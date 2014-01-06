@@ -46,7 +46,7 @@ Note: Comments starting with a '#' are allowed for both sky model and cluster fi
 
 #######################################################################
 3)Run sagecal
-Make sure your machine has 2 working GPU cards to use sagecal. (Otherwise it will fail)
+Optionally: Make sure your machine has (1/2 working NVIDIA GPU cards or Intel Xeon Phi MICs) to use sagecal.
 Recommended usage: (with GPUs)
 
 sagecal -d my_data.MS -s my_skymodel -c my_clustering -n no.of.threads -t 60 -p my_solutions -e 3 -g 2 -l 10 -m 7 -w 1 -b 1
