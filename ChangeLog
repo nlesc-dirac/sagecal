@@ -1,0 +1,10 @@
+Mon Jan  6 14:12:00 CET 2014
+- First public release
+Fri Sep 28 13:05:26 CEST 2012
+need _mm_cvtpd_ps
+readsky.c,predict.c: enabled support for shapelet linear tf, also -u,-v for projection
+Fri Mar  9 10:52:08 CET 2012
+*readcorrXY.py : read even the flagged data. but dont use them in calibration. final subtraction will include them
+Wed Mar  7 08:48:48 CET 2012
+version 0.0.10
+* added -ve clusters that are not subtracted. need to be optimized

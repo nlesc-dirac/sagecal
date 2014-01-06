@@ -1,0 +1,88 @@
+CC=gcc
+CXX=g++
+CFLAGS= -Wall -O3 -g -fopenmp -DHAVE_CUDA -DONE_GPU
+CLIBS= -lm -lcfitsio -lwcs
+#LAPACK=-L/usr/lib/atlas/sse -llapack -lblas
+LAPACK=-L/home/syatawat/lib  -lopenblas -lgfortran -lpthread
+
+INCLUDES= -I. $(WCSI)
+LIBPATH= $(WCSL)
+
+#### glib
+GLIBI=-I/usr/include/glib-2.0 -I/usr/lib/glib-2.0/include -I/usr/lib/x86_64-linux-gnu/glib-2.0/include/
+GLIBL=-lglib-2.0
+
+CUDAINC=-I/usr/local/cuda/include
+CUDALIB=-L/usr/local/cuda/lib64 -lcuda -lcudart
+NVCC=/usr/local/cuda/bin/nvcc
+#NVCFLAGS=-arch=sm_13 -g -G --ptxas-options=-v
+#NVCFLAGS=-arch=sm_13 -g -G --ptxas-options=-v -O3
+NVCFLAGS=-arch=sm_20 --ptxas-options=-v -O3
+
+# CULA
+#CULA_BIN_PATH_64=/software/users/lofareor/cula/bin64
+#CULA_ROOT=/software/users/lofareor/cula
+#CULA_LIB_PATH_64=/software/users/lofareor/cula/lib64
+#CULA_INC_PATH=/software/users/lofareor/cula/include
+#CULALIB=-lcula -lcublas
+CULA_ROOT=/usr/local/cula
+CULA_INC_PATH=/usr/local/cula/include
+CULA_LIB_PATH_64=/usr/local/cula/lib64
+CULALIB=-lcula_core -lcula_lapack -lcublas
+
+INCLUDES= -I. -I${CULA_INC_PATH} $(WCSI) $(CUDAINC)
+LIBPATH= $(WCSL) -L${CULA_LIB_PATH_64}
+
+
+
+OBJECTS=readsky.o dataio.o predict.o lmfit.o lbfgs.o myblas.o mderiv.o clmfit.o clmfit_nocuda.o residual.o barrier.o robust.o robustlm.o oslmfit.o mderiv_fl.o clmfit_fl.o updatenu.o robust_lbfgs_nocuda.o robust_fl.o
+
+default:libsagecal.a
+sagecal.o:sagecal.c
+	$(CC) $(CFLAGS) $(INCLUDES) $(GLIBI)  -c $<
+readsky.o:readsky.c
+	$(CC) $(CFLAGS) $(INCLUDES) $(GLIBI)  -c $<
+dataio.o:dataio.c
+	$(CC) $(CFLAGS) $(INCLUDES) $(GLIBI)  -c $<
+predict.o:predict.c
+	$(CC) $(CFLAGS) $(INCLUDES) $(GLIBI)  -c $<
+lmfit.o:lmfit.c
+	$(CC) $(CFLAGS) $(INCLUDES) $(GLIBI)  -c $<
+lbfgs.o:lbfgs.c
+	$(CC) $(CFLAGS) $(INCLUDES) $(GLIBI)  -c $<
+myblas.o:myblas.c
+	$(CC) $(CFLAGS) $(INCLUDES) $(GLIBI) -c $<
+mderiv.o:mderiv.cu
+	$(NVCC) $(NVCFLAGS) $(INCLUDES) $(GLIBI) -c $<
+clmfit.o:clmfit.c
+	$(CC) $(CFLAGS) $(INCLUDES) $(GLIBI) -c $<
+clmfit_nocuda.o:clmfit_nocuda.c
+	$(CC) $(CFLAGS) $(INCLUDES) $(GLIBI)  -c $<
+residual.o:residual.c
+	$(CC) $(CFLAGS) $(INCLUDES) $(GLIBI)  -c $<
+barrier.o:barrier.c
+	$(CC) $(CFLAGS) $(INCLUDES) $(GLIBI)  -c $<
+robustlm.o:robustlm.c
+	$(CC) $(CFLAGS) $(INCLUDES) $(GLIBI)  -c $<
+robust.o:robust.cu
+	$(NVCC) $(NVCFLAGS) $(INCLUDES) $(GLIBI) -c $<
+robust_fl.o:robust_fl.cu
+	$(NVCC) $(NVCFLAGS) $(INCLUDES) $(GLIBI) -c $<
+oslmfit.o:oslmfit.c
+	$(CC) $(CFLAGS) $(INCLUDES) $(GLIBI)  -c $<
+robust_lbfgs_nocuda.o:robust_lbfgs_nocuda.c
+	$(CC) $(CFLAGS) $(INCLUDES) $(GLIBI)  -c $<
+clmfit_fl.o:clmfit_fl.c
+	$(CC) $(CFLAGS) $(INCLUDES) $(GLIBI)  -c $<
+updatenu.o:updatenu.c
+	$(CC) $(CFLAGS) $(INCLUDES) $(GLIBI) -c $<
+mderiv_fl.o:mderiv_fl.cu
+	$(NVCC) $(NVCFLAGS) $(INCLUDES) $(GLIBI) -c $<
+sagecal:$(OBJECTS2) sagecal.h
+	$(CC) $(CFLAGS) $(INCLUDES) $(GLIBI)  $(LIBPATH)  -o $@ $(OBJECTS2)  $(CLIBS) $(GLIBL) $(LAPACK) $(CUDALIB) $(CULALIB)
+
+RANLIB=ranlib
+libsagecal.a:$(OBJECTS) sagecal.h
+	ar rv $@ $(OBJECTS); \
+	$(RANLIB) $@;
+

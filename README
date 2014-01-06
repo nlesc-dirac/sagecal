@@ -1,0 +1,54 @@
+SAGECAL
+=======
+Read INSTALL for installation. This file gives a brief guide to use SAGECal.
+Warning: this file may be obsolete. use sagecal -h to see up-to-date options.
+
+
+Step by Step Introduction:
+#######################################################################
+1)Calibrate data in the standard way using BBS/CASA or anything else. Use NDPP to average the data in your MS to a few channels (also average in time to about 10sec). Also flag any spikes in the data.
+
+#######################################################################
+2) Sky Model:
+3a)Make an image of your MS (using casapy). (Optional: also multiply the image by 2 to get the right flux).  Use Duchamp to create a mask for the image. Use buildsky to create a sky model. (see the README file on top level directory). Also create a proper cluster file.
+Special options to buildsky: -o 1 (NOTE: not -o 2)
+
+Alternatively, create these files by hand according to the following formats.
+
+2b)Cluster file format:
+cluster_id chunk_size source1 source2 ...
+e.g.
+
+0 1 P0C1 P0C2
+2 3 P11C2 P11C1 P13C1
+
+Note: putting -ve values for cluster_id will not subtract them from data.
+chunk_size: find hybrid solutions during one solve run. Eg. if -t 120 is used to select 120 timeslots, cluster 0 will find a solution using the full 120 timeslots while cluster 2 will solve for every 120/3=40 timeslots.
+
+2c)Sky model format:
+name h m s d m s I Q U V spectral_index RM extent_X(rad) extent_Y(rad) pos_angle(rad) freq0
+e.g.
+
+P1C1 0 12 42.996 85 43 21.514 0.030498 0 0 0 -5.713060 0 0 0 0 115039062.0
+P5C1 1 18 5.864 85 58 39.755 0.041839 0 0 0 -6.672879 0 0 0 0 115039062.0
+# A Gaussian mjor,minor 0.1375,0.0917 deg diameter -> radius(rad), PA 43.4772 deg (-> rad)
+# PA: N-> angle, clockwise, NOTE BDSM angle is N-> counterclockwise
+G0  5 34 31.75 22 00 52.86 100 0 0 0 0.00 0 0.0012  0.0008 -2.329615801 130.0e6
+# A Disk radius=0.041 deg
+D01 23 23 25.67 58 48 58 80 0 0 0 0 0 0.000715 0.000715 0 130e6
+# A Ring radius=0.031 deg
+R01 23 23 25.416 58 48 57 70 0 0 0 0 0 0.00052 0.00052 0 130e6
+# A shapelet ('S3C61MD.fits.modes' file must be in the current directory)
+S3C61MD 2 22 49.796414 86 18 55.913266 0.135 0 0 0 -6.6 0 1 1 0.0 115000000.0
+
+
+Note: Comments starting with a '#' are allowed for both sky model and cluster files.
+
+#######################################################################
+3)Run sagecal
+Make sure your machine has 2 working GPU cards to use sagecal. (Otherwise it will fail)
+Recommended usage: (with GPUs)
+
+sagecal -d my_data.MS -s my_skymodel -c my_clustering -n no.of.threads -t 60 -p my_solutions -e 3 -g 2 -l 10 -m 7 -w 1 -b 1
+
+Use your solution interval (-t 60) so that its big enough to get a decent solution and not too big to make the parameters vary too much. (about 20 minutes per solution is reasonable).

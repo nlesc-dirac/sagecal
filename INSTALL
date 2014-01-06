@@ -1,0 +1,34 @@
+$Id: INSTALL,v 1.7 2014/01/06 03:20:53 sarod Exp $
+SAGECal Installation
+====================
+0) Prerequsites:
+ - CASACORE http://casacore.googlecode.com/
+ - glib http://developer.gnome.org/glib
+ - BLAS/LAPACK
+   Highly recommended is OpenBLAS http://www.openblas.net/
+ - Compilers gcc/g++ or Intel icc/icpc 
+ - If you have NVIDIA GPUs, 
+  -- CUDA/CUBLAS and nvcc
+  -- CULATOOLS http://www.culatools.com/
+ - If you are using Intel Xeon Phi MICs.
+  -- Intel MKL and other libraries
+
+1) The basic way to build is
+  1.a) go to ./src/lib  and run make (which will create libsagecal.a)
+  1.b) go to ./src/MS and run make (which will create the executable)
+
+
+2) In ./src/lib and ./src/MS you MUST edit the Makefiles to suit your system. Some common items to edit are:
+ - LAPACK: directory where LAPACK/OpenBLAS is installed
+ - GLIBI/GLIBL: include/lib files for glib
+ - CASA_LIBDIR/CASA_INCDIR/CASA_LIBS : casacore include/library location and flies
+ - CUDAINC/CUDALIB : where CUDA/CUBLAS is installed
+ - NVCFLAGS : flags to pass to nvcc, especially -arch option to match your GPU  
+ - CULA* : where CULATOOLS are installed
+ - MKLROOT : for Intel MKL
+
+ Example makefiles: 
+   Makefile : plain build
+   Makefile.oneGPU : with One GPU support
+   Makefile.twoGPU : with two GPUs supported
+   Makefile.MIC : with Intel Xeon Phi support
