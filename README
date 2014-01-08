@@ -10,7 +10,7 @@ Step by Step Introduction:
 
 #######################################################################
 2) Sky Model:
-3a)Make an image of your MS (using casapy). (Optional: also multiply the image by 2 to get the right flux).  Use Duchamp to create a mask for the image. Use buildsky to create a sky model. (see the README file on top level directory). Also create a proper cluster file.
+3a)Make an image of your MS (using ExCon/casapy). Use Duchamp to create a mask for the image. Use buildsky to create a sky model. (see the README file on top level directory). Also create a proper cluster file.
 Special options to buildsky: -o 1 (NOTE: not -o 2)
 
 Alternatively, create these files by hand according to the following formats.
@@ -23,7 +23,8 @@ e.g.
 2 3 P11C2 P11C1 P13C1
 
 Note: putting -ve values for cluster_id will not subtract them from data.
-chunk_size: find hybrid solutions during one solve run. Eg. if -t 120 is used to select 120 timeslots, cluster 0 will find a solution using the full 120 timeslots while cluster 2 will solve for every 120/3=40 timeslots.
+chunk_size: find hybrid solutions during one solve run. Eg. if -t 120 is used 
+to select 120 timeslots, cluster 0 will find a solution using the full 120 timeslots while cluster 2 will solve for every 120/3=40 timeslots.
 
 2c)Sky model format:
 name h m s d m s I Q U V spectral_index RM extent_X(rad) extent_Y(rad) pos_angle(rad) freq0
@@ -43,6 +44,7 @@ S3C61MD 2 22 49.796414 86 18 55.913266 0.135 0 0 0 -6.6 0 1 1 0.0 115000000.0
 
 
 Note: Comments starting with a '#' are allowed for both sky model and cluster files.
+Note: 3rd order spectral indices are also supported, use -F 1 option in sagecal.
 
 #######################################################################
 3)Run sagecal
@@ -52,3 +54,5 @@ Recommended usage: (with GPUs)
 sagecal -d my_data.MS -s my_skymodel -c my_clustering -n no.of.threads -t 60 -p my_solutions -e 3 -g 2 -l 10 -m 7 -w 1 -b 1
 
 Use your solution interval (-t 60) so that its big enough to get a decent solution and not too big to make the parameters vary too much. (about 20 minutes per solution is reasonable).
+
+Note: It is also possible to calibrate more than one MS together. See the -f option.
