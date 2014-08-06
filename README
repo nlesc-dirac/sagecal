@@ -27,7 +27,12 @@ chunk_size: find hybrid solutions during one solve run. Eg. if -t 120 is used
 to select 120 timeslots, cluster 0 will find a solution using the full 120 timeslots while cluster 2 will solve for every 120/3=40 timeslots.
 
 2c)Sky model format:
-name h m s d m s I Q U V spectral_index RM extent_X(rad) extent_Y(rad) pos_angle(rad) freq0
+#name h m s d m s I Q U V spectral_index RM extent_X(rad) extent_Y(rad) pos_angle(rad) freq0
+
+or
+
+#name h m s d m s I Q U V spectral_index1 spectral_index2 spectral_index3 RM extent_X(rad) extent_Y(rad) pos_angle(rad) freq0
+
 e.g.
 
 P1C1 0 12 42.996 85 43 21.514 0.030498 0 0 0 -5.713060 0 0 0 0 115039062.0
@@ -45,6 +50,12 @@ S3C61MD 2 22 49.796414 86 18 55.913266 0.135 0 0 0 -6.6 0 1 1 0.0 115000000.0
 
 Note: Comments starting with a '#' are allowed for both sky model and cluster files.
 Note: 3rd order spectral indices are also supported, use -F 1 option in sagecal.
+Note: Spectral indices use natural logarithm, exp(ln(I0) + sp0*(f/f0) + sp1*(f/f0)^2 + ..) so if you have a model with common logarithms like 10^(log10(II0) + spp0*(f/f0) + spp1*(f/f0)^2 + ..) then, conversion is
+
+I0=exp(ln(10)*log10(II0))
+sp0=spp0*ln(10)
+sp1=spp1*ln(10)
+...
 
 #######################################################################
 3)Run sagecal
@@ -56,3 +67,15 @@ sagecal -d my_data.MS -s my_skymodel -c my_clustering -n no.of.threads -t 60 -p 
 Use your solution interval (-t 60) so that its big enough to get a decent solution and not too big to make the parameters vary too much. (about 20 minutes per solution is reasonable).
 
 Note: It is also possible to calibrate more than one MS together. See the -f option.
+
+Simulations:
+With -a 1, only a simulation of the sky model is done.
+With -a 1 and -p 'solutions_file', simulation is done with the sky model corrupted with solutions in 'solutions_file'.
+With -a 1 and -p 'solutions_file' and -z 'ignore_file', simulation is done with the solutions in the 'solutions_file', but ignoring the cluster ids in the 'ignore_file'.
+Eg. If you need to ignore cluster ids '-1', '10', '999', create a text file :
+
+-1
+10
+999
+
+and use it as the 'ignore_file'.
