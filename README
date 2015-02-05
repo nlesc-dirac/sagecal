@@ -6,11 +6,13 @@ Warning: this file may be obsolete. use sagecal -h to see up-to-date options.
 
 Step by Step Introduction:
 #######################################################################
-1)Calibrate data in the standard way using BBS/CASA or anything else. Use NDPP to average the data in your MS to a few channels (also average in time to about 10sec). Also flag any spikes in the data.
+1)Calibrate data in the standard way using BBS/CASA or anything else. 
+Use NDPP to average the data in your MS to a few channels (also average in time to about 10sec). Also flag any spikes in the data.
 
 #######################################################################
 2) Sky Model:
-3a)Make an image of your MS (using ExCon/casapy). Use Duchamp to create a mask for the image. Use buildsky to create a sky model. (see the README file on top level directory). Also create a proper cluster file.
+3a)Make an image of your MS (using ExCon/casapy). 
+Use Duchamp to create a mask for the image. Use buildsky to create a sky model. (see the README file on top level directory). Also create a proper cluster file.
 Special options to buildsky: -o 1 (NOTE: not -o 2)
 
 Alternatively, create these files by hand according to the following formats.
@@ -79,3 +81,8 @@ Eg. If you need to ignore cluster ids '-1', '10', '999', create a text file :
 999
 
 and use it as the 'ignore_file'.
+
+
+##########################################################################
+4)Distributed calibration
+Use mpirun to run sagecal-mpi.
