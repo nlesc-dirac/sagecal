@@ -172,7 +172,7 @@ rlevmar_der_single_cuda(
   int BlocksPerGrid=(M+ThreadsPerBlock-1)/ThreadsPerBlock;
 
 
-  int moff;
+  unsigned long int moff;
   if (!gWORK) {
   err=cudaMalloc((void**)&xd, N*sizeof(double));
   checkCudaError(err,__FILE__,__LINE__);
@@ -260,7 +260,7 @@ rlevmar_der_single_cuda(
      moff+=M;
     }
     bbd=(char*)&gWORK[moff];
-    moff+=Nbase*2*sizeof(char)/sizeof(double);
+    moff+=(Nbase*2*sizeof(char))/sizeof(double);
   }
 
   err=cudaMemcpyAsync(pd, p, M*sizeof(double), cudaMemcpyHostToDevice,0);
@@ -764,7 +764,7 @@ rlevmar_der_single_cuda_fl(
   int BlocksPerGrid=(M+ThreadsPerBlock-1)/ThreadsPerBlock;
 
 
-  int moff;
+  unsigned long int moff;
     moff=0;
     xd=&gWORK[moff];
     moff+=N;
@@ -806,7 +806,7 @@ rlevmar_der_single_cuda_fl(
      moff+=M;
     }
     bbd=(char*)&gWORK[moff];
-    moff+=Nbase*2*sizeof(char)/sizeof(float);
+    moff+=(Nbase*2*sizeof(char))/sizeof(float);
 
   err=cudaMemcpyAsync(pd, p, M*sizeof(float), cudaMemcpyHostToDevice,0);
   checkCudaError(err,__FILE__,__LINE__);
@@ -1287,7 +1287,7 @@ osrlevmar_der_single_cuda_fl(
   int BlocksPerGrid=(M+ThreadsPerBlock-1)/ThreadsPerBlock;
 
 
-  int moff;
+  unsigned long int moff;
     moff=0;
     xd=&gWORK[moff];
     moff+=N;
@@ -1329,7 +1329,7 @@ osrlevmar_der_single_cuda_fl(
      moff+=M;
     }
     bbd=(char*)&gWORK[moff];
-    moff+=Nbase*2*sizeof(char)/sizeof(float);
+    moff+=(Nbase*2*sizeof(char))/sizeof(float);
 
   err=cudaMemcpyAsync(pd, p, M*sizeof(float), cudaMemcpyHostToDevice,0);
   checkCudaError(err,__FILE__,__LINE__);
@@ -2019,13 +2019,18 @@ rlevmar_der_single_nocuda(
       exit(1);
   }
   WORK=Ud=Sd=VTd=0;
-  for (ci=0;ci<M; ci++) {
-   aones[ci]=1.0;
-  }
+//  for (ci=0;ci<M; ci++) {
+//   aones[ci]=1.0;
+//  }
+  me_data_t *dt=(me_data_t*)adata;
+  setweights(M,aones,1.0,dt->Nt);
+
   /*W set initial weights to 1 */
-  for (ci=0;ci<N; ci++) {
-   wtd[ci]=1.0;
-  }
+//  for (ci=0;ci<N; ci++) {
+//   wtd[ci]=1.0;
+//  }
+  setweights(N,wtd,1.0,dt->Nt);
+
   /* memory allocation: different solvers */
   if (solve_axb==0) {
 
@@ -2606,13 +2611,16 @@ osrlevmar_der_single_nocuda(
       exit(1);
   }
   WORK=Ud=Sd=VTd=0;
-  for (ci=0;ci<M; ci++) {
-   aones[ci]=1.0;
-  }
+//  for (ci=0;ci<M; ci++) {
+//   aones[ci]=1.0;
+//  }
+  me_data_t *dt=(me_data_t*)adata;
+  setweights(M,aones,1.0,dt->Nt);
   /*W set initial weights to 1 */
-  for (ci=0;ci<N; ci++) {
-   wtd[ci]=1.0;
-  }
+//  for (ci=0;ci<N; ci++) {
+//   wtd[ci]=1.0;
+//  }
+  setweights(N,wtd,1.0,dt->Nt);
   /* memory allocation: different solvers */
   if (solve_axb==0) {
 

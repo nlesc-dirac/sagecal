@@ -30,7 +30,7 @@
    C=A*B*sc, sc is a scalar
 */
 static void
-ambw(complex double *a, complex double *b, complex double *c, double sc) {
+ambw(complex double * __restrict a, complex double * __restrict b, complex double * __restrict c, double sc) {
  c[0]=(a[0]*b[0]+a[1]*b[2])*sc;
  c[1]=(a[0]*b[1]+a[1]*b[3])*sc;
  c[2]=(a[2]*b[0]+a[3]*b[2])*sc;
@@ -42,7 +42,7 @@ ambw(complex double *a, complex double *b, complex double *c, double sc) {
    C=A*B
 */
 static void
-amb(complex double *a, complex double *b, complex double *c) {
+amb(complex double * __restrict a, complex double * __restrict b, complex double * __restrict c) {
  c[0]=(a[0]*b[0]+a[1]*b[2]);
  c[1]=(a[0]*b[1]+a[1]*b[3]);
  c[2]=(a[2]*b[0]+a[3]*b[2]);
@@ -54,7 +54,7 @@ amb(complex double *a, complex double *b, complex double *c) {
    C=A*B^H
 */
 static void
-ambt(complex double *a, complex double *b, complex double *c) {
+ambt(complex double * __restrict a, complex double * __restrict b, complex double * __restrict c) {
  c[0]=a[0]*conj(b[0])+a[1]*conj(b[1]);
  c[1]=a[0]*conj(b[2])+a[1]*conj(b[3]);
  c[2]=a[2]*conj(b[0])+a[3]*conj(b[1]);
@@ -328,6 +328,7 @@ residual_threadfn_nointerpolation(void *data) {
     C[3]=t->x[8*ci+6]+_Complex_I*t->x[8*ci+7];
     px=(ci+t->boff)/((Ntilebase+t->carr[cm].nchunk-1)/t->carr[cm].nchunk);
     pm=&(t->pinv[8*t->N*px]);
+    /* FIXME: is pinv column major or row major, it seems column major */
     G1[0]=(pm[sta1*8])+_Complex_I*(pm[sta1*8+1]);
     G1[1]=(pm[sta1*8+2])+_Complex_I*(pm[sta1*8+3]);
     G1[2]=(pm[sta1*8+4])+_Complex_I*(pm[sta1*8+5]);
@@ -375,7 +376,7 @@ mat_invert(double xx[8],double yy[8], double rho) {
  }
  det=1.0/det;
  b[0]=a[3]*det;
- b[1]=-a[1]*det;
+ b[1]=-a[1]*det; 
  b[2]=-a[2]*det;
  b[3]=a[0]*det;
 
@@ -524,7 +525,7 @@ residual_threadfn_onefreq(void *data) {
  for (ci=0; ci<t->Nb; ci++) {
    /* iterate over the sky model and calculate contribution */
    /* for this x[8*ci:8*(ci+1)-1] */
-   /* if this baseline is flagged, we do not compute */
+   /* even if this baseline is flagged, we do compute */
 
    /* stations for this baseline */
    sta1=t->barr[ci+t->boff].sta1;
@@ -566,8 +567,6 @@ residual_threadfn_onefreq(void *data) {
        /* note u=u/c, v=v/c, w=w/c here */
        /* phterm is 2pi(u/c l +v/c m +w/c n) */
        phterm=2.0*M_PI*(t->u[ci]*t->carr[cm].ll[cn]+t->v[ci]*t->carr[cm].mm[cn]+t->w[ci]*t->carr[cm].nn[cn]);
-       //sinph=sin(phterm*freq0);
-       //cosph=cos(phterm*freq0);
        sincos(phterm*freq0,&sinph,&cosph);
        /* caltulate coherency, NOT scaled by 1/2, with spectral index */
        if (t->carr[cm].spec_idx[cn]!=0.0) {
@@ -584,6 +583,9 @@ residual_threadfn_onefreq(void *data) {
          sinph=sin(phterm)/phterm;
          prodterm*=sinph;
        }
+       /* time smearing TMS eq. 6.81 for EW-array formula */
+       //prodterm*=time_smear(t->carr[cm].ll[cn],t->carr[cm].mm[cn],t->dec0,t->tdelta,t->u[ci],t->v[ci],t->w[ci],t->freq0);
+
        /* check if source type is not a point source for additional 
           calculations */
        if (t->carr[cm].stype[cn]==STYPE_POINT) {
@@ -663,7 +665,7 @@ residual_threadfn_onefreq(void *data) {
 
 
 int
-calculate_residuals(double *u,double *v,double *w,double *p,double *x,int N,int Nbase,int tilesz,baseline_t *barr, clus_source_t *carr, int M,double freq0, double fdelta,int Nt, int ccid, double rho) {
+calculate_residuals(double *u,double *v,double *w,double *p,double *x,int N,int Nbase,int tilesz,baseline_t *barr, clus_source_t *carr, int M,double freq0, double fdelta,double tdelta,double dec0,int Nt, int ccid, double rho) {
   int nth,nth1,ci,cj;
 
   int Nthb0,Nthb;
@@ -745,9 +747,10 @@ calculate_residuals(double *u,double *v,double *w,double *p,double *x,int N,int 
     threaddata[nth].tilesz=tilesz;
     threaddata[nth].freq0=freq0;
     threaddata[nth].fdelta=fdelta;
+    threaddata[nth].tdelta=tdelta;
+    threaddata[nth].dec0=dec0;
    
     
-    //printf("thread %d predict  data from %d baselines %d\n",nth,8*ci,Nthb);
     pthread_create(&th_array[nth],&attr,residual_threadfn_onefreq,(void*)(&threaddata[nth]));
     /* next baseline set */
     ci=ci+Nthb;
@@ -832,12 +835,9 @@ residual_threadfn_multifreq(void *data) {
        /* note u=u/c, v=v/c, w=w/c here */
        /* phterm is 2pi(u/c l +v/c m +w/c n) */
        phterm=2.0*M_PI*(t->u[ci]*t->carr[cm].ll[cn]+t->v[ci]*t->carr[cm].mm[cn]+t->w[ci]*t->carr[cm].nn[cn]);
-       //sinph=sin(phterm*freq0);
-       //cosph=cos(phterm*freq0);
        sincos(phterm*freq0,&sinph,&cosph);
        /* caltulate coherency, NOT scaled by 1/2, with spectral index */
        if (t->carr[cm].spec_idx[cn]!=0.0) {
-         //prodterm=t->carr[cm].sI0[cn]*pow(freq0/t->carr[cm].f0[cn],t->carr[cm].spec_idx[cn])*(cosph+_Complex_I*sinph);
          fratio=log(freq0/t->carr[cm].f0[cn]);
          fratio1=fratio*fratio;
          fratio2=fratio1*fratio;
@@ -851,6 +851,9 @@ residual_threadfn_multifreq(void *data) {
          sinph=sin(phterm)/phterm;
          prodterm*=sinph;
        }
+       /* time smearing TMS eq. 6.81 for EW-array formula */
+       //prodterm*=time_smear(t->carr[cm].ll[cn],t->carr[cm].mm[cn],t->dec0,t->tdelta,t->u[ci],t->v[ci],t->w[ci],t->freq0);
+
        /* check if source type is not a point source for additional 
           calculations */
        if (t->carr[cm].stype[cn]==STYPE_POINT) {
@@ -934,7 +937,7 @@ residual_threadfn_multifreq(void *data) {
 
 
 int
-calculate_residuals_multifreq(double *u,double *v,double *w,double *p,double *x,int N,int Nbase,int tilesz,baseline_t *barr, clus_source_t *carr, int M,double *freqs,int Nchan, double fdelta,int Nt, int ccid, double rho) {
+calculate_residuals_multifreq(double *u,double *v,double *w,double *p,double *x,int N,int Nbase,int tilesz,baseline_t *barr, clus_source_t *carr, int M,double *freqs,int Nchan, double fdelta,double tdelta,double dec0,int Nt, int ccid, double rho) {
   int nth,nth1,ci,cj;
 
   int Nthb0,Nthb;
@@ -1017,9 +1020,9 @@ calculate_residuals_multifreq(double *u,double *v,double *w,double *p,double *x,
     threaddata[nth].freqs=freqs;
     threaddata[nth].Nchan=Nchan;
     threaddata[nth].fdelta=fdelta/(double)Nchan;
-   
+    threaddata[nth].tdelta=tdelta;
+    threaddata[nth].dec0=dec0;
     
-    //printf("thread %d predict  data from %d baselines %d\n",nth,8*ci,Nthb);
     pthread_create(&th_array[nth],&attr,residual_threadfn_multifreq,(void*)(&threaddata[nth]));
     /* next baseline set */
     ci=ci+Nthb;
@@ -1084,6 +1087,9 @@ visibilities_threadfn_multifreq(void *data) {
          sinph=sin(phterm)/phterm;
          prodterm*=sinph;
        }
+       /* time smearing TMS eq. 6.81 for EW-array formula */
+       //prodterm*=time_smear(t->carr[cm].ll[cn],t->carr[cm].mm[cn],t->dec0,t->tdelta,t->u[ci],t->v[ci],t->w[ci],t->freq0);
+
        /* check if source type is not a point source for additional 
           calculations */
        if (t->carr[cm].stype[cn]==STYPE_POINT) {
@@ -1128,9 +1134,9 @@ visibilities_threadfn_multifreq(void *data) {
 
 
 
-/* FIXME: tail timeslots still not written properly */
+/* FIXME: tail timeslots still not written properly (probably due to flagging while reading data) */
 int
-predict_visibilities_multifreq(double *u,double *v,double *w,double *x,int N,int Nbase,int tilesz,baseline_t *barr, clus_source_t *carr, int M,double *freqs,int Nchan, double fdelta,int Nt) {
+predict_visibilities_multifreq(double *u,double *v,double *w,double *x,int N,int Nbase,int tilesz,baseline_t *barr, clus_source_t *carr, int M,double *freqs,int Nchan, double fdelta,double tdelta, double dec0,int Nt) {
   int nth,nth1,ci;
 
   int Nthb0,Nthb;
@@ -1188,10 +1194,221 @@ predict_visibilities_multifreq(double *u,double *v,double *w,double *x,int N,int
     threaddata[nth].freqs=freqs;
     threaddata[nth].Nchan=Nchan;
     threaddata[nth].fdelta=fdelta/(double)Nchan;
+    threaddata[nth].tdelta=tdelta;
+    threaddata[nth].dec0=dec0;
    
-    
-    //printf("thread %d predict  data from %d baselines %d\n",nth,8*ci,Nthb);
     pthread_create(&th_array[nth],&attr,visibilities_threadfn_multifreq,(void*)(&threaddata[nth]));
+    /* next baseline set */
+    ci=ci+Nthb;
+  }
+
+  /* now wait for threads to finish */
+  for(nth1=0; nth1<nth; nth1++) {
+   pthread_join(th_array[nth1],NULL);
+  }
+
+ pthread_attr_destroy(&attr);
+
+ free(th_array);
+ free(threaddata);
+
+ return 0;
+
+}
+
+
+/* worker thread function for prediction with solutions
+   */
+static void *
+predictwithgain_threadfn_multifreq(void *data) {
+ thread_data_base_t *t=(thread_data_base_t*)data;
+ 
+ int ci,cm,cf,cn,sta1,sta2;
+ double *pm;
+ double phterm,sinph,cosph,freq0;
+ complex double prodterm;
+
+ double fratio,fratio1,fratio2; 
+ complex double C[4],G1[4],G2[4],T1[4],T2[4];
+ int M=(t->M);
+ int Ntilebase=(t->Nbase)*(t->tilesz);
+ int px;
+ for (ci=0; ci<t->Nb; ci++) {
+   /* iterate over the sky model and calculate contribution */
+   /* for this x[8*ci:8*(ci+1)-1] */
+   /* if this baseline is flagged, we do not compute */
+   for (cf=0; cf<t->Nchan; cf++) {
+    memset(&t->x[8*ci+cf*Ntilebase*8],0,sizeof(double)*8);
+   }
+
+   /* stations for this baseline */
+   sta1=t->barr[ci+t->boff].sta1;
+   sta2=t->barr[ci+t->boff].sta2;
+   for (cm=0; cm<M; cm++) { /* clusters */
+      /* check if cluster id not in ignore list to do a prediction */
+     if (!t->ignlist[cm]) {
+     /* gains for this cluster, for sta1,sta2 */
+     /* depending on the chunk size and the baseline index,
+        select right set of parameters 
+       data x=[0,........,Nbase*tilesz]
+       divided into nchunk chunks
+       p[0] -> x[0.....Nbase*tilesz/nchunk-1]
+       p[1] -> x[Nbase*tilesz/nchunk......2*Nbase*tilesz-1]
+       ....
+       p[last] -> x[(nchunk-1)*Nbase*tilesz/nchunk......Nbase*tilesz]
+
+       so given bindex,  right p[] is bindex/((Nbase*tilesz+nchunk-1)/nchunk)
+       */
+     px=(ci+t->boff)/((Ntilebase+t->carr[cm].nchunk-1)/t->carr[cm].nchunk);
+     //printf("base %d, cluster %d, parm off %d abs %d\n",t->bindex[ci],cm,px,t->carr[cm].p[px]);
+     pm=&(t->p[t->carr[cm].p[px]]);
+     G1[0]=(pm[sta1*8])+_Complex_I*(pm[sta1*8+1]);
+     G1[1]=(pm[sta1*8+2])+_Complex_I*(pm[sta1*8+3]);
+     G1[2]=(pm[sta1*8+4])+_Complex_I*(pm[sta1*8+5]);
+     G1[3]=(pm[sta1*8+6])+_Complex_I*(pm[sta1*8+7]);
+     G2[0]=(pm[sta2*8])+_Complex_I*(pm[sta2*8+1]);
+     G2[1]=(pm[sta2*8+2])+_Complex_I*(pm[sta2*8+3]);
+     G2[2]=(pm[sta2*8+4])+_Complex_I*(pm[sta2*8+5]);
+     G2[3]=(pm[sta2*8+6])+_Complex_I*(pm[sta2*8+7]);
+
+
+     /* iterate over frequencies */
+     for (cf=0; cf<t->Nchan; cf++) {
+      freq0=t->freqs[cf];
+/***********************************************/
+      /* calculate coherencies for each freq */
+      memset(C,0,sizeof(complex double)*4);
+     for (cn=0; cn<t->carr[cm].N; cn++) {
+       /* note u=u/c, v=v/c, w=w/c here */
+       /* phterm is 2pi(u/c l +v/c m +w/c n) */
+       phterm=2.0*M_PI*(t->u[ci]*t->carr[cm].ll[cn]+t->v[ci]*t->carr[cm].mm[cn]+t->w[ci]*t->carr[cm].nn[cn]);
+       sincos(phterm*freq0,&sinph,&cosph);
+       /* caltulate coherency, NOT scaled by 1/2, with spectral index */
+       if (t->carr[cm].spec_idx[cn]!=0.0) {
+         fratio=log(freq0/t->carr[cm].f0[cn]);
+         fratio1=fratio*fratio;
+         fratio2=fratio1*fratio;
+         prodterm=exp(log(t->carr[cm].sI0[cn])+t->carr[cm].spec_idx[cn]*fratio+t->carr[cm].spec_idx1[cn]*fratio1+t->carr[cm].spec_idx2[cn]*fratio2)*(cosph+_Complex_I*sinph);
+       } else {
+         prodterm=t->carr[cm].sI[cn]*(cosph+_Complex_I*sinph);
+       }
+       /* freq smearing : extra term delta * sinc(delta/2 * phterm) */
+       phterm*=t->fdelta*0.5;
+       if (phterm!=0.0) {
+         sinph=sin(phterm)/phterm;
+         prodterm*=sinph;
+       }
+       /* time smearing TMS eq. 6.81 for EW-array formula */
+       //prodterm*=time_smear(t->carr[cm].ll[cn],t->carr[cm].mm[cn],t->dec0,t->tdelta,t->u[ci],t->v[ci],t->w[ci],t->freq0);
+
+       /* check if source type is not a point source for additional 
+          calculations */
+       if (t->carr[cm].stype[cn]==STYPE_POINT) {
+        C[0]+=prodterm;
+        C[3]+=prodterm;
+       } else if (t->carr[cm].stype[cn]==STYPE_SHAPELET) {
+        prodterm*=shapelet_contrib(t->carr[cm].ex[cn],t->u[ci]*freq0,t->v[ci]*freq0,t->w[ci]*freq0);
+        C[0]+=prodterm;
+        C[3]+=prodterm;
+       } else if (t->carr[cm].stype[cn]==STYPE_GAUSSIAN) {
+        prodterm*=gaussian_contrib(t->carr[cm].ex[cn],t->u[ci]*freq0,t->v[ci]*freq0,t->w[ci]*freq0);
+        C[0]+=prodterm;
+        C[3]+=prodterm;
+       } else if (t->carr[cm].stype[cn]==STYPE_DISK) {
+        prodterm*=disk_contrib(t->carr[cm].ex[cn],t->u[ci]*freq0,t->v[ci]*freq0,t->w[ci]*freq0);
+        C[0]+=prodterm;
+        C[3]+=prodterm;
+       } else if (t->carr[cm].stype[cn]==STYPE_RING) {
+        prodterm*=ring_contrib(t->carr[cm].ex[cn],t->u[ci]*freq0,t->v[ci]*freq0,t->w[ci]*freq0);
+        C[0]+=prodterm;
+        C[3]+=prodterm;
+       }
+     }
+
+/***********************************************/
+      /* form G1*C*G2' */
+      /* T1=G1*C  */
+      amb(G1,C,T1);
+      /* T2=T1*G2' */
+      ambt(T1,G2,T2);
+
+      /* add to baseline visibilities */
+      t->x[8*ci+cf*Ntilebase*8]+=creal(T2[0]);
+      t->x[8*ci+1+cf*Ntilebase*8]+=cimag(T2[0]);
+      t->x[8*ci+2+cf*Ntilebase*8]+=creal(T2[1]);
+      t->x[8*ci+3+cf*Ntilebase*8]+=cimag(T2[1]);
+      t->x[8*ci+4+cf*Ntilebase*8]+=creal(T2[2]);
+      t->x[8*ci+5+cf*Ntilebase*8]+=cimag(T2[2]);
+      t->x[8*ci+6+cf*Ntilebase*8]+=creal(T2[3]);
+      t->x[8*ci+7+cf*Ntilebase*8]+=cimag(T2[3]);
+     }
+     }
+   }
+ }
+ return NULL;
+}
+
+int
+predict_visibilities_multifreq_withsol(double *u,double *v,double *w,double *p,double *x,int *ignlist,int N,int Nbase,int tilesz,baseline_t *barr, clus_source_t *carr, int M,double *freqs,int Nchan, double fdelta,double tdelta,double dec0,int Nt) {
+  int nth,nth1,ci;
+
+  int Nthb0,Nthb;
+  pthread_attr_t attr;
+  pthread_t *th_array;
+  thread_data_base_t *threaddata;
+
+  int Nbase1=Nbase*tilesz;
+
+    
+  /* calculate min baselines a thread can handle */
+  Nthb0=(Nbase1+Nt-1)/Nt;
+
+  /* setup threads */
+  pthread_attr_init(&attr);
+  pthread_attr_setdetachstate(&attr,PTHREAD_CREATE_JOINABLE);
+
+  if ((th_array=(pthread_t*)malloc((size_t)Nt*sizeof(pthread_t)))==0) {
+   fprintf(stderr,"%s: %d: No free memory\n",__FILE__,__LINE__);
+   exit(1);
+  }
+  if ((threaddata=(thread_data_base_t*)malloc((size_t)Nt*sizeof(thread_data_base_t)))==0) {
+    fprintf(stderr,"%s: %d: No free memory\n",__FILE__,__LINE__);
+    exit(1);
+  }
+
+
+  /* iterate over threads, allocating baselines per thread */
+  ci=0;
+  for (nth=0;  nth<Nt && ci<Nbase1; nth++) {
+    /* this thread will handle baselines [ci:min(Nbase-1,ci+Nthb0-1)] */
+    /* determine actual no. of baselines */
+    if (ci+Nthb0<Nbase1) {
+     Nthb=Nthb0;
+    } else {
+     Nthb=Nbase1-ci;
+    }
+
+    threaddata[nth].boff=ci;
+    threaddata[nth].Nb=Nthb;
+    threaddata[nth].barr=barr;
+    threaddata[nth].u=&(u[ci]);
+    threaddata[nth].v=&(v[ci]);
+    threaddata[nth].w=&(w[ci]);
+    threaddata[nth].carr=carr;
+    threaddata[nth].M=M;
+    threaddata[nth].x=&(x[8*ci]);
+    threaddata[nth].p=p;
+    threaddata[nth].ignlist=ignlist;
+    threaddata[nth].N=N;
+    threaddata[nth].Nbase=Nbase;
+    threaddata[nth].tilesz=tilesz;
+    threaddata[nth].freqs=freqs;
+    threaddata[nth].Nchan=Nchan;
+    threaddata[nth].fdelta=fdelta/(double)Nchan;
+    threaddata[nth].tdelta=tdelta;
+    threaddata[nth].dec0=dec0;
+    
+    pthread_create(&th_array[nth],&attr,predictwithgain_threadfn_multifreq,(void*)(&threaddata[nth]));
     /* next baseline set */
     ci=ci+Nthb;
   }

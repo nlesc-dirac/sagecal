@@ -186,9 +186,8 @@ clevmar_der_single_nocuda(
   }
 
   WORK=Ud=Sd=VTd=0;
-  for (ci=0;ci<M; ci++) {
-   aones[ci]=1.0;
-  }
+  me_data_t *dt=(me_data_t*)adata;
+  setweights(M,aones,1.0,dt->Nt);
   /* memory allocation: different solvers */
   if (solve_axb==0) {
 
@@ -226,7 +225,6 @@ clevmar_der_single_nocuda(
     
     status=my_dgesvd('A','A',M,M,jacTjacd,M,Sd,Ud,M,VTd,M,w,-1);
     if (!status) {
-      lwork=(int)w[0];
       lwork=(int)w[0];
       if ((WORK=(double*)calloc((size_t)lwork,sizeof(double)))==0) {
 #ifndef USE_MIC
@@ -671,9 +669,12 @@ mlm_der_single(
 #endif
       exit(1);
   }
-  for (ci=0;ci<M; ci++) {
-   aones[ci]=1.0;
-  }
+//  for (ci=0;ci<M; ci++) {
+//   aones[ci]=1.0;
+//  }
+  me_data_t *dt=(me_data_t*)adata;
+  setweights(M,aones,1.0,dt->Nt);
+
   if ((dk=(double*)calloc((size_t)M,sizeof(double)))==0) {
 #ifndef USE_MIC
       printf("%s: %d: no free memory\n",__FILE__,__LINE__);
@@ -1222,9 +1223,12 @@ oslevmar_der_single_nocuda(
   }
 
   WORK=Ud=Sd=VTd=0;
-  for (ci=0;ci<M; ci++) {
-   aones[ci]=1.0;
-  }
+//  for (ci=0;ci<M; ci++) {
+//   aones[ci]=1.0;
+//  }
+  me_data_t *dt=(me_data_t*)adata;
+  setweights(M,aones,1.0,dt->Nt);
+
   /* memory allocation: different solvers */
   if (solve_axb==0) {
 

@@ -1,0 +1,16 @@
+Restore
+========
+Mon Jan 12 19:03:22 CET 2015
+
+1)Prerequisites:
+ CFITSIO
+ WCSLIB
+ LAPACK : I recommend OpenBLAS
+ FFTW
+
+
+2) Configuration
+ Edit Makefile
+
+3) Compilation
+ Type make

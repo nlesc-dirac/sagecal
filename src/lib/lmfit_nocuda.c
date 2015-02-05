@@ -34,7 +34,7 @@
 __attribute__ ((target(MIC)))
 #endif
 static void
-amb(complex double *a, complex double *b, complex double *c) {
+amb(complex double * __restrict a, complex double * __restrict b, complex double * __restrict c) {
  c[0]=a[0]*b[0]+a[1]*b[2];
  c[1]=a[0]*b[1]+a[1]*b[3];
  c[2]=a[2]*b[0]+a[3]*b[2];
@@ -48,7 +48,7 @@ amb(complex double *a, complex double *b, complex double *c) {
 __attribute__ ((target(MIC)))
 #endif
 static void
-ambt(complex double *a, complex double *b, complex double *c) {
+ambt(complex double * __restrict a, complex double * __restrict b, complex double * __restrict c) {
  c[0]=a[0]*conj(b[0])+a[1]*conj(b[1]);
  c[1]=a[0]*conj(b[2])+a[1]*conj(b[3]);
  c[2]=a[2]*conj(b[0])+a[3]*conj(b[1]);
@@ -943,7 +943,7 @@ sagefit_visibilities(double *u, double *v, double *w, double *x, int N,
 #endif
      exit(1);
   }
-  if (solver_mode==2 || solver_mode==3) {
+  if (solver_mode==SM_OSLM_OSRLM_RLBFGS || solver_mode==SM_RLM_RLBFGS || solver_mode==SM_RTR_OSRLM_RLBFGS) {
    if ((robust_nuM=(double*)calloc((size_t)(M),sizeof(double)))==0) {
 #ifndef USE_MIC
      fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
@@ -965,15 +965,21 @@ sagefit_visibilities(double *u, double *v, double *w, double *x, int N,
   my_daxpy(n, xsub, -1.0, xdummy);
   *res_0=my_dnrm2(n,xdummy)/(double)n;
 
+  int iter_bar=(int)ceil((0.80/(double)M)*((double)total_iter));
   for (ci=0; ci<max_emiter; ci++) {
-
+#ifdef DEBUG
+printf("\n\nEM %d\n",ci);
+#endif
     for (cj=0; cj<M; cj++) { /* iter per cluster */
      /* calculate max LM iter for this cluster */
      if (weighted_iter) {
-       this_itermax=(int)ceil((0.33*nerr[cj]+0.66/(double)M)*((double)total_iter));
+       this_itermax=(int)((0.20*nerr[cj])*((double)total_iter))+iter_bar;
      } else {
        this_itermax=max_iter;
      }
+#ifdef DEBUG
+printf("\n\ncluster %d iter=%d\n",cj,this_itermax);
+#endif
      if (this_itermax>0) {
      /* calculate contribution from hidden data, subtract from x
        actually, add the current model for this cluster to residual */
@@ -994,15 +1000,15 @@ sagefit_visibilities(double *u, double *v, double *w, double *x, int N,
 
        lmdata.tilesz=ntiles;
        lmdata.tileoff=tcj;
-       if(solver_mode==0) {
+       if(solver_mode==SM_OSLM_LBFGS) {
          if (ci==max_emiter-1){
            ret=clevmar_der_single_nocuda(mylm_fit_single_pth0, mylm_jac_single_pth, &p[carr[cj].p[ck]], &xdummy[8*tcj*Nbase], 8*N, 8*ntiles*Nbase, this_itermax, opts, info, linsolv, (void*)&lmdata);  
          } else {
            ret=oslevmar_der_single_nocuda(mylm_fit_single_pth0, mylm_jac_single_pth, &p[carr[cj].p[ck]], &xdummy[8*tcj*Nbase], 8*N, 8*ntiles*Nbase, this_itermax, opts, info, linsolv, randomize, (void*)&lmdata);  
          }
-       } else if (solver_mode==1) {
+       } else if (solver_mode==SM_LM_LBFGS) {
          ret=clevmar_der_single_nocuda(mylm_fit_single_pth0, mylm_jac_single_pth, &p[carr[cj].p[ck]], &xdummy[8*tcj*Nbase], 8*N, 8*ntiles*Nbase, this_itermax, opts, info, linsolv, (void*)&lmdata);  
-       } else if (solver_mode==3) {
+       } else if (solver_mode==SM_RLM_RLBFGS) {
          /* only the last EM iteration is robust */
          if (ci==max_emiter-1){
           lmdata.robust_nu=robust_nu0;
@@ -1012,7 +1018,7 @@ sagefit_visibilities(double *u, double *v, double *w, double *x, int N,
           } else {
            ret=oslevmar_der_single_nocuda(mylm_fit_single_pth0, mylm_jac_single_pth, &p[carr[cj].p[ck]], &xdummy[8*tcj*Nbase], 8*N, 8*ntiles*Nbase, this_itermax, opts, info, linsolv, randomize, (void*)&lmdata);  
          }
-       } else if (solver_mode==2) {
+       } else if (solver_mode==SM_OSLM_OSRLM_RLBFGS) {
          /* only the last EM iteration is robust */
          if (ci==max_emiter-1){
           lmdata.robust_nu=robust_nu0;
@@ -1022,6 +1028,20 @@ sagefit_visibilities(double *u, double *v, double *w, double *x, int N,
           } else {
            ret=oslevmar_der_single_nocuda(mylm_fit_single_pth0, mylm_jac_single_pth, &p[carr[cj].p[ck]], &xdummy[8*tcj*Nbase], 8*N, 8*ntiles*Nbase, this_itermax, opts, info, linsolv, randomize, (void*)&lmdata);  
          }
+       } else if (solver_mode==SM_RTR_OSLM_LBFGS) { /* RTR */
+            /* RSD+RTR */
+           double Delta0=0.01; /* since previous timeslot used LM, use a very small TR radius because this solution will not be too far off */
+           ret=rtr_solve_nocuda(&p[carr[cj].p[ck]], &xdummy[8*tcj*Nbase], N, ntiles*Nbase, this_itermax+5, this_itermax+10, Delta0, Delta0*0.125, info, &lmdata);
+       } else if (solver_mode==SM_RTR_OSRLM_RLBFGS) { /* RTR + Robust */
+            /* RSD+RTR */
+           if (!ci){
+            lmdata.robust_nu=robust_nu0;
+           } 
+           double Delta0=0.01; /* since previous timeslot used LM, use a very small TR radius because this solution will not be too far off */
+           ret=rtr_solve_nocuda_robust(&p[carr[cj].p[ck]], &xdummy[8*tcj*Nbase], N, ntiles*Nbase, this_itermax+5, this_itermax+10, Delta0, Delta0*0.125, nulow, nuhigh, info, &lmdata);
+           if (ci==max_emiter-1){
+            robust_nuM[cj]+=lmdata.robust_nu;
+           }
        } else { /* not used */
          //ret=mlm_der_single(mylm_fit_single_pth0, mylm_jac_single_pth, &p[carr[cj].p[ck]], &xdummy[8*tcj*Nbase], 8*N, 8*ntiles*Nbase, this_itermax, NULL, info, linsolv, (void*)&lmdata);  
 #ifndef USE_MIC
@@ -1034,14 +1054,22 @@ sagefit_visibilities(double *u, double *v, double *w, double *x, int N,
 
        tcj=tcj+tilechunk;
      }
-
+#ifdef DEBUG
+printf("residual init=%lf final=%lf\n\n",init_res,final_res);
+#endif
      lmdata.tilesz=tilesz;
-     nerr[cj]=(init_res-final_res)/init_res;
+     /* catch -ve value here */
+     if (init_res>0.0) {
+      nerr[cj]=(init_res-final_res)/init_res;
+      if (nerr[cj]<0.0) { nerr[cj]=0.0; }
+     } else {
+      nerr[cj]=0.0;
+     }
      /* subtract current model */
      mylm_fit_single_pth(p, xsub, 8*N, n, (void*)&lmdata);
      my_daxpy(n, xsub, -1.0, xdummy);
      /* if robust LM, calculate average nu over hybrid clusters */
-     if ((solver_mode==2 || solver_mode==3) && (ci==max_emiter-1)) {
+     if ((solver_mode==SM_OSLM_OSRLM_RLBFGS || solver_mode==SM_RLM_RLBFGS || solver_mode==SM_RTR_OSRLM_RLBFGS) && (ci==max_emiter-1)) {
       robust_nuM[cj]/=(double)carr[cj].nchunk;
      }
     }
@@ -1049,7 +1077,9 @@ sagefit_visibilities(double *u, double *v, double *w, double *x, int N,
 
    /* normalize nerr array so that the sum is 1 */
    total_err=my_dasum(M,nerr);
-   my_dscal(M, 1.0/total_err, nerr);
+   if (total_err>0.0) {
+    my_dscal(M, 1.0/total_err, nerr);
+   }
 
    /* flip weighting flag */
    if (randomize) {
@@ -1058,7 +1088,7 @@ sagefit_visibilities(double *u, double *v, double *w, double *x, int N,
  }
   free(nerr);
   free(xdummy);
-  if (solver_mode==2 || solver_mode==3) {
+  if (solver_mode==SM_OSLM_OSRLM_RLBFGS || solver_mode==SM_RLM_RLBFGS || solver_mode==SM_RTR_OSRLM_RLBFGS) {
     /* calculate mean robust_nu over all clusters */
     robust_nu0=my_dasum(M,robust_nuM)/(double)M;
 #ifdef DEBUG
@@ -1075,10 +1105,14 @@ sagefit_visibilities(double *u, double *v, double *w, double *x, int N,
 
   if (max_lbfgs>0) {
 #ifdef USE_MIC
-  lmdata.Nt=64; /* increase threads for MIC */
+  lmdata.Nt=32; /* FIXME increase threads for MIC */
 #endif
   /* use LBFGS */
-   if (solver_mode==2 || solver_mode==3) {
+   if (solver_mode==SM_OSLM_OSRLM_RLBFGS || solver_mode==SM_RLM_RLBFGS ||  solver_mode==SM_RTR_OSRLM_RLBFGS) {
+    /* if RTR, divide by 8 */
+    if (solver_mode==SM_RTR_OSRLM_RLBFGS) {
+     robust_nu0 *=0.125;
+    }
     lmdata.robust_nu=robust_nu0;
     ret=lbfgs_fit_robust(minimize_viz_full_pth, p, x, m, n, max_lbfgs, lbfgs_m, gpu_threads, (void*)&lmdata);
    } else {
@@ -1263,7 +1297,6 @@ bfgsfit_visibilities(double *u, double *v, double *w, double *x, int N,
  }
  return 0;
 }
-
 
 
 #ifdef USE_MIC

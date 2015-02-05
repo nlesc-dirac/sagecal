@@ -32,3 +32,26 @@ SAGECal Installation
    Makefile.oneGPU : with One GPU support
    Makefile.twoGPU : with two GPUs supported
    Makefile.MIC : with Intel Xeon Phi support
+
+
+
+SAGECAL-MPI Installation
+========================
+0) Prerequsites:
+ - Same as above 
+ - MPI (OpenMPI)
+
+1) Build ./src/lib as above
+
+2) Build ./src/MPI using mpicc
+
+
+
+BUILDSKY Installation
+=====================
+1) See INSTALL in ./src/buildsky
+
+
+RESTORE Installation
+=====================
+1) See INSTALL in ./src/restore

@@ -25,6 +25,7 @@
 #include <ms/MeasurementSets/MSIter.h>
 #include <tables/Tables/Table.h>
 #include <tables/Tables/TableVector.h>
+#include <tables/Tables/TableRecord.h>
 #include <tables/Tables/TableIter.h>
 #include <tables/Tables/ScalarColumn.h>
 #include <tables/Tables/ArrayColumn.h>
@@ -88,6 +89,7 @@ namespace Data
     extern char *TableName; /* MS name */
     extern char *MSlist; /* text file with MS names */
     extern float min_uvcut;
+    extern float max_uvcut;
     extern float max_uvtaper;
     extern casa::String DataField; /* input column DATA/CORRECTED_DATA */
     extern casa::String OutField; /* output column DATA/CORRECTED_DATA */
@@ -108,9 +110,18 @@ namespace Data
     extern int ccid;
     extern double rho;
     extern char *solfile;
+    extern char *ignorefile;
     extern double nulow,nuhigh;
     extern int randomize;
     extern int DoSim; /* if 1, simulation mode */
     extern int doChan; /* if 1, solve for each channel in multi channel data */
+    extern int DoDiag; /* if >0, enables diagnostics (Leverage) 1: write leverage as output (no residual), 2: only calculate fractions of leverage/noise */
+
+    /* distributed sagecal parameters */
+    extern int Nadmm; /* ADMM iterations >=1 */
+    extern int Npoly; /* polynomial order >=1 */
+    extern double admm_rho; /* regularization */
+    /* for debugging, upper limit on time slots */
+    extern int Nmaxtime;
 }
 #endif //__DATA_H__

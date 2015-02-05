@@ -1,9 +1,7 @@
-CC=gcc44
+CC=gcc
 CXX=g++
 CFLAGS= -Wall -O3 -g -fopenmp -DHAVE_CUDA -DHYBRID_CODE
 CLIBS= -lm -lpthread
-#LAPACK=-L/usr/lib/atlas/sse -llapack -lblas
-LAPACK=-L/home/users/yatawatta/extern/lib -L/software/users/lofarsoft/software/local/lib64 -L/usr/lib64 -L.  -lgoto2 -lgfortran -lpthread
 
 CUDAINC=-I/software/users/lofarsoft/software/local/cuda/include
 CUDALIB=-L/software/users/lofarsoft/software/local/cuda/lib64 -lcuda -lcudart
@@ -29,13 +27,10 @@ LIBPATH= $(WCSL) -L${CULA_LIB_PATH_64}
 
 
 
-OBJECTS=readsky.o dataio.o predict.o lmfit.o lbfgs.o myblas.o mderiv.o clmfit.o clmfit_nocuda.o residual.o barrier.o robust.o robustlm.o oslmfit.o mderiv_fl.o clmfit_fl.o updatenu.o robust_lbfgs_nocuda.o robust_fl.o
-OBJECTS2=sagecal.o readsky.o dataio.o predict.o lmfit.o lbfgs.o myblas.o mderiv.o clmfit.o clmfit_nocuda.o residual.o barrier.o robust.o robustlm.o oslmfit.o mderiv_fl.o clmfit_fl.o updatenu.o robust_lbfgs_nocuda.o robust_fl.o
+OBJECTS=readsky.o dataio.o predict.o lmfit.o lbfgs.o myblas.o mderiv.o clmfit.o clmfit_nocuda.o residual.o barrier.o robust.o robustlm.o oslmfit.o mderiv_fl.o clmfit_fl.o updatenu.o robust_lbfgs_nocuda.o robust_fl.o manifold_fl.o rtr_solve_cuda.o rtr_solve_robust_cuda.o diagnostics.o diag_fl.o manifold_average.o consensus_poly.o rtr_solve_robust_cuda_admm.o rtr_solve_robust_admm.o admm_solve.o
 
 
 default:libsagecal.a
-sagecal.o:sagecal.c
-	$(CC) $(CFLAGS) $(INCLUDES) $(GLIBI)  -c $<
 readsky.o:readsky.c
 	$(CC) $(CFLAGS) $(INCLUDES) $(GLIBI)  -c $<
 dataio.o:dataio.c
@@ -74,8 +69,26 @@ updatenu.o:updatenu.c
 	$(CC) $(CFLAGS) $(INCLUDES) $(GLIBI) -c $<
 mderiv_fl.o:mderiv_fl.cu
 	$(NVCC) $(NVCFLAGS) $(INCLUDES) $(GLIBI) -c $<
-sagecal:$(OBJECTS2) sagecal.h
-	$(CC) $(CFLAGS) $(INCLUDES) $(GLIBI)  $(LIBPATH)  -o $@ $(OBJECTS2)  $(CLIBS) $(GLIBL) $(LAPACK) $(CUDALIB) $(CULALIB)
+manifold_fl.o:manifold_fl.cu
+	$(NVCC) $(NVCFLAGS) $(INCLUDES) $(GLIBI) -c $<
+rtr_solve_cuda.o:rtr_solve_cuda.c
+	$(CC) $(CFLAGS) $(INCLUDES) $(GLIBI) -c $<
+rtr_solve_robust_cuda.o:rtr_solve_robust_cuda.c
+	$(CC) $(CFLAGS) $(INCLUDES) $(GLIBI) -c $<
+diagnostics.o:diagnostics.c
+	$(CC) $(CFLAGS) $(INCLUDES) $(GLIBI) -c $<
+diag_fl.o:diag_fl.cu
+	$(NVCC) $(NVCFLAGS) $(INCLUDES) $(GLIBI) -c $<
+manifold_average.o:manifold_average.c
+	$(CC) $(CFLAGS) $(INCLUDES) $(GLIBI)  -c $<
+consensus_poly.o:consensus_poly.c
+	$(CC) $(CFLAGS) $(INCLUDES) $(GLIBI)  -c $<
+rtr_solve_robust_cuda_admm.o:rtr_solve_robust_cuda_admm.c
+	$(CC) $(CFLAGS) $(INCLUDES) $(GLIBI) -c $<
+rtr_solve_robust_admm.o:rtr_solve_robust_admm.c
+	$(CC) $(CFLAGS) $(INCLUDES) $(GLIBI) -c $<
+admm_solve.o:admm_solve.c
+	$(CC) $(CFLAGS) $(INCLUDES) $(GLIBI) -c $<
 
 
 RANLIB=ranlib

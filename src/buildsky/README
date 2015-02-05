@@ -1,0 +1,78 @@
+README file for source extraction.
+Thu Aug 11 15:23:02 CEST 2011
+=================================
+
+1) We use 'Duchamp' and 'buildsky' for building a sky model from a FITS file. Both programs are installed at
+
+ /software/users/lofareor/sarod/
+
+in the cluster.
+
+2) There are two stages in source extraction. Consider your image to be 'test.fits'
+ 
+2.1) First, you need to run Duchamp. Take the following as a configuration file:
+##########################################
+imageFile test.fits
+logFile         logfile.txt
+outFile         results.txt
+spectraFile     spectra.ps
+minPix          5
+flagATrous      0
+snrRecon        10.
+snrCut          5.
+threshold 0.030
+minChannels     3
+flagBaseline    0
+flagKarma 1
+karmaFile duchamp.ann
+flagnegative 0
+flagMaps 0
+flagOutputMask 1
+flagMaskWithObjectNum 1
+flagXOutput 0
+############################################
+
+You can change the 'imageFile' field to use a different FITS file. The cutoff can be changed by the 'threshold' field. The other parameters need not be changed, unless for fine tuning.
+
+You run Duchamp as follows:
+
+ Duchamp -p above_text_file
+
+This will create a few more files, but what you really need from this stage is the mask file 'test.MASK.fits'
+
+You can find more information on Duchamp from:
+
+http://www.atnf.csiro.au/people/Matthew.Whiting/Duchamp/
+
+2.2) Second, you run 'buildsky' as follows:
+
+ buildsky -f test.fits -m test.MASK.fits
+
+
+That is it. After this is over, there will be two useful files:
+ 
+ test.fits.sky.txt : list of sources (in BBS format)
+ test.fits.ds9.reg : annotation file that can be loaded using DS9
+ test.fits.flux.txt: flux of each component (-d mode) with freq
+ test.fits.sky.txt.cluster : clustering file
+ test.fits.sky.txt.cluster.reg : clustering region for DS9
+
+
+3) NOTES
+
+3.1) You can fine tune both Duchamp and buildsky. Run the programs with -h.
+
+3.2) Missing PSF (beam) in FITS file: 
+Duchamp: use 'beamsize' (the size of the beam in pixels) in the configuration file. This value is overridden by the BMAJ, BMIN, BPA header parameters if present in the FITS file.
+
+Run buildsky as:
+
+   buildsky -f test.fits -m test.MASK.fits -a bmaj -b bmin -p bpa
+
+where bmaj, bmin are the major, minor axes widths in arcseconds, bpa is the position angle in degrees.
+
+3.3) You can tell buildsky to ignore certain pixels detected by Duchamp (such as sidelobes). Ues -g ignore_file, where ignore_file is a text file with the island numbers (one per line) to ignore.
+
+3.4) By default, components that are closer than 1.0*beam_size are merged together to a single component. By specifying -c radius , the radius of merging can be changed. Use -c 0 to stop merging.
+
+3.5) To cluster the sky use -k no.of.clusters as an option.

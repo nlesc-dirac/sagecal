@@ -21,8 +21,11 @@
 #include <cuComplex.h>
 #include <stdio.h>
 
+/* enable this for checking for kernel failure */
+//#define CUDA_DBG
 
-__global__ void kernel_func_wt_fl(int Nbase, float *x, float *coh, float *p, char *bb, float *wt, int N){
+__global__ void 
+kernel_func_wt_fl(int Nbase, float *x, float *coh, float *p, char *bb, float *wt, int N){
   /* global thread index : equal to the baseline */
   unsigned int n = threadIdx.x + blockDim.x*blockIdx.x;
 
@@ -130,7 +133,8 @@ __global__ void kernel_func_wt_fl(int Nbase, float *x, float *coh, float *p, cha
 
 }
 
-__global__ void kernel_jacf_wt_fl(int Nbase, int M, float *jac, float *coh, float *p, char *bb, float *wt, int N){
+__global__ void 
+kernel_jacf_wt_fl(int Nbase, int M, float *jac, float *coh, float *p, char *bb, float *wt, int N){
   /* global thread index : equal to the baseline */
   unsigned int n = threadIdx.x + blockDim.x*blockIdx.x;
   /* which parameter:0...M */
@@ -248,7 +252,8 @@ __global__ void kernel_jacf_wt_fl(int Nbase, int M, float *jac, float *coh, floa
 
 }
 
-__global__ void kernel_setweights_fl(int N, float *wt, float alpha){
+__global__ void 
+kernel_setweights_fl(int N, float *wt, float alpha){
   unsigned int tid = blockIdx.x*blockDim.x + threadIdx.x;
   /* make sure to use only M threads */
   if (tid<N) {
@@ -256,7 +261,8 @@ __global__ void kernel_setweights_fl(int N, float *wt, float alpha){
   }
 }
 
-__global__ void kernel_hadamard_fl(int N, float *wt, float *x){
+__global__ void 
+kernel_hadamard_fl(int N, float *wt, float *x){
   unsigned int tid = blockIdx.x*blockDim.x + threadIdx.x;
   /* make sure to use only M threads */
   if (tid<N) {
@@ -264,7 +270,8 @@ __global__ void kernel_hadamard_fl(int N, float *wt, float *x){
   }
 }
 
-__global__ void kernel_updateweights_fl(int N, float *wt, float *x, float *q, float nu){
+__global__ void 
+kernel_updateweights_fl(int N, float *wt, float *x, float *q, float nu){
   unsigned int tid = blockIdx.x*blockDim.x + threadIdx.x;
   /* make sure to use only M threads */
   if (tid<N) {
@@ -273,7 +280,8 @@ __global__ void kernel_updateweights_fl(int N, float *wt, float *x, float *q, fl
   }
 }
 
-__global__ void kernel_sqrtweights_fl(int N, float *wt){
+__global__ void 
+kernel_sqrtweights_fl(int N, float *wt){
   unsigned int tid = blockIdx.x*blockDim.x + threadIdx.x;
   /* make sure to use only M threads */
   if (tid<N) {
@@ -285,7 +293,7 @@ __global__ void kernel_sqrtweights_fl(int N, float *wt){
 __device__ float 
 digamma_fl(float x) {
   float result = 0.0f, xx, xx2, xx4;
-  for ( ; x < 7; ++x) { /* reduce x till x<7 */
+  for ( ; x < 7.0f; ++x) { /* reduce x till x<7 */
     result -= 1.0f/x;
   }
   x -= 1.0f/2.0f;
@@ -296,13 +304,33 @@ digamma_fl(float x) {
   return result;
 }
 
-__global__ void kernel_evaluatenu_fl(int Nd, float qsum, float *q, float deltanu,float nulow) {
+__global__ void 
+kernel_evaluatenu_fl(int Nd, float qsum, float *q, float deltanu,float nulow) {
   unsigned int tid = blockIdx.x*blockDim.x + threadIdx.x;
   if (tid<Nd) {
    float thisnu=(nulow+((float)tid)*deltanu);
    float dgm=digamma_fl(thisnu*0.5f+0.5f);
    q[tid]=dgm-logf((thisnu+1.0f)*0.5f); /* psi((nu+1)/2)-log((nu+1)/2) */
    dgm=digamma_fl(thisnu*0.5f);
+   q[tid]+=-dgm+logf((thisnu)*0.5f); /* -psi((nu)/2)+log((nu)/2) */
+   q[tid]+=-qsum+1.0f; /* -(-sum(ln(w_i))/N+sum(w_i)/N)+1 */
+  }
+}
+
+__global__ void 
+kernel_evaluatenu_fl_eight(int Nd, float qsum, float *q, float deltanu,float nulow, float nu0) {
+  unsigned int tid = blockIdx.x*blockDim.x + threadIdx.x;
+  /* each block calculte  psi((nu+8)/2)-log((nu+8)/2) */
+  float dgm0;
+  if (threadIdx.x==0) {
+   dgm0=digamma_fl(nu0*0.5f+4.0f);
+   dgm0=dgm0-logf((nu0+8.0f)*0.5f); /* psi((nu0+8)/2)-log((nu0+8)/2) */
+  }
+  __syncthreads();
+  if (tid<Nd) {
+   float thisnu=(nulow+((float)tid)*deltanu);
+   q[tid]=dgm0; /* psi((nu0+8)/2)-log((nu0+8)/2) */
+   float dgm=digamma_fl(thisnu*0.5f);
    q[tid]+=-dgm+logf((thisnu)*0.5f); /* -psi((nu)/2)+log((nu)/2) */
    q[tid]+=-qsum+1.0f; /* -(-sum(ln(w_i))/N+sum(w_i)/N)+1 */
   }
@@ -316,8 +344,12 @@ extern "C"
 void
 cudakernel_setweights_fl(int ThreadsPerBlock, int BlocksPerGrid, int N, float *wt, float alpha) {
 
+#ifdef CUDA_DBG
   cudaError_t error;
+#endif
   kernel_setweights_fl<<< BlocksPerGrid, ThreadsPerBlock >>>(N, wt, alpha);
+  cudaDeviceSynchronize();
+#ifdef CUDA_DBG
   error = cudaGetLastError();
   if(error != cudaSuccess)
   {
@@ -325,8 +357,8 @@ cudakernel_setweights_fl(int ThreadsPerBlock, int BlocksPerGrid, int N, float *w
     fprintf(stderr,"CUDA error: %s :%s: %d\n", cudaGetErrorString(error),__FILE__,__LINE__);
     exit(-1);
   }
+#endif
 
-  cudaDeviceSynchronize();
 
 }
 
@@ -334,8 +366,12 @@ cudakernel_setweights_fl(int ThreadsPerBlock, int BlocksPerGrid, int N, float *w
 void
 cudakernel_hadamard_fl(int ThreadsPerBlock, int BlocksPerGrid, int N, float *wt, float *x) {
 
+#ifdef CUDA_DBG
   cudaError_t error;
+#endif
   kernel_hadamard_fl<<< BlocksPerGrid, ThreadsPerBlock >>>(N, wt, x);
+  cudaDeviceSynchronize();
+#ifdef CUDA_DBG
   error = cudaGetLastError();
   if(error != cudaSuccess)
   {
@@ -343,8 +379,8 @@ cudakernel_hadamard_fl(int ThreadsPerBlock, int BlocksPerGrid, int N, float *wt,
     fprintf(stderr,"CUDA error: %s :%s: %d\n", cudaGetErrorString(error),__FILE__,__LINE__);
     exit(-1);
   }
+#endif
 
-  cudaDeviceSynchronize();
 
 }
 
@@ -352,8 +388,12 @@ cudakernel_hadamard_fl(int ThreadsPerBlock, int BlocksPerGrid, int N, float *wt,
 void
 cudakernel_updateweights_fl(int ThreadsPerBlock, int BlocksPerGrid, int N, float *wt, float *x, float *q, float robust_nu) {
 
+#ifdef CUDA_DBG
   cudaError_t error;
+#endif
   kernel_updateweights_fl<<< BlocksPerGrid, ThreadsPerBlock >>>(N, wt, x, q, robust_nu);
+  cudaDeviceSynchronize();
+#ifdef CUDA_DBG
   error = cudaGetLastError();
   if(error != cudaSuccess)
   {
@@ -361,8 +401,8 @@ cudakernel_updateweights_fl(int ThreadsPerBlock, int BlocksPerGrid, int N, float
     fprintf(stderr,"CUDA error: %s :%s: %d\n", cudaGetErrorString(error),__FILE__,__LINE__);
     exit(-1);
   }
+#endif
 
-  cudaDeviceSynchronize();
 
 }
 
@@ -370,8 +410,12 @@ cudakernel_updateweights_fl(int ThreadsPerBlock, int BlocksPerGrid, int N, float
 void
 cudakernel_sqrtweights_fl(int ThreadsPerBlock, int BlocksPerGrid, int N, float *wt) {
 
+#ifdef CUDA_DBG
   cudaError_t error;
+#endif
   kernel_sqrtweights_fl<<< BlocksPerGrid, ThreadsPerBlock >>>(N, wt);
+  cudaDeviceSynchronize();
+#ifdef CUDA_DBG
   error = cudaGetLastError();
   if(error != cudaSuccess)
   {
@@ -379,8 +423,8 @@ cudakernel_sqrtweights_fl(int ThreadsPerBlock, int BlocksPerGrid, int N, float *
     fprintf(stderr,"CUDA error: %s :%s: %d\n", cudaGetErrorString(error),__FILE__,__LINE__);
     exit(-1);
   }
+#endif
 
-  cudaDeviceSynchronize();
 
 }
 
@@ -389,8 +433,12 @@ cudakernel_sqrtweights_fl(int ThreadsPerBlock, int BlocksPerGrid, int N, float *
 void
 cudakernel_evaluatenu_fl(int ThreadsPerBlock, int BlocksPerGrid, int Nd, float qsum, float *q, float deltanu,float nulow) {
 
+#ifdef CUDA_DBG
   cudaError_t error;
+#endif
   kernel_evaluatenu_fl<<< BlocksPerGrid, ThreadsPerBlock >>>(Nd, qsum, q, deltanu,nulow);
+  cudaDeviceSynchronize();
+#ifdef CUDA_DBG
   error = cudaGetLastError();
   if(error != cudaSuccess)
   {
@@ -398,8 +446,33 @@ cudakernel_evaluatenu_fl(int ThreadsPerBlock, int BlocksPerGrid, int Nd, float q
     fprintf(stderr,"CUDA error: %s :%s: %d\n", cudaGetErrorString(error),__FILE__,__LINE__);
     exit(-1);
   }
+#endif
 
+
+}
+
+
+/* evaluate expression for finding optimum nu for 
+  a range of nu values, using AECM
+  nu0: current value of robust_nu*/
+void
+cudakernel_evaluatenu_fl_eight(int ThreadsPerBlock, int BlocksPerGrid, int Nd, float qsum, float *q, float deltanu,float nulow, float nu0) {
+
+#ifdef CUDA_DBG
+  cudaError_t error;
+#endif
+  kernel_evaluatenu_fl_eight<<< BlocksPerGrid, ThreadsPerBlock >>>(Nd, qsum, q, deltanu,nulow, nu0);
   cudaDeviceSynchronize();
+#ifdef CUDA_DBG
+  error = cudaGetLastError();
+  if(error != cudaSuccess)
+  {
+    // print the CUDA error message and exit
+    fprintf(stderr,"CUDA error: %s :%s: %d\n", cudaGetErrorString(error),__FILE__,__LINE__);
+    exit(-1);
+  }
+#endif
+
 
 }
 
@@ -408,10 +481,14 @@ cudakernel_evaluatenu_fl(int ThreadsPerBlock, int BlocksPerGrid, int Nd, float q
 void
 cudakernel_func_wt_fl(int ThreadsPerBlock, int BlocksPerGrid, float *p, float *x, int M, int N, float *coh, char *bbh, float *wt, int Nbase, int Mclus, int Nstations) {
 
+#ifdef CUDA_DBG
   cudaError_t error;
+#endif
   cudaMemset(x, 0, N*sizeof(float));
 //  printf("Kernel data size=%d, block=%d, thread=%d, baselines=%d\n",N,BlocksPerGrid, ThreadsPerBlock,Nbase);
   kernel_func_wt_fl<<< BlocksPerGrid, ThreadsPerBlock >>>(Nbase,  x, coh, p, bbh, wt, Nstations);
+  cudaDeviceSynchronize();
+#ifdef CUDA_DBG
   error = cudaGetLastError();
   if(error != cudaSuccess)
   {
@@ -419,8 +496,8 @@ cudakernel_func_wt_fl(int ThreadsPerBlock, int BlocksPerGrid, float *p, float *x
     fprintf(stderr,"CUDA error: %s :%s: %d\n", cudaGetErrorString(error),__FILE__,__LINE__);
     exit(-1);
   }
+#endif
 
-  cudaDeviceSynchronize();
 }
 
 /* cuda driver for calculating wt \odot jacf() */
@@ -428,7 +505,9 @@ cudakernel_func_wt_fl(int ThreadsPerBlock, int BlocksPerGrid, float *p, float *x
 void
 cudakernel_jacf_wt_fl(int ThreadsPerBlock_row, int  ThreadsPerBlock_col, float *p, float *jac, int M, int N, float *coh, char *bbh, float *wt, int Nbase, int Mclus, int Nstations, int clus) {
 
+#ifdef CUDA_DBG
   cudaError_t error;
+#endif
   /* NOTE: use small value for ThreadsPerBlock here, like 8 */
   dim3 threadsPerBlock(16, 8);
   /* jacobian: Nbase x Nstations (proportional to N), so */
@@ -439,6 +518,9 @@ cudakernel_jacf_wt_fl(int ThreadsPerBlock_row, int  ThreadsPerBlock_col, float *
  // printf("Kernel Jax data size=%d, params=%d, block=%d,%d, thread=%d,%d, baselines=%d\n",N, M, numBlocks.x,numBlocks.y, threadsPerBlock.x, threadsPerBlock.y, Nbase);
   kernel_jacf_wt_fl<<< numBlocks, threadsPerBlock>>>(Nbase,  M, jac, coh, p, bbh, wt, Nstations);
 
+  cudaDeviceSynchronize();
+
+#ifdef CUDA_DBG
   error = cudaGetLastError();
   if(error != cudaSuccess)
   {
@@ -446,8 +528,8 @@ cudakernel_jacf_wt_fl(int ThreadsPerBlock_row, int  ThreadsPerBlock_col, float *
     fprintf(stderr,"CUDA error: %s :%s: %d\n", cudaGetErrorString(error),__FILE__,__LINE__);
     exit(-1);
   }
+#endif
 
-  cudaDeviceSynchronize();
 }
 
 }

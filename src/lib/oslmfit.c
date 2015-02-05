@@ -170,7 +170,7 @@ oslevmar_der_single_cuda(
   int BlocksPerGrid=(M+ThreadsPerBlock-1)/ThreadsPerBlock;
 
 
-  int moff;
+  unsigned long int moff;
   if (!gWORK) {
   err=cudaMalloc((void**)&xd, N*sizeof(double));
   checkCudaError(err,__FILE__,__LINE__);
@@ -250,7 +250,7 @@ oslevmar_der_single_cuda(
      moff+=M;
     }
     bbd=(char*)&gWORK[moff];
-    moff+=Nbase*2*sizeof(char)/sizeof(double);
+    moff+=(Nbase*2*sizeof(char))/sizeof(double);
   }
 
   err=cudaMemcpyAsync(pd, p, M*sizeof(double), cudaMemcpyHostToDevice,0);

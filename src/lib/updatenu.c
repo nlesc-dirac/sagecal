@@ -35,11 +35,12 @@ __attribute__ ((target(MIC)))
 #endif
 static double
 digamma(double x) {
+  /* FIXME catch -ve value as input */
   double result = 0.0, xx, xx2, xx4;
-  for ( ; x < 7; ++x) { /* reduce x till x<7 */
+  for ( ; x < 7.0; ++x) { /* reduce x till x<7 */
     result -= 1.0/x;
   }
-  x -= 1.0/2.0;
+  x -= 0.5;
   xx = 1.0/x;
   xx2 = xx*xx;
   xx4 = xx2*xx2;
@@ -48,55 +49,6 @@ digamma(double x) {
 }
 
 
-
-/* update nu (degrees of freedom)
-
-   nu0: current value of nu
-   e: Nx1 residual error
-   w: Nx1 weight vector
-
-
-   psi() : digamma function
-   find soltion to
-   psi((nu+1)/2)-ln((nu+1)/2)-psi(nu/2)+ln(nu/2)+1/N sum(ln(w_i)-w_i) +1 = 0
-   use ln(gamma()) => lgamma_r
-*/
-double
-update_nu(double nu0, double *w, int N, int Nt, double nulow, double nuhigh) {
-  int ci;
-  int Nd=30; /* no of samples to estimate nu */
-  double dgm,sumq,sumw,deltanu,thisnu,*q;
-  if ((q=(double*)calloc((size_t)N,sizeof(double)))==0) {
-      fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
-      exit(1);
-  }
-
-  sumw=my_dasum(N,w)/(double)N; /* sum(w_i)/N */
-  /* use q to calculate log(w_i) */
-  for (ci=0; ci<N; ci++) {
-    q[ci]=log(w[ci]);
-    //printf("ci=%d w=%lf logw=%lf\n",ci,w[ci],q[ci]);
-  }
-  sumq=my_dasum(N,q)/(double)N; /* sum(log(w_i)/N) */
-
-  /* search range [low,high] if nu~=30, its Gaussian */
-  deltanu=(double)(nuhigh-nulow)/(double)Nd;
-  for (ci=0; ci<Nd; ci++) {
-   thisnu=(nulow+ci*deltanu);
-   dgm=digamma(thisnu*0.5+0.5);
-   q[ci]=dgm-log((thisnu+1.0)*0.5); /* psi((nu+1)/2)-log((nu+1)/2) */
-   dgm=digamma(thisnu*0.5);
-   q[ci]+=-dgm+log((thisnu)*0.5); /* -psi((nu)/2)+log((nu)/2) */
-   q[ci]+=sumq-sumw+1.0; /* sum(ln(w_i))/N-sum(w_i)/N+1 */
-   //printf("ci=%d q=%lf\n",ci,q[ci]);
-  }
-  ci=my_idamin(Nd,q,1);
-  thisnu=(nulow+ci*deltanu);
-
-  free(q);
-  return thisnu;
-
-}
 
 /* update w<= (nu+1)/(nu+delta^2)
    then q <= w-log(w), so that it is +ve
@@ -140,11 +92,29 @@ q_update_threadfn(void *data) {
  int ci;
  double thisnu,dgm;
  for (ci=t->starti; ci<=t->endi; ci++) {
-   thisnu=(t->nulow+ci*t->nu0); /* deltanu stored in nu0 */
+   thisnu=(t->nulow+(double)ci*t->nu0); /* deltanu stored in nu0 */
    dgm=digamma(thisnu*0.5+0.5);
    t->q[ci]=dgm-log((thisnu+1.0)*0.5); /* psi((nu+1)/2)-log((nu+1)/2) */
    dgm=digamma(thisnu*0.5);
    t->q[ci]+=-dgm+log((thisnu)*0.5); /* -psi((nu)/2)+log((nu)/2) */
+   t->q[ci]+=-t->sumq+1.0; /* q is w-log(w), so -ve: sum(ln(w_i))/N-sum(w_i)/N+1 */
+ }
+ return NULL;
+}
+
+/* update nu  */
+#ifdef USE_MIC
+__attribute__ ((target(MIC)))
+#endif
+static void *
+q_update_threadfn_aecm(void *data) {
+ thread_data_vecnu_t *t=(thread_data_vecnu_t*)data;
+ int ci;
+ double thisnu,dgm;
+ for (ci=t->starti; ci<=t->endi; ci++) {
+   thisnu=(t->nulow+(double)ci*t->nu0); /* deltanu stored in nu0 */
+   dgm=digamma(thisnu*0.5);
+   t->q[ci]=-dgm+log((thisnu)*0.5); /* -psi((nu)/2)+log((nu)/2) */
    t->q[ci]+=-t->sumq+1.0; /* q is w-log(w), so -ve: sum(ln(w_i))/N-sum(w_i)/N+1 */
  }
  return NULL;
@@ -234,6 +204,11 @@ update_w_and_nu(double nu0, double *w, double *ed, int N, int Nt, double nulow, 
   /* search range 2 to 30 because if nu~=30, its Gaussian */
   deltanu=(double)(nuhigh-nulow)/(double)Nd;
   Nthb0=(Nd+Nt-1)/Nt;
+  /* check for too low number of values per thread, halve the threads */
+  if (Nthb0<=2) {
+   Nt=Nt/2;
+   Nthb0=(Nd+Nt-1)/Nt;
+  }
   ci=0;
   for (nth=0;  nth<Nt && ci<Nd; nth++) {
     if (ci+Nthb0<Nd) {
@@ -260,10 +235,104 @@ update_w_and_nu(double nu0, double *w, double *ed, int N, int Nt, double nulow, 
   free(threaddata);
 
   ci=my_idamin(Nd,q,1);
-  thisnu=(nulow+ci*deltanu);
+  thisnu=(nulow+(double)ci*deltanu);
 
   free(q);
   return thisnu;
 
  return 0;
+}
+
+
+
+
+/* update nu (degrees of freedom)
+   nu_old: old nu
+   logsumw = 1/N sum(log(w_i)-w_i)
+
+   use Nd values in [nulow,nuhigh] to find nu
+
+
+   psi() : digamma function
+   find soltion to
+   psi((nu_old+p)/2)-ln((nu_old+p)/2)-psi(nu/2)+ln(nu/2)+1/N sum(ln(w_i)-w_i) +1 = 0
+   use ln(gamma()) => lgamma_r
+
+   p: 1 or 8
+*/
+double
+update_nu(double logsumw, int Nd, int Nt, double nulow, double nuhigh, int p, double nu_old) {
+  int ci,nth,nth1,Nthb,Nthb0;
+  double deltanu,thisnu,*q;
+  pthread_attr_t attr;
+  pthread_t *th_array;
+  thread_data_vecnu_t *threaddata;
+
+  if ((q=(double*)calloc((size_t)Nd,sizeof(double)))==0) {
+#ifndef USE_MIC
+      fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
+#endif
+      exit(1);
+  }
+
+  /* setup threads */
+  pthread_attr_init(&attr);
+  pthread_attr_setdetachstate(&attr,PTHREAD_CREATE_JOINABLE);
+
+  if ((th_array=(pthread_t*)malloc((size_t)Nt*sizeof(pthread_t)))==0) {
+#ifndef USE_MIC
+   fprintf(stderr,"%s: %d: No free memory\n",__FILE__,__LINE__);
+#endif
+   exit(1);
+  }
+  if ((threaddata=(thread_data_vecnu_t*)malloc((size_t)Nt*sizeof(thread_data_vecnu_t)))==0) {
+#ifndef USE_MIC
+    fprintf(stderr,"%s: %d: No free memory\n",__FILE__,__LINE__);
+#endif
+    exit(1);
+  }
+  /* calculate psi((nu_old+p)/2)-ln((nu_old+p)/2) */
+  double dgm=digamma((nu_old+(double)p)*0.5);
+  dgm=dgm-log((nu_old+(double)p)*0.5); /* psi((nu+p)/2)-log((nu+p)/2) */
+
+
+  deltanu=(double)(nuhigh-nulow)/(double)Nd;
+  Nthb0=(Nd+Nt-1)/Nt;
+  /* check for too low number of values per thread, halve the threads */
+  if (Nthb0<=2) {
+   Nt=Nt/2;
+   Nthb0=(Nd+Nt-1)/Nt;
+  }
+  ci=0;
+  for (nth=0;  nth<Nt && ci<Nd; nth++) {
+    if (ci+Nthb0<Nd) {
+     Nthb=Nthb0;
+    } else {
+     Nthb=Nd-ci;
+    }
+    threaddata[nth].starti=ci;
+    threaddata[nth].endi=ci+Nthb-1;
+    threaddata[nth].q=q;
+    threaddata[nth].nu0=deltanu;
+    threaddata[nth].nulow=nulow;
+    threaddata[nth].nuhigh=nuhigh;
+    threaddata[nth].sumq=-logsumw-dgm;
+    pthread_create(&th_array[nth],&attr,q_update_threadfn_aecm,(void*)(&threaddata[nth]));
+    /* next baseline set */
+    ci=ci+Nthb;
+  }
+  /* now wait for threads to finish */
+  for(nth1=0; nth1<nth; nth1++) {
+   pthread_join(th_array[nth1],NULL);
+  }
+
+  pthread_attr_destroy(&attr);
+  free(th_array);
+  free(threaddata);
+
+  ci=my_idamin(Nd,q,1);
+  thisnu=(nulow+((double)ci)*deltanu);
+
+  free(q);
+  return thisnu;
 }

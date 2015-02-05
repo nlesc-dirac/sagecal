@@ -21,6 +21,8 @@
 #include <cuComplex.h>
 #include <stdio.h>
 
+/* enable this for kernel failure detection */
+//#define CUDA_DBG
 
 __global__ void kernel_deriv_robust(int Nbase, int tilesz, int M, int Ns, int Nparam, int goff, double robust_nu, double *x, double *coh, double *p, char *bb, int *ptoclus, double *grad){
   /* global thread index */
@@ -486,7 +488,7 @@ __global__ void kernel_sqrtweights(int N, double *wt){
 __device__ double
 digamma(double x) {
   double result = 0.0, xx, xx2, xx4;
-  for ( ; x < 7; ++x) { /* reduce x till x<7 */
+  for ( ; x < 7.0; ++x) { /* reduce x till x<7 */
     result -= 1.0/x;
   }
   x -= 1.0/2.0;
@@ -517,8 +519,12 @@ extern "C"
 void
 cudakernel_setweights(int ThreadsPerBlock, int BlocksPerGrid, int N, double *wt, double alpha) {
 
+#ifdef CUDA_DBG
   cudaError_t error;
+#endif
   kernel_setweights<<< BlocksPerGrid, ThreadsPerBlock >>>(N, wt, alpha);
+  cudaDeviceSynchronize();
+#ifdef CUDA_DBG
   error = cudaGetLastError();
   if(error != cudaSuccess)
   {
@@ -526,8 +532,8 @@ cudakernel_setweights(int ThreadsPerBlock, int BlocksPerGrid, int N, double *wt,
     fprintf(stderr,"CUDA error: %s :%s: %d\n", cudaGetErrorString(error),__FILE__,__LINE__);
     exit(-1);
   }
+#endif
 
-  cudaDeviceSynchronize();
 
 }
 
@@ -535,8 +541,12 @@ cudakernel_setweights(int ThreadsPerBlock, int BlocksPerGrid, int N, double *wt,
 void
 cudakernel_hadamard(int ThreadsPerBlock, int BlocksPerGrid, int N, double *wt, double *x) {
 
+#ifdef CUDA_DBG
   cudaError_t error;
+#endif
   kernel_hadamard<<< BlocksPerGrid, ThreadsPerBlock >>>(N, wt, x);
+  cudaDeviceSynchronize();
+#ifdef CUDA_DBG
   error = cudaGetLastError();
   if(error != cudaSuccess)
   {
@@ -544,8 +554,8 @@ cudakernel_hadamard(int ThreadsPerBlock, int BlocksPerGrid, int N, double *wt, d
     fprintf(stderr,"CUDA error: %s :%s: %d\n", cudaGetErrorString(error),__FILE__,__LINE__);
     exit(-1);
   }
+#endif
 
-  cudaDeviceSynchronize();
 
 }
 
@@ -553,8 +563,12 @@ cudakernel_hadamard(int ThreadsPerBlock, int BlocksPerGrid, int N, double *wt, d
 void
 cudakernel_updateweights(int ThreadsPerBlock, int BlocksPerGrid, int N, double *wt, double *x, double *q, double robust_nu) {
 
+#ifdef CUDA_DBG
   cudaError_t error;
+#endif
   kernel_updateweights<<< BlocksPerGrid, ThreadsPerBlock >>>(N, wt, x, q, robust_nu);
+  cudaDeviceSynchronize();
+#ifdef CUDA_DBG
   error = cudaGetLastError();
   if(error != cudaSuccess)
   {
@@ -562,8 +576,8 @@ cudakernel_updateweights(int ThreadsPerBlock, int BlocksPerGrid, int N, double *
     fprintf(stderr,"CUDA error: %s :%s: %d\n", cudaGetErrorString(error),__FILE__,__LINE__);
     exit(-1);
   }
+#endif
 
-  cudaDeviceSynchronize();
 
 }
 
@@ -571,8 +585,12 @@ cudakernel_updateweights(int ThreadsPerBlock, int BlocksPerGrid, int N, double *
 void
 cudakernel_sqrtweights(int ThreadsPerBlock, int BlocksPerGrid, int N, double *wt) {
 
+#ifdef CUDA_DBG
   cudaError_t error;
+#endif
   kernel_sqrtweights<<< BlocksPerGrid, ThreadsPerBlock >>>(N, wt);
+  cudaDeviceSynchronize();
+#ifdef CUDA_DBG
   error = cudaGetLastError();
   if(error != cudaSuccess)
   {
@@ -580,8 +598,8 @@ cudakernel_sqrtweights(int ThreadsPerBlock, int BlocksPerGrid, int N, double *wt
     fprintf(stderr,"CUDA error: %s :%s: %d\n", cudaGetErrorString(error),__FILE__,__LINE__);
     exit(-1);
   }
+#endif
 
-  cudaDeviceSynchronize();
 
 }
 
@@ -590,8 +608,12 @@ cudakernel_sqrtweights(int ThreadsPerBlock, int BlocksPerGrid, int N, double *wt
 void
 cudakernel_evaluatenu(int ThreadsPerBlock, int BlocksPerGrid, int Nd, double qsum, double *q, double deltanu,double nulow) {
 
+#ifdef CUDA_DBG
   cudaError_t error;
+#endif
   kernel_evaluatenu<<< BlocksPerGrid, ThreadsPerBlock >>>(Nd, qsum, q, deltanu, nulow);
+  cudaDeviceSynchronize();
+#ifdef CUDA_DBG
   error = cudaGetLastError();
   if(error != cudaSuccess)
   {
@@ -599,8 +621,8 @@ cudakernel_evaluatenu(int ThreadsPerBlock, int BlocksPerGrid, int Nd, double qsu
     fprintf(stderr,"CUDA error: %s :%s: %d\n", cudaGetErrorString(error),__FILE__,__LINE__);
     exit(-1);
   }
+#endif
 
-  cudaDeviceSynchronize();
 
 }
 
@@ -609,10 +631,14 @@ cudakernel_evaluatenu(int ThreadsPerBlock, int BlocksPerGrid, int Nd, double qsu
 void
 cudakernel_func_wt(int ThreadsPerBlock, int BlocksPerGrid, double *p, double *x, int M, int N, double *coh, char *bbh, double *wt, int Nbase, int Mclus, int Nstations) {
 
+#ifdef CUDA_DBG
   cudaError_t error;
+#endif
   cudaMemset(x, 0, N*sizeof(double));
 //  printf("Kernel data size=%d, block=%d, thread=%d, baselines=%d\n",N,BlocksPerGrid, ThreadsPerBlock,Nbase);
   kernel_func_wt<<< BlocksPerGrid, ThreadsPerBlock >>>(Nbase,  x, coh, p, bbh, wt, Nstations);
+  cudaDeviceSynchronize();
+#ifdef CUDA_DBG
   error = cudaGetLastError();
   if(error != cudaSuccess)
   {
@@ -620,8 +646,8 @@ cudakernel_func_wt(int ThreadsPerBlock, int BlocksPerGrid, double *p, double *x,
     fprintf(stderr,"CUDA error: %s :%s: %d\n", cudaGetErrorString(error),__FILE__,__LINE__);
     exit(-1);
   }
+#endif
 
-  cudaDeviceSynchronize();
 }
 
 /* cuda driver for calculating wt \odot jacf() */
@@ -629,7 +655,9 @@ cudakernel_func_wt(int ThreadsPerBlock, int BlocksPerGrid, double *p, double *x,
 void
 cudakernel_jacf_wt(int ThreadsPerBlock_row, int  ThreadsPerBlock_col, double *p, double *jac, int M, int N, double *coh, char *bbh, double *wt, int Nbase, int Mclus, int Nstations, int clus) {
 
+#ifdef CUDA_DBG
   cudaError_t error;
+#endif
   /* NOTE: use small value for ThreadsPerBlock here, like 8 */
   dim3 threadsPerBlock(16, 8);
   /* jacobian: Nbase x Nstations (proportional to N), so */
@@ -640,6 +668,8 @@ cudakernel_jacf_wt(int ThreadsPerBlock_row, int  ThreadsPerBlock_col, double *p,
  // printf("Kernel Jax data size=%d, params=%d, block=%d,%d, thread=%d,%d, baselines=%d\n",N, M, numBlocks.x,numBlocks.y, threadsPerBlock.x, threadsPerBlock.y, Nbase);
   kernel_jacf_wt<<< numBlocks, threadsPerBlock>>>(Nbase,  M, jac, coh, p, bbh, wt, Nstations);
 
+  cudaDeviceSynchronize();
+#ifdef CUDA_DBG
   error = cudaGetLastError();
   if(error != cudaSuccess)
   {
@@ -647,8 +677,8 @@ cudakernel_jacf_wt(int ThreadsPerBlock_row, int  ThreadsPerBlock_col, double *p,
     fprintf(stderr,"CUDA error: %s :%s: %d\n", cudaGetErrorString(error),__FILE__,__LINE__);
     exit(-1);
   }
+#endif
 
-  cudaDeviceSynchronize();
 }
 
 /* cuda driver for kernel */
@@ -670,9 +700,13 @@ cudakernel_jacf_wt(int ThreadsPerBlock_row, int  ThreadsPerBlock_col, double *p,
 */
 void cudakernel_lbfgs_robust(int ThreadsPerBlock, int BlocksPerGrid, int Nbase, int tilesz, int M, int Ns, int Nparam, int goff, double robust_nu, double *x, double *coh, double *p, char *bb, int *ptoclus, double *grad){
 
+#ifdef CUDA_DBG
   cudaError_t error;
+#endif
   /* invoke device on this block/thread grid (last argument is buffer size in bytes) */
   kernel_deriv_robust<<< BlocksPerGrid, ThreadsPerBlock, ThreadsPerBlock*sizeof(double) >>> (Nbase, tilesz, M, Ns, Nparam, goff, robust_nu, x, coh, p, bb, ptoclus, grad);
+  cudaDeviceSynchronize();
+#ifdef CUDA_DBG
   error = cudaGetLastError();
   if(error != cudaSuccess)
   {
@@ -680,8 +714,8 @@ void cudakernel_lbfgs_robust(int ThreadsPerBlock, int BlocksPerGrid, int Nbase, 
     fprintf(stderr,"CUDA error: %s :%s: %d\n", cudaGetErrorString(error),__FILE__,__LINE__);
     exit(-1);
   }
+#endif
 
-  cudaDeviceSynchronize();
 }
 
 }

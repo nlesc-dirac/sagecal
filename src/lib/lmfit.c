@@ -32,7 +32,7 @@
    C=A*B
 */
 static void
-amb(complex double *a, complex double *b, complex double *c) {
+amb(complex double * __restrict a, complex double * __restrict b, complex double * __restrict c) {
  c[0]=a[0]*b[0]+a[1]*b[2];
  c[1]=a[0]*b[1]+a[1]*b[3];
  c[2]=a[2]*b[0]+a[3]*b[2];
@@ -43,7 +43,7 @@ amb(complex double *a, complex double *b, complex double *c) {
    C=A*B^H
 */
 static void
-ambt(complex double *a, complex double *b, complex double *c) {
+ambt(complex double * __restrict a, complex double * __restrict b, complex double * __restrict c) {
  c[0]=a[0]*conj(b[0])+a[1]*conj(b[1]);
  c[1]=a[0]*conj(b[2])+a[1]*conj(b[3]);
  c[2]=a[2]*conj(b[0])+a[3]*conj(b[1]);
@@ -1429,8 +1429,10 @@ sagefit_visibilities_dual(double *u, double *v, double *w, double *x, int N,
    }
    /* normalize nerr array so that the sum is 1 */
    total_err=my_dasum(M,nerr);
-   my_dscal(M, 1.0/total_err, nerr);
-   if (randomize) {
+   if (total_err>0.0) {
+    my_dscal(M, 1.0/total_err, nerr);
+   }
+   if (randomize && M>1) {
     /* flip weighting flag */
     weighted_iter=!weighted_iter;
     free(cr);
@@ -1947,7 +1949,7 @@ sagefit_visibilities_dual_pt(double *u, double *v, double *w, double *x, int N,
    /* normalize nerr array so that the sum is 1 */
    total_err=my_dasum(M,nerr);
    my_dscal(M, 1.0/total_err, nerr);
-   if (randomize) {
+   if (randomize && M>1) {
     /* flip weighting flag */
     weighted_iter=!weighted_iter;
     free(cr);
@@ -2341,7 +2343,9 @@ sagefit_visibilities_dual_pt_one_gpu(double *u, double *v, double *w, double *x,
    my_dscal(M, 1.0/total_err, nerr);
 
    /* flip weighting flag */
-   weighted_iter=!weighted_iter;
+   if (M>1) {
+    weighted_iter=!weighted_iter;
+   }
  }
   free(nerr);
   free(xdummy);
@@ -2498,7 +2502,8 @@ pipeline_slave_code_flt(void *data)
   /* do work */
   //printf("state=%d, thread %d\n",gd->status[tid],tid);
   if (gd->status[tid]==PT_DO_WORK_LM || gd->status[tid]==PT_DO_WORK_OSLM
-   || gd->status[tid]==PT_DO_WORK_RLM || gd->status[tid]==PT_DO_WORK_OSRLM  ) {
+   || gd->status[tid]==PT_DO_WORK_RLM || gd->status[tid]==PT_DO_WORK_OSRLM
+   || gd->status[tid]==PT_DO_WORK_RTR || gd->status[tid]==PT_DO_WORK_RRTR ) {
 /************************* work *********************/
   me_data_t *t=(me_data_t *)gd->lmdata[tid];
   /* divide the tiles into chunks tilesz/nchunk */
@@ -2531,6 +2536,20 @@ pipeline_slave_code_flt(void *data)
       ret=rlevmar_der_single_cuda_fl(&gd->p[tid][ci*(gd->M[tid])], &gd->x[tid][8*cj*t->Nbase], gd->M[tid], 8*ntiles*t->Nbase, gd->itermax[tid], gd->opts[tid], gd->info[tid], gd->cbhandle[tid], gd->gWORK[tid], gd->linsolv, cj, ntiles, gd->nulow,gd->nuhigh,(void*)gd->lmdata[tid]);
      } else if (gd->status[tid]==PT_DO_WORK_OSRLM) {
       ret=osrlevmar_der_single_cuda_fl(&gd->p[tid][ci*(gd->M[tid])], &gd->x[tid][8*cj*t->Nbase], gd->M[tid], 8*ntiles*t->Nbase, gd->itermax[tid], gd->opts[tid], gd->info[tid], gd->cbhandle[tid], gd->gWORK[tid], gd->linsolv, cj, ntiles, gd->nulow,gd->nuhigh,gd->randomize,(void*)gd->lmdata[tid]);
+     } else if (gd->status[tid]==PT_DO_WORK_RTR) {
+      /* note stations: M/8, baselines ntiles*Nbase RSD+RTR */
+      float Delta0=0.01f; /* use very small value because previous LM has already made the solution close to true value */
+      /* storage: 
+       need (float) 8N*(BlocksPerGrid+8) + 8N*5 + 8*M + 8*Nbase + 2*Nbase + N
+       where N<=M/8 M<=ntiles*Nbase, Nbase<=ntiles*Nbase,
+         BlocksPerGrid=ceil(ntiles*Nbase/128)
+      so(max): M*( 13 + ntiles*Nbase/128 +1 +1) + 18*ntiles*Nbase
+        where M: no of stations (params/8), ntiles: tile size, Nbase: baselines */
+      ret=rtr_solve_cuda_fl(&gd->p[tid][ci*(gd->M[tid])], &gd->x[tid][8*cj*t->Nbase], gd->M[tid]/8, ntiles*t->Nbase, gd->itermax[tid]+5, gd->itermax[tid]+10, Delta0, Delta0*0.125f, gd->info[tid], gd->cbhandle[tid], gd->gWORK[tid],  cj, ntiles, (void*)gd->lmdata[tid]);
+     } else if (gd->status[tid]==PT_DO_WORK_RRTR) {
+      float Delta0=0.01f;
+      /* storage (float) 8N*(BlocksPerGrid+8) + 8N*5 + 8*M + 8*Nbase + 2*Nbase + N + M */
+      ret=rtr_solve_cuda_robust_fl(&gd->p[tid][ci*(gd->M[tid])], &gd->x[tid][8*cj*t->Nbase], gd->M[tid]/8, ntiles*t->Nbase, gd->itermax[tid]+5, gd->itermax[tid]+10, Delta0, Delta0*0.125f, gd->nulow, gd->nuhigh, gd->info[tid], gd->cbhandle[tid], gd->gWORK[tid],  cj, ntiles, (void*)gd->lmdata[tid]);
      }
      init_res+=gd->info[tid][0];
      final_res+=gd->info[tid][1];
@@ -2544,11 +2563,15 @@ pipeline_slave_code_flt(void *data)
  
 /************************* work *********************/
   } else if (gd->status[tid]==PT_DO_AGPU) {
-   attach_gpu_to_thread2(tid,&gd->cbhandle[tid],&gd->gWORK[tid],gd->data_size);
+   /* also enable cula : 1 at end */
+   attach_gpu_to_thread2(tid,&gd->cbhandle[tid],&gd->gWORK[tid],gd->data_size,1);
   } else if (gd->status[tid]==PT_DO_DGPU) {
-   detach_gpu_from_thread2(tid,gd->cbhandle[tid],gd->gWORK[tid]);
+   detach_gpu_from_thread2(tid,gd->cbhandle[tid],gd->gWORK[tid],1);
   } else if (gd->status[tid]==PT_DO_MEMRESET) {
    reset_gpu_memory((double*)gd->gWORK[tid],gd->data_size);
+  } else if (gd->status[tid]!=PT_DO_NOTHING) { /* catch error */
+    fprintf(stderr,"%s: %d: invalid mode for slave tid=%d status=%d\n",__FILE__,__LINE__,tid,gd->status[tid]);
+    exit(1);
   }
  }
  return NULL;
@@ -2724,7 +2747,7 @@ sagefit_visibilities_dual_pt_flt(double *u, double *v, double *w, double *x, int
      fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
      exit(1);
   }
-  if (solver_mode==2 || solver_mode==3) {
+  if (solver_mode==SM_OSLM_OSRLM_RLBFGS || solver_mode==SM_RLM_RLBFGS || solver_mode==SM_RTR_OSRLM_RLBFGS) {
    if ((robust_nuM=(double*)calloc((size_t)(M),sizeof(double)))==0) {
      fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
      exit(1);
@@ -2752,12 +2775,28 @@ sagefit_visibilities_dual_pt_flt(double *u, double *v, double *w, double *x, int
    int64_t data_sz=0;
    /* size for MLM (disabled) */
    //data_sz=(int64_t)(n+Mm*n+n+n+n+Mm+Mm+Mm*Mm+Mm*Mm+Mm+Mm+Mm+Mm+Mm+Nbase1*8)*sizeof(double)+(int64_t)Nbase1*2*sizeof(char);
-   if (solver_mode==0 || solver_mode==1) {
+   /* size for RTR (float)  : M*( 13 + ntiles*Nbase/128 +1+1) + 18*ntiles*Nbase
+        where M: no of stations (params/8) ntiles: tile size Nbase: baselines  
+   */
+   int64_t data_sz_rtr=0;
+   if (solver_mode==SM_RTR_OSLM_LBFGS) {
+     data_sz_rtr=(N*(13+Nbase1/128+1+1)+18*Nbase1)*sizeof(float);
+   } else if (solver_mode==SM_RTR_OSRLM_RLBFGS) {
+     /* 2 x Nbase more than normal RTR for weight, log(weight) */
+     data_sz_rtr=(N*(13+Nbase1/128+1+1)+20*Nbase1)*sizeof(float);
+   }
+   if (solver_mode==SM_LM_LBFGS || solver_mode==SM_OSLM_LBFGS || solver_mode==SM_RTR_OSLM_LBFGS) {
     /* size for LM */
     data_sz=(int64_t)(n+Mm*n+Mm*Mm+Mm+Mm*Mm+Mm+Mm+Mm+Mm+Nbase1*8+n+n)*sizeof(float)+(int64_t)Nbase1*2*sizeof(char);
-   } else if (solver_mode==2 || solver_mode==3 ) {
+    if(solver_mode==SM_RTR_OSLM_LBFGS) {
+     data_sz=MAX(data_sz,data_sz_rtr);
+    }
+   } else if (solver_mode==SM_RLM_RLBFGS || solver_mode==SM_OSLM_OSRLM_RLBFGS || solver_mode==SM_RTR_OSRLM_RLBFGS) {
    /* size for ROBUSTLM */
      data_sz=(int64_t)(n+Mm*n+Mm*Mm+Mm+Mm*Mm+Mm+Mm+Mm+Mm+Nbase1*8+n+n+n+n)*sizeof(float)+(int64_t)Nbase1*2*sizeof(char);
+    if(solver_mode==SM_RTR_OSRLM_RLBFGS) {
+     data_sz=MAX(data_sz,data_sz_rtr);
+    }
    } else {
     fprintf(stderr,"%s: %d: invalid mode for solver\n",__FILE__,__LINE__);
     exit(1);
@@ -2786,11 +2825,14 @@ sagefit_visibilities_dual_pt_flt(double *u, double *v, double *w, double *x, int
   my_daxpy(n, xsub, -1.0, xo);
   *res_0=my_dnrm2(n,xo)/(double)n;
 
+  int iter_bar=(int)ceil((0.80/(double)M)*((double)total_iter));
   for (ci=0; ci<max_emiter; ci++) {
   /**************** EM iteration ***********************/
-    if (randomize) {
+    if (randomize && M>1) {
      /* find a random permutation of clusters */
      cr=random_permutation(M,weighted_iter,nerr);
+    } else {
+     cr=NULL;
     }
 
     for (cj=0; cj<M/2; cj++) { /* iter per cluster pairs */
@@ -2805,12 +2847,14 @@ sagefit_visibilities_dual_pt_flt(double *u, double *v, double *w, double *x, int
      if (weighted_iter) {
        /* assume permutation gives a sorted pair 
        with almost equal nerr[] values */
-       this_itermax0=(int)floor((0.33*nerr[c0]+0.60/(double)M)*((double)total_iter));
-       this_itermax1=(int)floor((0.33*nerr[c1]+0.60/(double)M)*((double)total_iter));
+       this_itermax0=(int)((0.20*nerr[c0])*((double)total_iter))+iter_bar;
+       this_itermax1=(int)((0.20*nerr[c1])*((double)total_iter))+iter_bar;
      } else {
        this_itermax0=this_itermax1=max_iter;
      }
-     //printf("Cluster pair %d(iter=%d,wt=%lf),%d(iter=%d,wt=%lf)\n",c0,this_itermax0,nerr[c0],c1,this_itermax1,nerr[c1]);
+#ifdef DEBUG
+     printf("Cluster pair %d(iter=%d,wt=%lf),%d(iter=%d,wt=%lf)\n",c0,this_itermax0,nerr[c0],c1,this_itermax1,nerr[c1]);
+#endif
      if (this_itermax0>0 || this_itermax1>0) {
      /* calculate contribution from hidden data, subtract from x */
      /* since x has already subtracted this model, just add
@@ -2860,15 +2904,15 @@ sagefit_visibilities_dual_pt_flt(double *u, double *v, double *w, double *x, int
 
      /* both threads do work */
      /* if solver_mode>0 last EM iteration full LM, the rest OS LM */
-     if (!solver_mode) {
+     if (solver_mode==SM_OSLM_LBFGS) {
       if (ci==max_emiter-1) {
        tpg.status[0]=tpg.status[1]=PT_DO_WORK_LM;
       } else {
        tpg.status[0]=tpg.status[1]=PT_DO_WORK_OSLM;
       }
-     } else if (solver_mode==1) {
+     } else if (solver_mode==SM_LM_LBFGS) {
       tpg.status[0]=tpg.status[1]=PT_DO_WORK_LM;
-     } else if (solver_mode==3) {
+     } else if (solver_mode==SM_OSLM_OSRLM_RLBFGS) {
       /* last EM iteration robust OS-LM, the one before LM, the rest OS LM */
       if (ci==max_emiter-2) {
        tpg.status[0]=tpg.status[1]=PT_DO_WORK_LM;
@@ -2879,7 +2923,7 @@ sagefit_visibilities_dual_pt_flt(double *u, double *v, double *w, double *x, int
       } else {
        tpg.status[0]=tpg.status[1]=PT_DO_WORK_OSLM;
       }
-     } else if (solver_mode==2) {
+     } else if (solver_mode==SM_RLM_RLBFGS) {
       /* last EM iteration robust LM, the rest OS LM */
       if (ci==max_emiter-1) {
        lmdata0.robust_nu=lmdata1.robust_nu=robust_nu0; /* initial robust nu */
@@ -2887,15 +2931,41 @@ sagefit_visibilities_dual_pt_flt(double *u, double *v, double *w, double *x, int
       } else {
        tpg.status[0]=tpg.status[1]=PT_DO_WORK_OSLM;
       }
+     } else if (solver_mode==SM_RTR_OSLM_LBFGS) {
+       tpg.status[0]=tpg.status[1]=PT_DO_WORK_RTR;
+     } else if (solver_mode==SM_RTR_OSRLM_RLBFGS) {
+      if (!ci) {
+       lmdata0.robust_nu=lmdata1.robust_nu=robust_nu0; /* initial robust nu */
+      } 
+      tpg.status[0]=tpg.status[1]=PT_DO_WORK_RRTR;
+     } else {
+#ifndef USE_MIC
+        fprintf(stderr,"%s: %d: undefined solver mode\n",__FILE__,__LINE__);
+#endif
+        exit(1);
      }
   sync_barrier(&(tp.gate2)); /* sync at gate 2 */
   sync_barrier(&(tp.gate1)); /* sync at gate 1 */
      tpg.status[0]=tpg.status[1]=PT_DO_NOTHING;
   sync_barrier(&(tp.gate2)); /* sync at gate 2 */
-     nerr[c0]=(info0[0]-info0[1])/info0[0];
-     nerr[c1]=(info1[0]-info1[1])/info1[0];
+#ifdef DEBUG
+printf("1: %lf -> %lf 2: %lf -> %lf\n\n\n",info0[0],info0[1],info1[0],info1[1]);
+#endif
+     /* catch -ve value here */
+     if (info0[0]>0.0) {
+      nerr[c0]=(info0[0]-info0[1])/info0[0];
+      if (nerr[c0]<0.0) { nerr[c0]=0.0; }
+     } else {
+      nerr[c0]=0.0;
+     }
+     if (info1[0]>0.0) {
+      nerr[c1]=(info1[0]-info1[1])/info1[0];
+      if (nerr[c1]<0.0) { nerr[c1]=0.0; }
+     } else {
+      nerr[c1]=0.0;
+     }
      /* update robust_nu */
-     if ((solver_mode==2  || solver_mode==3) && (ci==max_emiter-1)) {
+     if ((solver_mode==SM_RLM_RLBFGS  || solver_mode==SM_OSLM_OSRLM_RLBFGS || solver_mode==SM_RTR_OSRLM_RLBFGS) && (ci==max_emiter-1)) {
       robust_nuM[c0]+=lmdata0.robust_nu;
       robust_nuM[c1]+=lmdata1.robust_nu;
      }
@@ -2912,18 +2982,20 @@ sagefit_visibilities_dual_pt_flt(double *u, double *v, double *w, double *x, int
    }
    /* odd cluster out, if M is odd */
    if (M%2) {
-     if (randomize) {
+     if (randomize && M>1) {
       c0=cr[M-1];
      } else {
       c0=M-1;
      }
      /* calculate max LM iter for this cluster */
      if (weighted_iter) {
-       this_itermax0=(int)floor((0.33*nerr[c0]+0.66/(double)M)*((double)total_iter));
+       this_itermax0=(int)((0.20*nerr[c0])*((double)total_iter))+iter_bar;
      } else {
        this_itermax0=max_iter;
      }
-    //printf("Cluster %d(iter=%d, wt=%lf)\n",c0,this_itermax0,nerr[c0]);
+#ifdef DEBUG
+    printf("Cluster %d(iter=%d, wt=%lf)\n",c0,this_itermax0,nerr[c0]);
+#endif
      if (this_itermax0>0) {
 /**************************************************************************/
   sync_barrier(&(tp.gate1)); /* sync at gate 1 */
@@ -2946,15 +3018,15 @@ sagefit_visibilities_dual_pt_flt(double *u, double *v, double *w, double *x, int
      tpg.linsolv=linsolv;
      tpg.lmdata[0]=&lmdata0;
 
-     if (!solver_mode) {
-     if (ci==max_emiter-1) {
-      tpg.status[0]=PT_DO_WORK_LM;
-     } else {
-      tpg.status[0]=PT_DO_WORK_OSLM;
-     }
-     } else if (solver_mode==1) {
-      tpg.status[0]=PT_DO_WORK_LM;
-     } else if (solver_mode==3) {
+     if (solver_mode==SM_OSLM_LBFGS) {
+       if (ci==max_emiter-1) {
+        tpg.status[0]=PT_DO_WORK_LM;
+       } else {
+        tpg.status[0]=PT_DO_WORK_OSLM;
+       }
+     } else if (solver_mode==SM_LM_LBFGS) {
+       tpg.status[0]=PT_DO_WORK_LM;
+     } else if (solver_mode==SM_OSLM_OSRLM_RLBFGS) {
       /* last EM iteration robust OS-LM, the one before LM, the rest OS LM */
        if (ci==max_emiter-2) {
         tpg.status[0]=PT_DO_WORK_LM;
@@ -2965,14 +3037,28 @@ sagefit_visibilities_dual_pt_flt(double *u, double *v, double *w, double *x, int
       } else {
        tpg.status[0]=PT_DO_WORK_OSLM;
       }
-     } else if (solver_mode==2) {
+     } else if (solver_mode==SM_RLM_RLBFGS) {
        if (ci==max_emiter-1) {
        lmdata0.robust_nu=robust_nu0; /* initial robust nu */
        tpg.status[0]=PT_DO_WORK_OSRLM;
       } else {
        tpg.status[0]=PT_DO_WORK_OSLM;
       }
+     }  else if (solver_mode==SM_RTR_OSLM_LBFGS) {
+        tpg.status[0]=PT_DO_WORK_RTR;
+     }  else if (solver_mode==SM_RTR_OSRLM_RLBFGS) {
+       /* last iteration is OSRLM */
+       if (!ci) {
+        lmdata0.robust_nu=robust_nu0; /* initial robust nu */
+       } 
+       tpg.status[0]=PT_DO_WORK_RRTR;
+     } else {
+#ifndef USE_MIC
+        fprintf(stderr,"%s: %d: undefined solver mode\n",__FILE__,__LINE__);
+#endif
+        exit(1);
      }
+
      tpg.status[1]=PT_DO_NOTHING;
   sync_barrier(&(tp.gate2)); /* sync at gate 2 */
 /**************************************************************************/
@@ -2980,9 +3066,18 @@ sagefit_visibilities_dual_pt_flt(double *u, double *v, double *w, double *x, int
      tpg.status[0]=tpg.status[1]=PT_DO_NOTHING;
   sync_barrier(&(tp.gate2)); /* sync at gate 2 */
 
-     nerr[c0]=(info0[0]-info0[1])/info0[0];
+#ifdef DEBUG
+printf("1: %lf -> %lf\n\n\n",info0[0],info0[1]);
+#endif
+     /* catch -ve value here */
+     if (info0[0]>0.0) {
+      nerr[c0]=(info0[0]-info0[1])/info0[0];
+      if (nerr[c0]<0.0) { nerr[c0]=0.0; }
+     } else {
+      nerr[c0]=0.0;
+     }
      /* update robust_nu */
-     if ((solver_mode==2 || solver_mode==3) && (ci==max_emiter-1)) {
+     if ((solver_mode==SM_RLM_RLBFGS || solver_mode==SM_OSLM_OSRLM_RLBFGS || solver_mode==SM_RTR_OSRLM_RLBFGS) && (ci==max_emiter-1)) {
       robust_nuM[c0]+=lmdata0.robust_nu;
      }
      /* once again subtract solved model from data */
@@ -2993,8 +3088,10 @@ sagefit_visibilities_dual_pt_flt(double *u, double *v, double *w, double *x, int
    }
    /* normalize nerr array so that the sum is 1 */
    total_err=my_dasum(M,nerr);
-   my_dscal(M, 1.0/total_err, nerr);
-   if (randomize) {
+   if (total_err>0.0) {
+    my_dscal(M, 1.0/total_err, nerr);
+   }
+   if (randomize && M>1) { /* nothing to randomize if only 1 direction */
     /* flip weighting flag */
     weighted_iter=!weighted_iter;
     free(cr);
@@ -3011,7 +3108,7 @@ sagefit_visibilities_dual_pt_flt(double *u, double *v, double *w, double *x, int
   free(xdummy1f);
   free(pf);
   free(ddcohf);
-  if (solver_mode==2 || solver_mode==3) {
+  if (solver_mode==SM_RLM_RLBFGS || solver_mode==SM_OSLM_OSRLM_RLBFGS || solver_mode==SM_RTR_OSRLM_RLBFGS) {
     /* calculate mean robust_nu over all clusters */
     robust_nu0=my_dasum(M,robust_nuM)/(double)M;
 #ifdef DEBUG
@@ -3036,7 +3133,11 @@ sagefit_visibilities_dual_pt_flt(double *u, double *v, double *w, double *x, int
 
   if (max_lbfgs>0) {
   /* use LBFGS */
-   if (solver_mode==2 || solver_mode==3) {
+   if (solver_mode==SM_RLM_RLBFGS || solver_mode==SM_OSLM_OSRLM_RLBFGS || solver_mode==SM_RTR_OSRLM_RLBFGS) {
+    /* if RTR, divide by 8 */
+    if (solver_mode==SM_RTR_OSRLM_RLBFGS) {
+     robust_nu0 *=0.125;  
+    }
     lmdata0.robust_nu=robust_nu0;
     ret=lbfgs_fit_robust_cuda(minimize_viz_full_pth, p, x, m, n, max_lbfgs, lbfgs_m, gpu_threads, (void*)&lmdata0);
    } else {

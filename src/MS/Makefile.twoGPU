@@ -19,7 +19,6 @@ CULALIB=-lcula_core -lcula_lapack -lcublas
 
 LDFLAGS=-Wl,--rpath,/home/users/yatawatta/extern/lib
 
-# with multithread FFTW
 MY_LIBS=-lm -lsagecal
 INCLUDES=-I. -I./lib -I$(CASA_INCDIR) -I/usr/include -I${CULA_INC_PATH} $(CUDAINC)
 LIBPATH=$(LAPACK_DIR) -L$(CASA_LIBDIR)  -L./lib -L${CULA_LIB_PATH_64}

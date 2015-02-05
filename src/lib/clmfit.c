@@ -37,7 +37,7 @@ checkStatus(culaStatus status, char *file, int line)
         return;
     culaGetErrorInfoString(status, culaGetErrorInfo(), buf, sizeof(buf));
     fprintf(stderr,"GPU (CULA): %s %s %d\n", buf,file,line);
-    culaShutdown();
+    culaShutdown(); //FIXME: in order to avoid spurious errors in CULA, disable exit in MPI mode
     exit(EXIT_FAILURE);
 }
 
@@ -695,7 +695,7 @@ clevmar_der_single_cuda(
   int BlocksPerGrid=(M+ThreadsPerBlock-1)/ThreadsPerBlock;
 
 
-  int moff;
+  unsigned long int moff; /* make sure offsets are multiples of 4 */
   if (!gWORK) {
   err=cudaMalloc((void**)&xd, N*sizeof(double));
   checkCudaError(err,__FILE__,__LINE__);
@@ -775,7 +775,7 @@ clevmar_der_single_cuda(
      moff+=M;
     }
     bbd=(char*)&gWORK[moff];
-    moff+=Nbase*2*sizeof(char)/sizeof(double);
+    moff+=(Nbase*2*sizeof(char))/sizeof(double);
   }
 
   err=cudaMemcpyAsync(pd, p, M*sizeof(double), cudaMemcpyHostToDevice,0);
@@ -1170,24 +1170,28 @@ attach_gpu_to_thread1(int card,  cublasHandle_t *cbhandle,double **WORK, int64_t
 
 }
 void
-attach_gpu_to_thread2(int card,  cublasHandle_t *cbhandle,float **WORK, int64_t work_size) {
+attach_gpu_to_thread2(int card,  cublasHandle_t *cbhandle,float **WORK, int64_t work_size, int usecula) {
 
   cudaError_t err;
   culaStatus status;
   cublasStatus_t cbstatus;
-  status=culaSelectDevice(card);
-  checkStatus(status,__FILE__,__LINE__);
-  status=culaInitialize();
-  checkStatus(status,__FILE__,__LINE__);
+  status=culaSelectDevice(card); /* FIXME: Do not enable CULA if its not going to be used */
+  if (usecula) {
+   checkStatus(status,__FILE__,__LINE__);
+   status=culaInitialize();
+   checkStatus(status,__FILE__,__LINE__);
+  
 
-  int ncard;
-  status=culaGetExecutingDevice(&ncard);
-  if (ncard!=card) {
-    fprintf(stderr,"%s: %d: asked card %d and got %d\n",__FILE__,__LINE__,card,ncard);
-    exit(1);
+   int ncard;
+   status=culaGetExecutingDevice(&ncard);
+   if (ncard!=card) {
+     fprintf(stderr,"%s: %d: asked card %d and got %d\n",__FILE__,__LINE__,card,ncard);
+     exit(1);
+   }
+   checkStatus(status,__FILE__,__LINE__);
   }
-  checkStatus(status,__FILE__,__LINE__);
 
+  cudaSetDevice(card); /* do we need this because sometimes we do not use cula */
   cbstatus=cublasCreate(cbhandle);
   if (cbstatus!=CUBLAS_STATUS_SUCCESS) {
     fprintf(stderr,"%s: %d: CUBLAS create fail\n",__FILE__,__LINE__);
@@ -1198,7 +1202,6 @@ attach_gpu_to_thread2(int card,  cublasHandle_t *cbhandle,float **WORK, int64_t 
   checkCudaError(err,__FILE__,__LINE__);
 
 }
-
 void
 detach_gpu_from_thread(cublasHandle_t cbhandle) {
   cublasStatus_t cbstatus;
@@ -1229,7 +1232,7 @@ detach_gpu_from_thread1(int card,cublasHandle_t cbhandle,double *WORK) {
   cudaDeviceReset();
 }
 void
-detach_gpu_from_thread2(int card,cublasHandle_t cbhandle,float *WORK) {
+detach_gpu_from_thread2(int card,cublasHandle_t cbhandle,float *WORK, int usecula) {
   cublasStatus_t cbstatus;
 
   cbstatus=cublasDestroy(cbhandle);
@@ -1237,11 +1240,13 @@ detach_gpu_from_thread2(int card,cublasHandle_t cbhandle,float *WORK) {
     fprintf(stderr,"%s: %d: CUBLAS destroy fail\n",__FILE__,__LINE__);
     exit(1);
   }
-  culaFreeBuffers();
-  culaShutdown();
+  if (usecula) {
+   culaFreeBuffers();
+   culaShutdown();
+  }
   cudaFree(WORK);
 
-  cudaSetDevice(card);
+  //cudaSetDevice(card);
   cudaDeviceReset();
 }
 void
@@ -1340,7 +1345,7 @@ mlm_der_single_cuda(
 
   double epsilon=CLM_EPSILON;
 
-  int moff;
+  unsigned long int moff;
   if (!gWORK) {
   err=cudaMalloc((void**)&xd, N*sizeof(double));
   checkCudaError(err,__FILE__,__LINE__);
@@ -1433,7 +1438,7 @@ mlm_der_single_cuda(
      moff+=M;
     }
     bbd=(char*)&gWORK[moff];
-    moff+=Nbase*2*sizeof(char)/sizeof(double);
+    moff+=(Nbase*2*sizeof(char))/sizeof(double);
   }
 
   err=cudaMemcpyAsync(pd, p, M*sizeof(double), cudaMemcpyHostToDevice,0);

@@ -25,242 +25,261 @@
 #include <pthread.h>
 #include <math.h>
 
-//#define DEBUG
-/* worker thread for a gpu */
+
+static void
+checkCudaError(cudaError_t err, char *file, int line)
+{
+    if(!err)
+        return;
+    fprintf(stderr,"GPU (CUDA): %s %s %d\n", cudaGetErrorString(err),file,line);
+    culaShutdown();
+    exit(EXIT_FAILURE);
+}
+/************************ pipeline **************************/
+/* data struct shared by all threads */
+typedef struct gb_data_b_ {
+  int status[2]; /* 0: do nothing, 
+              1: allocate GPU  memory, attach GPU
+              2: free GPU memory, detach GPU 
+              3,4..: do work on GPU 
+              99: reset GPU memory (memest all memory) */
+  thread_gpu_data *lmdata[2]; /* two for each thread */
+
+  /* GPU related info */
+  cublasHandle_t cbhandle[2]; /* CUBLAS handles */
+  double *gWORK[2]; /* GPU buffers */
+  int64_t data_size[2]; /* size of buffer (bytes), size gradient vector has different lengths, will be different for each thread */
+  /* different pointers to GPU data */
+  double *cxo[2]; /* data vector */
+  double *ccoh[2]; /* coherency vector */
+  double  *cpp[2]; /* parameter vector */
+  double *cgrad[2]; /* gradient vector */
+  char *cbb[2]; /* baseline map */
+  int *cptoclus[2]; /* param to cluster map */
+
+  /* for cost calculation */
+  int Nbase[2];
+  int boff[2];
+  double fcost[2];
+
+  /* for robust LBFGS */
+  int do_robust;
+} gbdata_b;
+
+/* slave thread 2GPU function */
 static void *
-cuda_calc_deriv(void *adata) {
-  thread_gpu_data *dp=(thread_gpu_data*)adata;
+pipeline_slave_code_b(void *data)
+{
+ cudaError_t err;
 
-  int devid=dp->card;
-  cudaError_t ret;
+ slave_tdata *td=(slave_tdata*)data;
+ gbdata_b *dp=(gbdata_b*)(td->pline->data);
+ int tid=td->tid;
+ int Nbase=(dp->lmdata[tid]->Nbase)*(dp->lmdata[tid]->tilesz);
+ int M=dp->lmdata[tid]->M;
+ int N=dp->lmdata[tid]->N;
+ int Nparam=(dp->lmdata[tid]->g_end-dp->lmdata[tid]->g_start+1);
+ int m=dp->lmdata[tid]->m;
 
-  /* this thread will calculate derivative for
-     parameters g_start to g_end
-     Nparam: g_end-gstart+1  */
-  /* GPU needs to store:
-    cxo: residual vector size Nbase*8 : equal to n
-   ccoh: coherency Nbase*8*M
-   cpp: parameter vector size  m (full parameter set)
-   cbb: baseline -> station vector : size 2*Nbase
-   output: cgrad : gradient size Nparam
-  */
-   
-  /* pointers to gpu device arrays */
-  double *cxo, *ccoh, *cpp, *cgrad;
-  char *cbb;
-  int *cptoclus;
-
-
-  int Nbase=(dp->Nbase)*(dp->tilesz);
-  int M=(dp->M);
-  int N=(dp->N);
-  int Nparam=(dp->g_end-dp->g_start+1);
-#ifdef DEBUG
-  size_t cmem_total,cmem_free;
-#endif
-
-  /* number of device in current "context" */
-  if((ret=cudaSetDevice(devid))!=cudaSuccess) {
-   fprintf(stderr,"%s: %d: cannot init card %d\n",__FILE__,__LINE__,devid);
-   exit(1);
-  }
-
-  /* we need to wait for this device to finish work */
-/*  if((ret=cudaSetDeviceFlags(cudaDeviceScheduleBlockingSync))!=cudaSuccess) {
-   fprintf(stderr,"%s: %d: cannot init card %d\n",__FILE__,__LINE__,devid);
-   exit(1);
-  } */
-
-
-  /* allocate arrays on device (via CUDA) */
-  if((ret=cudaMalloc((void**) &cxo, dp->n*sizeof(double)))!=cudaSuccess) {
-   fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
-   exit(1);
-  }
-  if((ret=cudaMalloc((void**) &ccoh, Nbase*8*M*sizeof(double)))!=cudaSuccess) {
-   fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
-   exit(1);
-  }
-  if((ret=cudaMalloc((void**) &cpp, (dp->m)*sizeof(double)))!=cudaSuccess) {
-   fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
-   exit(1);
-  }
-  if((ret=cudaMalloc((void**) &cbb, Nbase*2*sizeof(char)))!=cudaSuccess) {
-   fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
-   exit(1);
-  }
-  if((ret=cudaMalloc((void**) &cgrad, Nparam*sizeof(double)))!=cudaSuccess) {
-   fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
-   exit(1);
-  }
-  if((ret=cudaMalloc((void**) &cptoclus, 2*M*sizeof(int)))!=cudaSuccess) {
-   fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
-   exit(1);
-  }
-
-
-  /* copy from host array to device array */
-  cudaMemcpy(cxo, dp->xo, (dp->n)*sizeof(double), cudaMemcpyHostToDevice);
-  cudaMemcpy(ccoh, dp->coh, Nbase*8*M*sizeof(double), cudaMemcpyHostToDevice);
-  cudaMemcpy(cbb, dp->hbb, Nbase*2*sizeof(char), cudaMemcpyHostToDevice);
-  cudaMemcpy(cptoclus, dp->ptoclus, M*2*sizeof(int), cudaMemcpyHostToDevice);
-  cudaMemcpy(cpp, dp->p, (dp->m)*sizeof(double), cudaMemcpyHostToDevice);
-
-
-#ifdef DEBUG
-  cudaMemGetInfo(&cmem_free,&cmem_total);
-  printf("GPU %d memory %lf %% free\n",devid,(double)cmem_free/(double)cmem_total*100.0);
-#endif
-
-
-/*    stc=(ci%(8*N))/8;
-    stoff=(ci%(8*N))%8;
-    stm=ci/(8*N); */
-    /* invoke kernel on device */
-  cudakernel_lbfgs(dp->ThreadsPerBlock, dp->BlocksPerGrid, Nbase, dp->tilesz, M, N, Nparam, dp->g_start, cxo, ccoh, cpp, cbb, cptoclus, cgrad);
-  /* read back the result */
-  ret=cudaMemcpy(&(dp->g[dp->g_start]), cgrad, Nparam*sizeof(double), cudaMemcpyDeviceToHost);
-  if(ret!=cudaSuccess) {
-     fprintf(stderr,"CUDA error: %s :%s: %d\n", cudaGetErrorString(ret),__FILE__,__LINE__);
-     exit(1);
-  }
-
-
-/*  int ci;
-  for (ci=0; ci<Nparam; ci++) {
-    printf("%d = %lf\n",ci,dp->g[dp->g_start+ci]);
-  } */
-
-  cudaFree((void*)cxo);
-  cudaFree((void*)ccoh);
-  cudaFree((void*)cpp);
-  cudaFree((void*)cbb);
-  cudaFree((void*)cptoclus);
-  cudaFree((void*)cgrad);
-
-  return NULL;
-}
-
-/* calculate gradient */
-/* func: vector function
-   p: parameter values size m x 1 (at which grad is calculated)
-   g: gradient size m x 1 
-   xo: observed data size n x 1
-   n: size of vector function
-   step: step size for differencing 
-   gpu_threads: GPU threads per block
-   adata:  additional data passed to the function
-*/
-static int
-func_grad(
-   void (*func)(double *p, double *hx, int m, int n, void *adata),
-   double *p, double *g, double *xo, int m, int n, double step, int gpu_threads, void *adata) {
-  /* gradient for each parameter is
-     (||func(p+step*e_i)-x||^2-||func(p-step*e_i)-x||^2)/2*step
-    i=0,...,m-1 for all parameters
-    e_i: unit vector, 1 only at i-th location
-  */
-
-  pthread_attr_t attr;
-  pthread_t *th_array;
-  thread_gpu_data *threaddata;
-  /* no of threads equal to no of GUPs, so ==1 means one GPU */
-  /* FIXME: for COMA=1 */
-#ifdef ONE_GPU
-  int Nt=1;
-#endif /* ONE_GPU */
-#ifndef ONE_GPU
-  int Nt=2;
-#endif /* !ONE_GPU */
-
-  int ci,nth,Nparm;
-  double *x; /* residual */
-  me_data_t *dp=(me_data_t*)adata;
-  
-
-  /* setup threads */
-  pthread_attr_init(&attr);
-  pthread_attr_setdetachstate(&attr,PTHREAD_CREATE_JOINABLE);
-
-  if ((th_array=(pthread_t*)malloc((size_t)Nt*sizeof(pthread_t)))==0) {
-   fprintf(stderr,"%s: %d: No free memory\n",__FILE__,__LINE__);
-   exit(1);
-  }
-  if ((threaddata=(thread_gpu_data*)malloc((size_t)Nt*sizeof(thread_gpu_data)))==0) {
-    fprintf(stderr,"%s: %d: No free memory\n",__FILE__,__LINE__);
-    exit(1);
-  }
-
-  if ((x=(double*)calloc((size_t)n,sizeof(double)))==0) {
-     fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
-     exit(1);
-  }
-  /* evaluate func once, store in x, and create threads */
-  /* and calculate the residual x=xo-func */
-  func(p,x,m,n,adata);
-  /* calculate x<=x-xo */
-  my_daxpy(n,xo,-1.0,x);
-
-
-  /* choose 256 threads per block for high occupancy */
-  int ThreadsPerBlock = gpu_threads;
-
-  /* partition parameters, per each parameter, one thread */
-  /* also account for the no of GPUs using */
-  /* parameters per thread (GPU) */
-  Nparm=(m+Nt-1)/Nt;
-  /* find number of blocks */
-  int BlocksPerGrid = (Nparm+ThreadsPerBlock-1)/ThreadsPerBlock;
-
-#ifdef DEBUG
-  printf("total parms =%d, per thread=%d\n",m,Nparm);
-#endif
-
-  /* iterate over threads */
-  ci=0;
-  for (nth=0;  nth<Nt; nth++) {
-   threaddata[nth].ThreadsPerBlock=ThreadsPerBlock;
-   threaddata[nth].BlocksPerGrid=BlocksPerGrid;
-   threaddata[nth].card=nth;
-   threaddata[nth].Nbase=dp->Nbase;
-   threaddata[nth].tilesz=dp->tilesz;
-   threaddata[nth].barr=dp->barr;
-   threaddata[nth].M=dp->M;
-   threaddata[nth].N=dp->N;
-   threaddata[nth].coh=dp->coh;
-   threaddata[nth].m=m;
-   threaddata[nth].n=n;
-   threaddata[nth].xo=x;
-   threaddata[nth].p=p;
-   threaddata[nth].g=g;
-   threaddata[nth].hbb=dp->hbb;
-   threaddata[nth].ptoclus=dp->ptoclus;
-   threaddata[nth].g_start=ci;
-   threaddata[nth].g_end=ci+Nparm-1;
-   if (threaddata[nth].g_end>=m) {
-    threaddata[nth].g_end=m-1;
+ while(1) {
+  sync_barrier(&(td->pline->gate1)); /* stop at gate 1*/
+  if(td->pline->terminate) break; /* if flag is set, break loop */
+  sync_barrier(&(td->pline->gate2)); /* stop at gate 2 */
+  /* do work */
+  if (dp->status[tid]==PT_DO_CDERIV) {
+    /* copy the current solution to device */
+    err=cudaMemcpy(dp->cpp[tid], dp->lmdata[tid]->p, m*sizeof(double), cudaMemcpyHostToDevice);
+    checkCudaError(err,__FILE__,__LINE__);
+    if (!dp->do_robust) {
+     cudakernel_lbfgs_r(dp->lmdata[tid]->ThreadsPerBlock, dp->lmdata[tid]->BlocksPerGrid, Nbase, dp->lmdata[tid]->tilesz, M, N, Nparam, dp->lmdata[tid]->g_start, dp->cxo[tid], dp->ccoh[tid], dp->cpp[tid], dp->cbb[tid], dp->cptoclus[tid], dp->cgrad[tid]);
+    } else {
+     cudakernel_lbfgs_r_robust(dp->lmdata[tid]->ThreadsPerBlock, dp->lmdata[tid]->BlocksPerGrid, Nbase, dp->lmdata[tid]->tilesz, M, N, Nparam, dp->lmdata[tid]->g_start, dp->cxo[tid], dp->ccoh[tid], dp->cpp[tid], dp->cbb[tid], dp->cptoclus[tid], dp->cgrad[tid],dp->lmdata[tid]->robust_nu);
+    }
+    /* read back the result */
+    err=cudaMemcpy(&(dp->lmdata[tid]->g[dp->lmdata[tid]->g_start]), dp->cgrad[tid], Nparam*sizeof(double), cudaMemcpyDeviceToHost);
+    checkCudaError(err,__FILE__,__LINE__);
+  } else if (dp->status[tid]==PT_DO_CCOST) {
+   /* divide total baselines by 2 */
+   int BlocksPerGrid=(dp->Nbase[tid]+dp->lmdata[tid]->ThreadsPerBlock-1)/dp->lmdata[tid]->ThreadsPerBlock;
+   int  boff=dp->boff[tid];
+   /* copy the current solution to device */
+   err=cudaMemcpy(dp->cpp[tid], dp->lmdata[tid]->p, m*sizeof(double), cudaMemcpyHostToDevice);
+   checkCudaError(err,__FILE__,__LINE__);
+   if (!dp->do_robust) {
+    dp->fcost[tid]=cudakernel_lbfgs_cost(dp->lmdata[tid]->ThreadsPerBlock, BlocksPerGrid, dp->Nbase[tid], boff, M, N, Nbase, &dp->cxo[tid][8*boff], &dp->ccoh[tid][boff*8*M], dp->cpp[tid], &dp->cbb[tid][boff*2], dp->cptoclus[tid]); 
+   } else {
+    dp->fcost[tid]=cudakernel_lbfgs_cost_robust(dp->lmdata[tid]->ThreadsPerBlock, BlocksPerGrid, dp->Nbase[tid], boff, M, N, Nbase, &dp->cxo[tid][8*boff], &dp->ccoh[tid][boff*8*M], dp->cpp[tid], &dp->cbb[tid][boff*2], dp->cptoclus[tid], dp->lmdata[tid]->robust_nu);
    }
-   ci=ci+Nparm;
-#ifdef DEBUG
-   printf("thread %d parms (%d-%d)\n",nth,threaddata[nth].g_start,threaddata[nth].g_end);
-#endif
-   pthread_create(&th_array[nth],&attr,cuda_calc_deriv,(void*)(&threaddata[nth]));
+  } else if (dp->status[tid]==PT_DO_AGPU) {
+    attach_gpu_to_thread1(tid,&dp->cbhandle[tid],&dp->gWORK[tid],dp->data_size[tid]);
+    /****************** old code *****************************************/
+    /* set GPU pointers, mutiples of 4 */
+//    unsigned long int moff=0;
+//    dp->cxo[tid]=&(dp->gWORK[tid][moff]);
+//    moff+=dp->lmdata[tid]->n; /* n is already a multiple of 4 */
+//    dp->ccoh[tid]=&(dp->gWORK[tid][moff]);
+//    moff+=Nbase*8*M;
+//    dp->cpp[tid]=&(dp->gWORK[tid][moff]);
+//    moff+=m; /* already a multiple of 4 */
+//    dp->cgrad[tid]=&(dp->gWORK[tid][moff]);
+//    moff+=Nparam; /* already a multiple of 4 */
+//    dp->cbb[tid]=(char*)&(dp->gWORK[tid][moff]);
+//    int istor=(Nbase*2*sizeof(char))/sizeof(double);
+//    if (!istor || istor%4) {
+//     moff+=(istor/4+1)*4;/* NOTE +1 added to align memory */
+//    } else {
+//     moff+=istor;
+//    }
+//    dp->cptoclus[tid]=(int*)&(dp->gWORK[tid][moff]);
+//    istor=(2*M*sizeof(int))/sizeof(double);
+//    if (istor%4) {
+//     moff+=(istor/4+1)*4;/* NOTE +1 added to align memory */
+//    } else {
+//     moff+=istor;
+//    }
+//    /* copy fixed memory do device */
+//    err=cudaMemcpy(dp->cxo[tid], dp->lmdata[tid]->xo, dp->lmdata[tid]->n*sizeof(double), cudaMemcpyHostToDevice);
+//    checkCudaError(err,__FILE__,__LINE__);
+//    err=cudaMemcpy(dp->ccoh[tid], dp->lmdata[tid]->coh, Nbase*8*M*sizeof(double), cudaMemcpyHostToDevice);
+//    checkCudaError(err,__FILE__,__LINE__);
+//    err=cudaMemcpy(dp->cptoclus[tid], dp->lmdata[tid]->ptoclus, M*2*sizeof(int), cudaMemcpyHostToDevice);
+//    checkCudaError(err,__FILE__,__LINE__);
+//    err=cudaMemcpy(dp->cbb[tid], dp->lmdata[tid]->hbb, Nbase*2*sizeof(char), cudaMemcpyHostToDevice);
+//    checkCudaError(err,__FILE__,__LINE__);
+    /****************** end old code *************************************/
+    err=cudaMalloc((void**)&(dp->cxo[tid]),dp->lmdata[tid]->n*sizeof(double));
+    checkCudaError(err,__FILE__,__LINE__);
+    err=cudaMalloc((void**)&(dp->ccoh[tid]),Nbase*8*M*sizeof(double));
+    checkCudaError(err,__FILE__,__LINE__);
+    err=cudaMalloc((void**)&(dp->cpp[tid]),m*sizeof(double));
+    checkCudaError(err,__FILE__,__LINE__);
+    err=cudaMalloc((void**)&(dp->cgrad[tid]),Nparam*sizeof(double));
+    checkCudaError(err,__FILE__,__LINE__);
+    err=cudaMalloc((void**)&(dp->cptoclus[tid]),M*2*sizeof(int));
+    checkCudaError(err,__FILE__,__LINE__);
+    err=cudaMalloc((void**)&(dp->cbb[tid]),Nbase*2*sizeof(char));
+    checkCudaError(err,__FILE__,__LINE__);
+
+    /* copy fixed memory do device */
+    /* first copy to host pinned memory and then copy to device */
+    double *hp1;
+    cudaStream_t ms1;
+    double *hp2;
+    cudaStream_t ms2;
+    int *hp3;
+    cudaStream_t ms3;
+    char *hp4;
+    cudaStream_t ms4;
+
+    err=cudaStreamCreate(&ms1);
+    err=cudaStreamCreate(&ms2);
+    err=cudaStreamCreate(&ms3);
+    err=cudaStreamCreate(&ms4);
+
+    err=cudaHostAlloc((void**)&hp1,dp->lmdata[tid]->n*sizeof(double),cudaHostAllocDefault);
+    checkCudaError(err,__FILE__,__LINE__);
+    err=cudaMemcpy(hp1, dp->lmdata[tid]->xo, dp->lmdata[tid]->n*sizeof(double), cudaMemcpyHostToHost);
+    checkCudaError(err,__FILE__,__LINE__);
+    err=cudaMemcpyAsync(dp->cxo[tid], hp1, dp->lmdata[tid]->n*sizeof(double), cudaMemcpyHostToDevice,ms1);
+    checkCudaError(err,__FILE__,__LINE__);
+
+    err=cudaHostAlloc((void**)&hp2,Nbase*8*M*sizeof(double),cudaHostAllocDefault);
+    checkCudaError(err,__FILE__,__LINE__);
+    err=cudaMemcpy(hp2, dp->lmdata[tid]->coh, Nbase*8*M*sizeof(double), cudaMemcpyHostToHost);
+    err=cudaMemcpyAsync(dp->ccoh[tid], hp2, Nbase*8*M*sizeof(double), cudaMemcpyHostToDevice,ms2);
+    checkCudaError(err,__FILE__,__LINE__);
+
+
+    err=cudaHostAlloc((void**)&hp3,M*2*sizeof(int),cudaHostAllocDefault);
+    checkCudaError(err,__FILE__,__LINE__);
+    err=cudaMemcpy(hp3, dp->lmdata[tid]->ptoclus, M*2*sizeof(int), cudaMemcpyHostToHost);
+    err=cudaMemcpyAsync(dp->cptoclus[tid], hp3, M*2*sizeof(int), cudaMemcpyHostToDevice,ms3);
+    checkCudaError(err,__FILE__,__LINE__);
+
+    err=cudaHostAlloc((void**)&hp4,Nbase*2*sizeof(char),cudaHostAllocDefault);
+    checkCudaError(err,__FILE__,__LINE__);
+    err=cudaMemcpy(hp4, dp->lmdata[tid]->hbb, Nbase*2*sizeof(char), cudaMemcpyHostToHost);
+    err=cudaMemcpyAsync(dp->cbb[tid], hp4, Nbase*2*sizeof(char), cudaMemcpyHostToDevice,ms4);
+    checkCudaError(err,__FILE__,__LINE__);
+
+    err=cudaStreamDestroy(ms1);
+    cudaFree(hp1);
+    err=cudaStreamDestroy(ms2);
+    cudaFree(hp2);
+    err=cudaStreamDestroy(ms3);
+    cudaFree(hp3);
+    err=cudaStreamDestroy(ms4);
+    cudaFree(hp4);
+    checkCudaError(err,__FILE__,__LINE__);
+
+
+  } else if (dp->status[tid]==PT_DO_DGPU) {
+    cudaFree(dp->cxo[tid]);
+    cudaFree(dp->ccoh[tid]);
+    cudaFree(dp->cptoclus[tid]);
+    cudaFree(dp->cbb[tid]);
+    cudaFree(dp->cpp[tid]);
+    cudaFree(dp->cgrad[tid]);
+
+    detach_gpu_from_thread1(tid,dp->cbhandle[tid],dp->gWORK[tid]);
   }
 
-  /* now wait for threads to finish */
-  for(nth=0; nth<Nt; nth++) {
-   pthread_join(th_array[nth],NULL);
-  }
-
-  pthread_attr_destroy(&attr);
-
-  free(th_array);
-  free(threaddata);
-  free(x);
-
-  return 0;
-
+ }
+ return NULL;
 }
+
+/* initialize the pipeline
+  and start the slaves rolling */
+static void
+init_pipeline_b(th_pipeline *pline,
+     void *data)
+{
+ slave_tdata *t0,*t1;
+ pthread_attr_init(&(pline->attr));
+ pthread_attr_setdetachstate(&(pline->attr),PTHREAD_CREATE_JOINABLE);
+
+ init_th_barrier(&(pline->gate1),3); /* 3 threads, including master */
+ init_th_barrier(&(pline->gate2),3); /* 3 threads, including master */
+ pline->terminate=0;
+ pline->data=data; /* data should have pointers to t1 and t2 */
+
+ if ((t0=(slave_tdata*)malloc(sizeof(slave_tdata)))==0) {
+    fprintf(stderr,"no free memory\n");
+    exit(1);
+ }
+ if ((t1=(slave_tdata*)malloc(sizeof(slave_tdata)))==0) {
+    fprintf(stderr,"no free memory\n");
+    exit(1);
+ }
+
+
+ t0->pline=t1->pline=pline;
+ t0->tid=0;
+ t1->tid=1; /* link back t1, t2 to data so they could be freed */
+ pline->sd0=t0;
+ pline->sd1=t1;
+ pthread_create(&(pline->slave0),&(pline->attr),pipeline_slave_code_b,(void*)t0);
+ pthread_create(&(pline->slave1),&(pline->attr),pipeline_slave_code_b,(void*)t1);
+}
+
+
+/* destroy the pipeline */
+/* need to kill the slaves first */
+static void
+destroy_pipeline_b(th_pipeline *pline)
+{
+ pline->terminate=1;
+ sync_barrier(&(pline->gate1));
+ pthread_join(pline->slave0,NULL);
+ pthread_join(pline->slave1,NULL);
+ destroy_th_barrier(&(pline->gate1));
+ destroy_th_barrier(&(pline->gate2));
+ pthread_attr_destroy(&(pline->attr));
+ free(pline->sd0);
+ free(pline->sd1);
+ pline->data=NULL;
+}
+/************************ end pipeline **************************/
 
 /* use algorithm 9.1 to compute pk=Hk gk */
 /* pk,gk: size m x 1
@@ -351,113 +370,9 @@ mult_hessian(int m, double *pk, double *gk, double *s, double *y, double *rho, i
    adata:  additional data passed to the function
 */
 static double 
-cubic_interp1(
-   void (*func)(double *p, double *hx, int m, int n, void *adata),
-   double *xk, double *pk, double a, double b, double *x, double *xp,  double *xo, int m, int n, double step, void *adata) {
-
-  double f0,f1,f0d,f1d; /* function values and derivatives at a,b */
-  double p01,p02,z0,z1,fz0,fz1;
-  double aa,bb,cc;
-
-  my_dcopy(m,xk,1,xp,1); /* xp<=xk */
-  my_daxpy(m,pk,a,xp); /* xp<=xp+(a)*pk */
-  func(xp,x,m,n,adata);
-  my_daxpy(n,xo,-1.0,x);
-  f0=my_dnrm2(n,x);
-  f0*=f0;
-  /* grad(phi_0): evaluate at -step and +step */
-  my_daxpy(m,pk,step,xp); /* xp<=xp+(a+step)*pk */
-  func(xp,x,m,n,adata);
-  my_daxpy(n,xo,-1.0,x);
-  p01=my_dnrm2(n,x);
-  my_daxpy(m,pk,-2.0*step,xp); /* xp<=xp+(a-step)*pk */
-  func(xp,x,m,n,adata);
-  my_daxpy(n,xo,-1.0,x);
-  p02=my_dnrm2(n,x);
-  f0d=(p01*p01-p02*p02)/(2.0*step);
-
-  my_dcopy(m,xk,1,xp,1); /* xp<=xk */
-  my_daxpy(m,pk,b,xp); /* xp<=xp+(b)*pk */
-  func(xp,x,m,n,adata);
-  my_daxpy(n,xo,-1.0,x);
-  f1=my_dnrm2(n,x);
-  f1*=f1;
-  /* grad(phi_0): evaluate at -step and +step */
-  my_daxpy(m,pk,step,xp); /* xp<=xp+(b+step)*pk */
-  func(xp,x,m,n,adata);
-  my_daxpy(n,xo,-1.0,x);
-  p01=my_dnrm2(n,x);
-  my_daxpy(m,pk,-2.0*step,xp); /* xp<=xp+(b-step)*pk */
-  func(xp,x,m,n,adata);
-  my_daxpy(n,xo,-1.0,x);
-  p02=my_dnrm2(n,x);
-  f1d=(p01*p01-p02*p02)/(2.0*step);
-
-  //printf("Interp a,f(a),f'(a): (%lf,%lf,%lf) (%lf,%lf,%lf)\n",a,f0,f0d,b,f1,f1d);
-  /* cubic poly in [0,1] is f0+f0d z+eta z^2+xi z^3 
-    where eta=3(f1-f0)-2f0d-f1d, xi=f0d+f1d-2(f1-f0) 
-    derivative f0d+2 eta z+3 xi z^2 => cc+bb z+aa z^2 */
-   aa=3.0*(f0d+f1d-2.0*(f1-f0));
-   bb=2*(3.0*(f1-f0)-2.0*f0d-f1d);
-   cc=f0d;
-  
-  /* root exist? */
-  p01=bb*bb-4.0*aa*cc;
-  if (p01>0.0) {
-   /* roots */
-   p01=sqrt(p01);
-   z0=(-bb+p01)/(2.0*aa);
-   z1=(-bb-p01)/(2.0*aa);
-   /* check if any root is within [0,1] */
-   if (z0>=0.0 && z0<=1.0) {
-    /* evaluate function for this root */
-    my_dcopy(m,xk,1,xp,1); /* xp<=xk */
-    my_daxpy(m,pk,a+z0*(b-a),xp); /* xp<=xp+(z0)*pk */
-    func(xp,x,m,n,adata);
-    my_daxpy(n,xo,-1.0,x);
-    fz0=my_dnrm2(n,x);
-    fz0*=fz0;
-   } else {
-    fz0=1e9;
-   }
-   if (z1>=0.0 && z1<=1.0) {
-    /* evaluate function for this root */
-    my_dcopy(m,xk,1,xp,1); /* xp<=xk */
-    my_daxpy(m,pk,a+z1*(b-a),xp); /* xp<=xp+(z1)*pk */
-    func(xp,x,m,n,adata);
-    my_daxpy(n,xo,-1.0,x);
-    fz1=my_dnrm2(n,x);
-    fz1*=fz1;
-   } else {
-    fz1=1e9;
-   }
-
-   /* now choose between f0,f1,fz0,fz1 */
-   if (f0<f1 && f0<fz0 && f0<fz1) {
-     return a;
-   }
-   if (f1<fz0 && f1<fz1) {
-     return b;
-   }
-   if (fz0<fz1) {
-     return (a+z0*(b-a));
-   }
-   /* else */
-   return (a+z1*(b-a));
-  } else { 
-   /* find the value from a or b that minimizes func */
-   if (f0<f1) {
-    return a;
-   } else {
-    return b;
-   }
-  }
-  return 0;
-}
-static double 
 cubic_interp(
    void (*func)(double *p, double *hx, int m, int n, void *adata),
-   double *xk, double *pk, double a, double b, double *x, double *xp,  double *xo, int m, int n, double step, void *adata) {
+   double *xk, double *pk, double a, double b, double *x, double *xp,  double *xo, int m, int n, double step, void *adata,  th_pipeline *tp, gbdata_b *tpg) {
 
   double f0,f1,f0d,f1d; /* function values and derivatives at a,b */
   double p01,p02,z0,fz0;
@@ -465,37 +380,93 @@ cubic_interp(
 
   my_dcopy(m,xk,1,xp,1); /* xp<=xk */
   my_daxpy(m,pk,a,xp); /* xp<=xp+(a)*pk */
-  func(xp,x,m,n,adata);
-  my_daxpy(n,xo,-1.0,x);
-  f0=my_dnrm2(n,x);
-  f0*=f0;
+//  func(xp,x,m,n,adata);
+//  my_daxpy(n,xo,-1.0,x);
+//  f0=my_dnrm2(n,x);
+//  f0*=f0;
+  sync_barrier(&(tp->gate1));
+  tpg->lmdata[0]->p=tpg->lmdata[1]->p=xp;
+  tpg->status[0]=tpg->status[1]=PT_DO_CCOST;
+  sync_barrier(&(tp->gate2));
+  sync_barrier(&(tp->gate1));
+  tpg->status[0]=tpg->status[1]=PT_DO_NOTHING;
+  f0=tpg->fcost[0]+tpg->fcost[1];
+  sync_barrier(&(tp->gate2));
+
   /* grad(phi_0): evaluate at -step and +step */
   my_daxpy(m,pk,step,xp); /* xp<=xp+(a+step)*pk */
-  func(xp,x,m,n,adata);
-  my_daxpy(n,xo,-1.0,x);
-  p01=my_dnrm2(n,x);
+//  func(xp,x,m,n,adata);
+//  my_daxpy(n,xo,-1.0,x);
+//  p01=my_dnrm2(n,x);
+  sync_barrier(&(tp->gate1));
+  tpg->status[0]=tpg->status[1]=PT_DO_CCOST;
+  sync_barrier(&(tp->gate2));
+  sync_barrier(&(tp->gate1));
+  tpg->status[0]=tpg->status[1]=PT_DO_NOTHING;
+  p01=tpg->fcost[0]+tpg->fcost[1];
+  sync_barrier(&(tp->gate2));
+
+
   my_daxpy(m,pk,-2.0*step,xp); /* xp<=xp+(a-step)*pk */
-  func(xp,x,m,n,adata);
-  my_daxpy(n,xo,-1.0,x);
-  p02=my_dnrm2(n,x);
-  f0d=(p01*p01-p02*p02)/(2.0*step);
+//  func(xp,x,m,n,adata);
+//  my_daxpy(n,xo,-1.0,x);
+//  p02=my_dnrm2(n,x);
+  sync_barrier(&(tp->gate1));
+  tpg->status[0]=tpg->status[1]=PT_DO_CCOST;
+  sync_barrier(&(tp->gate2));
+  sync_barrier(&(tp->gate1));
+  tpg->status[0]=tpg->status[1]=PT_DO_NOTHING;
+  p02=tpg->fcost[0]+tpg->fcost[1];
+  sync_barrier(&(tp->gate2));
+
+
+//  f0d=(p01*p01-p02*p02)/(2.0*step);
+  f0d=(p01-p02)/(2.0*step);
 
   my_dcopy(m,xk,1,xp,1); /* xp<=xk */
   my_daxpy(m,pk,b,xp); /* xp<=xp+(b)*pk */
-  func(xp,x,m,n,adata);
-  my_daxpy(n,xo,-1.0,x);
-  f1=my_dnrm2(n,x);
-  f1*=f1;
+//  func(xp,x,m,n,adata);
+//  my_daxpy(n,xo,-1.0,x);
+//  f1=my_dnrm2(n,x);
+//  f1*=f1;
+  sync_barrier(&(tp->gate1));
+  tpg->status[0]=tpg->status[1]=PT_DO_CCOST;
+  sync_barrier(&(tp->gate2));
+  sync_barrier(&(tp->gate1));
+  tpg->status[0]=tpg->status[1]=PT_DO_NOTHING;
+  f1=tpg->fcost[0]+tpg->fcost[1];
+  sync_barrier(&(tp->gate2));
+
+
   /* grad(phi_1): evaluate at -step and +step */
   my_daxpy(m,pk,step,xp); /* xp<=xp+(b+step)*pk */
-  func(xp,x,m,n,adata);
-  my_daxpy(n,xo,-1.0,x);
-  p01=my_dnrm2(n,x);
+//  func(xp,x,m,n,adata);
+//  my_daxpy(n,xo,-1.0,x);
+//  p01=my_dnrm2(n,x);
+  sync_barrier(&(tp->gate1));
+  tpg->status[0]=tpg->status[1]=PT_DO_CCOST;
+  sync_barrier(&(tp->gate2));
+  sync_barrier(&(tp->gate1));
+  tpg->status[0]=tpg->status[1]=PT_DO_NOTHING;
+  p01=tpg->fcost[0]+tpg->fcost[1];
+  sync_barrier(&(tp->gate2));
+
+
   my_daxpy(m,pk,-2.0*step,xp); /* xp<=xp+(b-step)*pk */
-  func(xp,x,m,n,adata);
-  my_daxpy(n,xo,-1.0,x);
-  p02=my_dnrm2(n,x);
-  f1d=(p01*p01-p02*p02)/(2.0*step);
+//  func(xp,x,m,n,adata);
+//  my_daxpy(n,xo,-1.0,x);
+//  p02=my_dnrm2(n,x);
+  sync_barrier(&(tp->gate1));
+  tpg->status[0]=tpg->status[1]=PT_DO_CCOST;
+  sync_barrier(&(tp->gate2));
+  sync_barrier(&(tp->gate1));
+  tpg->status[0]=tpg->status[1]=PT_DO_NOTHING;
+  p02=tpg->fcost[0]+tpg->fcost[1];
+  sync_barrier(&(tp->gate2));
+
+
+//  f1d=(p01*p01-p02*p02)/(2.0*step);
+  f1d=(p01-p02)/(2.0*step);
 
 
   //printf("Interp a,f(a),f'(a): (%lf,%lf,%lf) (%lf,%lf,%lf)\n",a,f0,f0d,b,f1,f1d);
@@ -519,10 +490,18 @@ cubic_interp(
     /* evaluate function for this root */
     my_dcopy(m,xk,1,xp,1); /* xp<=xk */
     my_daxpy(m,pk,a+z0*(b-a),xp); /* xp<=xp+(z0)*pk */
-    func(xp,x,m,n,adata);
-    my_daxpy(n,xo,-1.0,x);
-    fz0=my_dnrm2(n,x);
-    fz0*=fz0;
+//    func(xp,x,m,n,adata);
+//    my_daxpy(n,xo,-1.0,x);
+//    fz0=my_dnrm2(n,x);
+//    fz0*=fz0;
+    sync_barrier(&(tp->gate1));
+    tpg->status[0]=tpg->status[1]=PT_DO_CCOST;
+    sync_barrier(&(tp->gate2));
+    sync_barrier(&(tp->gate1));
+    tpg->status[0]=tpg->status[1]=PT_DO_NOTHING;
+    fz0=tpg->fcost[0]+tpg->fcost[1];
+    sync_barrier(&(tp->gate2));
+
    }
    //printf("Val=%lf, [%lf,%lf]\n",fz0,f0,f1);
 
@@ -549,9 +528,6 @@ cubic_interp(
 }
 
 
-
-
-
 /*************** Fletcher line search **********************************/
 /* zoom function for line search */
 /* func: vector function
@@ -570,7 +546,7 @@ cubic_interp(
 static double 
 linesearch_zoom(
    void (*func)(double *p, double *hx, int m, int n, void *adata),
-   double *xk, double *pk, double a, double b, double *x, double *xp,  double phi_0, double gphi_0, double sigma, double rho, double t1, double t2, double t3, double *xo, int m, int n, double step, void *adata) {
+   double *xk, double *pk, double a, double b, double *x, double *xp,  double phi_0, double gphi_0, double sigma, double rho, double t1, double t2, double t3, double *xo, int m, int n, double step, void *adata,  th_pipeline *tp, gbdata_b *tpg) {
 
   double alphaj,phi_j,phi_aj;
   double gphi_j,p01,p02,aj,bj;
@@ -584,26 +560,42 @@ linesearch_zoom(
     /* choose alphaj from [a+t2(b-a),b-t3(b-a)] */
     p01=aj+t2*(bj-aj);
     p02=bj-t3*(bj-aj);
-    alphaj=cubic_interp(func,xk,pk,p01,p02,x,xp,xo,m,n,step,adata);
+    alphaj=cubic_interp(func,xk,pk,p01,p02,x,xp,xo,m,n,step,adata,tp,tpg);
     //printf("cubic intep [%lf,%lf]->%lf\n",p01,p02,alphaj);
 
     /* evaluate phi(alphaj) */
     my_dcopy(m,xk,1,xp,1); /* xp<=xk */
     my_daxpy(m,pk,alphaj,xp); /* xp<=xp+(alphaj)*pk */
-    func(xp,x,m,n,adata);
+//    func(xp,x,m,n,adata);
     /* calculate x<=x-xo */
-    my_daxpy(n,xo,-1.0,x);
-    phi_j=my_dnrm2(n,x);
-    phi_j*=phi_j;
+//    my_daxpy(n,xo,-1.0,x);
+//    phi_j=my_dnrm2(n,x);
+//    phi_j*=phi_j;
+    sync_barrier(&(tp->gate1));
+    tpg->lmdata[0]->p=tpg->lmdata[1]->p=xp;
+    tpg->status[0]=tpg->status[1]=PT_DO_CCOST;
+    sync_barrier(&(tp->gate2));
+    sync_barrier(&(tp->gate1));
+    tpg->status[0]=tpg->status[1]=PT_DO_NOTHING;
+    phi_j=tpg->fcost[0]+tpg->fcost[1];
+    sync_barrier(&(tp->gate2));
+
 
     /* evaluate phi(aj) */
     my_dcopy(m,xk,1,xp,1); /* xp<=xk */
     my_daxpy(m,pk,aj,xp); /* xp<=xp+(alphaj)*pk */
-    func(xp,x,m,n,adata);
+//    func(xp,x,m,n,adata);
     /* calculate x<=x-xo */
-    my_daxpy(n,xo,-1.0,x);
-    phi_aj=my_dnrm2(n,x);
-    phi_aj*=phi_aj;
+//    my_daxpy(n,xo,-1.0,x);
+//    phi_aj=my_dnrm2(n,x);
+//    phi_aj*=phi_aj;
+    sync_barrier(&(tp->gate1));
+    tpg->status[0]=tpg->status[1]=PT_DO_CCOST;
+    sync_barrier(&(tp->gate2));
+    sync_barrier(&(tp->gate1));
+    tpg->status[0]=tpg->status[1]=PT_DO_NOTHING;
+    phi_aj=tpg->fcost[0]+tpg->fcost[1];
+    sync_barrier(&(tp->gate2));
 
 
     if ((phi_j>phi_0+rho*alphaj*gphi_0) || phi_j>=phi_aj) {
@@ -612,16 +604,35 @@ linesearch_zoom(
      /* evaluate grad(alphaj) */
      my_dcopy(m,xk,1,xp,1); /* xp<=xk */
      my_daxpy(m,pk,alphaj+step,xp); /* xp<=xp+(alphaj+step)*pk */
-     func(xp,x,m,n,adata);
+//     func(xp,x,m,n,adata);
      /* calculate x<=x-xo */
-     my_daxpy(n,xo,-1.0,x);
-     p01=my_dnrm2(n,x);
+//     my_daxpy(n,xo,-1.0,x);
+//     p01=my_dnrm2(n,x);
+     sync_barrier(&(tp->gate1));
+     tpg->status[0]=tpg->status[1]=PT_DO_CCOST;
+     sync_barrier(&(tp->gate2));
+     sync_barrier(&(tp->gate1));
+     tpg->status[0]=tpg->status[1]=PT_DO_NOTHING;
+     p01=tpg->fcost[0]+tpg->fcost[1];
+     sync_barrier(&(tp->gate2));
+
+
      my_daxpy(m,pk,-2.0*step,xp); /* xp<=xp+(alphaj-step)*pk */
-     func(xp,x,m,n,adata);
+//     func(xp,x,m,n,adata);
      /* calculate x<=x-xo */
-     my_daxpy(n,xo,-1.0,x);
-     p02=my_dnrm2(n,x);
-     gphi_j=(p01*p01-p02*p02)/(2.0*step);
+//     my_daxpy(n,xo,-1.0,x);
+//     p02=my_dnrm2(n,x);
+     sync_barrier(&(tp->gate1));
+     tpg->status[0]=tpg->status[1]=PT_DO_CCOST;
+     sync_barrier(&(tp->gate2));
+     sync_barrier(&(tp->gate1));
+     tpg->status[0]=tpg->status[1]=PT_DO_NOTHING;
+     p02=tpg->fcost[0]+tpg->fcost[1];
+     sync_barrier(&(tp->gate2));
+
+
+//     gphi_j=(p01*p01-p02*p02)/(2.0*step);
+     gphi_j=(p01-p02)/(2.0*step);
 
      /* termination due to roundoff/other errors pp. 38, Fletcher */
      if ((aj-alphaj)*gphi_j<=step) {
@@ -671,8 +682,7 @@ linesearch_zoom(
 static double 
 linesearch(
    void (*func)(double *p, double *hx, int m, int n, void *adata),
-   double *xk, double *pk, double alpha1, double sigma, double rho, double t1, double t2, double t3, double *xo, int m, int n, double step, void *adata) {
- 
+   double *xk, double *pk, double alpha1, double sigma, double rho, double t1, double t2, double t3, double *xo, int m, int n, double step, void *adata, th_pipeline *tp, gbdata_b *tpg) {
  /* phi(alpha)=f(xk+alpha pk)
   for vector function func 
    f(xk) =||func(xk)||^2 */
@@ -685,7 +695,7 @@ linesearch(
   double alphak;
 
   double mu;
-  double tol=step; /* lower limit for minimization */
+  double tol; /* lower limit for minimization, need to be just about min value of cost function */
 
   int ci;
 
@@ -700,29 +710,63 @@ linesearch(
 
   alphak=1.0;
   /* evaluate phi_0 and grad(phi_0) */
-  func(xk,x,m,n,adata);
-  my_daxpy(n,xo,-1.0,x);
-  phi_0=my_dnrm2(n,x);
-  phi_0*=phi_0;
+//func(xk,x,m,n,adata);
+//my_daxpy(n,xo,-1.0,x);
+//phi_0=my_dnrm2(n,x);
+//phi_0*=phi_0;
+//printf("CPU cost=%lf\n",phi_0);
+  sync_barrier(&(tp->gate1));
+  tpg->lmdata[0]->p=tpg->lmdata[1]->p=xk;
+  tpg->status[0]=tpg->status[1]=PT_DO_CCOST;
+  sync_barrier(&(tp->gate2));
+  sync_barrier(&(tp->gate1));
+  tpg->status[0]=tpg->status[1]=PT_DO_NOTHING;
+  phi_0=tpg->fcost[0]+tpg->fcost[1];
+  sync_barrier(&(tp->gate2));
+//printf("GPU cost=%lf\n",phi_0);
+  /* select tolarance 1/100 of current function value */
+  tol=MIN(0.01*phi_0,1e-6); 
+
   /* grad(phi_0): evaluate at -step and +step */
   my_dcopy(m,xk,1,xp,1); /* xp<=xk */
   my_daxpy(m,pk,step,xp); /* xp<=xp+(0.0+step)*pk */
-  func(xp,x,m,n,adata);
+
+//func(xp,x,m,n,adata);
   /* calculate x<=x-xo */
-  my_daxpy(n,xo,-1.0,x);
-  p01=my_dnrm2(n,x);
+//my_daxpy(n,xo,-1.0,x);
+//p01=my_dnrm2(n,x);
+  sync_barrier(&(tp->gate1));
+  tpg->lmdata[0]->p=tpg->lmdata[1]->p=xp;
+  tpg->status[0]=tpg->status[1]=PT_DO_CCOST;
+  sync_barrier(&(tp->gate2));
+  sync_barrier(&(tp->gate1));
+  p01=tpg->fcost[0]+tpg->fcost[1];
+  tpg->status[0]=tpg->status[1]=PT_DO_NOTHING;
+  sync_barrier(&(tp->gate2));
+
   my_daxpy(m,pk,-2.0*step,xp); /* xp<=xp+(0.0-step)*pk */
-  func(xp,x,m,n,adata);
+//func(xp,x,m,n,adata);
   /* calculate x<=x-xo */
-  my_daxpy(n,xo,-1.0,x);
-  p02=my_dnrm2(n,x);
-  gphi_0=(p01*p01-p02*p02)/(2.0*step);
+//my_daxpy(n,xo,-1.0,x);
+//p02=my_dnrm2(n,x);
+  sync_barrier(&(tp->gate1));
+  tpg->status[0]=tpg->status[1]=PT_DO_CCOST;
+  sync_barrier(&(tp->gate2));
+  sync_barrier(&(tp->gate1));
+  p02=tpg->fcost[0]+tpg->fcost[1];
+  tpg->status[0]=tpg->status[1]=PT_DO_NOTHING;
+  sync_barrier(&(tp->gate2));
+
+
+//  gphi_0=(p01*p01-p02*p02)/(2.0*step);
+  gphi_0=(p01-p02)/(2.0*step);
+
 
   /* estimate for mu */
   /* mu = (tol-phi_0)/(rho gphi_0) */
   mu=(tol-phi_0)/(rho*gphi_0);
 #ifdef DEBUG
-  printf("mu=%lf, alpha1=%lf\n",mu,alpha1);
+  printf("cost=%lf grad=%lf mu=%lf, alpha1=%lf\n",phi_0,gphi_0,mu,alpha1);
 #endif
 
   ci=1;
@@ -733,11 +777,19 @@ linesearch(
    /* evalualte phi(alpha(i))=f(xk+alphai pk) */
    my_dcopy(m,xk,1,xp,1); /* xp<=xk */
    my_daxpy(m,pk,alphai,xp); /* xp<=xp+alphai*pk */
-   func(xp,x,m,n,adata);
+//   func(xp,x,m,n,adata);
    /* calculate x<=x-xo */
-   my_daxpy(n,xo,-1.0,x);
-   phi_alphai=my_dnrm2(n,x);
-   phi_alphai*=phi_alphai;
+//   my_daxpy(n,xo,-1.0,x);
+//   phi_alphai=my_dnrm2(n,x);
+//   phi_alphai*=phi_alphai;
+   sync_barrier(&(tp->gate1));
+   tpg->status[0]=tpg->status[1]=PT_DO_CCOST;
+   sync_barrier(&(tp->gate2));
+   sync_barrier(&(tp->gate1));
+   phi_alphai=tpg->fcost[0]+tpg->fcost[1];
+   tpg->status[0]=tpg->status[1]=PT_DO_NOTHING;
+   sync_barrier(&(tp->gate2));
+
 
    if (phi_alphai<tol) {
      alphak=alphai;
@@ -749,7 +801,7 @@ linesearch(
 
    if ((phi_alphai>phi_0+alphai*gphi_0) || (ci>1 && phi_alphai>=phi_alphai1)) {
       /* ai=alphai1, bi=alphai bracket */
-      alphak=linesearch_zoom(func,xk,pk,alphai1,alphai,x,xp,phi_0,gphi_0,sigma,rho,t1,t2,t3,xo,m,n,step,adata);
+      alphak=linesearch_zoom(func,xk,pk,alphai1,alphai,x,xp,phi_0,gphi_0,sigma,rho,t1,t2,t3,xo,m,n,step,adata,tp,tpg);
 #ifdef DEBUG
       printf("Linesearch : Condition 1 met\n");
 #endif
@@ -759,16 +811,34 @@ linesearch(
    /* evaluate grad(phi(alpha(i))) */
    my_dcopy(m,xk,1,xp,1); /* NOT NEEDED here?? xp<=xk */
    my_daxpy(m,pk,alphai+step,xp); /* xp<=xp+(alphai+step)*pk */
-   func(xp,x,m,n,adata);
+//   func(xp,x,m,n,adata);
    /* calculate x<=x-xo */
-   my_daxpy(n,xo,-1.0,x);
-   p01=my_dnrm2(n,x);
+//   my_daxpy(n,xo,-1.0,x);
+//   p01=my_dnrm2(n,x);
+   sync_barrier(&(tp->gate1));
+   tpg->status[0]=tpg->status[1]=PT_DO_CCOST;
+   sync_barrier(&(tp->gate2));
+   sync_barrier(&(tp->gate1));
+   p01=tpg->fcost[0]+tpg->fcost[1];
+   tpg->status[0]=tpg->status[1]=PT_DO_NOTHING;
+   sync_barrier(&(tp->gate2));
+
    my_daxpy(m,pk,-2.0*step,xp); /* xp<=xp+(alphai-step)*pk */
-   func(xp,x,m,n,adata);
+//   func(xp,x,m,n,adata);
    /* calculate x<=x-xo */
-   my_daxpy(n,xo,-1.0,x);
-   p02=my_dnrm2(n,x);
-   gphi_i=(p01*p01-p02*p02)/(2.0*step);
+//   my_daxpy(n,xo,-1.0,x);
+//   p02=my_dnrm2(n,x);
+   sync_barrier(&(tp->gate1));
+   tpg->status[0]=tpg->status[1]=PT_DO_CCOST;
+   sync_barrier(&(tp->gate2));
+   sync_barrier(&(tp->gate1));
+   p02=tpg->fcost[0]+tpg->fcost[1];
+   tpg->status[0]=tpg->status[1]=PT_DO_NOTHING;
+   sync_barrier(&(tp->gate2));
+
+
+//   gphi_i=(p01*p01-p02*p02)/(2.0*step);
+   gphi_i=(p01-p02)/(2.0*step);
 
    if (fabs(gphi_i)<=-sigma*gphi_0) {
      alphak=alphai;
@@ -780,7 +850,7 @@ linesearch(
 
    if (gphi_i>=0) {
      /* ai=alphai, bi=alphai1 bracket */
-     alphak=linesearch_zoom(func,xk,pk,alphai,alphai1,x,xp,phi_0,gphi_0,sigma,rho,t1,t2,t3,xo,m,n,step,adata);
+     alphak=linesearch_zoom(func,xk,pk,alphai,alphai1,x,xp,phi_0,gphi_0,sigma,rho,t1,t2,t3,xo,m,n,step,adata,tp,tpg);
 #ifdef DEBUG
      printf("Linesearch : Condition 3 met\n");
 #endif
@@ -788,15 +858,15 @@ linesearch(
    }
 
    /* else preserve old values */
-   if (mu<=(2*alphai-alphai1)) {
+   if (mu<=(2.0*alphai-alphai1)) {
      /* next step */
      alphai1=alphai;
      alphai=mu;
    } else {
      /* choose by interpolation in [2*alphai-alphai1,min(mu,alphai+t1*(alphai-alphai1)] */
-     p01=2*alphai-alphai1;
+     p01=2.0*alphai-alphai1;
      p02=MIN(mu,alphai+t1*(alphai-alphai1));
-     alphai=cubic_interp(func,xk,pk,p01,p02,x,xp,xo,m,n,step,adata);
+     alphai=cubic_interp(func,xk,pk,p01,p02,x,xp,xo,m,n,step,adata,tp,tpg);
      //printf("cubic interp [%lf,%lf]->%lf\n",p01,p02,alphai);
    }
    phi_alphai1=phi_alphai;
@@ -815,223 +885,18 @@ linesearch(
 }
 /*************** END Fletcher line search **********************************/
 
-/*************** Nocedal/Wright line search ********************************/
-/* zoom function for line search */
-/* func: vector function
-   xk: parameter values size m x 1 (at which step is calculated)
-   pk: step direction size m x 1 (x(k+1)=x(k)+alphak * pk)
-   alphal/alphah: low,high value for alpha 
-   x: size n x 1 (storage)
-   xp: size m x 1 (storage)
-   phi_0: phi(0)
-   gphi_0: grad(phi(0))
-   c1,c2: limit parameters for strong Wolfe conditions
-   xo: observed data size n x 1
-   n: size of vector function
-   step: step size for differencing 
-   adata:  additional data passed to the function
-*/
-static double 
-linesearch_zoom_nw(
-   void (*func)(double *p, double *hx, int m, int n, void *adata),
-   double *xk, double *pk, double alphal, double alphah, double *x, double *xp,  double phi_0, double gphi_0, double c1, double c2, double *xo, int m, int n, double step, void *adata) {
 
-  double alphaj,phi_j,phi_low;
-  double gphi_j,p01,p02;
-  double alphak=1.0;
-  int ci,found_step=0;
-
-  /* sort out if indeed alphal<alphah */
-  if (alphal>alphah) {
-    p01=alphah;
-    alphah=alphal;
-    alphal=p01;
-  }
-
-  /* evaluate phi_low =phi(alphal) */
-  my_dcopy(m,xk,1,xp,1); /* xp<=xk */
-  my_daxpy(m,pk,alphal,xp); /* xp<=xp+(alphal)*pk */
-  func(xp,x,m,n,adata);
-  phi_low=my_dnrm2(n,x);
-  phi_low*=phi_low;
-
-  ci=0;
-  while(ci<10) {
-   /* trial step in [alphal,alphah] */
-   //printf("Iter %d [%lf,%lf]\n",ci,alphal,alphah);
-   alphaj=cubic_interp(func,xk,pk,alphal,alphah,x,xp,xo,m,n,step,adata);
-   /* evaluate phi(alphaj) */
-   my_dcopy(m,xk,1,xp,1); /* xp<=xk */
-   my_daxpy(m,pk,alphaj,xp); /* xp<=xp+(alphaj)*pk */
-   func(xp,x,m,n,adata);
-   phi_j=my_dnrm2(n,x);
-   phi_j*=phi_j;
-
-   if ((phi_j>phi_0+c1*alphaj*gphi_0) || phi_j>=phi_low) {
-     alphah=alphaj;
-   } else {
-    /* evaluate grad(alphaj) */
-    my_dcopy(m,xk,1,xp,1); /* xp<=xk */
-    my_daxpy(m,pk,alphaj+step,xp); /* xp<=xp+(alphaj+step)*pk */
-    func(xp,x,m,n,adata);
-    my_daxpy(n,xo,-1.0,x);
-    p01=my_dnrm2(n,x);
-    my_daxpy(m,pk,-2.0*step,xp); /* xp<=xp+(alphaj-step)*pk */
-    func(xp,x,m,n,adata);
-    my_daxpy(n,xo,-1.0,x);
-    p02=my_dnrm2(n,x);
-    gphi_j=(p01*p01-p02*p02)/(2.0*step);
-    
-    if (fabs(gphi_j)<=-c2*gphi_0) {
-      alphak=alphaj;
-      found_step=1;
-      break;
-    }
-    if (gphi_j*(alphah-alphal)>=0) {
-       alphah=alphal;
-    }
-    alphal=alphaj;
-   }
-   ci++;
-  }
-
-  if (!found_step) {
-   /* use bound to find possible step */
-   alphak=cubic_interp(func,xk,pk,alphal,alphah,x,xp,xo,m,n,step,adata);
-  }
-   
-
-  //printf("Found %lf Interval [%lf,%lf]\n",alphak,alphal,alphah);
-  return alphak;
-}
- 
- 
-
-/* line search */
-/* func: vector function
-   xk: parameter values size m x 1 (at which step is calculated)
-   pk: step direction size m x 1 (x(k+1)=x(k)+alphak * pk)
-   alpha1/alphamax: initial value for step /max value
-   c1,c2: limit parameters for strong Wolfe conditions
-   xo: observed data size n x 1
-   n: size of vector function
-   step: step size for differencing 
-   adata:  additional data passed to the function
-*/
-static double 
-linesearch_nw(
-   void (*func)(double *p, double *hx, int m, int n, void *adata),
-   double *xk, double *pk, double alpha1, double alphamax, double c1, double c2, double *xo, int m, int n, double step, void *adata) {
- 
- /* phi(alpha)=f(xk+alpha pk)
-  for vector function func 
-   f(xk) =||func(xk)||^2 */
-  
-  double *x,*xp;
-  double alphai1,alphai;
-  double phi_0,phi_alphai,phi_alphai1;
-  double p01,p02;
-  double gphi_0,gphi_i;
-  double alphak;
-
-  int ci;
-
-  alphai1=0.0; /* initial value for alpha(i-1) */
-  alphai=alpha1; /* initial value for alpha(i) */
-  if ((x=(double*)calloc((size_t)n,sizeof(double)))==0) {
-     fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
-     exit(1);
-  }
-  if ((xp=(double*)calloc((size_t)m,sizeof(double)))==0) {
-     fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
-     exit(1);
-  }
-
-  alphak=1.0;
-  /* evaluate phi_0 and grad(phi_0) */
-  func(xk,x,m,n,adata);
-  my_daxpy(n,xo,-1.0,x);
-  phi_0=my_dnrm2(n,x);
-  phi_0*=phi_0;
-  /* grad(phi_0): evaluate alpha0-step and alpha0+step */
-  my_dcopy(m,xk,1,xp,1); /* xp<=xk */
-  my_daxpy(m,pk,alphai1+step,xp); /* xp<=xp+(alphai+step)*pk */
-  func(xp,x,m,n,adata);
-  my_daxpy(n,xo,-1.0,x);
-  p01=my_dnrm2(n,x);
-  my_daxpy(m,pk,-2.0*step,xp); /* xp<=xp+(alphai-step)*pk */
-  func(xp,x,m,n,adata);
-  my_daxpy(n,xo,-1.0,x);
-  p02=my_dnrm2(n,x);
-  gphi_0=(p01*p01-p02*p02)/(2.0*step);
-
-  ci=1;
-  phi_alphai1=phi_0;
-  while(ci<10) {
-   /* x=phi(alpha(i))=f(xk+alphai pk) */
-   my_dcopy(m,xk,1,xp,1); /* xp<=xk */
-   my_daxpy(m,pk,alphai,xp); /* xp<=xp+alphai*pk */
-   func(xp,x,m,n,adata);
-   /* calculate x<=x-xo */
-   my_daxpy(n,xo,-1.0,x);
-   phi_alphai=my_dnrm2(n,x);
-   phi_alphai*=phi_alphai;
-   if ((phi_alphai>phi_0+c1*alphai*gphi_0) || (ci>1 && phi_alphai>=phi_alphai1)) {
-      //alphak=(alphai1+alphai)*0.5;
-      alphak=linesearch_zoom_nw(func,xk,pk,alphai1,alphai,x,xp,phi_0,gphi_0,1e-4,0.9,xo,m,n,step,adata);
-      printf("Linesearch : Condition 1 met\n");
-      break;
-   } 
-   /* evaluate grad(phi(alpha(i))) */
-   my_dcopy(m,xk,1,xp,1); /* NOT NEEDED here?? xp<=xk */
-   my_daxpy(m,pk,step,xp); /* xp<=xp+(alphai+step)*pk */
-   func(xp,x,m,n,adata);
-   my_daxpy(n,xo,-1.0,x);
-   p01=my_dnrm2(n,x);
-   my_daxpy(m,pk,-2.0*step,xp); /* xp<=xp+(alphai-step)*pk */
-   func(xp,x,m,n,adata);
-   my_daxpy(n,xo,-1.0,x);
-   p02=my_dnrm2(n,x);
-   gphi_i=(p01*p01-p02*p02)/(2.0*step);
-
-   if (fabs(gphi_i)<=-c2*gphi_0) {
-     alphak=alphai;
-     printf("Linesearch : Condition 2 met\n");
-     break;
-   }
-
-   if (gphi_i>=0) {
-     //alphak=(alphai+alphai1)*0.5;
-     alphak=linesearch_zoom_nw(func,xk,pk,alphai,alphai1,x,xp,phi_0,gphi_0,1e-4,0.9,xo,m,n,step,adata);
-     printf("Linesearch : Condition 3 met\n");
-     break;
-   }
-
-   /* else preserve old values */
-   alphai1=alphai;
-   alphai=cubic_interp(func,xk,pk,alphai,alphamax,x,xp,xo,m,n,step,adata);
-   phi_alphai1=phi_alphai;
-
-   ci++;
-  }
-
-  free(x);
-  free(xp);
-  printf("Step size=%lf\n",alphak);
-  return alphak;
-}
-/*************** END Nocedal/Wright line search ****************************/
 /* note M here  is LBFGS memory size */
-int
-lbfgs_fit(
+static int
+lbfgs_fit_common(
    void (*func)(double *p, double *hx, int m, int n, void *adata),
-   double *p, double *x, int m, int n, int itmax, int M, int gpu_threads, void *adata) {
+   double *p, double *x, int m, int n, int itmax, int M, int gpu_threads, int do_robust, void *adata) {
 
   double *gk; /* gradients at both k+1 and k iter */
   double *xk1,*xk; /* parameters at k+1 and k iter */
   double *pk; /* step direction H_k * grad(f) */
 
-  double step=1e-6; /* FIXME: tune for GPU */
+  double step; /* FIXME tune for GPU, use larger if far away from convergence */
   double *y, *s; /* storage for delta(grad) and delta(p) */
   double *rho; /* storage for 1/yk^T*sk */
   int ci,ck,cm;
@@ -1042,6 +907,8 @@ lbfgs_fit(
   char *hbb;
   int *ptoclus;
   int Nbase1=dp->Nbase*dp->tilesz;
+
+  thread_gpu_data threaddata[2]; /* 2 for 2 threads/cards */
 
   if ((gk=(double*)calloc((size_t)m,sizeof(double)))==0) {
      fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
@@ -1082,17 +949,8 @@ lbfgs_fit(
      fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
      exit(1);
   }
-  rearrange_baselines(Nbase1, dp->barr, hbb, dp->Nt);
   /* baseline->station mapping */
-//  for (ci=0; ci<Nbase1; ci++) {
-//    if (!dp->barr[ci].flag) {
-//     hbb[2*ci]=dp->barr[ci].sta1;
-//     hbb[2*ci+1]=dp->barr[ci].sta2;
-//    } else { /* flagged baselines have -1 for stations */
-//     hbb[2*ci]=-1;
-//     hbb[2*ci+1]=-1;
-//    }
-//  }
+  rearrange_baselines(Nbase1, dp->barr, hbb, dp->Nt);
 
   /* parameter->cluster mapping */ 
   /* for each cluster: chunk size, start param index */
@@ -1107,13 +965,108 @@ lbfgs_fit(
   dp->hbb=hbb;
   dp->ptoclus=ptoclus;
 /*****************************************************************************/
+  /* choose 256 threads per block for high occupancy */
+  int ThreadsPerBlock = gpu_threads;
 
+  /* partition parameters, per each parameter, one thread */
+  /* also account for the no of GPUs using */
+  /* parameters per thread (GPU) */
+  int Nparm=(m+2-1)/2;
+  /* find number of blocks */
+  int BlocksPerGrid = (Nparm+ThreadsPerBlock-1)/ThreadsPerBlock;
+  ci=0;
+  int nth;
+  for (nth=0; nth<2; nth++) {
+   threaddata[nth].ThreadsPerBlock=ThreadsPerBlock;
+   threaddata[nth].BlocksPerGrid=BlocksPerGrid;
+   threaddata[nth].card=nth;
+   threaddata[nth].Nbase=dp->Nbase;
+   threaddata[nth].tilesz=dp->tilesz;
+   threaddata[nth].barr=dp->barr;
+   threaddata[nth].M=dp->M;
+   threaddata[nth].N=dp->N;
+   threaddata[nth].coh=dp->coh;
+   threaddata[nth].xo=x;
+   threaddata[nth].p=p;
+   threaddata[nth].g=gk;
+   threaddata[nth].m=m;
+   threaddata[nth].n=n;
+   threaddata[nth].hbb=dp->hbb;
+   threaddata[nth].ptoclus=dp->ptoclus;
+   threaddata[nth].g_start=ci;
+   threaddata[nth].g_end=ci+Nparm-1;
+   if (threaddata[nth].g_end>=m) {
+     threaddata[nth].g_end=m-1;
+   }
+   /* for robust mode */
+   if (do_robust) { 
+    threaddata[nth].robust_nu=dp->robust_nu;
+   }
+   ci=ci+Nparm;
+  }
+  
+  /* pipeline data */
+  th_pipeline tp;
+  gbdata_b tpg; 
 
+  tpg.do_robust=do_robust;
+  /* divide no of baselines */
+  int Nthb0=(Nbase1+2-1)/2;
+  tpg.Nbase[0]=Nthb0;
+  tpg.Nbase[1]=Nbase1-Nthb0;
+  tpg.boff[0]=0;
+  tpg.boff[1]=Nthb0;
+  
+  tpg.lmdata[0]=&threaddata[0];
+  tpg.lmdata[1]=&threaddata[1];
+  /* calculate total size of memory need to be allocated in GPU, in bytes +2 added to align memory */
+  /* note: we do not allocate memory here, use pinned memory for transfer */
+  //tpg.data_size[0]=(n+(dp->Nbase*dp->tilesz)*8*dp->M+m+(tpg.lmdata[0]->g_end-tpg.lmdata[0]->g_start+1)+2)*sizeof(double)+(2*dp->M*sizeof(int))+(2*dp->Nbase*dp->tilesz*sizeof(char));
+  //tpg.data_size[1]=(n+(dp->Nbase*dp->tilesz)*8*dp->M+m+(tpg.lmdata[1]->g_end-tpg.lmdata[1]->g_start+1)+2)*sizeof(double)+(2*dp->M*sizeof(int))+(2*dp->Nbase*dp->tilesz*sizeof(char));
+  tpg.data_size[0]=tpg.data_size[1]=sizeof(float);
+
+  tpg.status[0]=tpg.status[1]=PT_DO_NOTHING;
+  init_pipeline_b(&tp,&tpg);
+  sync_barrier(&(tp.gate1));
+  tpg.status[0]=tpg.status[1]=PT_DO_AGPU;
+  sync_barrier(&(tp.gate2));
+  sync_barrier(&(tp.gate1));
+  tpg.status[0]=tpg.status[1]=PT_DO_NOTHING;
+  sync_barrier(&(tp.gate2));
+
+/*****************************************************************************/
   /* initial value for params xk=p */
   my_dcopy(m,p,1,xk,1);
+  sync_barrier(&(tp.gate1));
+  threaddata[0].p=threaddata[1].p=xk;
+  tpg.status[0]=tpg.status[1]=PT_DO_CDERIV;
+  sync_barrier(&(tp.gate2));
+  sync_barrier(&(tp.gate1));
+  tpg.status[0]=tpg.status[1]=PT_DO_NOTHING;
+  sync_barrier(&(tp.gate2));
+//  for (ci=0; ci<20; ci++) {
+//   printf("GPU %d %lf\n",ci,gk[ci]);
+//  } 
   /*  gradient gk=grad(f)_k */
-  func_grad(func,xk,gk,x,m,n,step,gpu_threads,adata);
-  ck=0;
+//  func_grad(func,xk,gk,x,m,n,step,gpu_threads,adata);
+//  for (ci=0; ci<20; ci++) {
+//   printf("CPU %d %lf\n",ci,gk[ci]);
+//  } 
+  
+  double gradnrm=my_dnrm2(m,gk);
+  /* if gradient is too small, no need to solve, so stop */
+  if (gradnrm<CLM_STOP_THRESH) {
+   ck=itmax;
+   step=0.0;
+  } else {
+   ck=0;
+   /* step in [1e-6,1e-9] */
+   step=MAX(1e-9,MIN(1e-3/gradnrm,1e-6));
+  }
+#ifdef DEBUG
+  printf("||grad||=%g step=%g\n",gradnrm,step);
+#endif
+
   cm=0;
   ci=0;
  
@@ -1128,11 +1081,12 @@ lbfgs_fit(
 
    /* linesearch to find step length */
    /* parameters alpha1=10.0,sigma=0.1, rho=0.01, t1=9, t2=0.1, t3=0.5 */
-   /* FIXME: update paramters for GUP gradient */
-   alphak=linesearch(func,xk,pk,10.0,0.1,0.01,9,0.1,0.5,x,m,n,step,adata);
-   /* parameters c1=1e-4 c2=0.9, alpha1=1.0, alphamax=10.0, step (for alpha)=1e-4*/
-   //alphak=linesearch_nw(func,xk,pk,1.0,10.0,1e-4,0.9,x,m,n,1e-4,adata);
-   //alphak=1.0;
+   /* FIXME: update paramters for GPU gradient */
+   alphak=linesearch(func,xk,pk,10.0,0.1,0.01,9,0.1,0.5,x,m,n,step,adata,&tp, &tpg);
+   /* check if step size is too small, then stop */
+   if (fabs(alphak)<CLM_STOP_THRESH) {
+    break;
+   }
    /* update parameters xk1=xk+alpha_k *pk */
    my_dcopy(m,xk,1,xk1,1);
    my_daxpy(m,pk,alphak,xk1);
@@ -1147,7 +1101,15 @@ lbfgs_fit(
    my_dscal(m,-1.0,&y[cm]);
 
    /* update gradient */
-   func_grad(func,xk1,gk,x,m,n,step,gpu_threads,adata);
+  sync_barrier(&(tp.gate1));
+  tpg.lmdata[0]->p=tpg.lmdata[1]->p=xk1;
+  tpg.status[0]=tpg.status[1]=PT_DO_CDERIV;
+  sync_barrier(&(tp.gate2));
+  sync_barrier(&(tp.gate1));
+  tpg.status[0]=tpg.status[1]=PT_DO_NOTHING;
+  sync_barrier(&(tp.gate2));
+
+//   func_grad(func,xk1,gk,x,m,n,step,gpu_threads,adata);
    /* yk=yk+gk1 */
    my_daxpy(m,gk,1.0,&y[cm]);
 
@@ -1188,5 +1150,29 @@ lbfgs_fit(
   free(ptoclus);
   dp->hbb=NULL;
   dp->ptoclus=NULL;
+
+  /******** free threads ***************/
+  sync_barrier(&(tp.gate1)); /* sync at gate 1*/
+  tpg.status[0]=tpg.status[1]=PT_DO_DGPU;
+  sync_barrier(&(tp.gate2)); /* sync at gate 2*/
+
+  destroy_pipeline_b(&tp);
+
   return 0;
+}
+
+
+
+int
+lbfgs_fit(
+   void (*func)(double *p, double *hx, int m, int n, void *adata),
+   double *p, double *x, int m, int n, int itmax, int M, int gpu_threads, void *adata) {
+  return lbfgs_fit_common(func, p, x, m, n, itmax, M, gpu_threads, 0, adata);
+}
+
+int
+lbfgs_fit_robust_cuda(
+   void (*func)(double *p, double *hx, int m, int n, void *adata),
+   double *p, double *x, int m, int n, int itmax, int M, int gpu_threads, void *adata) {
+  return lbfgs_fit_common(func, p, x, m, n, itmax, M, gpu_threads, 1, adata);
 }

@@ -21,7 +21,8 @@
 #include <cuComplex.h>
 #include <stdio.h>
 
-
+/* enable this for checking for kernel failure */
+//#define CUDA_DBG
 
 __global__ void kernel_diagdiv_fl(int M, float eps, float *y, float *x){
   unsigned int tid = blockIdx.x*blockDim.x + threadIdx.x;
@@ -76,7 +77,7 @@ __global__ void kernel_func_fl(int Nbase, float *x, float *coh, float *p, char *
       1) its not flagged (sta1,sta2)>=0
     */
     if (sta1>=0 && sta2>=0) {   
-     cuComplex G1[4];
+     cuFloatComplex G1[4];
      float pp[8]; 
      pp[0]=p[sta1*8];
      pp[1]=p[sta1*8+1];
@@ -96,7 +97,7 @@ __global__ void kernel_func_fl(int Nbase, float *x, float *coh, float *p, char *
      G1[3].y=pp[7];
      
 
-     cuComplex C[4];
+     cuFloatComplex C[4];
      C[0].x=coh[8*n];
      C[0].y=coh[8*n+1];
      C[1].x=coh[8*n+2];
@@ -106,14 +107,14 @@ __global__ void kernel_func_fl(int Nbase, float *x, float *coh, float *p, char *
      C[3].x=coh[8*n+6];
      C[3].y=coh[8*n+7]; 
  
-     cuComplex T1[4];
+     cuFloatComplex T1[4];
      /* T=G1*C */
      T1[0]=cuCaddf(cuCmulf(G1[0],C[0]),cuCmulf(G1[1],C[2]));
      T1[1]=cuCaddf(cuCmulf(G1[0],C[1]),cuCmulf(G1[1],C[3]));
      T1[2]=cuCaddf(cuCmulf(G1[2],C[0]),cuCmulf(G1[3],C[2]));
      T1[3]=cuCaddf(cuCmulf(G1[2],C[1]),cuCmulf(G1[3],C[3]));
 
-     cuComplex G2[4];
+     cuFloatComplex G2[4];
      /* conjugate this */
      pp[0]=p[sta2*8];
      pp[1]=-p[sta2*8+1];
@@ -132,7 +133,7 @@ __global__ void kernel_func_fl(int Nbase, float *x, float *coh, float *p, char *
      G2[3].x=pp[6];
      G2[3].y=pp[7];
 
-     cuComplex T2[4];
+     cuFloatComplex T2[4];
      T2[0]=cuCaddf(cuCmulf(T1[0],G2[0]),cuCmulf(T1[1],G2[2]));
      T2[1]=cuCaddf(cuCmulf(T1[0],G2[1]),cuCmulf(T1[1],G2[3]));
      T2[2]=cuCaddf(cuCmulf(T1[2],G2[0]),cuCmulf(T1[3],G2[2]));
@@ -191,7 +192,7 @@ __global__ void kernel_jacf_fl(int Nbase, int M, float *jac, float *coh, float *
 
     if (((stc==sta2)||(stc==sta1)) && sta1>=0 && sta2>=0 ) {   
 
-     cuComplex C[4];
+     cuFloatComplex C[4];
      C[0].x=coh[8*n];
      C[0].y=coh[8*n+1];
      C[1].x=coh[8*n+2];
@@ -221,7 +222,7 @@ __global__ void kernel_jacf_fl(int Nbase, int M, float *jac, float *coh, float *
      }
 
 
-     cuComplex G1[4];
+     cuFloatComplex G1[4];
      G1[0].x=pp1[0];
      G1[0].y=pp1[1];
      G1[1].x=pp1[2];
@@ -231,14 +232,14 @@ __global__ void kernel_jacf_fl(int Nbase, int M, float *jac, float *coh, float *
      G1[3].x=pp1[6];
      G1[3].y=pp1[7];
      
-     cuComplex T1[4];
+     cuFloatComplex T1[4];
      /* T=G1*C */
      T1[0]=cuCaddf(cuCmulf(G1[0],C[0]),cuCmulf(G1[1],C[2]));
      T1[1]=cuCaddf(cuCmulf(G1[0],C[1]),cuCmulf(G1[1],C[3]));
      T1[2]=cuCaddf(cuCmulf(G1[2],C[0]),cuCmulf(G1[3],C[2]));
      T1[3]=cuCaddf(cuCmulf(G1[2],C[1]),cuCmulf(G1[3],C[3]));
 
-     cuComplex G2[4];
+     cuFloatComplex G2[4];
      /* conjugate this */
      G2[0].x=pp2[0];
      G2[0].y=-pp2[1];
@@ -249,7 +250,7 @@ __global__ void kernel_jacf_fl(int Nbase, int M, float *jac, float *coh, float *
      G2[3].x=pp2[6];
      G2[3].y=-pp2[7];
 
-     cuComplex T2[4];
+     cuFloatComplex T2[4];
      T2[0]=cuCaddf(cuCmulf(T1[0],G2[0]),cuCmulf(T1[1],G2[2]));
      T2[1]=cuCaddf(cuCmulf(T1[0],G2[1]),cuCmulf(T1[1],G2[3]));
      T2[2]=cuCaddf(cuCmulf(T1[2],G2[0]),cuCmulf(T1[3],G2[2]));
@@ -280,8 +281,12 @@ extern "C"
 void 
 cudakernel_diagdiv_fl(int ThreadsPerBlock, int BlocksPerGrid, int M, float eps, float *Dpd, float *Sd) {
 
+#ifdef CUDA_DBG
   cudaError_t error;
+#endif
   kernel_diagdiv_fl<<< BlocksPerGrid, ThreadsPerBlock >>>(M, eps, Dpd, Sd);
+  cudaDeviceSynchronize();
+#ifdef CUDA_DBG
   error = cudaGetLastError();
   if(error != cudaSuccess)
   {
@@ -289,8 +294,8 @@ cudakernel_diagdiv_fl(int ThreadsPerBlock, int BlocksPerGrid, int M, float eps, 
     fprintf(stderr,"CUDA error: %s :%s: %d\n", cudaGetErrorString(error),__FILE__,__LINE__);
     exit(-1);
   }
+#endif
 
-  cudaDeviceSynchronize();
 }
 
 /* cuda driver for calculating
@@ -300,8 +305,12 @@ cudakernel_diagdiv_fl(int ThreadsPerBlock, int BlocksPerGrid, int M, float eps, 
 */
 void
 cudakernel_diagmu_fl(int ThreadsPerBlock, int BlocksPerGrid, int M, float *A, float mu) {
+#ifdef CUDA_DBG
   cudaError_t error;
+#endif
   kernel_diagmu_fl<<< BlocksPerGrid, ThreadsPerBlock >>>(M, A, mu);
+  cudaDeviceSynchronize();
+#ifdef CUDA_DBG
   error = cudaGetLastError();
   if(error != cudaSuccess)
   {
@@ -309,7 +318,7 @@ cudakernel_diagmu_fl(int ThreadsPerBlock, int BlocksPerGrid, int M, float *A, fl
     fprintf(stderr,"CUDA error: %s :%s: %d\n", cudaGetErrorString(error),__FILE__,__LINE__);
     exit(-1);
   }
-  cudaDeviceSynchronize();
+#endif
 }
 
 
@@ -318,10 +327,14 @@ cudakernel_diagmu_fl(int ThreadsPerBlock, int BlocksPerGrid, int M, float *A, fl
 void
 cudakernel_func_fl(int ThreadsPerBlock, int BlocksPerGrid, float *p, float *x, int M, int N, float *coh, char *bbh, int Nbase, int Mclus, int Nstations) {
 
+#ifdef CUDA_DBG
   cudaError_t error;
+#endif
   cudaMemset(x, 0, N*sizeof(float));
 //  printf("Kernel data size=%d, block=%d, thread=%d, baselines=%d\n",N,BlocksPerGrid, ThreadsPerBlock,Nbase);
   kernel_func_fl<<< BlocksPerGrid, ThreadsPerBlock >>>(Nbase,  x, coh, p, bbh, Nstations);
+  cudaDeviceSynchronize();
+#ifdef CUDA_DBG
   error = cudaGetLastError();
   if(error != cudaSuccess)
   {
@@ -329,8 +342,8 @@ cudakernel_func_fl(int ThreadsPerBlock, int BlocksPerGrid, float *p, float *x, i
     fprintf(stderr,"CUDA error: %s :%s: %d\n", cudaGetErrorString(error),__FILE__,__LINE__);
     exit(-1);
   }
+#endif
 
-  cudaDeviceSynchronize();
 }
 
 /* cuda driver for calculating jacf() */
@@ -338,7 +351,9 @@ cudakernel_func_fl(int ThreadsPerBlock, int BlocksPerGrid, float *p, float *x, i
 void
 cudakernel_jacf_fl(int ThreadsPerBlock_row, int  ThreadsPerBlock_col, float *p, float *jac, int M, int N, float *coh, char *bbh, int Nbase, int Mclus, int Nstations) {
 
+#ifdef CUDA_DBG
   cudaError_t error;
+#endif
   /* NOTE: use small value for ThreadsPerBlock here, like 8 */
   dim3 threadsPerBlock(16, 8);
   /* jacobian: Nbase x Nstations (proportional to N), so */
@@ -349,6 +364,8 @@ cudakernel_jacf_fl(int ThreadsPerBlock_row, int  ThreadsPerBlock_col, float *p, 
  // printf("Kernel Jax data size=%d, params=%d, block=%d,%d, thread=%d,%d, baselines=%d\n",N, M, numBlocks.x,numBlocks.y, threadsPerBlock.x, threadsPerBlock.y, Nbase);
   kernel_jacf_fl<<< numBlocks, threadsPerBlock>>>(Nbase,  M, jac, coh, p, bbh, Nstations);
 
+  cudaDeviceSynchronize();
+#ifdef CUDA_DBG
   error = cudaGetLastError();
   if(error != cudaSuccess)
   {
@@ -356,8 +373,8 @@ cudakernel_jacf_fl(int ThreadsPerBlock_row, int  ThreadsPerBlock_col, float *p, 
     fprintf(stderr,"CUDA error: %s :%s: %d\n", cudaGetErrorString(error),__FILE__,__LINE__);
     exit(-1);
   }
+#endif
 
-  cudaDeviceSynchronize();
 }
 
 }

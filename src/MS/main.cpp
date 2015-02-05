@@ -31,7 +31,7 @@ using namespace Data;
 
 void
 print_copyright(void) {
-  cout<<"SAGECal 0.2.8 (C) 2011-2014 Sarod Yatawatta"<<endl;
+  cout<<"SAGECal 0.3.5 (C) 2011-2015 Sarod Yatawatta"<<endl;
 }
 
 
@@ -55,18 +55,19 @@ print_help(void) {
    cout << "-m LBFGS memory size : default " <<Data::lbfgs_m<< endl;
    cout << "-n no of worker threads : default "<<Data::Nt << endl;
    cout << "-t tile size : default " <<Data::TileSize<< endl;
-   cout << "-a 0,1 : if 1, only simulate, no calibration: default " <<Data::DoSim<< endl;
+   cout << "-a 0,1 : if 1, only simulate (with solutions if solutions file is also given): default " <<Data::DoSim<< endl;
+   cout << "-z ignore_clusters: if only doing a simulation, ignore the cluster ids listed in this file" << endl;
    cout << "-b 0,1 : if 1, solve for each channel: default " <<Data::doChan<< endl;
    cout << "-x exclude baselines length (lambda) lower than this in calibration : default "<<Data::min_uvcut << endl;
+   cout << "-y exclude baselines length (lambda) higher than this in calibration : default "<<Data::max_uvcut << endl;
    cout <<endl<<"Advanced options:"<<endl;
    cout << "-k cluster_id : correct residuals with solution of this cluster : default "<<Data::ccid<< endl;
    cout << "-o robust rho, robust matrix inversion during correction: default "<<Data::rho<< endl;
-   cout << "-j 0,1,2... 0 : OSaccel, 1 no OSaccel, 2: OSRLM, 3: RLM: default "<<Data::solver_mode<< endl;
+   cout << "-j 0,1,2... 0 : OSaccel, 1 no OSaccel, 2: OSRLM, 3: RLM, 4: RTR, 5: RRTR: default "<<Data::solver_mode<< endl;
    cout << "-L robust nu, lower bound: default "<<Data::nulow<< endl;
    cout << "-H robust nu, upper bound: default "<<Data::nuhigh<< endl;
    cout << "-R randomize iterations: default "<<Data::randomize<< endl;
-//   cout <<endl<<"Dangerous options:"<<endl;
-//   cout << "-y longest lambda for tapering (only if >0): default "<<Data::max_uvtaper<< endl;
+   cout << "-D 0,1,2 : if >0, enable diagnostics (Jacobian Leverage) 1 replace Jacobian Leverage as output, 2 only fractional noise/leverage is printed: default " <<Data::DoDiag<< endl;
    cout <<"Report bugs to <sarod@users.sf.net>"<<endl;
 
 }
@@ -80,7 +81,7 @@ ParseCmdLine(int ac, char **av) {
         print_help();
         exit(0);
     }
-    while((c=getopt(ac, av, "a:b:c:d:e:f:g:j:k:l:m:n:o:p:s:t:x:y:F:I:O:L:H:R:h"))!= -1)
+    while((c=getopt(ac, av, "a:b:c:d:e:f:g:j:k:l:m:n:o:p:s:t:x:y:z:D:F:I:O:L:H:R:h"))!= -1)
     {
         switch(c)
         {
@@ -157,7 +158,14 @@ ParseCmdLine(int ac, char **av) {
                 Data::min_uvcut= atof(optarg);
                 break;
             case 'y': 
-                Data::max_uvtaper= atof(optarg);
+                Data::max_uvcut= atof(optarg);
+                break;
+            case 'z':
+                ignorefile= optarg;
+                break;
+            case 'D':
+                DoDiag= atoi(optarg);
+                if (DoDiag<0) { DoDiag=0; }
                 break;
             case 'h': 
                 print_help();
@@ -176,13 +184,10 @@ ParseCmdLine(int ac, char **av) {
      print_help();
      exit(1);
     }
-    cout<<"Selecting baselines > "<<min_uvcut<<" wavelengths."<<endl;
-    if (max_uvtaper>0.0) {
-     cout<<"Tapering baselines < "<<max_uvtaper<<" wavelengths."<<endl;
-    }
+    cout<<"Selecting baselines > "<<min_uvcut<<" and < "<<max_uvcut<<" wavelengths."<<endl;
     if (!DoSim) {
     cout<<"Using ";
-    if (solver_mode==0 || solver_mode==1) {
+    if (solver_mode==SM_LM_LBFGS || solver_mode==SM_OSLM_LBFGS || solver_mode==SM_RTR_OSLM_LBFGS) {
      cout<<"Gaussian noise model for solver."<<endl;
     } else {
      cout<<"Robust noise model for solver with degrees of freedom ["<<nulow<<","<<nuhigh<<"]."<<endl;
@@ -226,11 +231,18 @@ main(int argc, char **argv) {
   double **pm;
   complex double *coh;
   FILE *sfp=0;
-
     if (solfile) {
+     if (!Data::DoSim) {
       if ((sfp=fopen(solfile,"w+"))==0) {
        fprintf(stderr,"%s: %d: no file\n",__FILE__,__LINE__);
-      return 1;
+       return 1;
+      }
+     } else {
+     /* simulation mode, read only access */
+      if ((sfp=fopen(solfile,"r"))==0) {
+       fprintf(stderr,"%s: %d: no file\n",__FILE__,__LINE__);
+       return 1;
+      }
      }
     }
 
@@ -239,7 +251,14 @@ main(int argc, char **argv) {
      clus_source_t *carr;
      baseline_t *barr;
      read_sky_cluster(Data::SkyModel,Data::Clusters,&carr,&M,iodata.freq0,iodata.ra0,iodata.dec0,Data::format);
-     printf("Got %d clusters\n",M);
+     /* exit if there are 0 clusters (incorrect sky model/ cluster file)*/
+     if (M<=0) {
+      fprintf(stderr,"%s: %d: no clusters to solve\n",__FILE__,__LINE__);
+      exit(1);
+     } else {
+      printf("Got %d clusters\n",M);
+     }
+
      /* array to store baseline->sta1,sta2 map */
      if ((barr=(baseline_t*)calloc((size_t)iodata.Nbase*iodata.tilesz,sizeof(baseline_t)))==0) {
       fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
@@ -260,6 +279,18 @@ main(int argc, char **argv) {
   if ((p=(double*)calloc((size_t)iodata.N*8*Mt,sizeof(double)))==0) {
      fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
      exit(1);
+  }
+   /* if simulation mode, solution file is given check if ignore file 
+      is also given */
+  int *ignorelist=0;
+  if (Data::DoSim && solfile) {
+    if ((ignorelist=(int*)calloc((size_t)M,sizeof(int)))==0) {
+     fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
+     exit(1);
+    }
+    if (ignorefile) {
+      update_ignorelist(ignorefile,ignorelist,M,carr);
+    }
   }
 
 #ifdef USE_MIC
@@ -404,9 +435,10 @@ main(int argc, char **argv) {
   double mic_data_nuhigh=Data::nuhigh;
 #endif
 
+   /* FIXME: uvmin is not needed in calibration, because its taken care of by flags */
     if (!Data::DoSim) {
     /****************** calibration **************************/
-    precalculate_coherencies(iodata.u,iodata.v,iodata.w,coh,iodata.N,iodata.Nbase*iodata.tilesz,barr,carr,M,iodata.freq0,iodata.deltaf,Data::min_uvcut,Data::Nt);
+    precalculate_coherencies(iodata.u,iodata.v,iodata.w,coh,iodata.N,iodata.Nbase*iodata.tilesz,barr,carr,M,iodata.freq0,iodata.deltaf,iodata.deltat,iodata.dec0,Data::min_uvcut,Data::max_uvcut,Data::Nt);
     
 #ifndef HAVE_CUDA
     if (start_iter) {
@@ -424,7 +456,7 @@ main(int argc, char **argv) {
      inout(p: length(8*mic_N*Mt)) 
      sagefit_visibilities_mic(mic_u,mic_v,mic_w,mic_x,mic_N,mic_Nbase,mic_tilesz,barr,mic_chunks,mic_pindex,coh,M,Mt,mic_freq0,mic_deltaf,p,mic_data_min_uvcut,mic_data_Nt,2*mic_data_max_emiter,mic_data_max_iter,(mic_data_dochan? 0 :mic_data_max_lbfgs),mic_data_lbfgs_m,mic_data_gpu_threads,mic_data_linsolv,mic_data_solver_mode,mic_data_nulow,mic_data_nuhigh,mic_data_randomize,&mean_nu,&res_0,&res_1);
 #else /* NOT MIC */
-     sagefit_visibilities(iodata.u,iodata.v,iodata.w,iodata.x,iodata.N,iodata.Nbase,iodata.tilesz,barr,carr,coh,M,Mt,iodata.freq0,iodata.deltaf,p,Data::min_uvcut,Data::Nt,2*Data::max_emiter,Data::max_iter,(Data::doChan? 0 :Data::max_lbfgs),Data::lbfgs_m,Data::gpu_threads,Data::linsolv,Data::solver_mode,Data::nulow,Data::nuhigh,Data::randomize,&mean_nu,&res_0,&res_1);
+     sagefit_visibilities(iodata.u,iodata.v,iodata.w,iodata.x,iodata.N,iodata.Nbase,iodata.tilesz,barr,carr,coh,M,Mt,iodata.freq0,iodata.deltaf,p,Data::min_uvcut,Data::Nt,2*Data::max_emiter,Data::max_iter,(Data::doChan? 0 :Data::max_lbfgs),Data::lbfgs_m,Data::gpu_threads,Data::linsolv,(Data::solver_mode==SM_RTR_OSLM_LBFGS?SM_OSLM_LBFGS:(Data::solver_mode==SM_RTR_OSRLM_RLBFGS?SM_OSLM_OSRLM_RLBFGS:Data::solver_mode)),Data::nulow,Data::nuhigh,Data::randomize,&mean_nu,&res_0,&res_1);
 #endif /* USE_MIC */
      start_iter=0;
     } else {
@@ -449,7 +481,7 @@ main(int argc, char **argv) {
 #ifdef HAVE_CUDA
 #ifdef ONE_GPU
     if (start_iter) {
-     sagefit_visibilities_dual_pt_one_gpu(iodata.u,iodata.v,iodata.w,iodata.x,iodata.N,iodata.Nbase,iodata.tilesz,barr,carr,coh,M,Mt,iodata.freq0,iodata.deltaf,p,Data::min_uvcut,Data::Nt,2*Data::max_emiter,Data::max_iter,(Data::doChan? 0: Data::max_lbfgs),Data::lbfgs_m,Data::gpu_threads,Data::linsolv,Data::solver_mode,Data::nulow,Data::nuhigh,Data::randomize,&mean_nu,&res_0,&res_1);
+     sagefit_visibilities_dual_pt_one_gpu(iodata.u,iodata.v,iodata.w,iodata.x,iodata.N,iodata.Nbase,iodata.tilesz,barr,carr,coh,M,Mt,iodata.freq0,iodata.deltaf,p,Data::min_uvcut,Data::Nt,2*Data::max_emiter,Data::max_iter,(Data::doChan? 0: Data::max_lbfgs),Data::lbfgs_m,Data::gpu_threads,Data::linsolv,(Data::solver_mode==SM_RTR_OSLM_LBFGS?SM_OSLM_LBFGS:(Data::solver_mode==SM_RTR_OSRLM_RLBFGS?SM_OSLM_OSRLM_RLBFGS:Data::solver_mode)),Data::nulow,Data::nuhigh,Data::randomize,&mean_nu,&res_0,&res_1);
      start_iter=0;
     } else {
      sagefit_visibilities_dual_pt_one_gpu(iodata.u,iodata.v,iodata.w,iodata.x,iodata.N,iodata.Nbase,iodata.tilesz,barr,carr,coh,M,Mt,iodata.freq0,iodata.deltaf,p,Data::min_uvcut,Data::Nt,Data::max_emiter,Data::max_iter,(Data::doChan? 0:Data::max_lbfgs),Data::lbfgs_m,Data::gpu_threads,Data::linsolv,Data::solver_mode,Data::nulow,Data::nuhigh,Data::randomize,&mean_nu,&res_0,&res_1);
@@ -457,7 +489,8 @@ main(int argc, char **argv) {
 #endif /* ONE_GPU */
 #ifndef ONE_GPU
     if (start_iter) {
-     sagefit_visibilities_dual_pt_flt(iodata.u,iodata.v,iodata.w,iodata.x,iodata.N,iodata.Nbase,iodata.tilesz,barr,carr,coh,M,Mt,iodata.freq0,iodata.deltaf,p,Data::min_uvcut,Data::Nt,2*Data::max_emiter,Data::max_iter,(Data::doChan? 0:Data::max_lbfgs),Data::lbfgs_m,Data::gpu_threads,Data::linsolv,Data::solver_mode,Data::nulow,Data::nuhigh,Data::randomize,&mean_nu,&res_0,&res_1);
+     sagefit_visibilities_dual_pt_flt(iodata.u,iodata.v,iodata.w,iodata.x,iodata.N,iodata.Nbase,iodata.tilesz,barr,carr,coh,M,Mt,iodata.freq0,iodata.deltaf,p,Data::min_uvcut,Data::Nt,2*Data::max_emiter,Data::max_iter,(Data::doChan? 0:Data::max_lbfgs),Data::lbfgs_m,Data::gpu_threads,Data::linsolv,(Data::solver_mode==SM_RTR_OSLM_LBFGS?SM_OSLM_LBFGS:(Data::solver_mode==SM_RTR_OSRLM_RLBFGS?SM_OSLM_OSRLM_RLBFGS:Data::solver_mode)),Data::nulow,Data::nuhigh,Data::randomize,&mean_nu,&res_0,&res_1);
+     ///DBG sagefit_visibilities_dual_pt_flt(iodata.u,iodata.v,iodata.w,iodata.x,iodata.N,iodata.Nbase,iodata.tilesz,barr,carr,coh,M,Mt,iodata.freq0,iodata.deltaf,p,Data::min_uvcut,Data::Nt,2*Data::max_emiter,Data::max_iter,(Data::doChan? 0:Data::max_lbfgs),Data::lbfgs_m,Data::gpu_threads,Data::linsolv,Data::solver_mode,Data::nulow,Data::nuhigh,Data::randomize,&mean_nu,&res_0,&res_1);
      start_iter=0;
     } else {
      sagefit_visibilities_dual_pt_flt(iodata.u,iodata.v,iodata.w,iodata.x,iodata.N,iodata.Nbase,iodata.tilesz,barr,carr,coh,M,Mt,iodata.freq0,iodata.deltaf,p,Data::min_uvcut,Data::Nt,Data::max_emiter,Data::max_iter,(Data::doChan? 0:Data::max_lbfgs),Data::lbfgs_m,Data::gpu_threads,Data::linsolv,Data::solver_mode,Data::nulow,Data::nuhigh,Data::randomize,&mean_nu,&res_0,&res_1);
@@ -482,7 +515,7 @@ main(int argc, char **argv) {
       for (ci=0; ci<iodata.Nchan; ci++) {
         memcpy(pfreq,p,(size_t)iodata.N*8*Mt*sizeof(double));
         memcpy(xfreq,&iodata.xo[ci*iodata.Nbase*iodata.tilesz*8],(size_t)iodata.Nbase*iodata.tilesz*8*sizeof(double));
-        precalculate_coherencies(iodata.u,iodata.v,iodata.w,coh,iodata.N,iodata.Nbase*iodata.tilesz,barr,carr,M,iodata.freqs[ci],deltafch,Data::min_uvcut,Data::Nt);
+        precalculate_coherencies(iodata.u,iodata.v,iodata.w,coh,iodata.N,iodata.Nbase*iodata.tilesz,barr,carr,M,iodata.freqs[ci],deltafch,iodata.deltat,iodata.dec0,Data::min_uvcut,Data::max_uvcut,Data::Nt);
       /* FIT, and calculate */
 #ifndef HAVE_CUDA
 #ifdef USE_MIC
@@ -508,29 +541,43 @@ main(int argc, char **argv) {
 #ifdef HAVE_CUDA
         bfgsfit_visibilities_gpu(iodata.u,iodata.v,iodata.w,xfreq,iodata.N,iodata.Nbase,iodata.tilesz,barr,carr,coh,M,Mt,iodata.freqs[ci],deltafch,pfreq,Data::min_uvcut,Data::Nt,Data::max_lbfgs,Data::lbfgs_m,Data::gpu_threads,Data::solver_mode,mean_nu,&res_00,&res_01);
 #endif /* HAVE_CUDA */
-        calculate_residuals(iodata.u,iodata.v,iodata.w,pfreq,&iodata.xo[ci*iodata.Nbase*iodata.tilesz*8],iodata.N,iodata.Nbase,iodata.tilesz,barr,carr,M,iodata.freqs[ci],deltafch,Data::Nt,Data::ccid,Data::rho);
+        calculate_residuals(iodata.u,iodata.v,iodata.w,pfreq,&iodata.xo[ci*iodata.Nbase*iodata.tilesz*8],iodata.N,iodata.Nbase,iodata.tilesz,barr,carr,M,iodata.freqs[ci],deltafch,iodata.deltat,iodata.dec0,Data::Nt,Data::ccid,Data::rho);
       }
       /* use last solution to save as output */
       memcpy(p,pfreq,(size_t)iodata.N*8*Mt*sizeof(double));
       free(pfreq);
       free(xfreq);
     } else {
-     calculate_residuals_multifreq(iodata.u,iodata.v,iodata.w,p,iodata.xo,iodata.N,iodata.Nbase,iodata.tilesz,barr,carr,M,iodata.freqs,iodata.Nchan,iodata.deltaf,Data::Nt,Data::ccid,Data::rho);
+     calculate_residuals_multifreq(iodata.u,iodata.v,iodata.w,p,iodata.xo,iodata.N,iodata.Nbase,iodata.tilesz,barr,carr,M,iodata.freqs,iodata.Nchan,iodata.deltaf,iodata.deltat,iodata.dec0,Data::Nt,Data::ccid,Data::rho);
     }
     /****************** end calibration **************************/
+    /****************** begin diagnostics ************************/
+#ifdef HAVE_CUDA
+    if (Data::DoDiag) {
+     calculate_diagnostics(iodata.u,iodata.v,iodata.w,p,iodata.xo,iodata.N,iodata.Nbase,iodata.tilesz,barr,carr,coh,M,Mt,Data::DoDiag,Data::Nt);
+    }
+#endif /* HAVE_CUDA */
+    /****************** end diagnostics **************************/
    } else {
     /************ simulation only mode ***************************/
-    predict_visibilities_multifreq(iodata.u,iodata.v,iodata.w,iodata.xo,iodata.N,iodata.Nbase,iodata.tilesz,barr,carr,M,iodata.freqs,iodata.Nchan,iodata.deltaf,Data::Nt);
+    if (!solfile) {
+     predict_visibilities_multifreq(iodata.u,iodata.v,iodata.w,iodata.xo,iodata.N,iodata.Nbase,iodata.tilesz,barr,carr,M,iodata.freqs,iodata.Nchan,iodata.deltaf,iodata.deltat,iodata.dec0,Data::Nt);
+    } else {
+     read_solutions(sfp,p,carr,iodata.N,M);
+    /* if solution file is given, read in the solutions and predict */
+     predict_visibilities_multifreq_withsol(iodata.u,iodata.v,iodata.w,p,iodata.xo,ignorelist,iodata.N,iodata.Nbase,iodata.tilesz,barr,carr,M,iodata.freqs,iodata.Nchan,iodata.deltaf,iodata.deltat,iodata.dec0,Data::Nt);
+    }
+    /************ end simulation only mode ***************************/
    }
 
    tilex+=iodata.tilesz;
    /* print solutions to file */
-   if (solfile) {
+   if (!Data::DoSim && solfile) {
     for (cj=0; cj<iodata.N*8; cj++) {
      fprintf(sfp,"%d ",cj);
      for (ci=M-1; ci>=0; ci--) {
        for (ck=0; ck<carr[ci].nchunk; ck++) {
-        fprintf(sfp," %lf",p[carr[ci].p[ck]+cj]);
+        fprintf(sfp," %e",p[carr[ci].p[ck]+cj]);
        }
      }
      fprintf(sfp,"\n");
@@ -548,23 +595,31 @@ main(int argc, char **argv) {
       (*msitr[cm])++;
     }
    if (!Data::DoSim) {
-   /* if residual has increased too much, reset solutions to original
+   /* if residual has increased too much, or all are flagged (0 residual)
+      or NaN
+      reset solutions to original
       initial values */
-   if (res_1>res_ratio*res_prev) {
+   if (res_1==0.0 || !isfinite(res_1) || res_1>res_ratio*res_prev) {
+     cout<<"Resetting Solution"<<endl;
      /* reset solutions so next iteration has default initial values */
      memcpy(p,pinit,(size_t)iodata.N*8*Mt*sizeof(double));
+     /* also assume iterations have restarted from scratch */
+     start_iter=1;
+     /* also forget min residual (otherwise will try to reset it always) */
+     res_prev=res_1;
    } else if (res_1<res_prev) { /* only store the min value */
     res_prev=res_1;
    }
    }
     end_time = time(0);
     elapsed_time = ((double) (end_time-start_time)) / 60.0;
+    if (solver_mode==SM_OSLM_OSRLM_RLBFGS||solver_mode==SM_RLM_RLBFGS||solver_mode==SM_RTR_OSRLM_RLBFGS) { 
     cout<<"nu="<<mean_nu<<endl;
+    }
 cout<<"Timeslot: "<<tilex<<" Residual: initial="<<res_0<<",final="<<res_1<<", Time spent="<<elapsed_time<<" minutes"<<endl;
     }
 
    Data::freeData(iodata);
-
 
 #ifdef USE_MIC
    free(mic_pindex);
@@ -627,6 +682,9 @@ cout<<"Timeslot: "<<tilex<<" Residual: initial="<<res_0<<",final="<<res_1<<", Ti
   free(coh);
   if (solfile) {
     fclose(sfp);
+  }
+  if (Data::DoSim && solfile) {
+    free(ignorelist);
   }
   /**********************************************************/
 

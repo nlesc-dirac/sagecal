@@ -13,7 +13,6 @@ LDFLAGS=-Wl,--rpath,/usr/local/OpenBLAS/lib/
 #LDFLAGS=-Wl,-t,--rpath,/software/users/lofareor/SW/lib64
 # -Wl,--hash-style=both
 
-# with multithread FFTW
 MY_LIBS=-lm -lsagecal
 INCLUDES=-I. -I./lib -I$(CASA_INCDIR) -I/usr/include
 LIBPATH=-L$(LAPACK_DIR) -L$(CASA_LIBDIR)  -L./lib

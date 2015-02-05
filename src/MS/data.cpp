@@ -36,6 +36,7 @@ unsigned long int Data::numRows;
 
 char *Data::TableName = NULL;
 float Data::min_uvcut=0.0f;
+float Data::max_uvcut=100e6;
 float Data::max_uvtaper=0.0f;
 String Data::DataField = "DATA";
 String Data::OutField = "CORRECTED_DATA";
@@ -55,14 +56,22 @@ int Data::gpu_threads=128;
 int Data::linsolv=1;
 int Data::randomize=1;
 int Data::DoSim=0;
+int Data::DoDiag=0;
 int Data::doChan=0; /* if 1, solve for each channel in multi channel data */
 int Data::solver_mode=0;
 int Data::ccid=-99999;
 double Data::rho=1e-9;
 char *Data::solfile=NULL;
+char *Data::ignorefile=NULL;
 char *Data::MSlist=NULL;
 
+/* distributed sagecal parameters */
+int Data::Nadmm=1;
+int Data::Npoly=2;
+double Data::admm_rho=5.0;
 
+/* no upper limit, solve for all timeslots */
+int Data::Nmaxtime=0;
 
 using namespace Data;
 
@@ -275,7 +284,7 @@ Data::loadData(Table ti, Data::IOData iodata) {
         double *c = uvw.data();
         double uvd=sqrt(c[0]*c[0]+c[1]*c[1]);
         bool flag_uvcut=0;
-        if (uvd<min_uvcut ) {
+        if (uvd<min_uvcut || uvd>max_uvcut) {
           flag_uvcut=true;
         } 
         double uvtaper=1.0;
@@ -409,7 +418,7 @@ Data::loadDataList(vector<MSIter*> msitr, Data::IOData iodata) {
         double *c = uvw.data();
         double uvd=sqrt(c[0]*c[0]+c[1]*c[1]);
         bool flag_uvcut=0;
-        if (uvd<min_uvcut ) {
+        if (uvd<min_uvcut || uvd>max_uvcut) {
           flag_uvcut=true;
         } 
         int nflag=0;
@@ -487,7 +496,6 @@ Data::loadDataList(vector<MSIter*> msitr, Data::IOData iodata) {
     }
     /* now if there is a tail of empty data remaining, flag them */
     if (row0<iodata.tilesz*iodata.Nbase) {
-cout<<"Tail "<<row0<<endl;
       for(int row = row0; row<iodata.tilesz*iodata.Nbase; row++) {
         iodata.flag[row]=1;
       }

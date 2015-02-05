@@ -21,6 +21,7 @@
 #include "sagecal.h"
 #include <pthread.h>
 
+
 /**** repeated code here ********************/
 /* Jones matrix multiplication 
    C=A*B
@@ -29,7 +30,7 @@
 __attribute__ ((target(MIC)))
 #endif
 static void
-amb(complex double *a, complex double *b, complex double *c) {
+amb(complex double * __restrict a, complex double * __restrict b, complex double * __restrict c) {
  c[0]=a[0]*b[0]+a[1]*b[2];
  c[1]=a[0]*b[1]+a[1]*b[3];
  c[2]=a[2]*b[0]+a[3]*b[2];
@@ -43,7 +44,7 @@ amb(complex double *a, complex double *b, complex double *c) {
 __attribute__ ((target(MIC)))
 #endif
 static void
-ambt(complex double *a, complex double *b, complex double *c) {
+ambt(complex double * __restrict a, complex double * __restrict b, complex double * __restrict c) {
  c[0]=a[0]*conj(b[0])+a[1]*conj(b[1]);
  c[1]=a[0]*conj(b[2])+a[1]*conj(b[3]);
  c[2]=a[2]*conj(b[0])+a[3]*conj(b[1]);
@@ -278,9 +279,6 @@ func_grad(
     threaddata[nth].g_end=m-1;
    }
    ci=ci+Nparm;
-#ifdef DEBUG
-   printf("thread %d parms (%d-%d)\n",nth,threaddata[nth].g_start,threaddata[nth].g_end);
-#endif
    pthread_create(&th_array[nth],&attr,cpu_calc_deriv,(void*)(&threaddata[nth]));
   }
 
@@ -877,7 +875,7 @@ linesearch_zoom(
   }
    
 #ifdef DEBUG
-  printf("Found %lf Interval [%lf,%lf]\n",alphak,a,b);
+  printf("Found %g Interval [%lf,%lf]\n",alphak,a,b);
 #endif
   return alphak;
 }
@@ -915,7 +913,7 @@ linesearch(
   double alphak;
 
   double mu;
-  double tol=step; /* lower limit for minimization */
+  double tol; /* lower limit for minimization */
 
   int ci;
 
@@ -938,6 +936,9 @@ linesearch(
   my_daxpy(n,xo,-1.0,x);
   phi_0=my_dnrm2(n,x);
   phi_0*=phi_0;
+  /* select tolarance 1/100 of current function value */
+  tol=MIN(0.01*phi_0,1e-6);
+
   /* grad(phi_0): evaluate at -step and +step */
   my_dcopy(m,xk,1,xp,1); /* xp<=xk */
   my_daxpy(m,pk,step,xp); /* xp<=xp+(0.0+step)*pk */
@@ -1022,13 +1023,13 @@ linesearch(
    }
 
    /* else preserve old values */
-   if (mu<=(2*alphai-alphai1)) {
+   if (mu<=(2.0*alphai-alphai1)) {
      /* next step */
      alphai1=alphai;
      alphai=mu;
    } else {
      /* choose by interpolation in [2*alphai-alphai1,min(mu,alphai+t1*(alphai-alphai1)] */
-     p01=2*alphai-alphai1;
+     p01=2.0*alphai-alphai1;
      p02=MIN(mu,alphai+t1*(alphai-alphai1));
      alphai=cubic_interp(func,xk,pk,p01,p02,x,xp,xo,m,n,step,adata);
      //printf("cubic interp [%lf,%lf]->%lf\n",p01,p02,alphai);
@@ -1043,7 +1044,7 @@ linesearch(
   free(x);
   free(xp);
 #ifdef DEBUG
-  printf("Step size=%lf\n",alphak);
+  printf("Step size=%g\n",alphak);
 #endif
   return alphak;
 }
@@ -1265,7 +1266,7 @@ lbfgs_fit(
   double *xk1,*xk; /* parameters at k+1 and k iter */
   double *pk; /* step direction H_k * grad(f) */
 
-  double step=1e-6;
+  double step=1e-6; /* step for interpolation */
   double *y, *s; /* storage for delta(grad) and delta(p) */
   double *rho; /* storage for 1/yk^T*sk */
   int ci,ck,cm;
@@ -1323,7 +1324,20 @@ lbfgs_fit(
   my_dcopy(m,p,1,xk,1);
   /*  gradient gk=grad(f)_k */
   func_grad(func,xk,gk,x,m,n,step,adata);
-  ck=0;
+  double gradnrm=my_dnrm2(m,gk);
+  /* if gradient is too small, no need to solve, so stop */
+  if (gradnrm<CLM_STOP_THRESH) {
+   ck=itmax;
+   step=0.0;
+  } else {
+   ck=0;
+   /* step in [1e-6,1e-9] */
+   step=MAX(1e-9,MIN(1e-3/gradnrm,1e-6));
+  }
+#ifdef DEBUG
+  printf("||grad||=%g step=%g\n",gradnrm,step);
+#endif
+  
   cm=0;
   ci=0;
   
@@ -1342,6 +1356,10 @@ lbfgs_fit(
    /* parameters c1=1e-4 c2=0.9, alpha1=1.0, alphamax=10.0, step (for alpha)=1e-4*/
    //alphak=linesearch_nw(func,xk,pk,1.0,10.0,1e-4,0.9,x,m,n,1e-4,adata);
    //alphak=1.0;
+   /* check if step size is too small, then stop */
+   if (fabs(alphak)<CLM_EPSILON) {
+    break;
+   }
    /* update parameters xk1=xk+alpha_k *pk */
    my_dcopy(m,xk,1,xk1,1);
    my_daxpy(m,pk,alphak,xk1);

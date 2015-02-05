@@ -246,6 +246,24 @@ disk_contrib(void*dd, double u, double v, double w) {
   return j1(b);
 }
 
+/* time smearing TMS eq. 6.80 for EW-array formula 
+  note u,v,w: meter/c so multiply by freq. to get wavelength */
+double
+time_smear(double ll,double mm,double dec0,double tdelta,double u,double v,double w,double freq0) {
+  /* baseline length in lambda */
+  double bl=sqrt(u*u+v*v+w*w)*freq0;
+  /* source dist */
+  double ds=sin(dec0)*mm;
+  double r1=sqrt(ll*ll+ds*ds);
+  /* earch angular vel x time x baseline length x source dist  */
+  double prod=7.2921150e-5*tdelta*bl*r1;
+  if (prod>CLM_EPSILON) {
+   return 1.0645*erf(0.8326*prod)/prod;
+  } else {
+   return 1.0;
+  }
+}
+ 
 /* worker thread function for prediction */
 static void *
 predict_threadfn(void *data) {
@@ -268,8 +286,6 @@ predict_threadfn(void *data) {
        /* note u=u/c, v=v/c, w=w/c here */
        /* phterm is 2pi(u/c l +v/c m +w/c n) */
        phterm=2.0*M_PI*(t->u[ci]*t->carr[cm].ll[cn]+t->v[ci]*t->carr[cm].mm[cn]+t->w[ci]*t->carr[cm].nn[cn]);
-       //sinph=sin(phterm*t->freq0);
-       //cosph=cos(phterm*t->freq0);
        sincos(phterm*t->freq0,&sinph,&cosph);
        /* calculate coherency, NOT scaled by 1/2 */
        prodterm=t->carr[cm].sI[cn]*(cosph+_Complex_I*sinph);
@@ -282,6 +298,8 @@ predict_threadfn(void *data) {
        /* full formula
              exp(j*2*pi*k)*sinc(2*pi*k*delta/2), k=(ul+vm+wn)
         */
+       /* time smearing TMS eq. 6.81 for EW-array formula */
+       //prodterm*=time_smear(t->carr[cm].ll[cn],t->carr[cm].mm[cn],t->dec0,t->tdelta,t->u[ci],t->v[ci],t->w[ci],t->freq0);
        
        /* check if source type is not a point source for additional 
           calculations */
@@ -320,7 +338,7 @@ predict_threadfn(void *data) {
 
 int
 predict_visibilities(double *u, double *v, double *w, double *x, int N,   
-   int Nbase, int tilesz,  baseline_t *barr,  clus_source_t *carr, int M, double freq0, double fdelta, int Nt) {
+   int Nbase, int tilesz,  baseline_t *barr,  clus_source_t *carr, int M, double freq0, double fdelta, double tdelta, double dec0, int Nt) {
   /* u,v,w : size Nbase*tilesz x 1  x: size Nbase*8*tilesz x 1 */
   /* barr: size Nbase*tilesz x 1 carr: size Mx1 */
 
@@ -371,6 +389,8 @@ predict_visibilities(double *u, double *v, double *w, double *x, int N,
     threaddata[nth].x=&(x[8*ci]);
     threaddata[nth].freq0=freq0;
     threaddata[nth].fdelta=fdelta;
+    threaddata[nth].tdelta=tdelta;
+    threaddata[nth].dec0=dec0;
 #ifdef DEBUG
     printf("thread %d writing to data from %d baselines %d\n",nth,8*ci,Nthb);
 #endif
@@ -420,8 +440,6 @@ precal_threadfn(void *data) {
        /* note u=u/c, v=v/c, w=w/c here */
        /* phterm is 2pi(u/c l +v/c m +w/c n) */
        phterm=2.0*M_PI*(t->u[ci]*t->carr[cm].ll[cn]+t->v[ci]*t->carr[cm].mm[cn]+t->w[ci]*t->carr[cm].nn[cn]);
-       //sinph=sin(phterm*t->freq0);
-       //cosph=cos(phterm*t->freq0);
        sincos(phterm*t->freq0,&sinph,&cosph);
 
        /* caltulate coherency, NOT scaled by 1/2 */
@@ -435,8 +453,9 @@ precal_threadfn(void *data) {
        /* full formula
              exp(j*2*pi*k)*sinc(2*pi*k*delta/2), k=(ul+vm+wn)
         */
-       
-
+       /* time smearing TMS eq. 6.81 for EW-array formula */
+       //prodterm*=time_smear(t->carr[cm].ll[cn],t->carr[cm].mm[cn],t->dec0,t->tdelta,t->u[ci],t->v[ci],t->w[ci],t->freq0);
+ 
        /* check if source type is not a point source for additional 
           calculations */
        if (t->carr[cm].stype[cn]==STYPE_POINT) {
@@ -467,9 +486,9 @@ precal_threadfn(void *data) {
      t->coh[4*M*ci+4*cm+3]=C[3];
     }
     if (!t->barr[ci+t->boff].flag) {
-    /* change the flag to 2 if baseline length is < uvmin */
+    /* change the flag to 2 if baseline length is < uvmin or > uvmax */
     uvdist=sqrt(t->u[ci]*t->u[ci]+t->v[ci]*t->v[ci])*t->freq0;
-    if (uvdist<t->uvmin) {
+    if (uvdist<t->uvmin || uvdist>t->uvmax) {
       t->barr[ci+t->boff].flag=2;
     }
    }
@@ -481,7 +500,7 @@ precal_threadfn(void *data) {
 
 int
 precalculate_coherencies(double *u, double *v, double *w, complex double *x, int N,
-   int Nbase, baseline_t *barr,  clus_source_t *carr, int M, double freq0, double fdelta, double uvmin, int Nt) {
+   int Nbase, baseline_t *barr,  clus_source_t *carr, int M, double freq0, double fdelta, double tdelta, double dec0, double uvmin, double uvmax, int Nt) {
   /* u,v,w : size Nbasex 1  x: size Nbase*4*M x 1 */
   /* barr: size Nbasex 1 carr: size Mx1 */
   /* ordering of x: [0,4M-1] coherencies for baseline 0
@@ -495,7 +514,6 @@ precalculate_coherencies(double *u, double *v, double *w, complex double *x, int
   thread_data_base_t *threaddata;
 
   /* calculate min baselines a thread can handle */
-  //Nthb0=ceil((double)Nbase/(double)Nt);
   Nthb0=(Nbase+Nt-1)/Nt;
 
   /* setup threads */
@@ -531,10 +549,12 @@ precalculate_coherencies(double *u, double *v, double *w, complex double *x, int
     threaddata[nth].carr=carr;
     threaddata[nth].M=M;
     threaddata[nth].uvmin=uvmin;
+    threaddata[nth].uvmax=uvmax;
     threaddata[nth].coh=&(x[4*M*ci]);
     threaddata[nth].freq0=freq0;
     threaddata[nth].fdelta=fdelta;
-    //printf("thread %d precalculating to data from %d baselines %d\n",nth,4*M*ci,Nthb);
+    threaddata[nth].tdelta=tdelta;
+    threaddata[nth].dec0=dec0;
     pthread_create(&th_array[nth],&attr,precal_threadfn,(void*)(&threaddata[nth]));
     /* next baseline set */
     ci=ci+Nthb;
@@ -585,7 +605,7 @@ rearrange_threadfn(void *data) {
 /* barr: 2*Nbase x 1
    coh: M*Nbase*4 x 1 complex
    ddcoh: M*Nbase*8 x 1
-   ddbase: 2*Nbase x 1
+   ddbase: 2*Nbase x 1 (sta1,sta2) == -1 if flagged
 */
 int
 rearrange_coherencies(int Nbase, baseline_t *barr, complex double *coh, double *ddcoh, char *ddbase, int M, int Nt) {
@@ -648,6 +668,98 @@ rearrange_coherencies(int Nbase, baseline_t *barr, complex double *coh, double *
 
  return 0;
 }
+
+
+/* worker thread function for rearranging coherencies*/
+static void *
+rearrange_threadfn2(void *data) {
+ thread_data_coharr_t *t=(thread_data_coharr_t*)data;
+ 
+ /* NOTE: t->ddcoh must have all zeros intially (using calloc) */
+ int ci,cj;
+ double *realcoh=(double*)t->coh;
+ for (ci=t->startbase; ci<=t->endbase; ci++) {
+     t->ddbase[3*ci]=(char)t->barr[ci].sta1;
+     t->ddbase[3*ci+1]=(char)t->barr[ci].sta2;
+     t->ddbase[3*ci+2]=(char)t->barr[ci].flag;
+     /* loop over directions and copy coherencies */
+     for (cj=0; cj<t->M; cj++) {
+       memcpy(&(t->ddcoh[cj*(t->Nbase)*8+8*ci]),&realcoh[8*cj+8*(t->M)*ci],8*sizeof(double));
+     }
+ }
+
+ return NULL;
+}
+
+
+/* rearranges coherencies for GPU use later */
+/* barr: 2*Nbase x 1
+   coh: M*Nbase*4 x 1 complex
+   ddcoh: M*Nbase*8 x 1
+   ddbase: 3*Nbase x 1 (sta1,sta2,flag)
+*/
+int
+rearrange_coherencies2(int Nbase, baseline_t *barr, complex double *coh, double *ddcoh, char *ddbase, int M, int Nt) {
+
+  int nth,nth1,ci;
+  int Nthb0,Nthb;
+  pthread_attr_t attr;
+  pthread_t *th_array;
+  thread_data_coharr_t *threaddata;
+
+  /* calculate min baselines a thread can handle */
+  Nthb0=(Nbase+Nt-1)/Nt;
+
+  /* setup threads */
+  pthread_attr_init(&attr);
+  pthread_attr_setdetachstate(&attr,PTHREAD_CREATE_JOINABLE);
+
+  if ((th_array=(pthread_t*)malloc((size_t)Nt*sizeof(pthread_t)))==0) {
+   fprintf(stderr,"%s: %d: No free memory\n",__FILE__,__LINE__);
+   exit(1);
+  }
+  if ((threaddata=(thread_data_coharr_t*)malloc((size_t)Nt*sizeof(thread_data_coharr_t)))==0) {
+    fprintf(stderr,"%s: %d: No free memory\n",__FILE__,__LINE__);
+    exit(1);
+  }
+
+  /* iterate over threads, allocating baselines per thread */
+  ci=0;
+  for (nth=0;  nth<Nt && ci<Nbase; nth++) {
+    /* this thread will handle baselines [ci:min(Nbase-1,ci+Nthb0-1)] */
+    /* determine actual no. of baselines */
+    if (ci+Nthb0<Nbase) {
+     Nthb=Nthb0;
+    } else {
+     Nthb=Nbase-ci;
+    }
+    threaddata[nth].Nbase=Nbase;
+    threaddata[nth].M=M;
+    threaddata[nth].startbase=ci;
+    threaddata[nth].endbase=ci+Nthb-1;
+    threaddata[nth].barr=barr;
+    threaddata[nth].coh=coh;
+    threaddata[nth].ddcoh=ddcoh;
+    threaddata[nth].ddbase=ddbase;
+    pthread_create(&th_array[nth],&attr,rearrange_threadfn2,(void*)(&threaddata[nth]));
+    /* next baseline set */
+    ci=ci+Nthb;
+  }
+
+  /* now wait for threads to finish */
+  for(nth1=0; nth1<nth; nth1++) {
+   pthread_join(th_array[nth1],NULL);
+  }
+
+ pthread_attr_destroy(&attr);
+
+ free(th_array);
+ free(threaddata);
+
+
+ return 0;
+}
+
 
 /* worker thread function for rearranging baselines*/
 static void *
@@ -1051,4 +1163,380 @@ generate_baselines(int Nbase, int tilesz, int N, baseline_t *barr,int Nt) {
 }
 
 
+/* worker thread function for counting */
+#ifdef USE_MIC
+__attribute__ ((target(MIC)))
+#endif
+static void *
+threadfn_fns_fcount(void *data) {
+ thread_data_count_t *t=(thread_data_count_t*)data;
 
+ int ci,sta1,sta2;
+ for (ci=0; ci<t->Nb; ci++) {
+   /* if this baseline is flagged, we do not compute */
+
+   /* stations for this baseline */
+   sta1=(int)t->ddbase[2*(ci+t->boff)];
+   sta2=(int)t->ddbase[2*(ci+t->boff)+1];
+
+   if (sta1!=-1 && sta2!=-1) {
+   pthread_mutex_lock(&t->mx_array[sta1]);
+   t->bcount[sta1]+=1;
+   pthread_mutex_unlock(&t->mx_array[sta1]);
+
+   pthread_mutex_lock(&t->mx_array[sta2]);
+   t->bcount[sta2]+=1;
+   pthread_mutex_unlock(&t->mx_array[sta2]);
+   }
+ }
+
+ return NULL;
+}
+
+
+/* cont how many baselines contribute to each station */
+int
+count_baselines(int Nbase, int N, float *iw, char *ddbase, int Nt) {
+ pthread_attr_t attr;
+ pthread_t *th_array;
+ thread_data_count_t *threaddata;
+ pthread_mutex_t *mx_array;
+
+ int *bcount;
+
+ int ci,nth1,nth;
+ int Nthb0,Nthb;
+
+ Nthb0=(Nbase+Nt-1)/Nt;
+
+ pthread_attr_init(&attr);
+ pthread_attr_setdetachstate(&attr,PTHREAD_CREATE_JOINABLE);
+
+ if ((th_array=(pthread_t*)malloc((size_t)Nt*sizeof(pthread_t)))==0) {
+#ifndef USE_MIC
+   fprintf(stderr,"%s: %d: No free memory\n",__FILE__,__LINE__);
+#endif
+   exit(1);
+ }
+
+ if ((threaddata=(thread_data_count_t*)malloc((size_t)Nt*sizeof(thread_data_count_t)))==0) {
+#ifndef USE_MIC
+    fprintf(stderr,"%s: %d: No free memory\n",__FILE__,__LINE__);
+#endif
+    exit(1);
+ }
+
+ if ((mx_array=(pthread_mutex_t*)malloc((size_t)N*sizeof(pthread_mutex_t)))==0) {
+#ifndef USE_MIC
+   fprintf(stderr,"%s: %d: No free memory\n",__FILE__,__LINE__);
+#endif
+   exit(1);
+ }
+ for (ci=0; ci<N; ci++) {
+   pthread_mutex_init(&mx_array[ci],NULL);
+ }
+
+ if ((bcount=(int*)calloc((size_t)N,sizeof(int)))==0) {
+#ifndef USE_MIC
+   fprintf(stderr,"%s: %d: No free memory\n",__FILE__,__LINE__);
+#endif
+   exit(1);
+ }
+
+  /* iterate over threads, allocating baselines per thread */
+  ci=0;
+  for (nth=0;  nth<Nt && ci<Nbase; nth++) {
+    /* this thread will handle baselines [ci:min(Nbase1-1,ci+Nthb0-1)] */
+    /* determine actual no. of baselines */
+    if (ci+Nthb0<Nbase) {
+     Nthb=Nthb0;
+    } else {
+     Nthb=Nbase-ci;
+    }
+
+    threaddata[nth].boff=ci;
+    threaddata[nth].Nb=Nthb;
+    threaddata[nth].ddbase=ddbase;
+    threaddata[nth].bcount=bcount; /* note this should be 0 first */
+    threaddata[nth].mx_array=mx_array;
+
+    pthread_create(&th_array[nth],&attr,threadfn_fns_fcount,(void*)(&threaddata[nth]));
+    /* next baseline set */
+    ci=ci+Nthb;
+  }
+
+  /* now wait for threads to finish */
+  for(nth1=0; nth1<nth; nth1++) {
+   pthread_join(th_array[nth1],NULL);
+  }
+
+  /* calculate inverse count */
+  for (nth1=0; nth1<N; nth1++) {
+   iw[nth1]=(bcount[nth1]>0?1.0f/(float)bcount[nth1]:0.0f);
+  }
+
+ /* scale back weight such that max value is 1 */
+ nth1=my_isamax(N,iw,1);
+ float maxw=iw[nth1-1]; /* 1 based index */
+ if (maxw>0.0f) { /* all baselines are flagged */
+  my_sscal(N,1.0f/maxw,iw);
+ } 
+
+ for (ci=0; ci<N; ci++) {
+   pthread_mutex_destroy(&mx_array[ci]);
+ }
+ pthread_attr_destroy(&attr);
+ free(bcount);
+ free(th_array);
+ free(mx_array);
+ free(threaddata);
+ return 0;
+}
+
+/* worker thread function for array initializing */
+#ifdef USE_MIC
+__attribute__ ((target(MIC)))
+#endif
+static void *
+threadfn_setwt(void *data) {
+ thread_data_setwt_t *t=(thread_data_setwt_t*)data;
+
+ int ci;
+ for (ci=0; ci<t->Nb; ci++) {
+  t->b[ci+t->boff]=t->a;
+ }
+
+ return NULL;
+}
+
+
+
+/* initialize array b (size Nx1) to given value a */
+void
+setweights(int N, double *b, double a, int Nt) {
+ pthread_attr_t attr;
+ pthread_t *th_array;
+ thread_data_setwt_t *threaddata;
+
+ int ci,nth1,nth;
+ int Nthb0,Nthb;
+
+ Nthb0=(N+Nt-1)/Nt;
+
+ pthread_attr_init(&attr);
+ pthread_attr_setdetachstate(&attr,PTHREAD_CREATE_JOINABLE);
+
+ if ((th_array=(pthread_t*)malloc((size_t)Nt*sizeof(pthread_t)))==0) {
+#ifndef USE_MIC
+   fprintf(stderr,"%s: %d: No free memory\n",__FILE__,__LINE__);
+#endif
+   exit(1);
+ }
+
+ if ((threaddata=(thread_data_setwt_t*)malloc((size_t)Nt*sizeof(thread_data_setwt_t)))==0) {
+#ifndef USE_MIC
+    fprintf(stderr,"%s: %d: No free memory\n",__FILE__,__LINE__);
+#endif
+    exit(1);
+ }
+
+
+  /* iterate over threads, allocating baselines per thread */
+  ci=0;
+  for (nth=0;  nth<Nt && ci<N; nth++) {
+    if (ci+Nthb0<N) {
+     Nthb=Nthb0;
+    } else {
+     Nthb=N-ci;
+    }
+
+    threaddata[nth].boff=ci;
+    threaddata[nth].a=a; 
+    threaddata[nth].Nb=Nthb; 
+    threaddata[nth].b=b; 
+
+    pthread_create(&th_array[nth],&attr,threadfn_setwt,(void*)(&threaddata[nth]));
+    /* next baseline set */
+    ci=ci+Nthb;
+  }
+
+  /* now wait for threads to finish */
+  for(nth1=0; nth1<nth; nth1++) {
+   pthread_join(th_array[nth1],NULL);
+  }
+
+ pthread_attr_destroy(&attr);
+ free(th_array);
+ free(threaddata);
+}
+
+
+/* worker thread function for one/zero vector */
+static void *
+onezero_threadfn(void *data) {
+ thread_data_onezero_t *t=(thread_data_onezero_t*)data;
+ 
+ /* NOTE: t->ddcoh must have all zeros intially (using calloc) */
+ int ci;
+ for (ci=t->startbase; ci<=t->endbase; ci++) {
+     if (t->ddbase[3*ci+2]) {
+      t->x[8*ci]=1.0f;
+      t->x[8*ci+1]=1.0f;
+      t->x[8*ci+2]=1.0f;
+      t->x[8*ci+3]=1.0f;
+      t->x[8*ci+4]=1.0f;
+      t->x[8*ci+5]=1.0f;
+      t->x[8*ci+6]=1.0f;
+      t->x[8*ci+7]=1.0f;
+     } 
+ }
+
+ return NULL;
+}
+
+/* create a vector with 1's at flagged data points */
+/* 
+   ddbase: 3*Nbase x 1 (sta1,sta2,flag)
+   x: 8*Nbase (set to 0's and 1's)
+*/
+int
+create_onezerovec(int Nbase, char *ddbase, float *x, int Nt) {
+
+  int nth,nth1,ci;
+  int Nthb0,Nthb;
+  pthread_attr_t attr;
+  pthread_t *th_array;
+  thread_data_onezero_t *threaddata;
+
+  /* calculate min baselines a thread can handle */
+  Nthb0=(Nbase+Nt-1)/Nt;
+
+  memset(x,0,sizeof(float)*8*Nbase);
+
+  /* setup threads */
+  pthread_attr_init(&attr);
+  pthread_attr_setdetachstate(&attr,PTHREAD_CREATE_JOINABLE);
+
+  if ((th_array=(pthread_t*)malloc((size_t)Nt*sizeof(pthread_t)))==0) {
+   fprintf(stderr,"%s: %d: No free memory\n",__FILE__,__LINE__);
+   exit(1);
+  }
+  if ((threaddata=(thread_data_onezero_t*)malloc((size_t)Nt*sizeof(thread_data_onezero_t)))==0) {
+    fprintf(stderr,"%s: %d: No free memory\n",__FILE__,__LINE__);
+    exit(1);
+  }
+
+  /* iterate over threads, allocating baselines per thread */
+  ci=0;
+  for (nth=0;  nth<Nt && ci<Nbase; nth++) {
+    /* this thread will handle baselines [ci:min(Nbase-1,ci+Nthb0-1)] */
+    /* determine actual no. of baselines */
+    if (ci+Nthb0<Nbase) {
+     Nthb=Nthb0;
+    } else {
+     Nthb=Nbase-ci;
+    }
+    threaddata[nth].startbase=ci;
+    threaddata[nth].endbase=ci+Nthb-1;
+    threaddata[nth].ddbase=ddbase;
+    threaddata[nth].x=x;
+    pthread_create(&th_array[nth],&attr,onezero_threadfn,(void*)(&threaddata[nth]));
+    /* next baseline set */
+    ci=ci+Nthb;
+  }
+
+  /* now wait for threads to finish */
+  for(nth1=0; nth1<nth; nth1++) {
+   pthread_join(th_array[nth1],NULL);
+  }
+
+ pthread_attr_destroy(&attr);
+
+ free(th_array);
+ free(threaddata);
+
+
+ return 0;
+}
+
+
+/* worker thread function for finding sums */
+static void *
+findsumprod_threadfn(void *data) {
+ thread_data_findsumprod_t *t=(thread_data_findsumprod_t*)data;
+ 
+ int ci;
+ for (ci=t->startbase; ci<=t->endbase; ci++) {
+     float xabs=fabsf(t->x[ci]);
+     t->sum1 +=xabs;
+     t->sum2 +=xabs*fabsf(t->y[ci]);
+ }
+
+ return NULL;
+}
+
+/* 
+  find sum1=sum(|x|), and sum2=y^T |x|
+  x,y: nx1 arrays
+*/
+int
+find_sumproduct(int N, float *x, float *y, float *sum1, float *sum2, int Nt) {
+
+  int nth,nth1,ci;
+  int Nthb0,Nthb;
+  pthread_attr_t attr;
+  pthread_t *th_array;
+  thread_data_findsumprod_t *threaddata;
+
+  /* calculate min baselines a thread can handle */
+  Nthb0=(N+Nt-1)/Nt;
+
+  /* setup threads */
+  pthread_attr_init(&attr);
+  pthread_attr_setdetachstate(&attr,PTHREAD_CREATE_JOINABLE);
+
+  if ((th_array=(pthread_t*)malloc((size_t)Nt*sizeof(pthread_t)))==0) {
+   fprintf(stderr,"%s: %d: No free memory\n",__FILE__,__LINE__);
+   exit(1);
+  }
+  if ((threaddata=(thread_data_findsumprod_t*)malloc((size_t)Nt*sizeof(thread_data_findsumprod_t)))==0) {
+    fprintf(stderr,"%s: %d: No free memory\n",__FILE__,__LINE__);
+    exit(1);
+  }
+
+  /* iterate over threads, allocating baselines per thread */
+  ci=0;
+  for (nth=0;  nth<Nt && ci<N; nth++) {
+    /* determine actual no. of baselines */
+    if (ci+Nthb0<N) {
+     Nthb=Nthb0;
+    } else {
+     Nthb=N-ci;
+    }
+    threaddata[nth].startbase=ci;
+    threaddata[nth].endbase=ci+Nthb-1;
+    threaddata[nth].x=x;
+    threaddata[nth].y=y;
+    threaddata[nth].sum1=0.0f;
+    threaddata[nth].sum2=0.0f;
+    pthread_create(&th_array[nth],&attr,findsumprod_threadfn,(void*)(&threaddata[nth]));
+    /* next baseline set */
+    ci=ci+Nthb;
+  }
+
+  *sum1=*sum2=0.0f;
+  /* now wait for threads to finish */
+  for(nth1=0; nth1<nth; nth1++) {
+   pthread_join(th_array[nth1],NULL);
+   *sum1+=threaddata[nth1].sum1;
+   *sum2+=threaddata[nth1].sum2;
+  }
+
+ pthread_attr_destroy(&attr);
+
+ free(th_array);
+ free(threaddata);
+
+
+ return 0;
+}

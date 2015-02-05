@@ -1,3 +1,8 @@
+Thu Feb  5 16:54:42 CET 2015
+- Updated SAGECAL
+- Added distributed SAGECAL (using MPI)
+- Added BUILDSKY
+- Added RESTORE
 Mon Jan  6 14:12:00 CET 2014
 - First public release
 Fri Sep 28 13:05:26 CEST 2012

@@ -30,7 +30,7 @@
 //#define DEBUG
 /* helper functions for diagnostics */
 static void
-checkStatus(culaStatus status, char *file, int line)
+checkStatus(culaStatus status, const char *file, int line)
 {
     char buf[80];
     if(!status)
@@ -43,7 +43,7 @@ checkStatus(culaStatus status, char *file, int line)
 
 
 static void
-checkCudaError(cudaError_t err, char *file, int line)
+checkCudaError(cudaError_t err, const char *file, int line)
 {
     if(!err)
         return;
@@ -156,7 +156,7 @@ oslevmar_der_single_cuda_fl(
   int BlocksPerGrid=(M+ThreadsPerBlock-1)/ThreadsPerBlock;
 
 
-  int moff;
+  unsigned long int moff;
     moff=0;
     xd=&gWORK[moff];
     moff+=N;
@@ -194,7 +194,7 @@ oslevmar_der_single_cuda_fl(
      moff+=M;
     }
     bbd=(char*)&gWORK[moff];
-    moff+=Nbase*2*sizeof(char)/sizeof(float);
+    moff+=(Nbase*2*sizeof(char))/sizeof(float);
 
   err=cudaMemcpyAsync(pd, p, M*sizeof(float), cudaMemcpyHostToDevice,0);
   checkCudaError(err,__FILE__,__LINE__);
@@ -305,7 +305,6 @@ oslevmar_der_single_cuda_fl(
      /* ed : N, cohd : Nbase*8, bbd : Nbase*2 full size */
     /* p: params (Mx1), jacd: jacobian (NxM), other data : coh, baseline->stat mapping, Nbase, Mclusters, Nstations*/
     /* FIXME thread/block sizes 16x16=256, so 16 is chosen */
-     //cudakernel_jacf(ThreadsPerBlock, ThreadsPerBlock/4, pd, jacd, M, N, cohd, bbd, Nbase, dp->M, dp->N);
      cudakernel_jacf_fl(ThreadsPerBlock, ThreadsPerBlock/4, pd, jacd, M, Nos[l], &cohd[8*NbI[l]], &bbd[2*NbI[l]], Nbaseos[l], dp->M, dp->N);
 
      /* Compute J^T J and J^T e */
@@ -665,7 +664,7 @@ clevmar_der_single_cuda_fl(
   int BlocksPerGrid=(M+ThreadsPerBlock-1)/ThreadsPerBlock;
 
 
-  int moff;
+  unsigned long int moff;
     moff=0;
     xd=&gWORK[moff];
     moff+=N;
@@ -703,7 +702,7 @@ clevmar_der_single_cuda_fl(
      moff+=M;
     }
     bbd=(char*)&gWORK[moff];
-    moff+=Nbase*2*sizeof(char)/sizeof(float);
+    moff+=(Nbase*2*sizeof(char))/sizeof(float);
 
   err=cudaMemcpyAsync(pd, p, M*sizeof(float), cudaMemcpyHostToDevice,0);
   checkCudaError(err,__FILE__,__LINE__);

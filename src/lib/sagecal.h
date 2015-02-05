@@ -35,6 +35,11 @@
 
 #include <pthread.h>
 
+/* for gcc 4.8 and above */
+#ifndef complex
+#define complex _Complex
+#endif
+
 #ifdef HAVE_CUDA
 // new version
 #include <cula_lapack_device.h>
@@ -58,15 +63,6 @@
 #define MAX(x,y) \
   ((x)>=(y)? (x): (y))
 #endif
-
-/* macros for version info */
-#ifndef CLMV
-#define CLMV "LM"
-#endif
-#ifndef CLBFGSV
-#define CLBFGSV "LBFGS"
-#endif
-
 
 /* soure types */
 #define STYPE_POINT 0
@@ -179,9 +175,12 @@ typedef struct thread_data_base_ {
   int clus; /* which cluster to process, 0,1,...,M-1 if -1 all clusters */
   double uvmin; /* baseline length sqrt(u^2+v^2) lower limit, below this is not 
                  included in calibration, but will be subtracted */
-  /* following used for freq smearing calculation */
+  double uvmax;
+  /* following used for freq/time smearing calculation */
   double freq0;
   double fdelta;
+  double tdelta; /* integration time for time smearing */
+  double dec0; /* declination for time smearing */
 
   /* following used for interpolation */
   double *p0; /* old parameters, same as p */
@@ -191,6 +190,8 @@ typedef struct thread_data_base_ {
   double *pinv; /* inverted solution array, if null no correction */
   int ccid; /* which cluster id (not user specified id) for correction, >=0 */
 
+  /* following for ignoring clusters in simulation */
+  int *ignlist; /* Mx1 array, if any value 1, that cluster will not be simulated */
 
   /* following used for multifrequency (channel) data */
   double *freqs;
@@ -219,7 +220,7 @@ typedef struct thread_data_coharr_ {
   baseline_t *barr; /* pointer to baseline-> stations mapping array */
   complex double *coh; /* output vector in complex form, (not used always) size 4*M*Nb */
   double *ddcoh; /* coherencies, rearranged for easy copying to GPU, also real,imag instead of complex */
-  char *ddbase; /* baseline to station maps, same as barr, assume no of stations < 127, if flagged set to -1 */
+  char *ddbase; /* baseline to station maps, same as barr, assume no of stations < 127, if flagged set to -1 OR (sta1,sta2,flag) 3 values for each baseline */
 } thread_data_coharr_t;
 
 /* structure for worker threads for type conversion */
@@ -238,6 +239,31 @@ typedef struct thread_data_baselinegen_{
   int N; /* stations */
   int Nbase; /* baselines */
 } thread_data_baselinegen_t;
+
+/* structure for counting baselines for each station (RTR)*/
+typedef struct thread_data_count_ {
+ int Nb; /* no of baselines this handle */
+ int boff; /* baseline offset per thread */
+
+ char *ddbase;
+
+ int *bcount;
+
+  /* mutexs: N x 1, one for each station */
+  pthread_mutex_t *mx_array;
+} thread_data_count_t;
+
+
+/* structure for initializing an array */
+typedef struct thread_data_setwt_ {
+ int Nb; /* no of baselines this handle */
+ int boff; /* baseline offset per thread */
+
+ double *b;
+ double a;
+
+} thread_data_setwt_t;
+
 
 /* structure for worker threads for jacobian calculation */
 typedef struct thread_data_jac_ {
@@ -290,6 +316,8 @@ typedef struct me_data_t_ {
 
   /* following used only by robust T cost/grad functions */
   double robust_nu;
+
+  /* following used only by RTR */
 } me_data_t;
 
 
@@ -362,6 +390,25 @@ typedef struct thread_data_vecnu_{
 } thread_data_vecnu_t;
 
 
+/* structure for worker threads for setting 1/0 */
+typedef struct thread_data_onezero_ {
+  int startbase; /* starting baseline */
+  int endbase; /* ending baseline */
+  char *ddbase; /* baseline to station maps, (sta1,sta2,flag) */
+  float *x; /* data vector */
+} thread_data_onezero_t;
+
+
+/* structure for worker threads for finding sum(|x|) and y^T |x| */
+typedef struct thread_data_findsumprod_ {
+  int startbase; /* starting baseline */
+  int endbase; /* ending baseline */
+  float *x; /* can be -ve*/
+  float *y;
+  float sum1; /* sum(|x|) */
+  float sum2; /* y^T |x| */
+} thread_data_findsumprod_t;
+
 
 /****************************** readsky.c ****************************/
 /* read sky/cluster files, 
@@ -374,7 +421,21 @@ typedef struct thread_data_vecnu_{
 extern int
 read_sky_cluster(const char *skymodel, const char *clusterfile, clus_source_t **carr, int *M, double freq0, double ra0, double dec0,int format);
 
+/* read solution file, only a set of solutions and load to p
+  sfp: solution file pointer
+  p: solutions vector Mt x 1
+  carr: for getting correct offset in p
+  N : stations 
+  M : clusters
+*/
+extern int
+read_solutions(FILE *sfp,double *p,clus_source_t *carr,int N,int M);
 
+/* set ignlist[ci]=1 if 
+  cluster id 'cid' is mentioned in ignfile and carr[ci].id==cid
+*/ 
+extern int
+update_ignorelist(const char *ignfile, int *ignlist, int M, clus_source_t *carr);
 /****************************** dataio.c ****************************/
 /* open binary file for input/output
  datfile: data file descriptor id
@@ -405,6 +466,15 @@ ring_contrib(void*dd, double u, double v, double w);
 extern complex double
 disk_contrib(void*dd, double u, double v, double w);
 
+
+/* time smearing TMS eq. 6.80 for EW-array formula 
+  note u,v,w: meter/c so multiply by freq. to get wavelength 
+  ll,mm: source
+  dec0: phase center declination
+  tdelta: integration time */
+extern double 
+time_smear(double ll,double mm,double dec0,double tdelta,double u,double v,double w,double freq0);
+
 /* predict visibilities
   u,v,w: u,v,w coordinates (wavelengths) size Nbase*tilesz x 1 
   u,v,w are ordered with baselines, timeslots
@@ -418,11 +488,13 @@ disk_contrib(void*dd, double u, double v, double w);
   M: no of clusters
   freq0: frequency
   fdelta: bandwidth for freq smearing
+  tdelta: integration time for time smearing
+  dec0: declination for time smearing
   Nt: no of threads
 */
 extern int
 predict_visibilities(double *u, double *v, double *w, double *x, int N, 
-   int Nbase, int tilesz,  baseline_t *barr, clus_source_t *carr, int M, double freq0, double fdelta, int Nt); 
+   int Nbase, int tilesz,  baseline_t *barr, clus_source_t *carr, int M, double freq0, double fdelta, double tdelta, double dec0, int Nt); 
   
 
 /* precalculate cluster coherencies
@@ -437,14 +509,18 @@ predict_visibilities(double *u, double *v, double *w, double *x, int N,
   M: no of clusters
   freq0: frequency
   fdelta: bandwidth for freq smearing
+  tdelta: integration time for time smearing
+  dec0: declination for time smearing
   uvmin: baseline length sqrt(u^2+v^2) below which not to include in solution
+  uvmax: baseline length higher than this not included in solution
   Nt: no of threads
 
   NOTE: prediction is done for all baselines, even flagged ones
+  and flags are set to 2 for baselines lower than uvcut
 */
 extern int
 precalculate_coherencies(double *u, double *v, double *w, complex double *x, int N,
-   int Nbase, baseline_t *barr,  clus_source_t *carr, int M, double freq0, double fdelta, double uvmin, int Nt); 
+   int Nbase, baseline_t *barr,  clus_source_t *carr, int M, double freq0, double fdelta, double tdelta, double dec0, double uvmin, double uvmax, int Nt); 
 
 
 
@@ -452,10 +528,13 @@ precalculate_coherencies(double *u, double *v, double *w, complex double *x, int
 /* barr: 2*Nbase x 1
    coh: M*Nbase*4 x 1 complex
    ddcoh: M*Nbase*8 x 1
-   ddbase: 2*Nbase x 1
+   ddbase: 2*Nbase x 1 (sta1,sta2) = -1 if flagged
 */
 extern int
 rearrange_coherencies(int Nbase, baseline_t *barr, complex double *coh, double *ddcoh, char *ddbase, int M, int Nt);
+/* ddbase: 3*Nbase x 1 (sta1,sta2,flag) */
+extern int
+rearrange_coherencies2(int Nbase, baseline_t *barr, complex double *coh, double *ddcoh, char *ddbase, int M, int Nt);
 
 /* rearranges baselines for GPU use later */
 /* barr: 2*Nbase x 1
@@ -463,6 +542,17 @@ rearrange_coherencies(int Nbase, baseline_t *barr, complex double *coh, double *
 */
 extern int
 rearrange_baselines(int Nbase, baseline_t *barr, char *ddbase, int Nt);
+
+/* cont how many baselines contribute to each station */
+extern int
+count_baselines(int Nbase, int N, float *iw, char *ddbase, int Nt);
+
+/* initialize array b (size Nx1) to given value a */
+#ifdef USE_MIC
+__attribute__ ((target(MIC)))
+#endif
+extern void
+setweights(int N, double *b, double a, int Nt);
 
 /* update baseline flags, also make data zero if flagged
   this is needed for solving (calculate error) ignore flagged data */
@@ -491,8 +581,31 @@ extern int
 double_to_float(float *farr, double *darr,int n, int Nt);
 extern int
 float_to_double(double *darr, float *farr,int n, int Nt);
+
+/* create a vector with 1's at flagged data points */
+/* 
+   ddbase: 3*Nbase x 1 (sta1,sta2,flag)
+   x: 8*Nbase (set to 0's and 1's)
+*/
+extern int
+create_onezerovec(int Nbase, char *ddbase, float *x, int Nt);
+
+/* 
+  find sum1=sum(|x|), and sum2=y^T |x|
+  x,y: nx1 arrays
+*/
+extern int
+find_sumproduct(int N, float *x, float *y, float *sum1, float *sum2, int Nt);
+
 /****************************** myblas.c ****************************/
 /* BLAS wrappers */
+/* machine precision */
+#ifdef USE_MIC
+__attribute__ ((target(MIC)))
+#endif
+extern double 
+dlamch(char CMACH);
+
 /* blas dcopy */
 /* y = x */
 /* read x values spaced by Nx (so x size> N*Nx) */
@@ -510,6 +623,11 @@ __attribute__ ((target(MIC)))
 #endif
 extern void
 my_dscal(int N, double a, double *x);
+#ifdef USE_MIC
+__attribute__ ((target(MIC)))
+#endif
+extern void
+my_sscal(int N, float a, float *x);
 
 /* x^T*y */
 #ifdef USE_MIC
@@ -524,6 +642,11 @@ __attribute__ ((target(MIC)))
 #endif
 extern double
 my_dnrm2(int N, double *x);
+#ifdef USE_MIC
+__attribute__ ((target(MIC)))
+#endif
+extern float
+my_fnrm2(int N, float *x);
 
 /* sum||x||_1 */
 #ifdef USE_MIC
@@ -531,6 +654,11 @@ __attribute__ ((target(MIC)))
 #endif
 extern double
 my_dasum(int N, double *x);
+#ifdef USE_MIC
+__attribute__ ((target(MIC)))
+#endif
+extern float
+my_fasum(int N, float *x);
 
 /* BLAS y = a.x + y */
 #ifdef USE_MIC
@@ -546,12 +674,23 @@ __attribute__ ((target(MIC)))
 extern void
 my_daxpys(int N, double *x, int incx, double a, double *y, int incy);
 
+#ifdef USE_MIC
+__attribute__ ((target(MIC)))
+#endif
+extern void
+my_saxpy(int N, float *x, float a, float *y);
+
 /* max |x|  index (start from 1...)*/
 #ifdef USE_MIC
 __attribute__ ((target(MIC)))
 #endif
 extern int
 my_idamax(int N, double *x, int incx);
+#ifdef USE_MIC
+__attribute__ ((target(MIC)))
+#endif
+extern int
+my_isamax(int N, float *x, int incx);
 
 /* min |x|  index (start from 1...)*/
 #ifdef USE_MIC
@@ -603,6 +742,12 @@ __attribute__ ((target(MIC)))
 extern int
 my_dgesvd(char JOBU, char JOBVT, int M, int N, double *A, int LDA, double *S,
    double *U, int LDU, double *VT, int LDVT, double *WORK, int LWORK);
+#ifdef USE_MIC
+__attribute__ ((target(MIC)))
+#endif
+extern int
+my_zgesvd(char JOBU, char JOBVT, int M, int N, complex double *A, int LDA, double *S,
+   complex double *U, int LDU, complex double *VT, int LDVT, complex double *WORK, int LWORK, double *RWORK); 
 
 /* QR factorization QR=A, only TAU is used for Q, R stored in A*/
 #ifdef USE_MIC
@@ -624,6 +769,75 @@ __attribute__ ((target(MIC)))
 #endif
 extern int
 my_dtrtrs(char UPLO, char TRANS, char DIAG,int N,int  NRHS,double *A,int  LDA,double *B,int  LDB);
+
+
+/* blas ccopy */
+/* y = x */
+/* read x values spaced by Nx (so x size> N*Nx) */
+/* write to y values spaced by Ny  (so y size > N*Ny) */
+#ifdef USE_MIC
+__attribute__ ((target(MIC)))
+#endif
+extern void
+my_ccopy(int N, complex double *x, int Nx, complex double *y, int Ny);
+
+/* blas scale */
+/* x = a. x */
+#ifdef USE_MIC
+__attribute__ ((target(MIC)))
+#endif
+extern void
+my_cscal(int N, complex double a, complex double *x);
+
+
+/* BLAS y = a.x + y */
+#ifdef USE_MIC
+__attribute__ ((target(MIC)))
+#endif
+extern void
+my_caxpy(int N, complex double *x, complex double a, complex double *y);
+
+
+/* BLAS x^H*y */
+#ifdef USE_MIC
+__attribute__ ((target(MIC)))
+#endif
+extern complex double
+my_cdot(int N, complex double *x, complex double *y);
+
+/* solve Ax=b using QR factorization */
+#ifdef USE_MIC
+__attribute__ ((target(MIC)))
+#endif
+extern int
+my_zgels(char TRANS, int M, int N, int NRHS, complex double *A, int LDA, complex double *B, int LDB, complex double *WORK, int LWORK);
+extern int
+my_cgels(char TRANS, int M, int N, int NRHS, complex float *A, int LDA, complex float *B, int LDB, complex float *WORK, int LWORK);
+
+/* BLAS ZGEMM C = alpha*op(A)*op(B)+ beta*C */
+#ifdef USE_MIC
+__attribute__ ((target(MIC)))
+#endif
+extern void
+my_zgemm(char transa, char transb, int M, int N, int K, complex double alpha, complex double *A, int lda, complex double *B, int ldb, complex double beta, complex double *C, int ldc);
+
+/* ||x||_2 */
+#ifdef USE_MIC
+__attribute__ ((target(MIC)))
+#endif
+extern double
+my_cnrm2(int N, complex double *x);
+
+
+/* blas fcopy */
+/* y = x */
+/* read x values spaced by Nx (so x size> N*Nx) */
+/* write to y values spaced by Ny  (so y size > N*Ny) */
+#ifdef USE_MIC
+__attribute__ ((target(MIC)))
+#endif
+extern void
+my_fcopy(int N, float *x, int Nx, float *y, int Ny);
 /****************************** lbfgs.c ****************************/
 /****************************** lbfgs_nocuda.c ****************************/
 /* LBFGS routines */
@@ -669,7 +883,7 @@ lbfgs_fit_robust_cuda(
 #endif
 
 /****************************** residual.c ****************************/
-/* residual calculation, with linear interpolation */
+/* residual calculation, with/without linear interpolation */
 /* 
   u,v,w: u,v,w coordinates (wavelengths) size Nbase*tilesz x 1 
   u,v,w are ordered with baselines, timeslots
@@ -687,12 +901,14 @@ lbfgs_fit_robust_cuda(
   M: no of clusters
   freq0: frequency
   fdelta: bandwidth for freq smearing
+  tdelta: integration time for time smearing
+  dec0: declination for time smearing
   Nt: no. of threads
   ccid: which cluster to use as correction
   rho: MMSE robust parameter J+rho I inverted
 */
 extern int
-calculate_residuals(double *u,double *v,double *w,double *p,double *x,int N,int Nbase,int tilesz,baseline_t *barr, clus_source_t *carr, int M,double freq0,double fdelta,int Nt, int ccid, double rho);
+calculate_residuals(double *u,double *v,double *w,double *p,double *x,int N,int Nbase,int tilesz,baseline_t *barr, clus_source_t *carr, int M,double freq0,double fdelta,double tdelta,double dec0, int Nt, int ccid, double rho);
 
 /* 
   residuals for multiple channels
@@ -701,18 +917,23 @@ calculate_residuals(double *u,double *v,double *w,double *p,double *x,int N,int 
   input: x is actual data, output: x is the residual
   freqs: Nchanx1 of frequency values
   fdelta: total bandwidth, so divide by Nchan to get each channel bandwith
+  tdelta: integration time for time smearing
+  dec0: declination for time smearing
 */
 extern int
-calculate_residuals_multifreq(double *u,double *v,double *w,double *p,double *x,int N,int Nbase,int tilesz,baseline_t *barr, clus_source_t *carr, int M,double *freqs,int Nchan, double fdelta,int Nt, int ccid, double rho);
+calculate_residuals_multifreq(double *u,double *v,double *w,double *p,double *x,int N,int Nbase,int tilesz,baseline_t *barr, clus_source_t *carr, int M,double *freqs,int Nchan, double fdelta,double tdelta,double dec0, int Nt, int ccid, double rho);
 
 /* 
   calculate visibilities for multiple channels, no solutions are used
   note: output column x is set to 0
 */
 extern int
-predict_visibilities_multifreq(double *u,double *v,double *w,double *x,int N,int Nbase,int tilesz,baseline_t *barr, clus_source_t *carr, int M,double *freqs,int Nchan, double fdelta,int Nt);
+predict_visibilities_multifreq(double *u,double *v,double *w,double *x,int N,int Nbase,int tilesz,baseline_t *barr, clus_source_t *carr, int M,double *freqs,int Nchan, double fdelta,double tdelta,double dec0,int Nt);
 
 
+/* predict with solutions in p , ignore clusters flagged in ignorelist (Mx1) array*/
+extern int
+predict_visibilities_multifreq_withsol(double *u,double *v,double *w,double *p,double *x,int *ignorelist,int N,int Nbase,int tilesz,baseline_t *barr, clus_source_t *carr, int M,double *freqs,int Nchan, double fdelta,double tdelta,double dec0,int Nt);
 /****************************** mderiv.cu ****************************/
 /* cuda driver for kernel */
 /* ThreadsPerBlock: keep <= 128
@@ -732,6 +953,19 @@ predict_visibilities_multifreq(double *u,double *v,double *w,double *x,int N,int
 */
 extern void 
 cudakernel_lbfgs(int ThreadsPerBlock, int BlocksPerGrid, int N, int tilesz, int M, int Ns, int Nparam, int goff, double *x, double *coh, double *p, char *bb, int *ptoclus, double *grad);
+/* x: data vector, not residual */
+extern void 
+cudakernel_lbfgs_r(int ThreadsPerBlock, int BlocksPerGrid, int N, int tilesz, int M, int Ns, int Nparam, int goff, double *x, double *coh, double *p, char *bb, int *ptoclus, double *grad);
+extern void 
+cudakernel_lbfgs_r_robust(int ThreadsPerBlock, int BlocksPerGrid, int N, int tilesz, int M, int Ns, int Nparam, int goff, double *x, double *coh, double *p, char *bb, int *ptoclus, double *grad, double robust_nu);
+
+
+/* cost function calculation, each GPU works with Nbase baselines out of Nbasetotal baselines 
+ */
+extern double
+cudakernel_lbfgs_cost(int ThreadsPerBlock, int BlocksPerGrid, int Nbase, int boff, int M, int Ns, int Nbasetotal, double *x, double *coh, double *p, char *bb, int *ptoclus);
+extern double
+cudakernel_lbfgs_cost_robust(int ThreadsPerBlock, int BlocksPerGrid, int Nbase, int boff, int M, int Ns, int Nbasetotal, double *x, double *coh, double *p, char *bb, int *ptoclus, double robust_nu);
 
 
 /* divide by singular values  Dpd[]/Sd[]  for Sd[]> eps */
@@ -860,6 +1094,12 @@ cudakernel_sqrtweights_fl(int ThreadsPerBlock, int BlocksPerGrid, int N, float *
 extern void
 cudakernel_evaluatenu_fl(int ThreadsPerBlock, int BlocksPerGrid, int Nd, float qsum, float *q, float deltanu,float nulow);
 
+/* evaluate expression for finding optimum nu for 
+  a range of nu values , 8 variate T distrubution
+  using AECM */
+extern void
+cudakernel_evaluatenu_fl_eight(int ThreadsPerBlock, int BlocksPerGrid, int Nd, float qsum, float *q, float deltanu,float nulow, float nu0);
+
 
 /****************************** barrier.c ****************************/
 typedef struct t_barrier_ {
@@ -930,7 +1170,7 @@ attach_gpu_to_thread(int card, cublasHandle_t *cbhandle);
 extern void
 attach_gpu_to_thread1(int card, cublasHandle_t *cbhandle, double **WORK, int64_t work_size);
 extern void
-attach_gpu_to_thread2(int card,  cublasHandle_t *cbhandle,float **WORK, int64_t work_size);
+attach_gpu_to_thread2(int card,  cublasHandle_t *cbhandle,float **WORK, int64_t work_size, int usecula);
 
 
 /* function to detach a GPU from a thread */
@@ -939,7 +1179,7 @@ detach_gpu_from_thread(cublasHandle_t cbhandle);
 extern void
 detach_gpu_from_thread1(int card, cublasHandle_t cbhandle, double *WORK);
 extern void
-detach_gpu_from_thread2(int card,cublasHandle_t cbhandle,float *WORK);
+detach_gpu_from_thread2(int card,cublasHandle_t cbhandle,float *WORK, int usecula);
 /* function to set memory to zero */
 extern void
 reset_gpu_memory(double *WORK, int64_t work_size);
@@ -1159,6 +1399,19 @@ osrlevmar_der_single_nocuda(
   void *adata);
 
 /****************************** updatenu.c ****************************/
+/* update nu (degrees of freedom)
+
+   nu0: current value of nu (need for AECM update)
+   sumlogw = 1/N sum(log(w_i)-w_i)
+   use Nd values in [nulow,nuhigh] to find nu
+   p: 1 or 8 depending on scalar or 2x2 matrix formulation
+*/
+#ifdef USE_MIC
+__attribute__ ((target(MIC)))
+#endif
+extern double
+update_nu(double sumlogw, int Nd, int Nt, double nulow, double nuhigh, int p, double nu0);
+
 /* update w and nu together 
    nu0: current value of nu
    w: Nx1 weight vector
@@ -1376,6 +1629,224 @@ oslevmar_der_single_cuda_fl(
                       */
 
 #endif /* !HAVE_CUDA */
+/****************************** rtr_solve.c ****************************/
+/* structure for worker threads for function calculation */
+typedef struct thread_data_rtr_ {
+  int Nb; /* no of baselines this handle */
+  int boff; /* baseline offset per thread */
+  baseline_t *barr; /* pointer to baseline-> stations mapping array */
+  clus_source_t *carr; /* sky model, with clusters Mx1 */
+  int M; /* no of clusters */
+  double *y; /* data vector Nbx8 array re,im,re,im .... */
+  complex double *coh; /* output vector in complex form, (not used always) size 4*M*Nb */
+  /* following are only used while predict with gain */
+  complex double *x; /* parameter array, */
+ /* general format of element in manifold x
+   x: size 4N x 1 vector
+   x[0:2N-1] : first column, x[2N:4N-1] : second column
+   x=[J_1(1,1)  J_1(1,2);
+      J_1(2,1)  J_1(2,2);
+      ...       ....
+      J_N(1,1)  J_N(1,2);
+      J_N(2,1)  J_N(2,2)];
+  */
+  int N; /* no of stations */
+  int clus; /* which cluster to process, 0,1,...,M-1 if -1 all clusters */
+  
+  /* output of cost function */
+  double fcost;
+  /* gradient */
+  complex double *grad;
+  /* Hessian */
+  complex double *hess;
+  /* Eta (used in Hessian) */
+  complex double *eta;
+
+  /* normalization factors for grad,hess calculation */
+  /* size Nx1 */
+  int *bcount;
+  double *iw; /* 1/bcount */
+
+  /* for robust solver */
+  double *wtd; /* weights for baseline */
+  double nu0;
+
+  /* mutexs: N x 1, one for each station */
+  pthread_mutex_t *mx_array;
+} thread_data_rtr_t;
+
+/* structure for common data */
+typedef struct global_data_rtr_ {
+  me_data_t *medata; /* passed from caller */
+
+  /* normalization factors for grad,hess calculation */
+  /* size Nx1 */
+  double *iw; /* 1/bcount */
+
+  /* for robust solver */
+  double *wtd; /* weights for baseline */
+  double nulow,nuhigh;
+
+  /* for ADMM cost */
+  complex double *Y; /* size 2Nx2 */
+  complex double *BZ; /* size 2Nx2 */
+  double admm_rho;
+
+  /* thread stuff  Nt x 1 threads */
+  pthread_t *th_array;
+  /* mutexs: N x 1, one for each station */
+  pthread_mutex_t *mx_array;
+  pthread_attr_t attr;
+} global_data_rtr_t;
+
+
+/* RTR (ICASSP 2013) */
+#ifdef USE_MIC
+__attribute__ ((target(MIC)))
+#endif
+extern int
+rtr_solve_nocuda(
+  double *x,         /* initial values and updated solution at output (size 8*N double) */
+  double *y,         /* data vector (size 8*M double) */
+  int N,              /* no. of stations */
+  int M,              /* no. of constraints */
+  int itmax_sd,          /* maximum number of iterations RSD */
+  int itmax_rtr,          /* maximum number of iterations RTR */
+  double Delta_bar, double Delta0, /* Trust region radius and initial value */
+  double *info, /* initial and final residuals */
+  me_data_t *adata); /* pointer to additional data
+                */
+
+/****************************** rtr_solve_robust.c ****************************/
+#ifdef USE_MIC
+__attribute__ ((target(MIC)))
+#endif
+extern int
+rtr_solve_nocuda_robust(
+  double *x0,         /* initial values and updated solution at output (size 8*N double) */
+  double *y,         /* data vector (size 8*M double) */
+  int N,              /* no. of stations */
+  int M,              /* no. of constraints */
+  int itmax_rsd,          /* maximum number of iterations RSD */
+  int itmax_rtr,          /* maximum number of iterations RTR */
+  double Delta_bar, double Delta0, /* Trust region radius and initial value */
+  double robust_nulow, double robust_nuhigh, /* robust nu range */
+  double *info, /* initial and final residuals */
+  me_data_t *adata);
+
+/****************************** rtr_solve_robust_admm.c ****************************/
+#ifdef USE_MIC
+__attribute__ ((target(MIC)))
+#endif
+extern int
+rtr_solve_nocuda_robust_admm(
+  double *x0,         /* initial values and updated solution at output (size 8*N double) */
+  double *Y,         /* Lagrange multiplier (size 8*N double) */
+  double *BZ,         /* consensus B Z (size 8*N double) */
+  double *y,         /* data vector (size 8*M double) */
+  int N,              /* no. of stations */
+  int M,              /* no. of constraints */
+  int itmax_rsd,          /* maximum number of iterations RSD */
+  int itmax_rtr,          /* maximum number of iterations RTR */
+  double Delta_bar, double Delta0, /* Trust region radius and initial value */
+  double admm_rho, /* ADMM regularization value */
+  double robust_nulow, double robust_nuhigh, /* robust nu range */
+  double *info, /* initial and final residuals */
+  me_data_t *adata);
+#ifdef HAVE_CUDA
+/****************************** manifold_fl.cu ****************************/
+extern float 
+cudakernel_fns_f(int ThreadsPerBlock, int BlocksPerGrid, int N, int M, cuFloatComplex *x, float *y, float *coh, char *bbh,float *gWORK);
+extern void
+cudakernel_fns_fgradflat(int ThreadsPerBlock, int BlocksPerGrid, int N, int M, cuFloatComplex *x, cuFloatComplex *eta, float *y, float *coh, char *bbh, float *gWORK);
+extern void
+cudakernel_fns_fhessflat(int ThreadsPerBlock, int BlocksPerGrid, int N, int M, cuFloatComplex *x, cuFloatComplex *eta, cuFloatComplex *fhess, float *y, float *coh, char *bbh, float *gWORK);
+extern void
+cudakernel_fns_fscale(int N, cuFloatComplex *eta, float *iw);
+extern float 
+cudakernel_fns_f_robust(int ThreadsPerBlock, int BlocksPerGrid, int N, int M, cuFloatComplex *x, float *y, float *coh, char *bbh,  float *wtd, float *gWORK);
+extern void
+cudakernel_fns_fgradflat_robust(int ThreadsPerBlock, int BlocksPerGrid, int N, int M, cuFloatComplex *x, cuFloatComplex *eta, float *y, float *coh, char *bbh, float *wtd, cuFloatComplex *Ai, cublasHandle_t cbhandle, float *gWORK);
+extern void
+cudakernel_fns_fgradflat_robust1(int ThreadsPerBlock, int BlocksPerGrid, int N, int M, cuFloatComplex *x, cuFloatComplex *eta, float *y, float *coh, char *bbh, float *wtd, float *gWORK);
+extern void
+cudakernel_fns_fgradflat_robust_admm(int ThreadsPerBlock, int BlocksPerGrid, int N, int M, cuFloatComplex *x, cuFloatComplex *eta, float *y, float *coh, char *bbh, float *wtd, cublasHandle_t cbhandle, float *gWORK);
+extern void
+cudakernel_fns_fhessflat_robust1(int ThreadsPerBlock, int BlocksPerGrid, int N, int M, cuFloatComplex *x, cuFloatComplex *eta, cuFloatComplex *fhess, float *y, float *coh, char *bbh, float *wtd, float *gWORK);
+extern void
+cudakernel_fns_fhessflat_robust(int ThreadsPerBlock, int BlocksPerGrid, int N, int M, cuFloatComplex *x, cuFloatComplex *eta, cuFloatComplex *fhess, float *y, float *coh, char *bbh, float *wtd, cuFloatComplex *Ai, cublasHandle_t cbhandle, float *gWORK);
+extern void
+cudakernel_fns_fhessflat_robust_admm(int ThreadsPerBlock, int BlocksPerGrid, int N, int M, cuFloatComplex *x, cuFloatComplex *eta, cuFloatComplex *fhess, float *y, float *coh, char *bbh, float *wtd, cublasHandle_t cbhandle, float *gWORK);
+extern void
+cudakernel_fns_fupdate_weights(int ThreadsPerBlock, int BlocksPerGrid, int N, int M, cuFloatComplex *x, float *y, float *coh, char *bbh, float *wtd, float nu0);
+extern void
+cudakernel_fns_fupdate_weights_q(int ThreadsPerBlock, int BlocksPerGrid, int N, int M, cuFloatComplex *x, float *y, float *coh, char *bbh, float *wtd, float *qd, float nu0);
+/****************************** rtr_solve_cuda.c ****************************/
+extern int
+rtr_solve_cuda_fl(
+  float *x,         /* initial values and updated solution at output (size 8*N float) */
+  float *y,         /* data vector (size 8*M float) */
+  int N,              /* no of stations */
+  int M,              /* no of constraints */
+  int itmax_sd,          /* maximum number of iterations RSD */
+  int itmax_rtr,          /* maximum number of iterations RTR */
+  float Delta_bar, float Delta0, /* Trust region radius and initial value */
+  double *info, /* initial and final residuals */
+
+  cublasHandle_t cbhandle, /* device handle */
+  float *gWORK, /* GPU allocated memory */
+  int tileoff, /* tile offset when solving for many chunks */
+  int ntiles, /* total tile (data) size being solved for */
+  me_data_t *adata); /* pointer to possibly additional data  */
+
+
+extern void
+cudakernel_fns_R(int N, cuFloatComplex *x, cuFloatComplex *r, cuFloatComplex *rnew, cublasHandle_t cbhandle);
+extern float
+cudakernel_fns_g(int N,cuFloatComplex *x,cuFloatComplex *eta, cuFloatComplex *gamma,cublasHandle_t cbhandle);
+extern void
+cudakernel_fns_proj(int N, cuFloatComplex *x, cuFloatComplex *z, cuFloatComplex *rnew, cublasHandle_t cbhandle);
+/****************************** rtr_solve_robust_cuda.c ****************************/
+extern int
+rtr_solve_cuda_robust_fl(
+  float *x0,         /* initial values and updated solution at output (size 8*N float) */
+  float *y,         /* data vector (size 8*M float) */
+  int N,              /* no of stations */
+  int M,              /* no of constraints */
+  int itmax_sd,          /* maximum number of iterations RSD */
+  int itmax_rtr,          /* maximum number of iterations RTR */
+  float Delta_bar, float Delta0, /* Trust region radius and initial value */
+  double robust_nulow, double robust_nuhigh, /* robust nu range */
+  double *info, /* initial and final residuals */
+
+  cublasHandle_t cbhandle, /* device handle */
+  float *gWORK, /* GPU allocated memory */
+  int tileoff, /* tile offset when solving for many chunks */
+  int ntiles, /* total tile (data) size being solved for */
+  me_data_t *adata);
+/****************************** rtr_solve_robust_cuda_admm.c ****************************/
+/* ADMM solver */
+extern int
+rtr_solve_cuda_robust_admm_fl(
+  float *x0,         /* initial values and updated solution at output (size 8*N float) */
+  float *Y, /* Lagrange multiplier size 8N */
+  float *Z, /* consensus term B Z  size 8N */
+  float *y,         /* data vector (size 8*M float) */
+  int N,              /* no of stations */
+  int M,              /* no of constraints */
+  int itmax_sd,          /* maximum number of iterations RSD */
+  int itmax_rtr,          /* maximum number of iterations RTR */
+  float Delta_bar, float Delta0, /* Trust region radius and initial value */
+  float admm_rho, /* ADMM regularization */
+  double robust_nulow, double robust_nuhigh, /* robust nu range */
+  double *info, /* initial and final residuals */
+
+  cublasHandle_t cbhandle, /* device handle */
+  float *gWORK, /* GPU allocated memory */
+  int tileoff, /* tile offset when solving for many chunks */
+  int ntiles, /* total tile (data) size being solved for */
+  me_data_t *adata);
+#endif /* HAVE_CUDA */
 /****************************** lmfit.c ****************************/
 /****************************** lmfit_nocuda.c ****************************/
 /* struct for calling parallel LM jobs */
@@ -1407,6 +1878,13 @@ __attribute__ ((target(MIC)))
 extern int*
 random_permutation(int n, int weighted_iter, double *w);
 
+/********* solver modes *********/
+#define SM_LM_LBFGS 1
+#define SM_OSLM_LBFGS 0
+#define SM_OSLM_OSRLM_RLBFGS 3
+#define SM_RLM_RLBFGS 2
+#define SM_RTR_OSLM_LBFGS 4
+#define SM_RTR_OSRLM_RLBFGS 5
 /* fit visibilities
   u,v,w: u,v,w coordinates (wavelengths) size Nbase*tilesz x 1 
   u,v,w are ordered with baselines, timeslots
@@ -1431,7 +1909,7 @@ random_permutation(int n, int weighted_iter, double *w);
   lbfgs_m: memory size for LBFGS
   gpu_threads: GPU threads per block (LBFGS)
   linsolv: (GPU/CPU versions) 0: Cholesky, 1: QR, 2: SVD
-  solver_mode:  0: with OS, 1: No OS, 2: OS-Robust LM, 3: NO-OS Robust LM
+  solver_mode:  0: OS-LM, 1: LM , 2: OS-Robust LM, 3: Robust LM, 4: OS-LM + RTR, 5: OS-LM, RTR, OS-Robust LM
   nulow,nuhigh: robust nu search range
   randomize: if >0, randomize cluster selection in SAGE and OS subset selection
 
@@ -1451,6 +1929,7 @@ sagefit_visibilities(double *u, double *v, double *w, double *x, int N,
 extern int
 sagefit_visibilities_dual(double *u, double *v, double *w, double *x, int N, 
    int Nbase, int tilesz,  baseline_t *barr, clus_source_t *carr, complex double *coh, int M, int Mt, double freq0, double fdelta, double *pp, double uvmin, int Nt,int max_emiter, int max_iter, int max_lbfgs, int lbfgs_m, int gpu_threads, int linsolv, double nulow, double nuhigh, int randomize,  double *mean_nu, double *res_0, double *res_1); 
+
 
 
 #ifdef USE_MIC
@@ -1525,9 +2004,23 @@ typedef struct pipeline_ {
 #ifndef PT_DO_WORK_OSRLM /* robust LM, OS accel */
 #define PT_DO_WORK_OSRLM 6
 #endif
+#ifndef PT_DO_WORK_RTR /* RTR */
+#define PT_DO_WORK_RTR 7
+#endif
+#ifndef PT_DO_WORK_RRTR /* Robust RTR */
+#define PT_DO_WORK_RRTR 8
+#endif
 #ifndef PT_DO_MEMRESET 
 #define PT_DO_MEMRESET 99
 #endif
+/* for BFGS pipeline */
+#ifndef PT_DO_CDERIV
+#define PT_DO_CDERIV 20
+#endif
+#ifndef PT_DO_CCOST
+#define PT_DO_CCOST 21
+#endif
+
 
 
 #ifdef HAVE_CUDA
@@ -1583,6 +2076,36 @@ typedef struct gb_data_fl_ {
   int randomize; /* >0 for randomization */
 } gbdatafl;
 
+/* for ADMM solver */
+typedef struct gb_data_admm_fl_ {
+  int status[2]; /* 0: do nothing, 
+              1: allocate GPU  memory, attach GPU
+              3: free GPU memory, detach GPU 
+              3,4..: do work on GPU 
+              99: reset GPU memory (memest all memory) */
+  float *p[2]; /* pointer to parameters being solved by each thread */
+  float *Y[2]; /* pointer to Lagrange multiplier */
+  float *Z[2]; /* pointer to consensus term */
+  float admm_rho;
+  float *x[2]; /* pointer to data being fit by each thread */
+  int M[2];
+  int N[2];
+  int itermax[2];
+  double *opts[2];
+  double *info[2];
+  int linsolv;
+  me_data_t *lmdata[2]; /* two for each thread */
+
+  /* GPU related info */
+  cublasHandle_t cbhandle[2]; /* CUBLAS handles */
+  float *gWORK[2]; /* GPU buffers */
+  int64_t data_size; /* size of buffer (bytes) */
+
+  double nulow,nuhigh; /* used only in robust version */
+  int randomize; /* >0 for randomization */
+} gbdatafl_admm;
+
+
 #endif /* !HAVE_CUDA */
 
 /* with 2 GPUs */
@@ -1599,6 +2122,135 @@ sagefit_visibilities_dual_pt_one_gpu(double *u, double *v, double *w, double *x,
 extern int
 sagefit_visibilities_dual_pt_flt(double *u, double *v, double *w, double *x, int N,
    int Nbase, int tilesz,  baseline_t *barr,  clus_source_t *carr, complex double *coh, int M, int Mt, double freq0, double fdelta, double *pp, double uvmin, int Nt, int max_emiter, int max_iter, int max_lbfgs, int lbfgs_m, int gpu_threads, int linsolv,int solver_mode,  double nulow, double nuhigh, int randomize, double *mean_nu, double *res_0, double *res_1);
+
+/****************************** diagnostics.c ****************************/
+#ifdef HAVE_CUDA
+/*  Calculate St.Laurent-Cook Jacobian leverage
+x: input: residual, output: levarage
+  flags: 2 for flags based on uvcut, 1 for normal flags
+  coh: coherencies are calculated for all baselines, regardless of flag
+  diagmode: 1: replaces residual with Jacobian Leverage, 2: calculates (prints) fraction of leverage/noise
+ */
+extern int
+calculate_diagnostics(double *u,double *v,double *w,double *p,double *x,int N,int Nbase,int tilesz,baseline_t *barr, clus_source_t *carr, complex double *coh, int M,int Mt,int diagmode,int Nt);
+#endif
+
+
+/****************************** diag_fl.cu ****************************/
+#ifdef HAVE_CUDA
+/* cuda driver for calculating Jacobian for leverage */
+/* p: params (Mx1), jac: jacobian (NxM), other data : coh, baseline->stat mapping, Nbase, Mclusters, Nstations */
+/* flags are always ignored */
+extern void
+cudakernel_jacf_fl2(float *p, float *jac, int M, int N, float *coh, char *bbh, int Nbase, int Mclus, int Nstations);
+
+/* invert sqrt(singular values)  Sd[]=1/sqrt(Sd[])  for Sd[]> eps */
+extern void
+cudakernel_sqrtdiv_fl(int ThreadsPerBlock, int BlocksPerGrid, int M, float eps, float *Sd);
+
+/* U <= U D, 
+   U : MxM
+   D : Mx1, diagonal matrix
+*/
+extern void
+cudakernel_diagmult_fl(int ThreadsPerBlock, int BlocksPerGrid, int M, float * U, float *D); 
+
+/* diag(J^T J)
+   d[i] = J[i,:] * J[i,:]
+   J: NxM (in row major order, so J[i,:] is actually J[:,i]
+   d: Nx1
+*/
+extern void
+cudakernel_jnorm_fl(int ThreadsPerBlock, int BlocksPerGrid, float *J, int N, int M, float *d);
+#endif
+
+
+/****************************** manifold_average.c ****************************/
+/* calculate manifold average of 2Nx2 solution blocks,
+   then project each solution to this average 
+   Y: 2Nx2 x M x Nf values (average calculated for each 2Nx2 x Nf blocks)
+   N: no of stations
+   M: no of directions
+   Nf: no of frequencies
+   Niter: everaging iterations
+   Nt: threads
+*/
+extern int
+calculate_manifold_average(int N,int M,int Nf,double *Y,int Niter,int Nt);
+
+
+/* find U to  minimize 
+  ||J-J1 U|| solving Procrustes problem 
+  J,J1 : 8N x 1 vectors, in standard format
+  will be reshaped to 2Nx2 format and J1 will be modified as J1 U
+*/
+extern int
+project_procrustes(int N,double *J,double *J1);
+
+/* same as above, but J,J1 are in right 2Nx2 matrix format */
+/* J1 is modified */
+extern int
+project_procrustes_block(int N,complex double *J,complex double *J1);
+
+
+/****************************** consensus_poly.c ****************************/
+/* build matrix with polynomial terms
+  B : Npoly x Nf, each row is one basis function
+  Npoly : total basis functions
+  Nf: frequencies
+  freqs: Nfx1 array freqs
+  freq0: reference freq
+  type : 0 for [1 ((f-fo)/fo) ((f-fo)/fo)^2 ...] basis functions
+  type : 1 : normalize each row such that norm is 1
+*/
+extern int
+setup_polynomials(double *B, int Npoly, int Nf, double *freqs, double freq0, int type);
+
+/* build matrix with polynomial terms
+  B : Npoly x Nf, each row is one basis function
+  Bi: Npoly x Npoly pseudo inverse of sum( B(:,col) x B(:,col)' )
+  Npoly : total basis functions
+  Nf: frequencies
+*/
+extern int
+find_prod_inverse(double *B, double *Bi, int Npoly, int Nf);
+
+/* update Z
+   Z: 8NxNpoly x M double array (real and complex need to be updated separate)
+   N : stations
+   M : clusters
+   Npoly: no of basis functions
+   z : right hand side 8NMxNpoly (note the different ordering from Z)
+   Bi : NpolyxNpoly matrix, Bi^T=Bi assumed
+*/
+extern int
+update_global_z(double *Z,int N,int M,int Npoly,double *z,double *Bi);
+
+
+/****************************** admm_solve.c ****************************/
+/* ADMM cost function  = normal_cost + ||Y^H(J-BZ)|| + rho/2 ||J-BZ||^2 */
+/* extra params
+   Y : Lagrange multiplier
+   BZ : consensus term
+   Y,BZ : size same as pp : 8*N*Mt x1 double values (re,img) for each station/direction 
+   admm_rho : regularization factor 
+*/ 
+extern int
+sagefit_visibilities_admm(double *u, double *v, double *w, double *x, int N,
+   int Nbase, int tilesz,  baseline_t *barr,  clus_source_t *carr, complex double *coh, int M, int Mt, double freq0, double fdelta, double *pp, double *Y, double *BZ, double uvmin, int Nt, int max_emiter, int max_iter, int max_lbfgs, int lbfgs_m, int gpu_threads, int linsolv,int solver_mode,double nulow, double nuhigh,int randomize, double admm_rho, double *mean_nu, double *res_0, double *res_1);
+
+/* ADMM cost function  = normal_cost + ||Y^H(J-BZ)|| + rho/2 ||J-BZ||^2 */
+/* extra params
+   Y : Lagrange multiplier
+   BZ : consensus term
+   Y,BZ : size same as pp : 8*N*Mt x1 double values (re,img) for each station/direction 
+   admm_rho : regularization factor 
+*/ 
+#ifdef HAVE_CUDA
+extern int
+sagefit_visibilities_admm_dual_pt_flt(double *u, double *v, double *w, double *x, int N,
+   int Nbase, int tilesz,  baseline_t *barr,  clus_source_t *carr, complex double *coh, int M, int Mt, double freq0, double fdelta, double *pp, double *Y, double *BZ, double uvmin, int Nt, int max_emiter, int max_iter, int max_lbfgs, int lbfgs_m, int gpu_threads, int linsolv,int solver_mode,  double nulow, double nuhigh, int randomize, double admm_rho, double *mean_nu, double *res_0, double *res_1);
+#endif
 
 #ifdef __cplusplus
      } /* extern "C" */

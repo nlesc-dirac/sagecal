@@ -589,3 +589,98 @@ read_sky_cluster(const char *skymodel, const char *clusterfile, clus_source_t **
   g_hash_table_destroy(stable);
  return 0;
 }
+
+
+
+int
+read_solutions(FILE *cfp,double *p,clus_source_t *carr,int N,int M) {
+ /* read 8N valid rows and Mt columns */
+ int Nc=8*N-1;
+ int c,buff_len,ci,ck,cn;
+ double jtmp;
+ char *buf;
+ /* allocate memory for buffer */
+ buff_len = 128;
+ if((buf = (char*)malloc(sizeof(char)*(size_t)(buff_len)))==NULL) {
+        fprintf(stderr,"%s: %d: No free memory\n",__FILE__,__LINE__);
+        exit(1);
+ }
+#ifdef DEBUG
+printf("Nc=%d\n",Nc);
+#endif
+ c=skip_lines(cfp);
+ while(Nc>=0 && c>=0) {
+    /* we have a new line */
+    memset(buf,0,buff_len);
+    c=read_next_string(&buf,&buff_len,cfp);
+    if (c!=1) {
+     /* first column is solution number (int) 1..8N */
+     sscanf(buf,"%d",&cn);
+    }
+#ifdef DEBUG
+    printf("%d ",cn);
+#endif
+    /* read the rest of the line */
+    for (ci=M-1; ci>=0; ci--) {
+        for (ck=0; ck<carr[ci].nchunk; ck++) {
+        if (strlen(buf)>0)  {
+         memset(buf,0,buff_len);
+         c=read_next_string(&buf,&buff_len,cfp);
+          sscanf(buf,"%lf",&jtmp);
+          p[carr[ci].p[ck]+cn]=jtmp;
+#ifdef DEBUG
+          printf("%e ",jtmp);
+#endif
+        }
+       }
+    }
+#ifdef DEBUG
+    printf("\n"); 
+#endif
+    c=skip_lines(cfp);
+    Nc--;
+ }
+ /* if Nc>=0 and we have reached the EOF, something wrong with solution file
+   so display warning */
+ if (Nc>=0) {
+  printf("Warning: solution file EOF reached, check your solution file\n");
+ } 
+
+ free(buf);
+ return 0;
+}
+
+
+int
+update_ignorelist(const char *ignfile, int *ignlist, int M, clus_source_t *carr) {
+    FILE *cfp;
+    int ci,c,ignc,cn;
+    if ((cfp=fopen(ignfile,"r"))==0) {
+      fprintf(stderr,"%s: %d: no file %s\n",__FILE__,__LINE__,ignfile);
+      exit(1);
+    }
+    cn=0;
+    do {
+      c=fscanf(cfp,"%d",&ignc);
+      if (c>0) {
+#ifdef DEBUG
+      printf("searching for %d\n",ignc);
+#endif
+        /* search for this id in carr */
+        for (ci=0; ci<M; ci++) {
+         if (carr[ci].id==ignc) {
+            ignlist[ci]=1;
+            cn++;
+#ifdef DEBUG
+            printf("cid=%d found at %d\n",ignc,ci);
+#endif
+            break;
+         }
+        }
+      }
+    } while (c>= 0);
+
+    fclose(cfp);
+    printf("Total %d clustes ignored in simulation.\n",cn);
+    return 0;
+}

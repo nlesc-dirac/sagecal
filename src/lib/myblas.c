@@ -21,6 +21,17 @@
 #include "sagecal.h"
 #include <string.h> /* for memcpy */
 
+/* machine precision */
+double
+dlamch(char CMACH) {
+#ifdef USE_MIC
+__attribute__ ((target(MIC)))
+#endif
+  extern double dlamch_(char *CMACH);
+  return(dlamch_(&CMACH));
+}
+
+
 /* blas dcopy */
 /* y = x */
 /* read x values spaced by Nx (so x size> N*Nx) */
@@ -49,6 +60,15 @@ __attribute__ ((target(MIC)))
   int i=1;
   dscal_(&N,&a,x,&i);
 }
+void
+my_sscal(int N, float a, float *x) {
+#ifdef USE_MIC
+__attribute__ ((target(MIC)))
+#endif
+  extern void sscal_(int *N, float *alpha, float *x, int *incx);
+  int i=1;
+  sscal_(&N,&a,x,&i);
+}
 
 /* x^T*y */
 double
@@ -71,6 +91,17 @@ __attribute__ ((target(MIC)))
   int i=1;
   return(dnrm2_(&N,x,&i));
 }
+float
+my_fnrm2(int N, float *x) {
+#ifdef USE_MIC
+__attribute__ ((target(MIC)))
+#endif
+  extern float snrm2_(int *N, float *x, int *incx);
+  int i=1;
+  return(snrm2_(&N,x,&i));
+}
+
+
 
 /* sum||x||_1 */
 double
@@ -81,6 +112,15 @@ __attribute__ ((target(MIC)))
   extern double  dasum_(int *N, double *x, int *incx);
   int i=1;
   return(dasum_(&N,x,&i));
+}
+float
+my_fasum(int N, float *x) {
+#ifdef USE_MIC
+__attribute__ ((target(MIC)))
+#endif
+  extern float sasum_(int *N, float *x, int *incx);
+  int i=1;
+  return(sasum_(&N,x,&i));
 }
 
 /* BLAS y = a.x + y */
@@ -104,6 +144,16 @@ __attribute__ ((target(MIC)))
     daxpy_(&N,&a,x,&incx,y,&incy);
 }
 
+void
+my_saxpy(int N, float *x, float a, float *y) {
+#ifdef USE_MIC
+__attribute__ ((target(MIC)))
+#endif
+    extern void saxpy_(int *N, float *alpha, float *x, int *incx, float *y, int *incy);
+    int i=1; /* strides */
+    saxpy_(&N,&a,x,&i,y,&i);
+}
+
 
 
 /* max |x|  index (start from 1...)*/
@@ -114,6 +164,15 @@ __attribute__ ((target(MIC)))
 #endif
     extern int idamax_(int *N, double *x, int *incx);
     return idamax_(&N,x,&incx);
+}
+
+int
+my_isamax(int N, float *x, int incx) {
+#ifdef USE_MIC
+__attribute__ ((target(MIC)))
+#endif
+    extern int isamax_(int *N, float *x, int *incx);
+    return isamax_(&N,x,&incx);
 }
 
 /* min |x|  index (start from 1...)*/
@@ -236,4 +295,140 @@ __attribute__ ((target(MIC)))
   dtrtrs_(&UPLO,&TRANS,&DIAG,&N,&NRHS,A,&LDA,B,&LDB,&info);
 
   return info;
+}
+
+
+/* blas ccopy */
+/* y = x */
+/* read x values spaced by Nx (so x size> N*Nx) */
+/* write to y values spaced by Ny  (so y size > N*Ny) */
+void
+my_ccopy(int N, complex double *x, int Nx, complex double *y, int Ny) {
+#ifdef USE_MIC
+__attribute__ ((target(MIC)))
+#endif
+  extern void zcopy_(int *N, complex double *x, int *incx, complex double *y, int *incy);
+  /* use memcpy if Nx=Ny=1 */
+  if (Nx==1&&Ny==1) {
+   memcpy((void*)y,(void*)x,sizeof(complex double)*(size_t)N);
+  } else {
+   zcopy_(&N,x,&Nx,y,&Ny);
+  }
+}
+
+/* blas scale */
+/* x = a. x */
+void
+my_cscal(int N, complex double a, complex double *x) {
+#ifdef USE_MIC
+__attribute__ ((target(MIC)))
+#endif
+  extern void zscal_(int *N, complex double *alpha, complex double *x, int *incx);
+  int i=1;
+  zscal_(&N,&a,x,&i);
+}
+
+/* BLAS y = a.x + y */
+void
+my_caxpy(int N, complex double *x, complex double a, complex double *y) {
+#ifdef USE_MIC
+__attribute__ ((target(MIC)))
+#endif
+    extern void zaxpy_(int *N, complex double *alpha, complex double *x, int *incx, complex double *y, int *incy);
+    int i=1; /* strides */
+    zaxpy_(&N,&a,x,&i,y,&i);
+}
+
+
+/* BLAS x^H*y */
+complex double
+my_cdot(int N, complex double *x, complex double *y) {
+#ifdef USE_MIC
+__attribute__ ((target(MIC)))
+#endif
+  extern complex double  zdotc_(int *N, complex double *x, int *incx, complex double *y, int *incy);
+  int i=1;
+  return(zdotc_(&N,x,&i,y,&i));
+}
+
+/* A=U S VT, so V needs NOT to be transposed */
+int
+my_zgesvd(char JOBU, char JOBVT, int M, int N, complex double *A, int LDA, double *S,
+   complex double *U, int LDU, complex double *VT, int LDVT, complex double *WORK, int LWORK, double *RWORK) {
+#ifdef USE_MIC
+__attribute__ ((target(MIC)))
+#endif
+   extern void zgesvd_(char *JOBU, char *JOBVT, int *M, int *N, complex double *A, 
+    int *LDA, double *S, complex double *U, int *LDU, complex double *VT, int *LDVT,
+    complex double *WORK, int *LWORK, double *RWORK, int *info);
+   int info;
+   zgesvd_(&JOBU,&JOBVT,&M,&N,A,&LDA,S,U,&LDU,VT,&LDVT,WORK,&LWORK,RWORK,&info);
+   return info;
+}
+
+/* solve Ax=b using QR factorization */
+int
+my_zgels(char TRANS, int M, int N, int NRHS, complex double *A, int LDA, complex double *B, int LDB, complex double *WORK, int LWORK) {
+#ifdef USE_MIC
+__attribute__ ((target(MIC)))
+#endif
+  extern void zgels_(char *TRANS, int *M, int *N, int *NRHS, complex double *A, int *LDA, complex double *B, int *LDB, complex double *WORK, int *LWORK, int *INFO);
+  int info;
+  zgels_(&TRANS,&M,&N,&NRHS,A,&LDA,B,&LDB,WORK,&LWORK,&info);
+  return info;
+}
+
+
+/* solve Ax=b using QR factorization */
+int
+my_cgels(char TRANS, int M, int N, int NRHS, complex float *A, int LDA, complex float *B, int LDB, complex float *WORK, int LWORK) {
+#ifdef USE_MIC
+__attribute__ ((target(MIC)))
+#endif
+  extern void cgels_(char *TRANS, int *M, int *N, int *NRHS, complex float *A, int *LDA, complex float *B, int *LDB, complex float *WORK, int *LWORK, int *INFO);
+  int info;
+  cgels_(&TRANS,&M,&N,&NRHS,A,&LDA,B,&LDB,WORK,&LWORK,&info);
+  return info;
+}
+
+
+
+
+/* BLAS ZGEMM C = alpha*op(A)*op(B)+ beta*C */
+void
+my_zgemm(char transa, char transb, int M, int N, int K, complex double alpha, complex double *A, int lda, complex double *B, int ldb, complex double beta, complex double *C, int ldc) {
+#ifdef USE_MIC
+__attribute__ ((target(MIC)))
+#endif
+  extern void zgemm_(char *TRANSA, char *TRANSB, int *M, int *N, int *K, complex double *ALPHA, complex double *A, int *LDA, complex double *B, int * LDB, complex double *BETA, complex double *C, int *LDC);
+  zgemm_(&transa, &transb, &M, &N, &K, &alpha, A, &lda, B, &ldb, &beta, C, &ldc);
+}
+
+/* ||x||_2 */
+double
+my_cnrm2(int N, complex double *x) {
+#ifdef USE_MIC
+__attribute__ ((target(MIC)))
+#endif
+  extern double  dznrm2_(int *N, complex double *x, int *incx);
+  int i=1;
+  return(dznrm2_(&N,x,&i));
+}
+
+/* blas fcopy */
+/* y = x */
+/* read x values spaced by Nx (so x size> N*Nx) */
+/* write to y values spaced by Ny  (so y size > N*Ny) */
+void
+my_fcopy(int N, float *x, int Nx, float *y, int Ny) {
+#ifdef USE_MIC
+__attribute__ ((target(MIC)))
+#endif
+  extern void scopy_(int *N, float *x, int *incx, float *y, int *incy);
+  /* use memcpy if Nx=Ny=1 */
+  if (Nx==1&&Ny==1) {
+   memcpy((void*)y,(void*)x,sizeof(float)*(size_t)N);
+  } else {
+   scopy_(&N,x,&Nx,y,&Ny);
+  }
 }

@@ -24,7 +24,6 @@
 #include <cuda_runtime.h>
 #endif
 
-
 /**** repeated code here ********************/
 /* Jones matrix multiplication 
    C=A*B
@@ -33,7 +32,7 @@
 __attribute__ ((target(MIC)))
 #endif
 static void
-amb(complex double *a, complex double *b, complex double *c) {
+amb(complex double * __restrict a, complex double * __restrict b, complex double * __restrict c) {
  c[0]=a[0]*b[0]+a[1]*b[2];
  c[1]=a[0]*b[1]+a[1]*b[3];
  c[2]=a[2]*b[0]+a[3]*b[2];
@@ -47,7 +46,7 @@ amb(complex double *a, complex double *b, complex double *c) {
 __attribute__ ((target(MIC)))
 #endif
 static void
-ambt(complex double *a, complex double *b, complex double *c) {
+ambt(complex double * __restrict a, complex double * __restrict b, complex double * __restrict c) {
  c[0]=a[0]*conj(b[0])+a[1]*conj(b[1]);
  c[1]=a[0]*conj(b[2])+a[1]*conj(b[3]);
  c[2]=a[2]*conj(b[0])+a[3]*conj(b[1]);
@@ -117,8 +116,8 @@ func_robust(
 
   ci=0;
   for (nth=0; nth<Nt; nth++) {
-    threaddata[nth].f=f;
-    threaddata[nth].x=y;
+    threaddata[nth].f=f; /* model */
+    threaddata[nth].x=y; /* data */
     threaddata[nth].nu=robust_nu;
     threaddata[nth].start=ci;
     threaddata[nth].sum=0.0;
@@ -496,7 +495,7 @@ linesearch(
   double alphak;
 
   double mu;
-  double tol=step; /* lower limit for minimization */
+  double tol; /* lower limit for minimization */
 
   int ci;
 
@@ -520,6 +519,10 @@ linesearch(
   //phi_0=my_dnrm2(n,x);
   //phi_0*=phi_0;
   phi_0=func_robust(x,xo,n,dp->robust_nu,dp->Nt);
+  /* select tolarance 1/100 of current function value */
+  tol=MIN(0.01*phi_0,1e-6);
+
+
   /* grad(phi_0): evaluate at -step and +step */
   my_dcopy(m,xk,1,xp,1); /* xp<=xk */
   my_daxpy(m,pk,step,xp); /* xp<=xp+(0.0+step)*pk */
@@ -536,11 +539,12 @@ linesearch(
   p02=func_robust(x,xo,n,dp->robust_nu,dp->Nt);
   gphi_0=(p01-p02)/(2.0*step);
 
+
   /* estimate for mu */
   /* mu = (tol-phi_0)/(rho gphi_0) */
   mu=(tol-phi_0)/(rho*gphi_0);
 #ifdef DEBUG
-  printf("mu=%lf, alpha1=%lf\n",mu,alpha1);
+  printf("cost=%lf grad=%lf mu=%lf, alpha1=%lf\n",phi_0,gphi_0,mu,alpha1);
 #endif
 
   ci=1;
@@ -887,9 +891,6 @@ func_grad_robust(
     threaddata[nth].g_end=m-1;
    }
    ci=ci+Nparm;
-#ifdef DEBUG
-   printf("thread %d parms (%d-%d)\n",nth,threaddata[nth].g_start,threaddata[nth].g_end);
-#endif
    pthread_create(&th_array[nth],&attr,cpu_calc_deriv_robust,(void*)(&threaddata[nth]));
   }
 
@@ -974,7 +975,20 @@ lbfgs_fit_robust(
   my_dcopy(m,p,1,xk,1);
   /*  gradient gk=grad(f)_k */
   func_grad_robust(func,xk,gk,x,m,n,step,adata);
-  ck=0;
+  double gradnrm=my_dnrm2(m,gk);
+  /* if gradient is too small, no need to solve, so stop */
+  if (gradnrm<CLM_STOP_THRESH) {
+   ck=itmax;
+   step=0.0;
+  } else {
+   ck=0;
+   /* step in [1e-6,1e-9] */
+   step=MAX(1e-9,MIN(1e-3/gradnrm,1e-6));
+  }
+#ifdef DEBUG
+  printf("||grad||=%g step=%g\n",gradnrm,step);
+#endif
+
   cm=0;
   ci=0;
   
@@ -1287,7 +1301,7 @@ func_grad_robust_cuda(
 }
 
 int
-lbfgs_fit_robust_cuda(
+lbfgs_fit_robust_cuda_00(
    void (*func)(double *p, double *hx, int m, int n, void *adata),
    double *p, double *x, int m, int n, int itmax, int M, int gpu_threads, void *adata) {
 
@@ -1367,7 +1381,20 @@ lbfgs_fit_robust_cuda(
   my_dcopy(m,p,1,xk,1);
   /*  gradient gk=grad(f)_k */
   func_grad_robust_cuda(func,xk,gk,x,m,n,step,gpu_threads,adata);
-  ck=0;
+  double gradnrm=my_dnrm2(m,gk);
+  /* if gradient is too small, no need to solve, so stop */
+  if (gradnrm<CLM_STOP_THRESH) {
+   ck=itmax;
+   step=0.0;
+  } else {
+   ck=0;
+   /* step in [1e-6,1e-9] */
+   step=MAX(1e-9,MIN(1e-3/gradnrm,1e-6));
+  }
+#ifdef DEBUG
+  printf("||grad||=%g step=%g\n",gradnrm,step);
+#endif
+
   cm=0;
   ci=0;
  
