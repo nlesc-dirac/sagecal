@@ -16,12 +16,13 @@ LAPACK_DIR=/usr/local/OpenBLAS/lib/
 # FFTW
 FFTW=-lfftw3_threads -lfftw3
 
-INCLUDES= -I. $(WCSI)
 LIBPATH=-L$(LAPACK_DIR) $(WCSL)
 
 #### glib
 GLIBI=-I/usr/include/glib-2.0 -I/usr/lib/glib-2.0/include -I/usr/lib/x86_64-linux-gnu/glib-2.0/include/
 GLIBL=-lglib-2.0
+
+INCLUDES= -I. $(WCSI) $(GLIBI)
 
 OBJECTS2=restore.o glist.o readsky.o fft.o shapelet_lm.o hermite.o
 default:restore
