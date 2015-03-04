@@ -52,12 +52,19 @@ S3C61MD 2 22 49.796414 86 18 55.913266 0.135 0 0 0 -6.6 0 1 1 0.0 115000000.0
 
 Note: Comments starting with a '#' are allowed for both sky model and cluster files.
 Note: 3rd order spectral indices are also supported, use -F 1 option in sagecal.
-Note: Spectral indices use natural logarithm, exp(ln(I0) + sp0*(f/f0) + sp1*(f/f0)^2 + ..) so if you have a model with common logarithms like 10^(log10(II0) + spp0*(f/f0) + spp1*(f/f0)^2 + ..) then, conversion is
+Note: Spectral indices use natural logarithm, exp(ln(I0) + p1*ln(f/f0) + p2*ln(f/f0)^2 + ..) so if you have a model with common logarithms like 10^(log(J0) + q1*log(f/f0) + q2*log(f/f0)^2 + ..) then, conversion is
 
-I0=exp(ln(10)*log10(II0))
-sp0=spp0*ln(10)
-sp1=spp1*ln(10)
+ln(I0)+p1*ln(f/f0)+p2*ln(f/f0)^2+... = ln(10)*(log(J0)+q1*log(f/f0)+q2*log(f/f0))^2)+...)
+=ln(10)*(ln(J0)/ln(10)+q1*ln(f/f0)/ln(10)+q2*ln(f/f0)^2/ln(10)^2+...)
+
+so
+
+I0=J0
+p1=q1
+p2=q2/ln(10)
+p3=q3/ln(10)^2
 ...
+
 
 #######################################################################
 3)Run sagecal
