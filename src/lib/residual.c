@@ -573,7 +573,12 @@ residual_threadfn_onefreq(void *data) {
          fratio=log(freq0/t->carr[cm].f0[cn]);
          fratio1=fratio*fratio;
          fratio2=fratio1*fratio;
-         prodterm=exp(log(t->carr[cm].sI0[cn])+t->carr[cm].spec_idx[cn]*fratio+t->carr[cm].spec_idx1[cn]*fratio1+t->carr[cm].spec_idx2[cn]*fratio2)*(cosph+_Complex_I*sinph);
+         /* catch -ve sI */
+         if (t->carr[cm].sI0[cn]>0.0) {
+          prodterm=exp(log(t->carr[cm].sI0[cn])+t->carr[cm].spec_idx[cn]*fratio+t->carr[cm].spec_idx1[cn]*fratio1+t->carr[cm].spec_idx2[cn]*fratio2)*(cosph+_Complex_I*sinph);
+         } else {
+          prodterm=-exp(log(-t->carr[cm].sI0[cn])+t->carr[cm].spec_idx[cn]*fratio+t->carr[cm].spec_idx1[cn]*fratio1+t->carr[cm].spec_idx2[cn]*fratio2)*(cosph+_Complex_I*sinph);
+         }
        } else {
          prodterm=t->carr[cm].sI[cn]*(cosph+_Complex_I*sinph);
        }
@@ -841,7 +846,12 @@ residual_threadfn_multifreq(void *data) {
          fratio=log(freq0/t->carr[cm].f0[cn]);
          fratio1=fratio*fratio;
          fratio2=fratio1*fratio;
-         prodterm=exp(log(t->carr[cm].sI0[cn])+t->carr[cm].spec_idx[cn]*fratio+t->carr[cm].spec_idx1[cn]*fratio1+t->carr[cm].spec_idx2[cn]*fratio2)*(cosph+_Complex_I*sinph);
+         /* catch -ve sI */
+         if (t->carr[cm].sI0[cn]>0.0) {
+          prodterm=exp(log(t->carr[cm].sI0[cn])+t->carr[cm].spec_idx[cn]*fratio+t->carr[cm].spec_idx1[cn]*fratio1+t->carr[cm].spec_idx2[cn]*fratio2)*(cosph+_Complex_I*sinph);
+         } else {
+          prodterm=-exp(log(-t->carr[cm].sI0[cn])+t->carr[cm].spec_idx[cn]*fratio+t->carr[cm].spec_idx1[cn]*fratio1+t->carr[cm].spec_idx2[cn]*fratio2)*(cosph+_Complex_I*sinph);
+         }
        } else {
          prodterm=t->carr[cm].sI[cn]*(cosph+_Complex_I*sinph);
        }
@@ -1077,7 +1087,12 @@ visibilities_threadfn_multifreq(void *data) {
          fratio=log(freq0/t->carr[cm].f0[cn]);
          fratio1=fratio*fratio;
          fratio2=fratio1*fratio;
-         prodterm=exp(log(t->carr[cm].sI0[cn])+t->carr[cm].spec_idx[cn]*fratio+t->carr[cm].spec_idx1[cn]*fratio1+t->carr[cm].spec_idx2[cn]*fratio2)*(cosph+_Complex_I*sinph);
+         /* catch -ve sI */ 
+         if (t->carr[cm].sI0[cn]>0.0) {
+          prodterm=exp(log(t->carr[cm].sI0[cn])+t->carr[cm].spec_idx[cn]*fratio+t->carr[cm].spec_idx1[cn]*fratio1+t->carr[cm].spec_idx2[cn]*fratio2)*(cosph+_Complex_I*sinph);
+         } else {
+          prodterm=-exp(log(-t->carr[cm].sI0[cn])+t->carr[cm].spec_idx[cn]*fratio+t->carr[cm].spec_idx1[cn]*fratio1+t->carr[cm].spec_idx2[cn]*fratio2)*(cosph+_Complex_I*sinph);
+         }
        } else {
          prodterm=t->carr[cm].sI[cn]*(cosph+_Complex_I*sinph);
        }
@@ -1288,7 +1303,12 @@ predictwithgain_threadfn_multifreq(void *data) {
          fratio=log(freq0/t->carr[cm].f0[cn]);
          fratio1=fratio*fratio;
          fratio2=fratio1*fratio;
-         prodterm=exp(log(t->carr[cm].sI0[cn])+t->carr[cm].spec_idx[cn]*fratio+t->carr[cm].spec_idx1[cn]*fratio1+t->carr[cm].spec_idx2[cn]*fratio2)*(cosph+_Complex_I*sinph);
+         /* catch -ve sI */
+         if (t->carr[cm].sI0[cn]>0.0) {
+          prodterm=exp(log(t->carr[cm].sI0[cn])+t->carr[cm].spec_idx[cn]*fratio+t->carr[cm].spec_idx1[cn]*fratio1+t->carr[cm].spec_idx2[cn]*fratio2)*(cosph+_Complex_I*sinph);
+         } else {
+          prodterm=-exp(log(-t->carr[cm].sI0[cn])+t->carr[cm].spec_idx[cn]*fratio+t->carr[cm].spec_idx1[cn]*fratio1+t->carr[cm].spec_idx2[cn]*fratio2)*(cosph+_Complex_I*sinph);
+         }
        } else {
          prodterm=t->carr[cm].sI[cn]*(cosph+_Complex_I*sinph);
        }

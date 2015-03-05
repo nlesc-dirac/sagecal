@@ -328,7 +328,12 @@ read_sky_cluster(const char *skymodel, const char *clusterfile, clus_source_t **
        fratio=log(freq0/f0);
        fratio1=fratio*fratio;
        fratio2=fratio1*fratio;
-       source->sI=exp(log(sI)+spec_idx*fratio+spec_idx1*fratio1+spec_idx2*fratio2);
+       /* catch -ve sI */
+       if (sI>0.0) {
+        source->sI=exp(log(sI)+spec_idx*fratio+spec_idx1*fratio1+spec_idx2*fratio2);
+       } else {
+        source->sI=-exp(log(-sI)+spec_idx*fratio+spec_idx1*fratio1+spec_idx2*fratio2);
+       }
       } else {
        source->sI=sI;
       }
