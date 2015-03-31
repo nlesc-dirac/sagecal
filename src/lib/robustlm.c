@@ -2796,7 +2796,7 @@ osrlevmar_der_single_nocuda(
      /*W J<= wt\odot J, each row mult by wt[] */
      /* jac[0..M-1] <- wtd[0],  jac[M...2M-1] <- wtd[1] ... */
      for (ci=0; ci<Nos[l]; ci++) {
-      my_dscal(M, wtd[ci], &jac[ci*M]);
+      my_dscal(M, wtd[ci+edI[l]], &jac[ci*M]);
      }
 
      /* Compute J^T J and J^T e */
