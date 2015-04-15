@@ -1400,6 +1400,144 @@ armijostep(int N,complex double *x,complex double *teta, double *y, global_data_
  return nocostred;
 }
 
+/* Fine tune initial trust region radius, also update initial value for x
+   A. Sartenaer, 1995
+   returns : trust region estimate,
+   also modifies x
+   eta,Heta,s,x_prop: used as storage
+ */
+#ifdef USE_MIC
+__attribute__ ((target(MIC)))
+#endif
+static double
+itrr(int N,complex double *x,complex double *eta, complex double *Heta, double *y, global_data_rtr_t *gdata, complex double *s, complex double *x_prop) {
+
+ double f0,fk,mk,rho,rho1,Delta0;
+
+ /* initialize trust region radii */
+ double delta_0=1.0;
+ double delta_m=0.0;
+
+ double sigma=0.0;
+ double delta=0.0;
+
+ // initial cost
+ f0=fns_f(x,y,gdata);
+ // gradient at x0
+ fns_fgrad(x,eta,y,gdata,1);
+ //normalize
+ double eta_nrm=my_cnrm2(4*N,eta);
+ my_cscal(4*N, 1.0/eta_nrm+0.0*_Complex_I, eta);
+
+ my_ccopy(4*N,eta,1,s,1);
+ my_cscal(4*N, delta_0+0.0*_Complex_I, s);
+ //Hessian at s
+ fns_fhess(x,s,Heta,y,gdata);
+
+ /* constants used */
+ double gamma_1=0.0625; double gamma_2=5.0; double gamma_3=0.5; double gamma_4=2.0;
+ double mu_0=0.5; double mu_1=0.5; double mu_2=0.35;
+ double teta=0.25;
+
+
+ int m,MK=4;
+ for (m=0; m<MK; m++) {
+   /* x_prop=x0-s */
+   my_ccopy(4*N,x,1,x_prop,1);
+   my_caxpy(4*N, s, -1.0+0.0*_Complex_I, x_prop);
+
+   /* model = f0 - g(x_prop,g0,s) - 0.5 g(x_prop,Hess,s) */
+   mk=f0-fns_g(N,x_prop,eta,s)-0.5*fns_g(N,x_prop,Heta,s);
+   fk=fns_f(x_prop,y,gdata);
+
+   if (f0==mk) {
+    rho=1e9;
+   } else {
+    rho=(f0-fk)/(f0-mk);
+   }
+   rho1=fabs(rho-1.0);
+
+   /* update max radius */
+   if (rho1<mu_0) {
+     delta_m=MAX(delta_m,delta_0);
+   }
+   if ((f0-fk)>delta) {
+     delta=f0-fk;
+     sigma=delta_0;
+   }
+   /* radius update */
+   double beta_1,beta_2,beta_i;
+   beta_1=0.0;
+   beta_2=0.0;
+   if (m<MK) {
+     double g0_s=fns_g(N,x,eta,s);
+     double b1=(teta*(f0-g0_s)+(1.0-teta)*mk-fk);
+     beta_1=(b1==0.0?1e9:-teta*g0_s/b1);
+
+     double b2=(-teta*(f0-g0_s)+(1.0+teta)*mk-fk);
+     beta_2=(b2==0.0?1e9:teta*g0_s/b2);
+
+     double minbeta=MIN(beta_1,beta_2);
+     double maxbeta=MAX(beta_1,beta_2);
+     if (rho1>mu_1) {
+       if (minbeta>1.0) {
+        beta_i=gamma_3;
+       } else if ((maxbeta<gamma_1) || (minbeta<gamma_1 && maxbeta>=1.0)) {
+        beta_i=gamma_1;
+       } else if ((beta_1>=gamma_1 && beta_1<1.0) && (beta_2<gamma_1 || beta_2>=1.0)) {
+        beta_i=beta_1;
+       } else if ((beta_2>=gamma_1 && beta_2<1.0) && (beta_1<gamma_1 || beta_1>=1.0)) {
+        beta_i=beta_2;
+      } else {
+        beta_i=maxbeta;
+      }
+     } else if (rho1<=mu_2) {
+       if (maxbeta<1.0) {
+         beta_i=gamma_4;
+       } else if (maxbeta>gamma_2) {
+         beta_i=gamma_2;
+       } else if ((beta_1>=1.0 && beta_1<=gamma_2) && beta_2<1.0) {
+         beta_i=beta_1;
+       } else if ((beta_2>=1.0 && beta_2<=gamma_2) && beta_1<1.0) {
+         beta_i=beta_2;
+       } else {
+         beta_i=maxbeta;
+       }
+     } else {
+       if (maxbeta<gamma_3) {
+         beta_i=gamma_3;
+       } else if (maxbeta>gamma_4) {
+         beta_i=gamma_4;
+       } else {
+         beta_i=maxbeta;
+       }
+     }
+     /* update radius */
+     delta_0=delta_0/beta_i;
+   }
+
+#ifdef DEBUG
+printf("m=%d delta_0=%e delta_max=%e beta=%e rho=%e\n",m,delta_0,delta_m,beta_i,rho);
+#endif
+
+   my_ccopy(4*N,eta,1,s,1);
+   my_cscal(4*N,delta_0+0.0*_Complex_I, s);
+ }
+
+
+ // update initial value
+ if (delta>0.0) {
+   my_caxpy(4*N, eta, -sigma+0.0*_Complex_I, x);
+ }
+
+ if (delta_m>0.0) {
+  Delta0=delta_m;
+ } else {
+  Delta0=delta_0;
+ }
+
+ return Delta0;
+}
 
 int
 rtr_solve_nocuda_robust(
@@ -1556,7 +1694,7 @@ rtr_solve_nocuda_robust(
  int rsdstat=0;
 /***************************************************/
  /* RSD solution */
- for (ci=0; ci<itmax_rsd; ci++) {
+ for (ci=0; ci<0; ci++) {
   /* Armijo step */
   /* teta=armijostep(V,C,N,x); */
   rsdstat=armijostep(N,x,eta,y,&gdata,fgradx,x_prop,&fx); /* NOTE last two are just storage */
@@ -1569,8 +1707,16 @@ rtr_solve_nocuda_robust(
   }
  }
 
- Delta_bar=MIN(fx,0.01);
- Delta0=Delta_bar*0.125;
+ double Delta_new=itrr(N,x,eta,Heta, y, &gdata, fgradx, x_prop);
+#ifdef DEBUG
+ printf("TR radius given=%lf est=%lf\n",Delta0,Delta_new);
+#endif
+
+ //Delta_bar=MIN(fx,0.01);
+ //Delta0=Delta_bar*0.125;
+ Delta0=MIN(Delta_new,0.01); /* need to be more restrictive for EM */
+ Delta_bar=Delta0*8.0;
+
  rho_regularization=fx*1e-6;
 //printf("fx=%g Delta_bar=%g Delta0=%g\n",fx,Delta_bar,Delta0);
 
