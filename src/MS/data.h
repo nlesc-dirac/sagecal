@@ -26,6 +26,7 @@
 #include <tables/Tables/Table.h>
 #include <tables/Tables/TableVector.h>
 #include <tables/Tables/TableRecord.h>
+#include <tables/Tables/TableColumn.h>
 #include <tables/Tables/TableIter.h>
 #include <tables/Tables/ScalarColumn.h>
 #include <tables/Tables/ArrayColumn.h>
