@@ -297,7 +297,8 @@ Data::loadData(Table ti, Data::IOData iodata) {
         int nflag=0;
         for(int k = 0; k < iodata.Nchan; k++) {
            Complex *ptr = data[k].data();
-           if (!flag.data()[k]){
+           bool *flgptr=flag[k].data();
+           if (!flgptr[0] && !flgptr[1] && !flgptr[2] && !flgptr[3]){
              cxx+=ptr[0];
              cxy+=ptr[1];
              cyx+=ptr[2];
@@ -436,7 +437,8 @@ Data::loadDataList(vector<MSIter*> msitr, Data::IOData iodata) {
         Array<bool> flag = (*(flagCols[cm]))(row);
         for(int k = 0; k < iodata.NchanMS[cm]; k++) {
            Complex *ptr = data[k].data();
-           if (!flag.data()[k]){
+           bool *flgptr=flag[k].data();
+           if (!flgptr[0] && !flgptr[1] && !flgptr[2] && !flgptr[3]){
              cxx+=ptr[0];
              cxy+=ptr[1];
              cyx+=ptr[2];
