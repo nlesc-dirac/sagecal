@@ -227,6 +227,15 @@ sagecal_slave(int argc, char **argv) {
      exit(1);
     }
 
+    /* if we have more than 1 channel, need to backup raw data */
+    double *xbackup=0;
+    if (iodata.Nchan>1) {
+      if ((xbackup=(double*)calloc((size_t)iodata.Nbase*8*iodata.tilesz,sizeof(double)))==0) {
+     fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
+     exit(1);
+     }
+    }
+
     int msgcode=0;
     /* starting iterations doubled */
     int start_iter=1;
@@ -240,6 +249,9 @@ cout<<"Slave "<<myrank<<" quitting"<<endl;
      }
      /* else, load data, do the necessary preprocessing */
      Data::loadData(msitr[0]->table(),iodata);
+     if (iodata.Nchan>1) { /* keep fresh copy of raw data */
+       my_dcopy(iodata.Nbase*8*iodata.tilesz, iodata.x, 1, xbackup, 1);
+     }
      /**********************************************************/
      /* update baseline flags */
      /* and set x[]=0 for flagged values */
@@ -281,8 +293,12 @@ cout<<"Slave "<<myrank<<" quitting"<<endl;
        }
       } else { /* minimize augmented Lagrangian */
        /* since original data is now residual, get a fresh copy of data */
-       /* only 1 channel is assumed */
-       my_dcopy(iodata.Nbase*8*iodata.tilesz, iodata.xo, 1, iodata.x, 1);
+       if (iodata.Nchan>1) {
+        my_dcopy(iodata.Nbase*8*iodata.tilesz, xbackup, 1, iodata.x, 1);
+       } else {
+        /* only 1 channel is assumed */
+        my_dcopy(iodata.Nbase*8*iodata.tilesz, iodata.xo, 1, iodata.x, 1);
+       }
  
 #ifndef HAVE_CUDA
        sagefit_visibilities_admm(iodata.u,iodata.v,iodata.w,iodata.x,iodata.N,iodata.Nbase,iodata.tilesz,barr,carr,coh,M,Mt,iodata.freq0,iodata.deltaf,p,Y,Z,Data::min_uvcut,Data::Nt,Data::max_emiter,Data::max_iter,0,Data::lbfgs_m,Data::gpu_threads,Data::linsolv,Data::solver_mode,Data::nulow,Data::nuhigh,Data::randomize,admm_rho,&mean_nu,&res_0,&res_1);
@@ -440,6 +456,9 @@ cout<<"Slave "<<myrank<<" quitting"<<endl;
   free(coh);
   if (solfile) {
     fclose(sfp);
+  }
+  if (iodata.Nchan>1) {
+    free(xbackup);
   }
   free(Z);
   free(Y);
