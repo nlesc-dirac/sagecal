@@ -81,14 +81,16 @@ calculate_uv_mode_vectors_scalar(double u, double v, double beta, int n0, double
 
 	/* start filling in the array from the positive values */
 	zci=0;
+  xval=u*beta;
+  double expval=exp(-0.5*xval*xval);
 	for (xci=0; xci<n0; xci++) {
-		xval=u*beta;
-		shpvl[zci][xci]=H_e(xval,xci)*exp(-0.5*xval*xval)/sqrt((double)(2<<xci)*fact[xci]);
+		shpvl[zci][xci]=H_e(xval,xci)*expval/sqrt((double)(2<<xci)*fact[xci]);
 	}
 	zci=1;
+ 	xval=v*beta;
+  expval=exp(-0.5*xval*xval);
 	for (xci=0; xci<n0; xci++) {
-		xval=v*beta;
-		shpvl[zci][xci]=H_e(xval,xci)*exp(-0.5*xval*xval)/sqrt((double)(2<<xci)*fact[xci]);
+		shpvl[zci][xci]=H_e(xval,xci)*expval/sqrt((double)(2<<xci)*fact[xci]);
 	}
 
 
