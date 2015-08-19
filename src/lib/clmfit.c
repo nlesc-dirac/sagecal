@@ -23,6 +23,7 @@
 #include <string.h>
 #include <math.h>
 #include <float.h>
+#include <unistd.h>
 
 #include "sagecal.h"
 #include <cuda_runtime.h>
@@ -1175,8 +1176,14 @@ attach_gpu_to_thread2(int card,  cublasHandle_t *cbhandle,float **WORK, int64_t 
   cudaError_t err;
   culaStatus status;
   cublasStatus_t cbstatus;
-  status=culaSelectDevice(card); /* FIXME: Do not enable CULA if its not going to be used */
   if (usecula) {
+   status=culaSelectDevice(card); /* Do not enable CULA if its not going to be used */
+   /* if first try failed, wait and retry */
+   if (status) {
+    fprintf(stderr,"%s: %d: CULA device select failure, retrying\n",__FILE__,__LINE__);
+    sleep(10);
+    status=culaSelectDevice(card);
+   }
    checkStatus(status,__FILE__,__LINE__);
    status=culaInitialize();
    checkStatus(status,__FILE__,__LINE__);
@@ -1189,13 +1196,21 @@ attach_gpu_to_thread2(int card,  cublasHandle_t *cbhandle,float **WORK, int64_t 
      exit(1);
    }
    checkStatus(status,__FILE__,__LINE__);
+   cudaSetDevice(card); /* we need this */
+  } else { /* not using CULA */
+   cudaSetDevice(card);
   }
 
-  cudaSetDevice(card); /* do we need this because sometimes we do not use cula */
   cbstatus=cublasCreate(cbhandle);
   if (cbstatus!=CUBLAS_STATUS_SUCCESS) {
-    fprintf(stderr,"%s: %d: CUBLAS create fail\n",__FILE__,__LINE__);
-    exit(1);
+    /* retry once more before exiting */
+    fprintf(stderr,"%s: %d: CUBLAS create failure, retrying\n",__FILE__,__LINE__);
+    sleep(10);
+    cbstatus=cublasCreate(cbhandle);
+    if (cbstatus!=CUBLAS_STATUS_SUCCESS) {
+     fprintf(stderr,"%s: %d: CUBLAS create fail\n",__FILE__,__LINE__);
+     exit(1);
+    }
   }
 
   err=cudaMalloc((void**)WORK, (size_t)work_size);
@@ -1246,7 +1261,6 @@ detach_gpu_from_thread2(int card,cublasHandle_t cbhandle,float *WORK, int usecul
   }
   cudaFree(WORK);
 
-  //cudaSetDevice(card);
   cudaDeviceReset();
 }
 void

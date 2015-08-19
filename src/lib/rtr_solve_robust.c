@@ -312,6 +312,7 @@ fns_f(complex double *x, double *y,  global_data_rtr_t *gdata) {
 
 
 /* worker thread function for weight update (nu+8)/(nu+error^2) */
+/* update: error: min of XX,XY,YX,YY errors, so p=2 */
 #ifdef USE_MIC
 __attribute__ ((target(MIC)))
 #endif
@@ -363,7 +364,8 @@ threadfn_fns_fupdate_weights(void *data) {
      double r11=t->y[8*ci+6]-creal(T2[3]);
      double i11=t->y[8*ci+7]-cimag(T2[3]);
 
-     t->wtd[ci] = (t->nu0+8.0)/(t->nu0+(r00*r00+i00*i00+r01*r01+i01*i01+r10*r10+i10*i10+r11*r11+i11*i11));
+     //t->wtd[ci] = (t->nu0+8.0)/(t->nu0+(r00*r00+i00*i00+r01*r01+i01*i01+r10*r10+i10*i10+r11*r11+i11*i11));
+     t->wtd[ci] = (t->nu0+2.0)/(t->nu0+MAX(r00*r00+i00*i00,MAX(r01*r01+i01*i01,MAX(r10*r10+i10*i10,r11*r11+i11*i11))));
    }
  }
 
@@ -475,12 +477,15 @@ fns_fupdate_weights(complex double *x, double *y,  global_data_rtr_t *gdata) {
    pthread_join(gdata->th_array[nth1],NULL);
   }
   sumlogw/=(double)Nbase1;
- free(threaddata);
+  free(threaddata);
 
- /* find new value for nu, p-variate T dist, p=8 */
+ /* find new value for nu, p-variate T dist, p=8 (update p=2 because using MAX()  for residual calculation, not sum) */
  /*  psi((nu_old+p)/2)-ln((nu_old+p)/2)-psi(nu/2)+ln(nu/2)+1/N sum(ln(w_i)-w_i) +1 = 0, AECM */
- double nu1=update_nu(sumlogw, 30, Nt, gdata->nulow, gdata->nuhigh, 8, dp->robust_nu);
+ double nu1=update_nu(sumlogw, 30, Nt, gdata->nulow, gdata->nuhigh, 2, dp->robust_nu);
 
+ /* make sure new value stays within bounds */
+ if (nu1<gdata->nulow) { return gdata->nulow; }
+ if (nu1>gdata->nuhigh) { return gdata->nuhigh; }
  return nu1;
 }
 
@@ -1400,6 +1405,7 @@ armijostep(int N,complex double *x,complex double *teta, double *y, global_data_
  return nocostred;
 }
 
+
 /* Fine tune initial trust region radius, also update initial value for x
    A. Sartenaer, 1995
    returns : trust region estimate,
@@ -1427,10 +1433,10 @@ itrr(int N,complex double *x,complex double *eta, complex double *Heta, double *
  fns_fgrad(x,eta,y,gdata,1);
  //normalize
  double eta_nrm=my_cnrm2(4*N,eta);
- my_cscal(4*N, 1.0/eta_nrm+0.0*_Complex_I, eta);
+ my_cscal(4*N, 1.0/eta_nrm+0.0*_Complex_I, eta); 
 
  my_ccopy(4*N,eta,1,s,1);
- my_cscal(4*N, delta_0+0.0*_Complex_I, s);
+ my_cscal(4*N, delta_0+0.0*_Complex_I, s); 
  //Hessian at s
  fns_fhess(x,s,Heta,y,gdata);
 
@@ -1439,7 +1445,7 @@ itrr(int N,complex double *x,complex double *eta, complex double *Heta, double *
  double mu_0=0.5; double mu_1=0.5; double mu_2=0.35;
  double teta=0.25;
 
-
+ 
  int m,MK=4;
  for (m=0; m<MK; m++) {
    /* x_prop=x0-s */
@@ -1449,7 +1455,7 @@ itrr(int N,complex double *x,complex double *eta, complex double *Heta, double *
    /* model = f0 - g(x_prop,g0,s) - 0.5 g(x_prop,Hess,s) */
    mk=f0-fns_g(N,x_prop,eta,s)-0.5*fns_g(N,x_prop,Heta,s);
    fk=fns_f(x_prop,y,gdata);
-
+ 
    if (f0==mk) {
     rho=1e9;
    } else {
@@ -1521,7 +1527,7 @@ printf("m=%d delta_0=%e delta_max=%e beta=%e rho=%e\n",m,delta_0,delta_m,beta_i,
 #endif
 
    my_ccopy(4*N,eta,1,s,1);
-   my_cscal(4*N,delta_0+0.0*_Complex_I, s);
+   my_cscal(4*N,delta_0+0.0*_Complex_I, s); 
  }
 
 
@@ -1538,6 +1544,8 @@ printf("m=%d delta_0=%e delta_max=%e beta=%e rho=%e\n",m,delta_0,delta_m,beta_i,
 
  return Delta0;
 }
+
+
 
 int
 rtr_solve_nocuda_robust(
@@ -1694,6 +1702,7 @@ rtr_solve_nocuda_robust(
  int rsdstat=0;
 /***************************************************/
  /* RSD solution */
+ //for (ci=0; ci<itmax_rsd; ci++) {
  for (ci=0; ci<0; ci++) {
   /* Armijo step */
   /* teta=armijostep(V,C,N,x); */
@@ -1707,11 +1716,13 @@ rtr_solve_nocuda_robust(
   }
  }
 
+
  double Delta_new=itrr(N,x,eta,Heta, y, &gdata, fgradx, x_prop);
 #ifdef DEBUG
  printf("TR radius given=%lf est=%lf\n",Delta0,Delta_new);
 #endif
 
+ //old values
  //Delta_bar=MIN(fx,0.01);
  //Delta0=Delta_bar*0.125;
  Delta0=MIN(Delta_new,0.01); /* need to be more restrictive for EM */
@@ -1939,6 +1950,268 @@ Delta = Delta0;
    free(x_prop);
 /***************************************************/
   robust_nu1=fns_fupdate_weights(x,y,&gdata);
+  adata->robust_nu=robust_nu1;
+  if (fx0>fx) {
+  /* copy back solution to x0 */
+  /* re J(0,0) */
+  my_dcopy(N, &Jd[0], 4, &x0[0], 8);
+  /* im J(0,0) */
+  my_dcopy(N, &Jd[1], 4, &x0[1], 8);
+  /* re J(1,0) */
+  my_dcopy(N, &Jd[2], 4, &x0[4], 8);
+  /* im J(1,0) */
+  my_dcopy(N, &Jd[3], 4, &x0[5], 8);
+  /* re J(0,1) */
+  my_dcopy(N, &Jd[4*N], 4, &x0[2], 8);
+  /* im J(0,1) */
+  my_dcopy(N, &Jd[4*N+1], 4, &x0[3], 8);
+  /* re J(1,1) */
+  my_dcopy(N, &Jd[4*N+2], 4, &x0[6], 8);
+  /* im J(1,1) */
+  my_dcopy(N, &Jd[4*N+3], 4, &x0[7], 8);
+  }
+
+  for (ci=0; ci<N; ci++) {
+   pthread_mutex_destroy(&gdata.mx_array[ci]);
+  }
+  pthread_attr_destroy(&gdata.attr);
+  free(gdata.th_array);
+  free(gdata.mx_array);
+  free(gdata.iw);
+  free(gdata.wtd);
+  free(x);
+  return 0;
+}
+
+
+int
+nsd_solve_nocuda_robust(
+  double *x0,         /* initial values and updated solution at output (size 8*N double) */
+  double *y,         /* data vector (size 8*M double) */
+  int N,              /* no. of stations */
+  int M,              /* no. of constraints */
+  int itermax,          /* maximum number of iterations RSD */
+  double robust_nulow, double robust_nuhigh, /* robust nu range */
+  double *info, /* initial and final residuals */
+  me_data_t *adata) { /* pointer to additional data */
+
+  /* reshape x to make J: 2Nx2 complex double 
+  */
+  complex double *x;
+  if ((x=(complex double*)malloc((size_t)4*N*sizeof(complex double)))==0) {
+#ifndef USE_MIC
+   fprintf(stderr,"%s: %d: No free memory\n",__FILE__,__LINE__);
+#endif
+   exit(1);
+  }
+  /* map x: [(re,im)J_1(0,0) (re,im)J_1(0,1) (re,im)J_1(1,0) (re,im)J_1(1,1)...]
+   to
+  J: [J_1(0,0) J_1(1,0) J_2(0,0) J_2(1,0) ..... J_1(0,1) J_1(1,1) J_2(0,1) J_2(1,1)....]
+ */
+  double *Jd=(double*)x;
+  /* re J(0,0) */
+  my_dcopy(N, &x0[0], 8, &Jd[0], 4);
+  /* im J(0,0) */
+  my_dcopy(N, &x0[1], 8, &Jd[1], 4);
+  /* re J(1,0) */
+  my_dcopy(N, &x0[4], 8, &Jd[2], 4);
+  /* im J(1,0) */
+  my_dcopy(N, &x0[5], 8, &Jd[3], 4);
+  /* re J(0,1) */
+  my_dcopy(N, &x0[2], 8, &Jd[4*N], 4);
+  /* im J(0,1) */
+  my_dcopy(N, &x0[3], 8, &Jd[4*N+1], 4);
+  /* re J(1,1) */
+  my_dcopy(N, &x0[6], 8, &Jd[4*N+2], 4);
+  /* im J(1,1) */
+  my_dcopy(N, &x0[7], 8, &Jd[4*N+3], 4);
+
+
+
+  int Nt=adata->Nt;
+  int ci;
+  global_data_rtr_t gdata;
+
+  gdata.medata=adata;
+  /* setup threads */
+  pthread_attr_init(&gdata.attr);
+  pthread_attr_setdetachstate(&gdata.attr,PTHREAD_CREATE_JOINABLE);
+
+  if ((gdata.th_array=(pthread_t*)malloc((size_t)Nt*sizeof(pthread_t)))==0) {
+#ifndef USE_MIC
+   fprintf(stderr,"%s: %d: No free memory\n",__FILE__,__LINE__);
+#endif
+   exit(1);
+  }
+  
+  if ((gdata.mx_array=(pthread_mutex_t*)malloc((size_t)N*sizeof(pthread_mutex_t)))==0) {
+#ifndef USE_MIC
+   fprintf(stderr,"%s: %d: No free memory\n",__FILE__,__LINE__);
+#endif
+   exit(1);
+  }
+  if ((gdata.iw=(double*)malloc((size_t)N*sizeof(double)))==0) {
+#ifndef USE_MIC
+   fprintf(stderr,"%s: %d: No free memory\n",__FILE__,__LINE__);
+#endif
+   exit(1);
+  }
+  /* weights for robust LS, length could be less than total no of baselines
+    therefore use relative offset boff */
+  if ((gdata.wtd=(double*)malloc((size_t)M*sizeof(double)))==0) {
+#ifndef USE_MIC
+      printf("%s: %d: no free memory\n",__FILE__,__LINE__);
+#endif
+      exit(1);
+  }
+
+
+  for (ci=0; ci<N; ci++) {
+   pthread_mutex_init(&gdata.mx_array[ci],NULL);
+  }
+ /* count baseline->station contributions 
+   NOTE: has to be done here because the baseline offset would change */
+ fns_fcount(&gdata);
+/***************************************************/
+ complex double *fgradx,*eta,*z,*x_prop,*z_prop;
+ if ((fgradx=(complex double*)calloc((size_t)4*N,sizeof(complex double)))==0) {
+#ifndef USE_MIC
+      fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
+#endif
+      exit(1);
+ }
+ if ((eta=(complex double*)calloc((size_t)4*N,sizeof(complex double)))==0) {
+#ifndef USE_MIC
+      fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
+#endif
+      exit(1);
+ }
+ if ((z=(complex double*)calloc((size_t)4*N,sizeof(complex double)))==0) {
+#ifndef USE_MIC
+      fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
+#endif
+      exit(1);
+ }
+ if ((x_prop=(complex double*)calloc((size_t)4*N,sizeof(complex double)))==0) {
+#ifndef USE_MIC
+      fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
+#endif
+      exit(1);
+ }
+ if ((z_prop=(complex double*)calloc((size_t)4*N,sizeof(complex double)))==0) {
+#ifndef USE_MIC
+      fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
+#endif
+      exit(1);
+ }
+
+ /*set initial weights to 1 */
+ setweights(M,gdata.wtd,1.0,Nt);
+ gdata.nulow=robust_nulow;
+ gdata.nuhigh=robust_nuhigh;
+
+ double fx;
+ fx=fns_f(x,y,&gdata);
+ double fx0=fx;
+/***************************************************/
+  /* gradient at x0 */
+  fns_fgrad(x,fgradx,y,&gdata,1);
+  /* Hessian at x0,x0 */
+  fns_fhess(x,x,z,y,&gdata);
+  /* intial step ~ 1/||Hessian|| */
+  double hess_nrm=my_cnrm2(4*N,z);
+  double t=1.0/hess_nrm;
+  /* if initial step too small */
+  if (t<1e-6) {
+   t=1e-6;
+  }
+
+  /* z <= x */
+  my_ccopy(4*N,x,1,z,1);
+  double theta=1.0;
+  double ALPHA=1.01; /*  step-size growth factor */
+  double BETA=0.5; /* step-size shrinkage factor */
+
+  int k;
+  for (k=0; k<itermax; k++) {
+   /* x_prop <= x */
+   my_ccopy(4*N,x,1,x_prop,1);
+   /* z_prop <= z */
+   my_ccopy(4*N,z,1,z_prop,1);
+
+   /* x <= z - t * grad */
+   my_ccopy(4*N,z,1,x,1);
+   my_caxpy(4*N, fgradx, -t+0.0*_Complex_I, x);
+
+   /* if ||x-z|| == t||grad|| is below threshold, stop iteration */
+   double grad_nrm=my_cnrm2(4*N,fgradx);
+   double x_nrm=my_cnrm2(4*N,x);
+   /* norm(y-x)/max(1,norm(x)); */
+   if (grad_nrm*t/MAX(1.0,x_nrm) < 1e-6) {
+      break;
+   }
+
+   /* theta = 2/(1 + sqrt(1+4/(theta^2))); */
+   theta=2.0/(1.0 + sqrt(1.0+4.0/(theta*theta)));
+
+   /* z = x + (1-theta)*(x-x_prop); 
+       z = (2-theta)*x  - (1-theta) * x_prop */
+   my_ccopy(4*N,x,1,z,1);
+   my_cscal(4*N, 2.0-theta+0.0*_Complex_I, z);
+   my_caxpy(4*N, x_prop, -(1.0-theta)+0.0*_Complex_I, z);
+
+   /* eta = grad_old;
+     grad  <= grad_f( z ) */
+   my_ccopy(4*N,fgradx,1,eta,1);
+   fns_fgrad(z,fgradx,y,&gdata,1);
+
+   /* z_prop <= z_prop - z */
+   my_caxpy(4*N, z, -1.0+0.0*_Complex_I, z_prop);
+   /* eta <= eta - new_grad */
+   my_caxpy(4*N, fgradx, -1.0+0.0*_Complex_I, eta);
+
+   /* ||z-z_prop|| */
+   double ydiffnrm=my_cnrm2(4*N,z_prop);
+   /* (z-z_prop)'*(grad-grad_old) */
+   double dot_ydiff_gdiff=my_ddot(8*N, (double *)z_prop, (double *)eta);
+#ifdef DEBUG
+   printf("num=%e den=%e\n",ydiffnrm,dot_ydiff_gdiff);
+#endif
+   /* the above can be NAN, if so break loop */
+   if (isnan(dot_ydiff_gdiff) || isinf(dot_ydiff_gdiff)) { 
+     break;
+   }
+
+   /* backtracking
+     t_hat = 0.5*(norm(y-y_old)^2)/abs((y - y_old)'*(g_old - g));
+     t = min( ALPHA*t, max( BETA*t, t_hat ));
+   */
+   double t_hat=0.5*(ydiffnrm*ydiffnrm)/fabs(dot_ydiff_gdiff);
+   t=MIN(ALPHA*t,MAX(BETA*t,t_hat));
+   
+#ifdef DEBUG
+printf("k=%d theta=%e step=%e\n",k,theta,t);
+#endif
+
+  }
+
+   fx=fns_f(x,y,&gdata);
+   /* final residual */
+   info[1]=fx;
+
+#ifdef DEBUG
+printf("k=%d cost initial=%e final=%e\n",k,fx0,fx);
+#endif
+
+
+
+   free(fgradx);
+   free(eta);
+   free(z);
+   free(z_prop);
+   free(x_prop);
+/***************************************************/
+  double robust_nu1=fns_fupdate_weights(x,y,&gdata);
   adata->robust_nu=robust_nu1;
   if (fx0>fx) {
   /* copy back solution to x0 */

@@ -71,6 +71,9 @@
 #define STYPE_RING 3
 #define STYPE_SHAPELET 4
 
+/* max source name length, increase it if names get longer */
+#define MAX_SNAME 2048
+
 /********* constants - from levmar ******************/
 #define CLM_INIT_MU       1E-03
 #define CLM_STOP_THRESH   1E-17
@@ -192,6 +195,8 @@ typedef struct thread_data_base_ {
 
   /* following for ignoring clusters in simulation */
   int *ignlist; /* Mx1 array, if any value 1, that cluster will not be simulated */
+  /* flag for adding model to data */
+  int add_to_data;
 
   /* following used for multifrequency (channel) data */
   double *freqs;
@@ -263,6 +268,18 @@ typedef struct thread_data_setwt_ {
  double a;
 
 } thread_data_setwt_t;
+
+/* structure for weight calculation for baselines */
+typedef struct thread_data_baselinewt_ {
+ int Nb; /* no of baselines this handle */
+ int boff; /* baseline offset per thread */
+
+ double *wt; /* 8 values per baseline */
+ double *u,*v;
+ double freq0;
+
+} thread_data_baselinewt_t;
+
 
 
 /* structure for worker threads for jacobian calculation */
@@ -436,6 +453,21 @@ read_solutions(FILE *sfp,double *p,clus_source_t *carr,int N,int M);
 */ 
 extern int
 update_ignorelist(const char *ignfile, int *ignlist, int M, clus_source_t *carr);
+
+/* read ADMM regularization factor per cluster from text file, format:
+ cluster_id  hybrid_parameter admm_rho
+ ...
+ ...
+ (M values)
+ and store it in array arho : size Mtx1, taking into account the hybrid parameter
+ also in array arhoslave : size Mx1, without taking hybrid params into account
+
+ admm_rho : can be 0 to ignore consensus, just normal calibration
+*/
+ 
+extern int
+read_arho_fromfile(const char *admm_rho_file,int Mt,double *arho, int M, double *arhoslave);
+
 /****************************** dataio.c ****************************/
 /* open binary file for input/output
  datfile: data file descriptor id
@@ -874,7 +906,9 @@ __attribute__ ((target(MIC)))
 extern int
 lbfgs_fit_robust(
    void (*func)(double *p, double *hx, int m, int n, void *adata),
-   double *p, double *x, int m, int n, int itmax, int lbfgs_m, int gpu_threads, void *adata);
+   double *p, double *x, int m, int n, int itmax, int lbfgs_m, int gpu_threads,
+ int whiten, /* if >0 whiten data 1: NCP, 2... */
+ void *adata);
 #ifdef HAVE_CUDA
 extern int
 lbfgs_fit_robust_cuda(
@@ -925,15 +959,17 @@ calculate_residuals_multifreq(double *u,double *v,double *w,double *p,double *x,
 
 /* 
   calculate visibilities for multiple channels, no solutions are used
-  note: output column x is set to 0
+  note: output column x is set to 0 if add_to_data ==0, else model is added to data
 */
 extern int
-predict_visibilities_multifreq(double *u,double *v,double *w,double *x,int N,int Nbase,int tilesz,baseline_t *barr, clus_source_t *carr, int M,double *freqs,int Nchan, double fdelta,double tdelta,double dec0,int Nt);
+predict_visibilities_multifreq(double *u,double *v,double *w,double *x,int N,int Nbase,int tilesz,baseline_t *barr, clus_source_t *carr, int M,double *freqs,int Nchan, double fdelta,double tdelta,double dec0,int Nt,int add_to_data);
 
 
-/* predict with solutions in p , ignore clusters flagged in ignorelist (Mx1) array*/
+/* predict with solutions in p , ignore clusters flagged in ignorelist (Mx1) array
+ also correct final data with solutions for cluster ccid, if valid
+*/
 extern int
-predict_visibilities_multifreq_withsol(double *u,double *v,double *w,double *p,double *x,int *ignorelist,int N,int Nbase,int tilesz,baseline_t *barr, clus_source_t *carr, int M,double *freqs,int Nchan, double fdelta,double tdelta,double dec0,int Nt);
+predict_visibilities_multifreq_withsol(double *u,double *v,double *w,double *p,double *x,int *ignorelist,int N,int Nbase,int tilesz,baseline_t *barr, clus_source_t *carr, int M,double *freqs,int Nchan, double fdelta,double tdelta,double dec0,int Nt,int add_to_data, int ccid, double rho);
 /****************************** mderiv.cu ****************************/
 /* cuda driver for kernel */
 /* ThreadsPerBlock: keep <= 128
@@ -1331,6 +1367,7 @@ osrlevmar_der_single_cuda_fl(
   int ntiles, /* total tile (data) size being solved for */
   double robust_nulow, double robust_nuhigh, /* robust nu range */
   int randomize, /* if >0 randomize */
+  int whiten, /* if >0 whiten data 1: NCP, 2... */
   void *adata);
 #endif /* HAVE_CUDA */
 
@@ -1357,6 +1394,7 @@ rlevmar_der_single_nocuda(
   int linsolv, /* 0 Cholesky, 1 QR, 2 SVD */
   int Nt, /* no of threads */
   double robust_nulow, double robust_nuhigh, /* robust nu range */
+  int whiten, /* if >0 whiten data 1: NCP, 2... */
   void *adata);
 
 /* robust LM, OS acceleration */
@@ -1396,6 +1434,7 @@ osrlevmar_der_single_nocuda(
   int Nt, /* no of threads */
   double robust_nulow, double robust_nuhigh, /* robust nu range */
   int randomize, /* if >0 randomize */
+  int whiten, /* if >0 whiten data 1: NCP, 2... */
   void *adata);
 
 /****************************** updatenu.c ****************************/
@@ -1425,6 +1464,15 @@ __attribute__ ((target(MIC)))
 #endif
 extern double
 update_w_and_nu(double nu0, double *w, double *ed, int N, int Nt,  double nulow, double nuhigh);
+
+/* update weights array wt by multiplying it with the inverse density function
+  1/( 1+f(u,v) ) 
+ as u,v->inf, f(u,v) -> 0 so long baselines are not affected 
+ wt : Nbase*8 x 1
+ u,v : Nbase x 1
+ note: u = u/c, v=v/c here, so need freq to convert to wavelengths */
+extern void
+add_whitening_weights(int Nbase, double *wt, double *u, double *v, double freq0, int Nt);
 /****************************** clmfit_nocuda.c ****************************/
 /* LM with LAPACK */
 /** keep interface almost the same as in levmar **/
@@ -1734,6 +1782,22 @@ rtr_solve_nocuda_robust(
   double *info, /* initial and final residuals */
   me_data_t *adata);
 
+/* Nesterov's SD */
+#ifdef USE_MIC
+__attribute__ ((target(MIC)))
+#endif
+extern int
+nsd_solve_nocuda_robust(
+  double *x,         /* initial values and updated solution at output (size 8*N double) */
+  double *y,         /* data vector (size 8*M double) */
+  int N,              /* no. of stations */
+  int M,              /* no. of constraints */
+  int itmax,          /* maximum number of iterations */
+  double robust_nulow, double robust_nuhigh, /* robust nu range */
+  double *info, /* initial and final residuals */
+  me_data_t *adata); /* pointer to additional data
+                */
+
 /****************************** rtr_solve_robust_admm.c ****************************/
 #ifdef USE_MIC
 __attribute__ ((target(MIC)))
@@ -1824,6 +1888,24 @@ rtr_solve_cuda_robust_fl(
   int tileoff, /* tile offset when solving for many chunks */
   int ntiles, /* total tile (data) size being solved for */
   me_data_t *adata);
+
+
+/* Nesterov's steepest descent */
+extern int
+nsd_solve_cuda_robust_fl(
+  float *x0,         /* initial values and updated solution at output (size 8*N float) */
+  float *y,         /* data vector (size 8*M float) */
+  int N,              /* no of stations */
+  int M,              /* no of constraints */
+  int itmax,          /* maximum number of iterations */
+  double robust_nulow, double robust_nuhigh, /* robust nu range */
+  double *info, /* initial and final residuals */
+  cublasHandle_t cbhandle, /* device handle */
+  float *gWORK, /* GPU allocated memory */
+  int tileoff, /* tile offset when solving for many chunks */
+  int ntiles, /* total tile (data) size being solved for */
+  me_data_t *adata);
+
 /****************************** rtr_solve_robust_cuda_admm.c ****************************/
 /* ADMM solver */
 extern int
@@ -1834,13 +1916,32 @@ rtr_solve_cuda_robust_admm_fl(
   float *y,         /* data vector (size 8*M float) */
   int N,              /* no of stations */
   int M,              /* no of constraints */
-  int itmax_sd,          /* maximum number of iterations RSD */
-  int itmax_rtr,          /* maximum number of iterations RTR */
+  int itmax_rtr,          /* maximum number of iterations */
   float Delta_bar, float Delta0, /* Trust region radius and initial value */
   float admm_rho, /* ADMM regularization */
   double robust_nulow, double robust_nuhigh, /* robust nu range */
   double *info, /* initial and final residuals */
 
+  cublasHandle_t cbhandle, /* device handle */
+  float *gWORK, /* GPU allocated memory */
+  int tileoff, /* tile offset when solving for many chunks */
+  int ntiles, /* total tile (data) size being solved for */
+  me_data_t *adata);
+
+
+/* Nesterov's SD */
+extern int
+nsd_solve_cuda_robust_admm_fl(
+  float *x0,         /* initial values and updated solution at output (size 8*N float) */
+  float *Y, /* Lagrange multiplier size 8N */
+  float *Z, /* consensus term B Z  size 8N */
+  float *y,         /* data vector (size 8*M float) */
+  int N,              /* no of stations */
+  int M,              /* no of constraints */
+  int itmax,          /* maximum number of iterations */
+  float admm_rho, /* ADMM regularization */
+  double robust_nulow, double robust_nuhigh, /* robust nu range */
+  double *info, /* initial and final residuals */
   cublasHandle_t cbhandle, /* device handle */
   float *gWORK, /* GPU allocated memory */
   int tileoff, /* tile offset when solving for many chunks */
@@ -1885,6 +1986,7 @@ random_permutation(int n, int weighted_iter, double *w);
 #define SM_RLM_RLBFGS 2
 #define SM_RTR_OSLM_LBFGS 4
 #define SM_RTR_OSRLM_RLBFGS 5
+#define SM_NSD_RLBFGS 6
 /* fit visibilities
   u,v,w: u,v,w coordinates (wavelengths) size Nbase*tilesz x 1 
   u,v,w are ordered with baselines, timeslots
@@ -1913,6 +2015,7 @@ random_permutation(int n, int weighted_iter, double *w);
   nulow,nuhigh: robust nu search range
   randomize: if >0, randomize cluster selection in SAGE and OS subset selection
 
+  whiten : if >0 whiten data 1: NCP, 2... 
   mean_nu: output mean value of nu
   res_0,res_1: initial and final residuals (output)
   return val=0 if final residual< initial residual
@@ -1923,7 +2026,7 @@ __attribute__ ((target(MIC)))
 #endif
 extern int
 sagefit_visibilities(double *u, double *v, double *w, double *x, int N, 
-   int Nbase, int tilesz,  baseline_t *barr, clus_source_t *carr, complex double *coh, int M, int Mt, double freq0, double fdelta, double *pp, double uvmin, int Nt,int max_emiter, int max_iter, int max_lbfgs, int lbfgs_m, int gpu_threads, int linsolv, int solver_mode, double nulow, double nuhigh, int randomize, double *mean_nu, double *res_0, double *res_1); 
+   int Nbase, int tilesz,  baseline_t *barr, clus_source_t *carr, complex double *coh, int M, int Mt, double freq0, double fdelta, double *pp, double uvmin, int Nt,int max_emiter, int max_iter, int max_lbfgs, int lbfgs_m, int gpu_threads, int linsolv, int solver_mode, double nulow, double nuhigh, int randomize, int whiten, double *mean_nu, double *res_0, double *res_1); 
 
 /* same as above, but uses 2 GPUS in the LM stage */
 extern int
@@ -2010,6 +2113,9 @@ typedef struct pipeline_ {
 #ifndef PT_DO_WORK_RRTR /* Robust RTR */
 #define PT_DO_WORK_RRTR 8
 #endif
+#ifndef PT_DO_WORK_NSD /* Nesterov's SD */
+#define PT_DO_WORK_NSD 9
+#endif
 #ifndef PT_DO_MEMRESET 
 #define PT_DO_MEMRESET 99
 #endif
@@ -2086,7 +2192,7 @@ typedef struct gb_data_admm_fl_ {
   float *p[2]; /* pointer to parameters being solved by each thread */
   float *Y[2]; /* pointer to Lagrange multiplier */
   float *Z[2]; /* pointer to consensus term */
-  float admm_rho;
+  float admm_rho[2];
   float *x[2]; /* pointer to data being fit by each thread */
   int M[2];
   int N[2];
@@ -2233,23 +2339,23 @@ update_global_z(double *Z,int N,int M,int Npoly,double *z,double *Bi);
    Y : Lagrange multiplier
    BZ : consensus term
    Y,BZ : size same as pp : 8*N*Mt x1 double values (re,img) for each station/direction 
-   admm_rho : regularization factor 
+   admm_rho : regularization factor array size Mx1
 */ 
 extern int
 sagefit_visibilities_admm(double *u, double *v, double *w, double *x, int N,
-   int Nbase, int tilesz,  baseline_t *barr,  clus_source_t *carr, complex double *coh, int M, int Mt, double freq0, double fdelta, double *pp, double *Y, double *BZ, double uvmin, int Nt, int max_emiter, int max_iter, int max_lbfgs, int lbfgs_m, int gpu_threads, int linsolv,int solver_mode,double nulow, double nuhigh,int randomize, double admm_rho, double *mean_nu, double *res_0, double *res_1);
+   int Nbase, int tilesz,  baseline_t *barr,  clus_source_t *carr, complex double *coh, int M, int Mt, double freq0, double fdelta, double *pp, double *Y, double *BZ, double uvmin, int Nt, int max_emiter, int max_iter, int max_lbfgs, int lbfgs_m, int gpu_threads, int linsolv,int solver_mode,double nulow, double nuhigh,int randomize, double *admm_rho, double *mean_nu, double *res_0, double *res_1);
 
 /* ADMM cost function  = normal_cost + ||Y^H(J-BZ)|| + rho/2 ||J-BZ||^2 */
 /* extra params
    Y : Lagrange multiplier
    BZ : consensus term
    Y,BZ : size same as pp : 8*N*Mt x1 double values (re,img) for each station/direction 
-   admm_rho : regularization factor 
+   admm_rho : regularization factor  array size Mx1
 */ 
 #ifdef HAVE_CUDA
 extern int
 sagefit_visibilities_admm_dual_pt_flt(double *u, double *v, double *w, double *x, int N,
-   int Nbase, int tilesz,  baseline_t *barr,  clus_source_t *carr, complex double *coh, int M, int Mt, double freq0, double fdelta, double *pp, double *Y, double *BZ, double uvmin, int Nt, int max_emiter, int max_iter, int max_lbfgs, int lbfgs_m, int gpu_threads, int linsolv,int solver_mode,  double nulow, double nuhigh, int randomize, double admm_rho, double *mean_nu, double *res_0, double *res_1);
+   int Nbase, int tilesz,  baseline_t *barr,  clus_source_t *carr, complex double *coh, int M, int Mt, double freq0, double fdelta, double *pp, double *Y, double *BZ, double uvmin, int Nt, int max_emiter, int max_iter, int max_lbfgs, int lbfgs_m, int gpu_threads, int linsolv,int solver_mode,  double nulow, double nuhigh, int randomize, double *admm_rho, double *mean_nu, double *res_0, double *res_1);
 #endif
 
 #ifdef __cplusplus

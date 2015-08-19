@@ -911,7 +911,9 @@ func_grad_robust(
 int
 lbfgs_fit_robust(
    void (*func)(double *p, double *hx, int m, int n, void *adata),
-   double *p, double *x, int m, int n, int itmax, int M, int gpu_threads, void *adata) {
+   double *p, double *x, int m, int n, int itmax, int M, int gpu_threads,
+ int whiten, /* if >0 whiten data 1: NCP, 2... */
+ void *adata) {
 
   double *gk; /* gradients at both k+1 and k iter */
   double *xk1,*xk; /* parameters at k+1 and k iter */

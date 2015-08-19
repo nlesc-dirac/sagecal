@@ -55,6 +55,7 @@ int Data::lbfgs_m=7;
 int Data::gpu_threads=128;
 int Data::linsolv=1;
 int Data::randomize=1;
+int Data::whiten=0;
 int Data::DoSim=0;
 int Data::DoDiag=0;
 int Data::doChan=0; /* if 1, solve for each channel in multi channel data */
@@ -69,6 +70,7 @@ char *Data::MSlist=NULL;
 int Data::Nadmm=1;
 int Data::Npoly=2;
 double Data::admm_rho=5.0;
+char *Data::admm_rho_file=NULL;
 
 /* no upper limit, solve for all timeslots */
 int Data::Nmaxtime=0;
@@ -298,6 +300,7 @@ Data::loadData(Table ti, Data::IOData iodata) {
         for(int k = 0; k < iodata.Nchan; k++) {
            Complex *ptr = data[k].data();
            bool *flgptr=flag[k].data();
+           //if (!flag.data()[k]){
            if (!flgptr[0] && !flgptr[1] && !flgptr[2] && !flgptr[3]){
              cxx+=ptr[0];
              cxy+=ptr[1];
@@ -438,6 +441,7 @@ Data::loadDataList(vector<MSIter*> msitr, Data::IOData iodata) {
         for(int k = 0; k < iodata.NchanMS[cm]; k++) {
            Complex *ptr = data[k].data();
            bool *flgptr=flag[k].data();
+           //if (!flag.data()[k]){
            if (!flgptr[0] && !flgptr[1] && !flgptr[2] && !flgptr[3]){
              cxx+=ptr[0];
              cxy+=ptr[1];

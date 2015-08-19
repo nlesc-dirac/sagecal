@@ -33,7 +33,7 @@ using namespace Data;
 
 void
 print_copyright(void) {
-  cout<<"SAGECal-MPI 0.3.5 (C) 2011-2015 Sarod Yatawatta"<<endl;
+  cout<<"SAGECal-MPI 0.3.9 (C) 2011-2015 Sarod Yatawatta"<<endl;
 }
 
 
@@ -44,10 +44,10 @@ print_help(void) {
    cout << "-f MSlist: text file with MS names" << endl;
    cout << "-s sky.txt: sky model file"<< endl;
    cout << "-c cluster.txt: cluster file"<< endl;
-   cout << "-p solutions.txt: if given, save solution in this file, if not given 'XXX.MS.solutions' will be used"<< endl;
+   cout << "-p solutions.txt: if given, save (global) solutions in this file, but slaves will always write to 'XXX.MS.solutions'"<< endl;
    cout << "-F sky model format: 0: LSM, 1: LSM with 3 order spectra : default "<< Data::format<<endl;
-   cout << "-I input column (DATA/CORRECTED_DATA) : default " <<Data::DataField<< endl;
-   cout << "-O ouput column (DATA/CORRECTED_DATA) : default " <<Data::OutField<< endl;
+   cout << "-I input column (DATA/CORRECTED_DATA/...) : default " <<Data::DataField<< endl;
+   cout << "-O ouput column (DATA/CORRECTED_DATA/...) : default " <<Data::OutField<< endl;
    cout << "-e max EM iterations : default " <<Data::max_emiter<< endl;
    cout << "-g max iterations  (within single EM) : default " <<Data::max_iter<< endl;
    cout << "-l max LBFGS iterations : default " <<Data::max_lbfgs<< endl;
@@ -57,16 +57,16 @@ print_help(void) {
    cout << "-A ADMM iterations: default " <<Data::Nadmm<< endl;
    cout << "-P consensus polynomial order: default " <<Data::Npoly<< endl;
    cout << "-r regularization factor: default " <<Data::admm_rho<< endl;
+   cout << "-G regularization factor of each cluster (text file instead of -r): default : None" << endl;
    cout << "-x exclude baselines length (lambda) lower than this in calibration : default "<<Data::min_uvcut << endl;
    cout << "-y exclude baselines length (lambda) higher than this in calibration : default "<<Data::max_uvcut << endl;
    cout <<endl<<"Advanced options:"<<endl;
    cout << "-k cluster_id : correct residuals with solution of this cluster : default "<<Data::ccid<< endl;
    cout << "-o robust rho, robust matrix inversion during correction: default "<<Data::rho<< endl;
-   cout << "-j 0,1,2... 0 : OSaccel, 1 no OSaccel, 2: OSRLM, 3: RLM, 4: RTR, 5: RRTR: default "<<Data::solver_mode<< endl;
+   cout << "-j 0,1,2... 0 : OSaccel, 1 no OSaccel, 2: OSRLM, 3: RLM, 4: RTR, 5: RRTR: 6: NSD, default "<<Data::solver_mode<< endl;
    cout << "-L robust nu, lower bound: default "<<Data::nulow<< endl;
    cout << "-H robust nu, upper bound: default "<<Data::nuhigh<< endl;
    cout << "-R randomize iterations: default "<<Data::randomize<< endl;
-   cout << "-D 0,1,2 : if >0, enable diagnostics (Jacobian Leverage) 1 replace Jacobian Leverage as output, 2 only fractional noise/leverage is printed: default " <<Data::DoDiag<< endl;
    cout << "-T stop after this number of solutions (0 means no limit): default "<<Data::Nmaxtime<< endl;
    cout <<"Report bugs to <sarod@users.sf.net>"<<endl;
 }
@@ -75,7 +75,7 @@ print_help(void) {
 void 
 ParseCmdLine(int ac, char **av) {
     char c;
-    while((c=getopt(ac, av, "c:e:f:g:j:k:l:m:n:o:p:r:s:t:x:y:A:D:F:I:L:O:P:H:R:T:h"))!= -1)
+    while((c=getopt(ac, av, "c:e:f:g:j:k:l:m:n:o:p:r:s:t:x:y:A:F:I:L:O:P:G:H:R:T:h"))!= -1)
     {
         switch(c)
         {
@@ -146,6 +146,9 @@ ParseCmdLine(int ac, char **av) {
                 break;
             case 'r': 
                 admm_rho= atof(optarg);
+                break;
+            case 'G': 
+                admm_rho_file= optarg;
                 break;
             case 'R': 
                 randomize= atoi(optarg);

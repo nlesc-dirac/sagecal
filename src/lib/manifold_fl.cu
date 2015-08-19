@@ -1352,7 +1352,7 @@ kernel_fns_fupdate_weights(int N, int Nbase, cuFloatComplex *x, float *y, float 
       1) its not flagged (sta1,sta2)>=0
     */
     float sumn=0.0f;
-    float temp1,temp2,tt,yy,c=0.0f;
+    float temp1,temp2,tt;
     if (sta1>=0 && sta2>=0) {
      cuFloatComplex G1[4];
      cuFloatComplex G2[4];
@@ -1382,25 +1382,28 @@ kernel_fns_fupdate_weights(int N, int Nbase, cuFloatComplex *x, float *y, float 
      /* T=T*G2' */
      ambt(T1,G2,T2);
 
-     /* error using Kahan summation */
+     /* use p=2, find MAX value of residual error out of XX,XY,YX,YY
+        instead of the sum */
      /* V->U */
      temp1=y[8*n]-T2[0].x; 
-     temp2=temp1*temp1; yy=temp2-c; tt=sumn+yy; c=(tt-sumn)-yy; sumn=tt;
-     temp1=y[8*n+1]-T2[0].y;
-     temp2=temp1*temp1; yy=temp2-c; tt=sumn+yy; c=(tt-sumn)-yy; sumn=tt;
+     temp2=y[8*n+1]-T2[0].y;
+     sumn=temp1*temp1+temp2*temp2;
      temp1=y[8*n+2]-T2[1].x;
-     temp2=temp1*temp1; yy=temp2-c; tt=sumn+yy; c=(tt-sumn)-yy; sumn=tt;
-     temp1=y[8*n+3]-T2[1].y;
-     temp2=temp1*temp1; yy=temp2-c; tt=sumn+yy; c=(tt-sumn)-yy; sumn=tt;
+     temp2=y[8*n+3]-T2[1].y;
+     tt=temp1*temp1+temp2*temp2;
+     if (sumn<tt) { sumn=tt; }
+     
      temp1=y[8*n+4]-T2[2].x;
-     temp2=temp1*temp1; yy=temp2-c; tt=sumn+yy; c=(tt-sumn)-yy; sumn=tt;
-     temp1=y[8*n+5]-T2[2].y;
-     temp2=temp1*temp1; yy=temp2-c; tt=sumn+yy; c=(tt-sumn)-yy; sumn=tt;
+     temp2=y[8*n+5]-T2[2].y;
+     tt=temp1*temp1+temp2*temp2;
+     if (sumn<tt) { sumn=tt; }
+
      temp1=y[8*n+6]-T2[3].x;
-     temp2=temp1*temp1; yy=temp2-c; tt=sumn+yy; c=(tt-sumn)-yy; sumn=tt;
-     temp1=y[8*n+7]-T2[3].y;
-     temp2=temp1*temp1; yy=temp2-c; tt=sumn+yy; c=(tt-sumn)-yy; sumn=tt;
-     wtd[n]=(nu0+8.0f)/(nu0+sumn);  /* 8 variate T distribution */
+     temp2=y[8*n+7]-T2[3].y;
+     tt=temp1*temp1+temp2*temp2;
+     if (sumn<tt) { sumn=tt; }
+     //wtd[n]=(nu0+8.0f)/(nu0+sumn); /* 8 variate T distribution */ 
+     wtd[n]=(nu0+2.0f)/(nu0+sumn); /* 2 variate T distribution */ 
     } 
   }
 
@@ -1422,7 +1425,7 @@ kernel_fns_fupdate_weights_q(int N, int Nbase, cuFloatComplex *x, float *y, floa
       1) its not flagged (sta1,sta2)>=0
     */
     float sumn=0.0f;
-    float temp1,temp2,tt,yy,c=0.0f;
+    float temp1,temp2,tt;
     if (sta1>=0 && sta2>=0) {
      cuFloatComplex G1[4];
      cuFloatComplex G2[4];
@@ -1452,25 +1455,28 @@ kernel_fns_fupdate_weights_q(int N, int Nbase, cuFloatComplex *x, float *y, floa
      /* T=T*G2' */
      ambt(T1,G2,T2);
 
-     /* error using Kahan summation */
+     /* use p=2, find MAX value of residual error out of XX,XY,YX,YY
+        instead of the sum */
      /* V->U */
      temp1=y[8*n]-T2[0].x; 
-     temp2=temp1*temp1; yy=temp2-c; tt=sumn+yy; c=(tt-sumn)-yy; sumn=tt;
-     temp1=y[8*n+1]-T2[0].y;
-     temp2=temp1*temp1; yy=temp2-c; tt=sumn+yy; c=(tt-sumn)-yy; sumn=tt;
+     temp2=y[8*n+1]-T2[0].y;
+     sumn=temp1*temp1+temp2*temp2;
      temp1=y[8*n+2]-T2[1].x;
-     temp2=temp1*temp1; yy=temp2-c; tt=sumn+yy; c=(tt-sumn)-yy; sumn=tt;
-     temp1=y[8*n+3]-T2[1].y;
-     temp2=temp1*temp1; yy=temp2-c; tt=sumn+yy; c=(tt-sumn)-yy; sumn=tt;
+     temp2=y[8*n+3]-T2[1].y;
+     tt=temp1*temp1+temp2*temp2;
+     if (sumn<tt) { sumn=tt; }
+     
      temp1=y[8*n+4]-T2[2].x;
-     temp2=temp1*temp1; yy=temp2-c; tt=sumn+yy; c=(tt-sumn)-yy; sumn=tt;
-     temp1=y[8*n+5]-T2[2].y;
-     temp2=temp1*temp1; yy=temp2-c; tt=sumn+yy; c=(tt-sumn)-yy; sumn=tt;
+     temp2=y[8*n+5]-T2[2].y;
+     tt=temp1*temp1+temp2*temp2;
+     if (sumn<tt) { sumn=tt; }
+
      temp1=y[8*n+6]-T2[3].x;
-     temp2=temp1*temp1; yy=temp2-c; tt=sumn+yy; c=(tt-sumn)-yy; sumn=tt;
-     temp1=y[8*n+7]-T2[3].y;
-     temp2=temp1*temp1; yy=temp2-c; tt=sumn+yy; c=(tt-sumn)-yy; sumn=tt;
-     wtd[n]=(nu0+8.0f)/(nu0+sumn); /* 8 variate T distribution */ 
+     temp2=y[8*n+7]-T2[3].y;
+     tt=temp1*temp1+temp2*temp2;
+     if (sumn<tt) { sumn=tt; }
+     //wtd[n]=(nu0+8.0f)/(nu0+sumn); /* 8 variate T distribution */ 
+     wtd[n]=(nu0+2.0f)/(nu0+sumn); /* 2 variate T distribution */ 
      qd[n]=wtd[n]-logf(wtd[n]);  
     } 
   }
@@ -1667,7 +1673,7 @@ cudakernel_fns_f(int ThreadsPerBlock, int BlocksPerGrid, int N, int M, cuFloatCo
 
   return ed: error vector, BlocksPerGridx1
 */
-/* need BlocksPerGrid+1+L float storage */
+/* need BlocksPerGrid+4+L float storage <= (2 BlocksPerGrid + 4) */
 float 
 cudakernel_fns_f_robust(int ThreadsPerBlock, int BlocksPerGrid, int N, int M, cuFloatComplex *x, float *y, float *coh, char *bbh, float *wtd, float *gWORK) {
 #ifdef CUDA_DBG

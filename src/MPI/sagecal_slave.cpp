@@ -24,6 +24,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <pthread.h>
+#include <time.h>
 
 #include<sagecal.h>
 #include <mpi.h>
@@ -71,21 +72,14 @@ sagecal_slave(int argc, char **argv) {
     double **pm;
     complex double *coh;
     FILE *sfp=0;
-    if (solfile) {
-      if ((sfp=fopen(solfile,"w+"))==0) {
+    /* always create default solution file name MS+'.solutions' */
+    std::string filebuff=std::string(Data::TableName)+std::string(".solutions\0");
+    if ((sfp=fopen(filebuff.c_str(),"w+"))==0) {
        fprintf(stderr,"%s: %d: no file\n",__FILE__,__LINE__);
        return 1;
-      }
-    } else {
-     /* create default solution file name MS+'.solutions' */
-     std::string filebuff=std::string(Data::TableName)+std::string(".solutions\0");
-     if ((sfp=fopen(filebuff.c_str(),"w+"))==0) {
-       fprintf(stderr,"%s: %d: no file\n",__FILE__,__LINE__);
-       return 1;
-     }
-     /* set solfile to non null value */
-     solfile=const_cast<char*>(filebuff.c_str());
     }
+    /* set solfile to non null value */
+    solfile=const_cast<char*>(filebuff.c_str());
 
 
      double mean_nu;
@@ -192,17 +186,25 @@ sagecal_slave(int argc, char **argv) {
       msitr[cm]->origin();
     }
 
+    /* write additional info to solution file */
+    if (solfile) {
+      fprintf(sfp,"# solution file created by SAGECal\n");
+      fprintf(sfp,"# freq(MHz) bandwidth(MHz) time_interval(min) stations clusters effective_clusters\n");
+      fprintf(sfp,"%lf %lf %lf %d %d %d\n",iodata.freq0*1e-6,iodata.deltaf*1e-6,(double)iodata.tilesz*iodata.deltat/60.0,iodata.N,M,Mt);
+    }
+
 
     /**** send info to master ***************************************/
-    /* send freq (freq0), no. stations (N), total timeslots (totalt), no. of clusters (Mt), integration time (deltat), bandwidth (deltaf) */
-    int *bufint=new int[4];
+    /* send freq (freq0), no. stations (N), total timeslots (totalt), no. of clusters (M), true no. of clusters with hybrid (Mt), integration time (deltat), bandwidth (deltaf) */
+    int *bufint=new int[5];
     double *bufdouble=new double[1];
     bufint[0]=iodata.N;
-    bufint[1]=Mt;
-    bufint[2]=iodata.tilesz;
-    bufint[3]=iodata.totalt;
+    bufint[1]=M;
+    bufint[2]=Mt;
+    bufint[3]=iodata.tilesz;
+    bufint[4]=iodata.totalt;
     bufdouble[0]=iodata.freq0;
-    MPI_Send(bufint, 4, MPI_INT, 0,TAG_MSAUX, MPI_COMM_WORLD);
+    MPI_Send(bufint, 5, MPI_INT, 0,TAG_MSAUX, MPI_COMM_WORLD);
     MPI_Send(bufdouble, 1, MPI_DOUBLE, 0,TAG_MSAUX, MPI_COMM_WORLD);
 
     delete [] bufint;
@@ -227,6 +229,15 @@ sagecal_slave(int argc, char **argv) {
      exit(1);
     }
 
+    double *arho;
+    if ((arho=(double*)calloc((size_t)M,sizeof(double)))==0) {
+     fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
+     exit(1);
+    }
+
+    /* get regularization factor array */
+    MPI_Recv(arho,M,MPI_DOUBLE,0,TAG_RHO,MPI_COMM_WORLD,&status);
+
     /* if we have more than 1 channel, need to backup raw data */
     double *xbackup=0;
     if (iodata.Nchan>1) {
@@ -235,6 +246,7 @@ sagecal_slave(int argc, char **argv) {
      exit(1);
      }
     }
+
 
     int msgcode=0;
     /* starting iterations doubled */
@@ -265,22 +277,19 @@ cout<<"Slave "<<myrank<<" quitting"<<endl;
      /******************** ADMM  *******************************/
 
      for (int admm=0; admm<Nadmm; admm++) {
-      /* get current regularization factor */
-      MPI_Recv(&admm_rho,1,MPI_DOUBLE,0,TAG_RHO,MPI_COMM_WORLD,&status);
-
       /* ADMM 1: minimize cost function */
       if (admm==0) { 
 #ifndef HAVE_CUDA
       if (start_iter) {
-       sagefit_visibilities(iodata.u,iodata.v,iodata.w,iodata.x,iodata.N,iodata.Nbase,iodata.tilesz,barr,carr,coh,M,Mt,iodata.freq0,iodata.deltaf,p,Data::min_uvcut,Data::Nt,2*Data::max_emiter,Data::max_iter,Data::max_lbfgs,Data::lbfgs_m,Data::gpu_threads,Data::linsolv,(Data::solver_mode==SM_RTR_OSLM_LBFGS?SM_OSLM_LBFGS:(Data::solver_mode==SM_RTR_OSRLM_RLBFGS?SM_OSLM_OSRLM_RLBFGS:Data::solver_mode)),Data::nulow,Data::nuhigh,Data::randomize,&mean_nu,&res_0,&res_1);
+       sagefit_visibilities(iodata.u,iodata.v,iodata.w,iodata.x,iodata.N,iodata.Nbase,iodata.tilesz,barr,carr,coh,M,Mt,iodata.freq0,iodata.deltaf,p,Data::min_uvcut,Data::Nt,(iodata.N<=64?2*Data::max_emiter:4*Data::max_emiter),Data::max_iter,Data::max_lbfgs,Data::lbfgs_m,Data::gpu_threads,Data::linsolv,(iodata.N<=64 && Data::solver_mode==SM_RTR_OSLM_LBFGS?SM_OSLM_LBFGS:(iodata.N<=64 && (Data::solver_mode==SM_RTR_OSRLM_RLBFGS||Data::solver_mode==SM_NSD_RLBFGS)?SM_OSLM_OSRLM_RLBFGS:Data::solver_mode)),Data::nulow,Data::nuhigh,Data::randomize,0,&mean_nu,&res_0,&res_1); /* 0 for dummy whiten flag */
        start_iter=0;
       } else {
-       sagefit_visibilities(iodata.u,iodata.v,iodata.w,iodata.x,iodata.N,iodata.Nbase,iodata.tilesz,barr,carr,coh,M,Mt,iodata.freq0,iodata.deltaf,p,Data::min_uvcut,Data::Nt,Data::max_emiter,Data::max_iter,Data::max_lbfgs,Data::lbfgs_m,Data::gpu_threads,Data::linsolv,Data::solver_mode,Data::nulow,Data::nuhigh,Data::randomize,&mean_nu,&res_0,&res_1);
+       sagefit_visibilities(iodata.u,iodata.v,iodata.w,iodata.x,iodata.N,iodata.Nbase,iodata.tilesz,barr,carr,coh,M,Mt,iodata.freq0,iodata.deltaf,p,Data::min_uvcut,Data::Nt,Data::max_emiter,Data::max_iter,Data::max_lbfgs,Data::lbfgs_m,Data::gpu_threads,Data::linsolv,Data::solver_mode,Data::nulow,Data::nuhigh,Data::randomize,0,&mean_nu,&res_0,&res_1);
       }
 #endif /* !HAVE_CUDA */
 #ifdef HAVE_CUDA
       if (start_iter) {
-       sagefit_visibilities_dual_pt_flt(iodata.u,iodata.v,iodata.w,iodata.x,iodata.N,iodata.Nbase,iodata.tilesz,barr,carr,coh,M,Mt,iodata.freq0,iodata.deltaf,p,Data::min_uvcut,Data::Nt,2*Data::max_emiter,Data::max_iter,Data::max_lbfgs,Data::lbfgs_m,Data::gpu_threads,Data::linsolv,(Data::solver_mode==SM_RTR_OSLM_LBFGS?SM_OSLM_LBFGS:(Data::solver_mode==SM_RTR_OSRLM_RLBFGS?SM_OSLM_OSRLM_RLBFGS:Data::solver_mode)),Data::nulow,Data::nuhigh,Data::randomize,&mean_nu,&res_0,&res_1);
+       sagefit_visibilities_dual_pt_flt(iodata.u,iodata.v,iodata.w,iodata.x,iodata.N,iodata.Nbase,iodata.tilesz,barr,carr,coh,M,Mt,iodata.freq0,iodata.deltaf,p,Data::min_uvcut,Data::Nt,(iodata.N<=64?2*Data::max_emiter:4*Data::max_emiter),Data::max_iter,Data::max_lbfgs,Data::lbfgs_m,Data::gpu_threads,Data::linsolv,(iodata.N<=64 && Data::solver_mode==SM_RTR_OSLM_LBFGS?SM_OSLM_LBFGS:(iodata.N<=64 && (Data::solver_mode==SM_RTR_OSRLM_RLBFGS||Data::solver_mode==SM_NSD_RLBFGS)?SM_OSLM_OSRLM_RLBFGS:Data::solver_mode)),Data::nulow,Data::nuhigh,Data::randomize,&mean_nu,&res_0,&res_1);
        start_iter=0;
       } else {
        sagefit_visibilities_dual_pt_flt(iodata.u,iodata.v,iodata.w,iodata.x,iodata.N,iodata.Nbase,iodata.tilesz,barr,carr,coh,M,Mt,iodata.freq0,iodata.deltaf,p,Data::min_uvcut,Data::Nt,Data::max_emiter,Data::max_iter,Data::max_lbfgs,Data::lbfgs_m,Data::gpu_threads,Data::linsolv,Data::solver_mode,Data::nulow,Data::nuhigh,Data::randomize,&mean_nu,&res_0,&res_1);
@@ -301,11 +310,11 @@ cout<<"Slave "<<myrank<<" quitting"<<endl;
        }
  
 #ifndef HAVE_CUDA
-       sagefit_visibilities_admm(iodata.u,iodata.v,iodata.w,iodata.x,iodata.N,iodata.Nbase,iodata.tilesz,barr,carr,coh,M,Mt,iodata.freq0,iodata.deltaf,p,Y,Z,Data::min_uvcut,Data::Nt,Data::max_emiter,Data::max_iter,0,Data::lbfgs_m,Data::gpu_threads,Data::linsolv,Data::solver_mode,Data::nulow,Data::nuhigh,Data::randomize,admm_rho,&mean_nu,&res_0,&res_1);
+       sagefit_visibilities_admm(iodata.u,iodata.v,iodata.w,iodata.x,iodata.N,iodata.Nbase,iodata.tilesz,barr,carr,coh,M,Mt,iodata.freq0,iodata.deltaf,p,Y,Z,Data::min_uvcut,Data::Nt,Data::max_emiter,Data::max_iter,0,Data::lbfgs_m,Data::gpu_threads,Data::linsolv,Data::solver_mode,Data::nulow,Data::nuhigh,Data::randomize,arho,&mean_nu,&res_0,&res_1);
 #endif /* !HAVE_CUDA */
 #ifdef HAVE_CUDA
-       //sagefit_visibilities_admm(iodata.u,iodata.v,iodata.w,iodata.x,iodata.N,iodata.Nbase,iodata.tilesz,barr,carr,coh,M,Mt,iodata.freq0,iodata.deltaf,p,Y,Z,Data::min_uvcut,Data::Nt,Data::max_emiter,Data::max_iter,0,Data::lbfgs_m,Data::gpu_threads,Data::linsolv,Data::solver_mode,Data::nulow,Data::nuhigh,Data::randomize,admm_rho,&mean_nu,&res_0,&res_1);
-       sagefit_visibilities_admm_dual_pt_flt(iodata.u,iodata.v,iodata.w,iodata.x,iodata.N,iodata.Nbase,iodata.tilesz,barr,carr,coh,M,Mt,iodata.freq0,iodata.deltaf,p,Y,Z,Data::min_uvcut,Data::Nt,Data::max_emiter,Data::max_iter,0,Data::lbfgs_m,Data::gpu_threads,Data::linsolv,Data::solver_mode,Data::nulow,Data::nuhigh,Data::randomize,admm_rho,&mean_nu,&res_0,&res_1);
+       //sagefit_visibilities_admm(iodata.u,iodata.v,iodata.w,iodata.x,iodata.N,iodata.Nbase,iodata.tilesz,barr,carr,coh,M,Mt,iodata.freq0,iodata.deltaf,p,Y,Z,Data::min_uvcut,Data::Nt,Data::max_emiter,Data::max_iter,0,Data::lbfgs_m,Data::gpu_threads,Data::linsolv,Data::solver_mode,Data::nulow,Data::nuhigh,Data::randomize,arho,&mean_nu,&res_0,&res_1);
+       sagefit_visibilities_admm_dual_pt_flt(iodata.u,iodata.v,iodata.w,iodata.x,iodata.N,iodata.Nbase,iodata.tilesz,barr,carr,coh,M,Mt,iodata.freq0,iodata.deltaf,p,Y,Z,Data::min_uvcut,Data::Nt,Data::max_emiter,Data::max_iter,0,Data::lbfgs_m,Data::gpu_threads,Data::linsolv,Data::solver_mode,Data::nulow,Data::nuhigh,Data::randomize,arho,&mean_nu,&res_0,&res_1);
 #endif /* HAVE_CUDA */
       }
 
@@ -314,10 +323,25 @@ cout<<"Slave "<<myrank<<" quitting"<<endl;
       if (admm==0) {
        /* Y is set to 0 : so original is just rho * J*/
        my_dcopy(iodata.N*8*Mt, p, 1, Y, 1);
-       my_dscal(iodata.N*8*Mt, admm_rho, Y);
+       /* scale by individual rho for each cluster */
+       /* if rho<=0, do nothing */
+       ck=0;
+       for (ci=0; ci<M; ci++) {
+        /* Y will be set to 0 if rho<=0 */
+        my_dscal(iodata.N*8*carr[ci].nchunk, arho[ci], &Y[ck]);
+        ck+=iodata.N*8*carr[ci].nchunk;
+       }
       } else {
-       my_daxpy(iodata.N*8*Mt, p, admm_rho, Y);
+       ck=0;
+       for (ci=0; ci<M; ci++) {
+        if (arho[ci]>0.0) {
+         my_daxpy(iodata.N*8*carr[ci].nchunk, &p[ck], arho[ci], &Y[ck]);
+        }
+        ck+=iodata.N*8*carr[ci].nchunk;
+//cout<<"Clus="<<ci<<" Chunk="<<carr[ci].nchunk<<" Rho="<<arho[ci]<<endl;
+       }
       }
+
       MPI_Send(Y, iodata.N*8*Mt, MPI_DOUBLE, 0,TAG_YDATA, MPI_COMM_WORLD);
       /* for initial ADMM iteration, get back Y with common unitary ambiguity */
       if (admm==0) {
@@ -329,7 +353,14 @@ cout<<"Slave "<<myrank<<" quitting"<<endl;
      
       /* update Y_i <= Y_i + rho (J_i-B_i Z)
           since we already have Y_i + rho J_i, only need -rho (B_i Z) */
-      my_daxpy(iodata.N*8*Mt, Z, -admm_rho, Y);
+      ck=0;
+      for (ci=0; ci<M; ci++) {
+        if (arho[ci]>0.0) {
+         my_daxpy(iodata.N*8*carr[ci].nchunk, &Z[ck], -arho[ci], &Y[ck]);
+        }
+        ck+=iodata.N*8*carr[ci].nchunk;
+      }
+
       /* calculate primal residual J-BZ */
       my_dcopy(iodata.N*8*Mt, p, 1, pres, 1);
       my_daxpy(iodata.N*8*Mt, Z, -1.0, pres);
@@ -365,21 +396,21 @@ cout<<"Slave "<<myrank<<" quitting"<<endl;
     /* if residual has increased too much, or all are flagged (0 residual)
       or NaN
       reset solutions to original
-      initial values */
-    if (res_1==0.0 || !isfinite(res_1) || res_1>res_ratio*res_prev) {
+      initial values : use residual at 1st ADMM */
+    if (res_01==0.0 || !isfinite(res_01) || res_01>res_ratio*res_prev) {
       cout<<"Resetting Solution"<<endl;
       /* reset solutions so next iteration has default initial values */
       memcpy(p,pinit,(size_t)iodata.N*8*Mt*sizeof(double));
       /* also assume iterations have restarted from scratch */
       start_iter=1;
       /* also forget min residual (otherwise will try to reset it always) */
-      res_prev=res_1;
-    } else if (res_1<res_prev) { /* only store the min value */
-     res_prev=res_1;
+      res_prev=res_01;
+    } else if (res_01<res_prev) { /* only store the min value */
+     res_prev=res_01;
     }
     end_time = time(0);
     elapsed_time = ((double) (end_time-start_time)) / 60.0;
-    if (solver_mode==SM_OSLM_OSRLM_RLBFGS||solver_mode==SM_RLM_RLBFGS||solver_mode==SM_RTR_OSRLM_RLBFGS) { 
+    if (solver_mode==SM_OSLM_OSRLM_RLBFGS||solver_mode==SM_RLM_RLBFGS||solver_mode==SM_RTR_OSRLM_RLBFGS || solver_mode==SM_NSD_RLBFGS) { 
      cout<<"nu="<<mean_nu<<endl;
     }
     cout<<myrank<< ": Timeslot: "<<tilex<<" residual: initial="<<res_00<<"/"<<res_0<<",final="<<res_01<<"/"<<res_1<<", Time spent="<<elapsed_time<<" minutes"<<endl;
@@ -463,6 +494,7 @@ cout<<"Slave "<<myrank<<" quitting"<<endl;
   free(Z);
   free(Y);
   free(pres);
+  free(arho);
   /**********************************************************/
 
    cout<<"Done."<<endl;    

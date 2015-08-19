@@ -573,11 +573,11 @@ residual_threadfn_onefreq(void *data) {
          fratio=log(freq0/t->carr[cm].f0[cn]);
          fratio1=fratio*fratio;
          fratio2=fratio1*fratio;
-         /* catch -ve sI */
+         /* catch -ve and 0 sI */
          if (t->carr[cm].sI0[cn]>0.0) {
           prodterm=exp(log(t->carr[cm].sI0[cn])+t->carr[cm].spec_idx[cn]*fratio+t->carr[cm].spec_idx1[cn]*fratio1+t->carr[cm].spec_idx2[cn]*fratio2)*(cosph+_Complex_I*sinph);
          } else {
-          prodterm=-exp(log(-t->carr[cm].sI0[cn])+t->carr[cm].spec_idx[cn]*fratio+t->carr[cm].spec_idx1[cn]*fratio1+t->carr[cm].spec_idx2[cn]*fratio2)*(cosph+_Complex_I*sinph);
+          prodterm=(t->carr[cm].sI0[cn]==0.0?0.0:-exp(log(-t->carr[cm].sI0[cn])+t->carr[cm].spec_idx[cn]*fratio+t->carr[cm].spec_idx1[cn]*fratio1+t->carr[cm].spec_idx2[cn]*fratio2)*(cosph+_Complex_I*sinph));
          }
        } else {
          prodterm=t->carr[cm].sI[cn]*(cosph+_Complex_I*sinph);
@@ -846,11 +846,11 @@ residual_threadfn_multifreq(void *data) {
          fratio=log(freq0/t->carr[cm].f0[cn]);
          fratio1=fratio*fratio;
          fratio2=fratio1*fratio;
-         /* catch -ve sI */
+         /* catch -ve and 0 sI */
          if (t->carr[cm].sI0[cn]>0.0) {
           prodterm=exp(log(t->carr[cm].sI0[cn])+t->carr[cm].spec_idx[cn]*fratio+t->carr[cm].spec_idx1[cn]*fratio1+t->carr[cm].spec_idx2[cn]*fratio2)*(cosph+_Complex_I*sinph);
          } else {
-          prodterm=-exp(log(-t->carr[cm].sI0[cn])+t->carr[cm].spec_idx[cn]*fratio+t->carr[cm].spec_idx1[cn]*fratio1+t->carr[cm].spec_idx2[cn]*fratio2)*(cosph+_Complex_I*sinph);
+          prodterm=(t->carr[cm].sI0[cn]==0.0?0.0:-exp(log(-t->carr[cm].sI0[cn])+t->carr[cm].spec_idx[cn]*fratio+t->carr[cm].spec_idx1[cn]*fratio1+t->carr[cm].spec_idx2[cn]*fratio2)*(cosph+_Complex_I*sinph));
          }
        } else {
          prodterm=t->carr[cm].sI[cn]*(cosph+_Complex_I*sinph);
@@ -1087,11 +1087,11 @@ visibilities_threadfn_multifreq(void *data) {
          fratio=log(freq0/t->carr[cm].f0[cn]);
          fratio1=fratio*fratio;
          fratio2=fratio1*fratio;
-         /* catch -ve sI */ 
+         /* catch -ve and 0 sI */ 
          if (t->carr[cm].sI0[cn]>0.0) {
           prodterm=exp(log(t->carr[cm].sI0[cn])+t->carr[cm].spec_idx[cn]*fratio+t->carr[cm].spec_idx1[cn]*fratio1+t->carr[cm].spec_idx2[cn]*fratio2)*(cosph+_Complex_I*sinph);
          } else {
-          prodterm=-exp(log(-t->carr[cm].sI0[cn])+t->carr[cm].spec_idx[cn]*fratio+t->carr[cm].spec_idx1[cn]*fratio1+t->carr[cm].spec_idx2[cn]*fratio2)*(cosph+_Complex_I*sinph);
+          prodterm=(t->carr[cm].sI0[cn]==0.0?0.0:-exp(log(-t->carr[cm].sI0[cn])+t->carr[cm].spec_idx[cn]*fratio+t->carr[cm].spec_idx1[cn]*fratio1+t->carr[cm].spec_idx2[cn]*fratio2)*(cosph+_Complex_I*sinph));
          }
        } else {
          prodterm=t->carr[cm].sI[cn]*(cosph+_Complex_I*sinph);
@@ -1151,7 +1151,7 @@ visibilities_threadfn_multifreq(void *data) {
 
 /* FIXME: tail timeslots still not written properly (probably due to flagging while reading data) */
 int
-predict_visibilities_multifreq(double *u,double *v,double *w,double *x,int N,int Nbase,int tilesz,baseline_t *barr, clus_source_t *carr, int M,double *freqs,int Nchan, double fdelta,double tdelta, double dec0,int Nt) {
+predict_visibilities_multifreq(double *u,double *v,double *w,double *x,int N,int Nbase,int tilesz,baseline_t *barr, clus_source_t *carr, int M,double *freqs,int Nchan, double fdelta,double tdelta, double dec0,int Nt, int add_to_data) {
   int nth,nth1,ci;
 
   int Nthb0,Nthb;
@@ -1177,8 +1177,10 @@ predict_visibilities_multifreq(double *u,double *v,double *w,double *x,int N,int
     exit(1);
   }
 
-  /* set output column to zero */
-  memset(x,0,sizeof(double)*8*Nbase*tilesz*Nchan);
+  if (!add_to_data) {
+   /* set output column to zero */
+   memset(x,0,sizeof(double)*8*Nbase*tilesz*Nchan);
+  }
 
   /* iterate over threads, allocating baselines per thread */
   ci=0;
@@ -1211,6 +1213,8 @@ predict_visibilities_multifreq(double *u,double *v,double *w,double *x,int N,int
     threaddata[nth].fdelta=fdelta/(double)Nchan;
     threaddata[nth].tdelta=tdelta;
     threaddata[nth].dec0=dec0;
+    threaddata[nth].add_to_data=add_to_data;
+    
    
     pthread_create(&th_array[nth],&attr,visibilities_threadfn_multifreq,(void*)(&threaddata[nth]));
     /* next baseline set */
@@ -1252,8 +1256,10 @@ predictwithgain_threadfn_multifreq(void *data) {
    /* iterate over the sky model and calculate contribution */
    /* for this x[8*ci:8*(ci+1)-1] */
    /* if this baseline is flagged, we do not compute */
-   for (cf=0; cf<t->Nchan; cf++) {
-    memset(&t->x[8*ci+cf*Ntilebase*8],0,sizeof(double)*8);
+   if (!t->add_to_data) { /* only model is written as output */
+    for (cf=0; cf<t->Nchan; cf++) {
+     memset(&t->x[8*ci+cf*Ntilebase*8],0,sizeof(double)*8);
+    }
    }
 
    /* stations for this baseline */
@@ -1303,11 +1309,11 @@ predictwithgain_threadfn_multifreq(void *data) {
          fratio=log(freq0/t->carr[cm].f0[cn]);
          fratio1=fratio*fratio;
          fratio2=fratio1*fratio;
-         /* catch -ve sI */
+         /* catch -ve and 0 sI */
          if (t->carr[cm].sI0[cn]>0.0) {
           prodterm=exp(log(t->carr[cm].sI0[cn])+t->carr[cm].spec_idx[cn]*fratio+t->carr[cm].spec_idx1[cn]*fratio1+t->carr[cm].spec_idx2[cn]*fratio2)*(cosph+_Complex_I*sinph);
          } else {
-          prodterm=-exp(log(-t->carr[cm].sI0[cn])+t->carr[cm].spec_idx[cn]*fratio+t->carr[cm].spec_idx1[cn]*fratio1+t->carr[cm].spec_idx2[cn]*fratio2)*(cosph+_Complex_I*sinph);
+          prodterm=(t->carr[cm].sI0[cn]==0.0?0.0:-exp(log(-t->carr[cm].sI0[cn])+t->carr[cm].spec_idx[cn]*fratio+t->carr[cm].spec_idx1[cn]*fratio1+t->carr[cm].spec_idx2[cn]*fratio2)*(cosph+_Complex_I*sinph));
          }
        } else {
          prodterm=t->carr[cm].sI[cn]*(cosph+_Complex_I*sinph);
@@ -1364,12 +1370,44 @@ predictwithgain_threadfn_multifreq(void *data) {
      }
      }
    }
+  /* if valid cluster is given, correct with its solutions */
+   if (t->pinv) {
+    cm=t->ccid;
+    px=(ci+t->boff)/((Ntilebase+t->carr[cm].nchunk-1)/t->carr[cm].nchunk);
+    pm=&(t->pinv[8*t->N*px]);
+    G1[0]=(pm[sta1*8])+_Complex_I*(pm[sta1*8+1]);
+    G1[1]=(pm[sta1*8+2])+_Complex_I*(pm[sta1*8+3]);
+    G1[2]=(pm[sta1*8+4])+_Complex_I*(pm[sta1*8+5]);
+    G1[3]=(pm[sta1*8+6])+_Complex_I*(pm[sta1*8+7]);
+    G2[0]=(pm[sta2*8])+_Complex_I*(pm[sta2*8+1]);
+    G2[1]=(pm[sta2*8+2])+_Complex_I*(pm[sta2*8+3]);
+    G2[2]=(pm[sta2*8+4])+_Complex_I*(pm[sta2*8+5]);
+    G2[3]=(pm[sta2*8+6])+_Complex_I*(pm[sta2*8+7]);
+
+     /* now do correction, if any */
+     C[0]=t->x[8*ci]+_Complex_I*t->x[8*ci+1];
+     C[1]=t->x[8*ci+2]+_Complex_I*t->x[8*ci+3];
+     C[2]=t->x[8*ci+4]+_Complex_I*t->x[8*ci+5];
+     C[3]=t->x[8*ci+6]+_Complex_I*t->x[8*ci+7];
+     /* T1=G1*C  */
+     amb(G1,C,T1);
+     /* T2=T1*G2' */
+     ambt(T1,G2,T2);
+     t->x[8*ci]=creal(T2[0]);
+     t->x[8*ci+1]=cimag(T2[0]);
+     t->x[8*ci+2]=creal(T2[1]);
+     t->x[8*ci+3]=cimag(T2[1]);
+     t->x[8*ci+4]=creal(T2[2]);
+     t->x[8*ci+5]=cimag(T2[2]);
+     t->x[8*ci+6]=creal(T2[3]);
+     t->x[8*ci+7]=cimag(T2[3]);
+   }
  }
  return NULL;
 }
 
 int
-predict_visibilities_multifreq_withsol(double *u,double *v,double *w,double *p,double *x,int *ignlist,int N,int Nbase,int tilesz,baseline_t *barr, clus_source_t *carr, int M,double *freqs,int Nchan, double fdelta,double tdelta,double dec0,int Nt) {
+predict_visibilities_multifreq_withsol(double *u,double *v,double *w,double *p,double *x,int *ignlist,int N,int Nbase,int tilesz,baseline_t *barr, clus_source_t *carr, int M,double *freqs,int Nchan, double fdelta,double tdelta,double dec0,int Nt, int add_to_data, int ccid, double rho) {
   int nth,nth1,ci;
 
   int Nthb0,Nthb;
@@ -1379,6 +1417,32 @@ predict_visibilities_multifreq_withsol(double *u,double *v,double *w,double *p,d
 
   int Nbase1=Nbase*tilesz;
 
+
+  int cm,cj;
+  double *pm,*pinv=0;
+  cm=-1;
+  /* find if any cluster is specified for correction of data */
+  for (cj=0; cj<M; cj++) { /* clusters */
+    /* check if cluster id == ccid to do a correction */
+    if (carr[cj].id==ccid) {
+     cm=cj;
+     ci=1; /* correction cluster found */
+    }
+  }
+  if (cm>=0) { /* valid cluser for correction */
+   /* allocate memory for inverse J */
+   if ((pinv=(double*)malloc((size_t)8*N*carr[cm].nchunk*sizeof(double)))==0) {
+     fprintf(stderr,"%s: %d: No free memory\n",__FILE__,__LINE__);
+     exit(1);
+   }
+   for (cj=0; cj<carr[cm].nchunk; cj++) {
+    pm=&(p[carr[cm].p[cj]]); /* start of solutions */
+    /* invert N solutions */
+    for (ci=0; ci<N; ci++) {
+     mat_invert(&pm[8*ci],&pinv[8*ci+8*N*cj], rho);
+    }
+   }
+  }
     
   /* calculate min baselines a thread can handle */
   Nthb0=(Nbase1+Nt-1)/Nt;
@@ -1427,6 +1491,11 @@ predict_visibilities_multifreq_withsol(double *u,double *v,double *w,double *p,d
     threaddata[nth].fdelta=fdelta/(double)Nchan;
     threaddata[nth].tdelta=tdelta;
     threaddata[nth].dec0=dec0;
+    threaddata[nth].add_to_data=add_to_data;
+    /* for correction of data */
+    threaddata[nth].pinv=pinv;
+    threaddata[nth].ccid=cm;
+
     
     pthread_create(&th_array[nth],&attr,predictwithgain_threadfn_multifreq,(void*)(&threaddata[nth]));
     /* next baseline set */

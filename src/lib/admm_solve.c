@@ -387,7 +387,7 @@ minimize_viz_full_pth(double *p, double *x, int m, int n, void *data) {
 
 int
 sagefit_visibilities_admm(double *u, double *v, double *w, double *x, int N,   
-   int Nbase, int tilesz,  baseline_t *barr,  clus_source_t *carr, complex double *coh, int M, int Mt, double freq0, double fdelta, double *pp, double *Y, double *BZ, double uvmin, int Nt, int max_emiter, int max_iter, int max_lbfgs, int lbfgs_m, int gpu_threads, int linsolv,int solver_mode,double nulow, double nuhigh,int randomize, double admm_rho, double *mean_nu, double *res_0, double *res_1) {
+   int Nbase, int tilesz,  baseline_t *barr,  clus_source_t *carr, complex double *coh, int M, int Mt, double freq0, double fdelta, double *pp, double *Y, double *BZ, double uvmin, int Nt, int max_emiter, int max_iter, int max_lbfgs, int lbfgs_m, int gpu_threads, int linsolv,int solver_mode,double nulow, double nuhigh,int randomize, double *admm_rho, double *mean_nu, double *res_0, double *res_1) {
 
   int  ci,cj,ck,tcj;
   double *p; // parameters: m x 1
@@ -511,7 +511,7 @@ printf("\n\ncluster %d iter=%d\n",cj,this_itermax);
         /* use a reasonable TR radius because cost function has extra 
        regularization NB: ADMM very sensitive to this */
        double Delta0=2.0; 
-       rtr_solve_nocuda_robust_admm(&p[carr[cj].p[ck]], &Y[carr[cj].p[ck]], &BZ[carr[cj].p[ck]], &xdummy[8*tcj*Nbase], N, ntiles*Nbase, this_itermax+5, this_itermax+10, Delta0, Delta0*0.125, admm_rho, nulow, nuhigh, info, &lmdata);
+       rtr_solve_nocuda_robust_admm(&p[carr[cj].p[ck]], &Y[carr[cj].p[ck]], &BZ[carr[cj].p[ck]], &xdummy[8*tcj*Nbase], N, ntiles*Nbase, this_itermax+5, this_itermax+10, Delta0, Delta0*0.125, admm_rho[cj], nulow, nuhigh, info, &lmdata);
        if (ci==max_emiter-1){
             robust_nuM[cj]+=lmdata.robust_nu;
        }
@@ -563,6 +563,8 @@ printf("residual init=%lf final=%lf\n\n",init_res,final_res);
   free(robust_nuM);
   if (robust_nu0<nulow) {
      robust_nu0=nulow;
+  } else if (robust_nu0>nuhigh) {
+     robust_nu0=nuhigh;
   }
 
   /* final residual calculation */
@@ -601,7 +603,7 @@ pipeline_slave_code_admm_flt(void *data)
   sync_barrier(&(td->pline->gate2)); /* stop at gate 2 */
   /* do work : only one solver */
   //printf("state=%d, thread %d\n",gd->status[tid],tid);
-  if (gd->status[tid]==PT_DO_WORK_RRTR ) {
+  if (gd->status[tid]==PT_DO_WORK_RRTR || gd->status[tid]==PT_DO_WORK_NSD) {
 /************************* work *********************/
   me_data_t *t=(me_data_t *)gd->lmdata[tid];
   /* divide the tiles into chunks tilesz/nchunk */
@@ -626,10 +628,13 @@ pipeline_slave_code_admm_flt(void *data)
       ntiles=t->tilesz-cj;
      }
 
-      /* max trust region radius: keep reasonable */
-      float Delta0=2.0f;
-      /* storage (float) 8N*(BlocksPerGrid+8) + 8N*5 + 8*M + 8*Nbase + 2*Nbase + N + M */
-      ret=rtr_solve_cuda_robust_admm_fl(&gd->p[tid][ci*(gd->M[tid])], &gd->Y[tid][ci*(gd->M[tid])], &gd->Z[tid][ci*(gd->M[tid])], &gd->x[tid][8*cj*t->Nbase], gd->M[tid]/8, ntiles*t->Nbase, gd->itermax[tid]+5, gd->itermax[tid]+10, Delta0, Delta0*0.125f, gd->admm_rho, gd->nulow, gd->nuhigh, gd->info[tid], gd->cbhandle[tid], gd->gWORK[tid],  cj, ntiles, (void*)gd->lmdata[tid]);
+      if (gd->status[tid]==PT_DO_WORK_NSD) {
+       ret=nsd_solve_cuda_robust_admm_fl(&gd->p[tid][ci*(gd->M[tid])], &gd->Y[tid][ci*(gd->M[tid])], &gd->Z[tid][ci*(gd->M[tid])], &gd->x[tid][8*cj*t->Nbase], gd->M[tid]/8, ntiles*t->Nbase, gd->itermax[tid]+15, gd->admm_rho[tid], gd->nulow, gd->nuhigh, gd->info[tid], gd->cbhandle[tid], gd->gWORK[tid],  cj, ntiles, (void*)gd->lmdata[tid]);
+      } else {
+       /* max trust region radius: keep reasonable */
+       float Delta0=2.0f;
+       ret=rtr_solve_cuda_robust_admm_fl(&gd->p[tid][ci*(gd->M[tid])], &gd->Y[tid][ci*(gd->M[tid])], &gd->Z[tid][ci*(gd->M[tid])], &gd->x[tid][8*cj*t->Nbase], gd->M[tid]/8, ntiles*t->Nbase, gd->itermax[tid]+10, Delta0, Delta0*0.125f, gd->admm_rho[tid], gd->nulow, gd->nuhigh, gd->info[tid], gd->cbhandle[tid], gd->gWORK[tid],  cj, ntiles, (void*)gd->lmdata[tid]);
+      }
 
      init_res+=gd->info[tid][0];
      final_res+=gd->info[tid][1];
@@ -712,7 +717,7 @@ destroy_pipeline_admm_flt(th_pipeline *pline)
 //#define DEBUG
 int
 sagefit_visibilities_admm_dual_pt_flt(double *u, double *v, double *w, double *x, int N, 
-   int Nbase, int tilesz,  baseline_t *barr,  clus_source_t *carr, complex double *coh, int M, int Mt, double freq0, double fdelta, double *pp, double *Y, double *BZ, double uvmin, int Nt, int max_emiter, int max_iter, int max_lbfgs, int lbfgs_m, int gpu_threads, int linsolv,int solver_mode,  double nulow, double nuhigh, int randomize,double admm_rho, double *mean_nu, double *res_0, double *res_1) {
+   int Nbase, int tilesz,  baseline_t *barr,  clus_source_t *carr, complex double *coh, int M, int Mt, double freq0, double fdelta, double *pp, double *Y, double *BZ, double uvmin, int Nt, int max_emiter, int max_iter, int max_lbfgs, int lbfgs_m, int gpu_threads, int linsolv,int solver_mode,  double nulow, double nuhigh, int randomize,double *admm_rho, double *mean_nu, double *res_0, double *res_1) {
 
 
   int  ci,cj;
@@ -857,23 +862,20 @@ sagefit_visibilities_admm_dual_pt_flt(double *u, double *v, double *w, double *x
   tpg.status[0]=tpg.status[1]=PT_DO_AGPU;
   /* also calculate the total storage needed to be allocated on a GPU */
    /* determine total size for memory allocation */
-   int Mm=8*N;
    int64_t data_sz=0;
-   /* size for RTR (float)  : M*( 13 + ntiles*Nbase/128 +1+1) + 18*ntiles*Nbase
-        where M: no of stations (params/8) ntiles: tile size Nbase: baselines  
+   /* size for RTR/NSD (float), 128 is the ThreadsPerBlock   
+      NSD is a bit lower
    */
-   int64_t data_sz_rtr=0;
-   /* 2 x Nbase more than normal RTR for weight, log(weight) */
-   data_sz_rtr=(N*(13+Nbase1/128+1+1)+20*Nbase1)*sizeof(float);
-   /* size for ROBUSTLM */
-   data_sz=(int64_t)(n+Mm*n+Mm*Mm+Mm+Mm*Mm+Mm+Mm+Mm+Mm+Nbase1*8+n+n+n+n)*sizeof(float)+(int64_t)Nbase1*2*sizeof(char);
-   data_sz=MAX(data_sz,data_sz_rtr);
-   data_sz+=(int64_t)Mm*sizeof(float);
+  if (solver_mode==SM_NSD_RLBFGS) {
+   data_sz=(8*N*(7+(Nbase1+128-1)/128)+N+8*Nbase1*2+3*Nbase1)*sizeof(float);
+  } else { /* default is RTR */
+   data_sz=(8*N*(11+(Nbase1+128-1)/128)+N+8*Nbase1*2+3*Nbase1)*sizeof(float);
+  }
+
   tpg.data_size=data_sz;
   tpg.nulow=nulow;
   tpg.nuhigh=nuhigh;
   tpg.randomize=randomize;
-  tpg.admm_rho=(float)admm_rho;
   sync_barrier(&(tp.gate2)); /* sync at gate 2*/
 
   sync_barrier(&(tp.gate1)); /* sync at gate 1*/
@@ -948,6 +950,7 @@ sagefit_visibilities_admm_dual_pt_flt(double *u, double *v, double *w, double *x
      tpg.p[0]=&pf[carr[c0].p[0]]; /* length carr[c0].nchunk times */
      tpg.Y[0]=&Yf[carr[c0].p[0]]; /* length carr[c0].nchunk times */
      tpg.Z[0]=&Zf[carr[c0].p[0]]; /* length carr[c0].nchunk times */
+     tpg.admm_rho[0]=(float)admm_rho[c0];
      tpg.x[0]=xdummy0f;
      tpg.M[0]=8*N; /* even though size of p is > M, dont change this */
      tpg.N[0]=n; /* Nbase*tilesz*8 */
@@ -960,6 +963,7 @@ sagefit_visibilities_admm_dual_pt_flt(double *u, double *v, double *w, double *x
      tpg.p[1]=&pf[carr[c1].p[0]]; /* length carr[c1].nchunk times */
      tpg.Y[1]=&Yf[carr[c1].p[0]]; /* length carr[c1].nchunk times */
      tpg.Z[1]=&Zf[carr[c1].p[0]]; /* length carr[c1].nchunk times */
+     tpg.admm_rho[1]=(float)admm_rho[c1];
      tpg.x[1]=xdummy1f;
      tpg.M[1]=8*N; /* even though size of p is > M, dont change this */
      tpg.N[1]=n; /* Nbase*tilesz*8 */
@@ -971,7 +975,11 @@ sagefit_visibilities_admm_dual_pt_flt(double *u, double *v, double *w, double *x
 /**************************************************************************/
 
      /* both threads do work */
-     tpg.status[0]=tpg.status[1]=PT_DO_WORK_RRTR;
+     if (solver_mode==SM_NSD_RLBFGS) {
+      tpg.status[0]=tpg.status[1]=PT_DO_WORK_NSD;
+     } else {
+      tpg.status[0]=tpg.status[1]=PT_DO_WORK_RRTR;
+     }
   sync_barrier(&(tp.gate2)); /* sync at gate 2 */
   sync_barrier(&(tp.gate1)); /* sync at gate 1 */
      tpg.status[0]=tpg.status[1]=PT_DO_NOTHING;
@@ -1037,6 +1045,7 @@ printf("1: %lf -> %lf 2: %lf -> %lf\n\n\n",info0[0],info0[1],info1[0],info1[1]);
      tpg.p[0]=&pf[carr[c0].p[0]];
      tpg.Y[0]=&Yf[carr[c0].p[0]];
      tpg.Z[0]=&Zf[carr[c0].p[0]];
+     tpg.admm_rho[0]=(float)admm_rho[c0];
      tpg.x[0]=xdummy0f;
      tpg.M[0]=8*N;
      tpg.N[0]=n;
@@ -1046,7 +1055,11 @@ printf("1: %lf -> %lf 2: %lf -> %lf\n\n\n",info0[0],info0[1],info1[0],info1[1]);
      tpg.linsolv=linsolv;
      tpg.lmdata[0]=&lmdata0;
 
-     tpg.status[0]=PT_DO_WORK_RRTR;
+     if (solver_mode==SM_NSD_RLBFGS) {
+      tpg.status[0]=PT_DO_WORK_NSD;
+     } else {
+      tpg.status[0]=PT_DO_WORK_RRTR;
+     }
 
      tpg.status[1]=PT_DO_NOTHING;
   sync_barrier(&(tp.gate2)); /* sync at gate 2 */
@@ -1106,9 +1119,12 @@ printf("1: %lf -> %lf\n\n\n",info0[0],info0[1]);
     printf("mean nu=%lf\n",robust_nu0);
 #endif
     free(robust_nuM);
-    if (robust_nu0<nulow) {
+  if (robust_nu0<nulow) {
      robust_nu0=nulow;
-    }
+  } else if (robust_nu0>nuhigh) {
+     robust_nu0=nuhigh;
+  }
+
   /******** free threads ***************/
   sync_barrier(&(tp.gate1)); /* sync at gate 1*/
   tpg.status[0]=tpg.status[1]=PT_DO_DGPU;
@@ -1139,7 +1155,7 @@ printf("1: %lf -> %lf\n\n\n",info0[0],info0[1]);
 
 int
 sagefit_visibilities_admm_dual_pt_flt_one(double *u, double *v, double *w, double *x, int N, 
-   int Nbase, int tilesz,  baseline_t *barr,  clus_source_t *carr, complex double *coh, int M, int Mt, double freq0, double fdelta, double *pp, double *Y, double *BZ, double uvmin, int Nt, int max_emiter, int max_iter, int max_lbfgs, int lbfgs_m, int gpu_threads, int linsolv,int solver_mode,  double nulow, double nuhigh, int randomize,double admm_rho, double *mean_nu, double *res_0, double *res_1) {
+   int Nbase, int tilesz,  baseline_t *barr,  clus_source_t *carr, complex double *coh, int M, int Mt, double freq0, double fdelta, double *pp, double *Y, double *BZ, double uvmin, int Nt, int max_emiter, int max_iter, int max_lbfgs, int lbfgs_m, int gpu_threads, int linsolv,int solver_mode,  double nulow, double nuhigh, int randomize,double *admm_rho, double *mean_nu, double *res_0, double *res_1) {
 
 
   int  ci,cj;
@@ -1284,24 +1300,16 @@ sagefit_visibilities_admm_dual_pt_flt_one(double *u, double *v, double *w, doubl
   tpg.status[0]=tpg.status[1]=PT_DO_AGPU;
   /* also calculate the total storage needed to be allocated on a GPU */
    /* determine total size for memory allocation */
-   int Mm=8*N;
    int64_t data_sz=0;
-   /* size for RTR (float)  : M*( 13 + ntiles*Nbase/128 +1+1) + 18*ntiles*Nbase
-        where M: no of stations (params/8) ntiles: tile size Nbase: baselines  
+   /* size for RTR/NSD (float), 128 is the ThreadsPerBlock   
+      NSD is a bit lower, but use the same
    */
-   int64_t data_sz_rtr=0;
-   /* 2 x Nbase more than normal RTR for weight, log(weight) */
-   data_sz_rtr=(N*(13+Nbase1/128+1+1)+20*Nbase1)*sizeof(float);
-   /* size for ROBUSTLM */
-   data_sz=(int64_t)(n+Mm*n+Mm*Mm+Mm+Mm*Mm+Mm+Mm+Mm+Mm+Nbase1*8+n+n+n+n)*sizeof(float)+(int64_t)Nbase1*2*sizeof(char);
-   data_sz=MAX(data_sz,data_sz_rtr);
-   data_sz+=(int64_t)Mm*sizeof(float);
+  data_sz=(8*N*(11+(Nbase1+128-1)/128)+N+8*Nbase1*2+3*Nbase1)*sizeof(float);
 
   tpg.data_size=data_sz;
   tpg.nulow=nulow;
   tpg.nuhigh=nuhigh;
   tpg.randomize=randomize;
-  tpg.admm_rho=(float)admm_rho;
   sync_barrier(&(tp.gate2)); /* sync at gate 2*/
 
   sync_barrier(&(tp.gate1)); /* sync at gate 1*/
@@ -1358,6 +1366,7 @@ sagefit_visibilities_admm_dual_pt_flt_one(double *u, double *v, double *w, doubl
      tpg.p[0]=&pf[carr[c0].p[0]];
      tpg.Y[0]=&Yf[carr[c0].p[0]];
      tpg.Z[0]=&Zf[carr[c0].p[0]];
+     tpg.admm_rho[0]=(float)admm_rho[c0];
      tpg.x[0]=xdummy0f;
      tpg.M[0]=8*N;
      tpg.N[0]=n;
@@ -1427,9 +1436,13 @@ printf("1: %lf -> %lf\n\n\n",info0[0],info0[1]);
     printf("mean nu=%lf\n",robust_nu0);
 #endif
     free(robust_nuM);
-    if (robust_nu0<nulow) {
+  if (robust_nu0<nulow) {
      robust_nu0=nulow;
-    }
+  } else if (robust_nu0>nuhigh) {
+     robust_nu0=nuhigh;
+  }
+
+
   /******** free threads ***************/
   sync_barrier(&(tp.gate1)); /* sync at gate 1*/
   tpg.status[0]=tpg.status[1]=PT_DO_DGPU;

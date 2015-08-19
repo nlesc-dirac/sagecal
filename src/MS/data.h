@@ -114,6 +114,7 @@ namespace Data
     extern char *ignorefile;
     extern double nulow,nuhigh;
     extern int randomize;
+    extern int whiten;
     extern int DoSim; /* if 1, simulation mode */
     extern int doChan; /* if 1, solve for each channel in multi channel data */
     extern int DoDiag; /* if >0, enables diagnostics (Leverage) 1: write leverage as output (no residual), 2: only calculate fractions of leverage/noise */
@@ -122,6 +123,7 @@ namespace Data
     extern int Nadmm; /* ADMM iterations >=1 */
     extern int Npoly; /* polynomial order >=1 */
     extern double admm_rho; /* regularization */
+    extern char *admm_rho_file; /* text file for regularization of each cluster */
     /* for debugging, upper limit on time slots */
     extern int Nmaxtime;
 }

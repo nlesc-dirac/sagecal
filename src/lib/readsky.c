@@ -209,10 +209,10 @@ read_sky_cluster(const char *skymodel, const char *clusterfile, clus_source_t **
   /* each element of list is a list of source names */
   if ((cfp=fopen(clusterfile,"r"))==0) {
       fprintf(stderr,"%s: %d: no file\n",__FILE__,__LINE__);
-      return 1;
+      exit(1);
   }
   /* allocate memory for buffer */
-  buff_len = 2048; /* FIXME: handle long names */
+  buff_len = MAX_SNAME; /* handle long names */
   if((buff = (char*)malloc(sizeof(char)*(size_t)(buff_len)))==NULL) {
         fprintf(stderr,"%s: %d: No free memory\n",__FILE__,__LINE__);
         exit(1);
@@ -231,7 +231,7 @@ read_sky_cluster(const char *skymodel, const char *clusterfile, clus_source_t **
      /* new cluster found */
      if ((clus= (clust_t*)malloc(sizeof(clust_t)))==0) {
             fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
-            return 1;
+            exit(1);
      }
      sscanf(buff,"%d",&clus->id);
      clus->slist=NULL;
@@ -248,11 +248,11 @@ read_sky_cluster(const char *skymodel, const char *clusterfile, clus_source_t **
       /* source found for this cluster */
       if ((sclus= (clust_n*)malloc(sizeof(clust_n)))==0) {
             fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
-            return 1;
+            exit(1);
       }     
       if ((sclus->name=(char*)malloc((size_t)(strlen(buff)+1)*sizeof(char)))==0) {
             fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
-            return 1;
+            exit(1);
       }
       strcpy(sclus->name,buff);
       clus->slist=g_list_prepend(clus->slist,sclus);
@@ -277,10 +277,10 @@ read_sky_cluster(const char *skymodel, const char *clusterfile, clus_source_t **
   */
   if ((cfp=fopen(skymodel,"r"))==0) {
       fprintf(stderr,"%s: %d: no file\n",__FILE__,__LINE__);
-      return 1;
+      exit(1);
   }
 
-  if ((buff = (char*)realloc((void*)(buff),sizeof(char)*(size_t)(128)))==NULL) {
+  if ((buff = (char*)realloc((void*)(buff),sizeof(char)*(size_t)(MAX_SNAME)))==NULL) {
      fprintf(stderr,"%s: %d: No free memory\n",__FILE__,__LINE__);
      exit(1);
   }
@@ -298,12 +298,12 @@ read_sky_cluster(const char *skymodel, const char *clusterfile, clus_source_t **
     if (c!=EOF && c>0) {
       if ((hkey=(char*)malloc((size_t)(strlen(buff)+1)*sizeof(char)))==0) {
             fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
-            return 1;
+            exit(1);
       }    
       strcpy(hkey,buff);
       if ((source=(sinfo_t*)malloc(sizeof(sinfo_t)))==0) {
             fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
-            return 1;
+            exit(1);
       }      
       /* calculate l,m */
       /* Rad=(hr+min/60+sec/60*60)*pi/12 */
@@ -328,11 +328,11 @@ read_sky_cluster(const char *skymodel, const char *clusterfile, clus_source_t **
        fratio=log(freq0/f0);
        fratio1=fratio*fratio;
        fratio2=fratio1*fratio;
-       /* catch -ve sI */
+       /* catch -ve and 0 sI */
        if (sI>0.0) {
         source->sI=exp(log(sI)+spec_idx*fratio+spec_idx1*fratio1+spec_idx2*fratio2);
        } else {
-        source->sI=-exp(log(-sI)+spec_idx*fratio+spec_idx1*fratio1+spec_idx2*fratio2);
+        source->sI=(sI==0.0?0.0:-exp(log(-sI)+spec_idx*fratio+spec_idx1*fratio1+spec_idx2*fratio2));
        }
       } else {
        source->sI=sI;
@@ -365,7 +365,7 @@ read_sky_cluster(const char *skymodel, const char *clusterfile, clus_source_t **
        source->stype=STYPE_GAUSSIAN;
        if((exg=(exinfo_gaussian *)malloc(sizeof(exinfo_gaussian)))==0) {
          fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
-         return 1;
+         exit(1);
        } 
        exg->eX=2.0*eX; /* scale by 2 */
        exg->eY=2.0*eY;
@@ -387,7 +387,7 @@ read_sky_cluster(const char *skymodel, const char *clusterfile, clus_source_t **
        source->stype=STYPE_DISK;
        if((exd=(exinfo_disk*)malloc(sizeof(exinfo_disk)))==0) {
          fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
-         return 1;
+         exit(1);
        } 
        exd->eX=eX;
        /* negate angles */
@@ -407,7 +407,7 @@ read_sky_cluster(const char *skymodel, const char *clusterfile, clus_source_t **
        source->stype=STYPE_RING;
        if((exr=(exinfo_ring*)malloc(sizeof(exinfo_ring)))==0) {
          fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
-         return 1;
+         exit(1);
        } 
        exr->eX=eX;
        /* negate angles */
@@ -427,7 +427,7 @@ read_sky_cluster(const char *skymodel, const char *clusterfile, clus_source_t **
        source->stype=STYPE_SHAPELET;
        if((exs=(exinfo_shapelet*)malloc(sizeof(exinfo_shapelet)))==0) {
          fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
-         return 1;
+         exit(1);
        } 
        exs->eX=eX;
        exs->eY=eY;
@@ -474,7 +474,7 @@ read_sky_cluster(const char *skymodel, const char *clusterfile, clus_source_t **
   /* setup the array of cluster/source information */
   if ((*carr=(clus_source_t*)malloc((size_t)(g_list_length(clusters))*sizeof(clus_source_t)))==0) {
      fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
-     return 1;
+     exit(1);
   } 
   
   ci=0;
@@ -491,48 +491,48 @@ read_sky_cluster(const char *skymodel, const char *clusterfile, clus_source_t **
 
     if (((*carr)[ci].ll=(double*)malloc((size_t)((*carr)[ci].N)*sizeof(double)))==0) {
      fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
-     return 1;
+     exit(1);
     }
     if (((*carr)[ci].mm=(double*)malloc((size_t)((*carr)[ci].N)*sizeof(double)))==0) {
      fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
-     return 1;
+     exit(1);
     }
     if (((*carr)[ci].nn=(double*)malloc((size_t)((*carr)[ci].N)*sizeof(double)))==0) {
      fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
-     return 1;
+     exit(1);
     }
     if (((*carr)[ci].sI=(double*)malloc((size_t)((*carr)[ci].N)*sizeof(double)))==0) {
      fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
-     return 1;
+     exit(1);
     }
     if (((*carr)[ci].stype=(unsigned char*)malloc((size_t)((*carr)[ci].N)*sizeof(unsigned char)))==0) {
      fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
-     return 1;
+     exit(1);
     }
     if (((*carr)[ci].ex=(void**)malloc((size_t)((*carr)[ci].N)*sizeof(void*)))==0) {
      fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
-     return 1;
+     exit(1);
     }
     /* for handling multi channel data */
     if (((*carr)[ci].sI0=(double*)malloc((size_t)((*carr)[ci].N)*sizeof(double)))==0) {
      fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
-     return 1;
+     exit(1);
     }
     if (((*carr)[ci].f0=(double*)malloc((size_t)((*carr)[ci].N)*sizeof(double)))==0) {
      fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
-     return 1;
+     exit(1);
     }
     if (((*carr)[ci].spec_idx=(double*)malloc((size_t)((*carr)[ci].N)*sizeof(double)))==0) {
      fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
-     return 1;
+     exit(1);
     }
     if (((*carr)[ci].spec_idx1=(double*)malloc((size_t)((*carr)[ci].N)*sizeof(double)))==0) {
      fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
-     return 1;
+     exit(1);
     }
     if (((*carr)[ci].spec_idx2=(double*)malloc((size_t)((*carr)[ci].N)*sizeof(double)))==0) {
      fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
-     return 1;
+     exit(1);
     }
 
 
@@ -688,4 +688,56 @@ update_ignorelist(const char *ignfile, int *ignlist, int M, clus_source_t *carr)
     fclose(cfp);
     printf("Total %d clustes ignored in simulation.\n",cn);
     return 0;
+}
+
+
+
+
+int
+read_arho_fromfile(const char *admm_rho_file,int Mt,double *arho, int M, double *arhoslave) {
+
+  FILE *cfp;
+  int c,ci,cj,cluster_id,hybrid,hb;
+  double admm_rho;
+  if ((cfp=fopen(admm_rho_file,"r"))==0) {
+      fprintf(stderr,"%s: %d: no file\n",__FILE__,__LINE__);
+      exit(1);
+  }
+
+  c=skip_lines(cfp);
+  ci=0; /* store it in reverse order */
+  cj=0;
+  while(c>=0) {
+    c=fscanf(cfp,"%d %d %lf",&cluster_id,&hybrid,&admm_rho);
+    /* add this value to arho array */
+    if (c!=EOF && c>0) {
+      /* found a valid line */
+      arhoslave[M-1-cj]=admm_rho; /* reverse order */
+      for (hb=0; hb<hybrid; hb++) {
+        if (hb==0) {
+         arhoslave[M-1-cj]=admm_rho; /* reverse order */
+         //printf("clus=%d arr=%d rhoslave=%lf\n",cluster_id,M-1-cj,admm_rho);
+         cj++;
+        }
+        arho[Mt-1-ci]=admm_rho; /* reverse order */
+        //printf("clus=%d arr=%d rho=%lf\n",cluster_id,Mt-1-ci,admm_rho);
+        if (ci<Mt-1) {
+         ci++;
+        } else {
+         /* array size does not match one given by text file */
+         break;
+        }
+      }
+    }
+    c=skip_restof_line(cfp);
+    c=skip_lines(cfp);
+  }
+  /* report any errors */
+  if (!(c==EOF && ci==Mt-1)) {
+    fprintf(stderr,"%s: %d: Error: cluster numbers in cluster file and regularization file do not match up.\n",__FILE__,__LINE__);
+  }
+  fclose(cfp);
+
+
+ return 0;
 }

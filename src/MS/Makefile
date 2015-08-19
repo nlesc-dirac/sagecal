@@ -1,6 +1,6 @@
 OUTPUT=
 CXX=g++
-CXXFLAGS=-O3 -Wall -g #-fnostack-protector
+CXXFLAGS=-O3 -Wall -g #-pg #-fnostack-protector
 CASA_LIBDIR=/opt/casacore/lib
 CASA_INCDIR=/opt/casacore/include/casacore
 CASA_LIBS=-lcasa_casa -lcasa_tables -lcasa_measures -lcasa_ms -lcfitsio

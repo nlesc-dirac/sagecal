@@ -4,6 +4,8 @@ export LD_LIBRARY_PATH
 source /opt/intel/composerxe/bin/compilervars.sh intel64
 
 export MIC_ENV_PREFIX=MIC
+##export MKL_MIC_ENABLE=1
+##export OMP_NUM_THREADS=16
 export MIC_PREFIX=MIC
 export MIC_OMP_NUM_THREADS=240
 # 

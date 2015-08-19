@@ -67,40 +67,42 @@ sagecal_master(int argc, char **argv) {
 
    iodata.Nms=ntasks-1;
    /**** get info from slaves ***************************************/
-   int *bufint=new int[4];
+   int *bufint=new int[5];
    double *bufdouble=new double[1];
    iodata.freqs=new double[iodata.Nms];
    iodata.freq0=0.0;
    iodata.N=iodata.M=iodata.totalt=0;
+   int Mo=0;
    /* use iodata to store the results, also check for consistency of results */
    for (int cm=0; cm<iodata.Nms; cm++) {
-     MPI_Recv(bufint, 4, /* N,M,tilesz,totalt */
+     MPI_Recv(bufint, 5, /* N,Mo(actual clusters),M(with hybrid),tilesz,totalt */
        MPI_INT, cm+1, TAG_MSAUX, MPI_COMM_WORLD, &status);
-cout<<"Slave "<<cm+1<<" N="<<bufint[0]<<" M="<<bufint[1]<<" tilesz="<<bufint[2]<<" totaltime="<<bufint[3]<<endl;
+cout<<"Slave "<<cm+1<<" N="<<bufint[0]<<" M="<<bufint[1]<<"/"<<bufint[2]<<" tilesz="<<bufint[3]<<" totaltime="<<bufint[4]<<endl;
      if (cm==0) { /* update data */
       iodata.N=bufint[0];
-      iodata.M=bufint[1];
-      iodata.tilesz=bufint[2];
-      iodata.totalt=bufint[3];
+      Mo=bufint[1];
+      iodata.M=bufint[2];
+      iodata.tilesz=bufint[3];
+      iodata.totalt=bufint[4];
      } else { /* compare against others */
-       if ((iodata.N != bufint[0]) || (iodata.M != bufint[1]) || (iodata.tilesz != bufint[2])) {
-        cout<<"Slave "<<cm+1<<" parameters do not match  N="<<bufint[0]<<" M="<<bufint[1]<<" tilesz="<<bufint[2]<<endl;
+       if ((iodata.N != bufint[0]) || (iodata.M != bufint[2]) || (iodata.tilesz != bufint[3])) {
+        cout<<"Slave "<<cm+1<<" parameters do not match  N="<<bufint[0]<<" M="<<bufint[2]<<" tilesz="<<bufint[3]<<endl;
        }
-       if (iodata.totalt<bufint[3]) {
+       if (iodata.totalt<bufint[4]) {
         /* use max value as total time */
-        iodata.totalt=bufint[3];
+        iodata.totalt=bufint[4];
        }
      }
      MPI_Recv(bufdouble, 1, /* freq */
        MPI_DOUBLE, cm+1, TAG_MSAUX, MPI_COMM_WORLD, &status);
      iodata.freqs[cm]=bufdouble[0];
      iodata.freq0 +=bufdouble[0];
-     cout<<"Slave "<<cm+1<<" freq="<<bufdouble[0]<<endl;
+     cout<<"Slave "<<cm+1<<" frequency (MHz)="<<bufdouble[0]*1e-6<<endl;
    }
     iodata.freq0/=(double)iodata.Nms;
     delete [] bufint;
     delete [] bufdouble;
-cout<<"Reference freq="<<iodata.freq0<<endl;
+cout<<"Reference frequency (MHz)="<<iodata.freq0*1.0e-6<<endl;
     /* ADMM memory */
     double *Z,*Y,*z;
     /* Z: 2Nx2 x Npoly x M */
@@ -126,6 +128,24 @@ cout<<"Reference freq="<<iodata.freq0<<endl;
      fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
      exit(1);
     }
+    /* file for saving solutions */
+    FILE *sfp=0;
+    if (solfile) {
+     if ((sfp=fopen(solfile,"w+"))==0) {
+       fprintf(stderr,"%s: %d: no file\n",__FILE__,__LINE__);
+       exit(1);
+     }
+    }
+
+    /* write additional info to solution file */
+    if (solfile) {
+      fprintf(sfp,"# solution file (Z) created by SAGECal\n");
+      fprintf(sfp,"# reference_freq(MHz) polynomial_order stations clusters effective_clusters\n");
+      fprintf(sfp,"%lf %d %d %d %d\n",iodata.freq0*1e-6,Npoly,iodata.N,Mo,iodata.M);
+    }
+
+
+
 
     /* interpolation polynomial */
     double *B,*Bi;
@@ -139,12 +159,38 @@ cout<<"Reference freq="<<iodata.freq0<<endl;
      fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
      exit(1);
     }
-    /* regularization factor array */
-    double *arho;
-    if ((arho=(double*)calloc((size_t)Nadmm,sizeof(double)))==0) {
+    /* regularization factor array, size Mx1
+       one per each hybrid cluster */
+    double *arho,*arhoslave;
+    if ((arho=(double*)calloc((size_t)iodata.M,sizeof(double)))==0) {
      fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
      exit(1);
     }
+    if ((arhoslave=(double*)calloc((size_t)Mo,sizeof(double)))==0) {
+     fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
+     exit(1);
+    }
+
+    /* if text file is given, read it and update rho array */
+    if (Data::admm_rho_file) {
+     read_arho_fromfile(Data::admm_rho_file,iodata.M,arho,Mo,arhoslave);
+    } else {
+     /* copy common value */
+     /* setup regularization factor array */
+     for (int p=0; p<iodata.M; p++) {
+      arho[p]=admm_rho; 
+     }
+     for (int p=0; p<Mo; p++) {
+      arhoslave[p]=admm_rho; 
+     }
+    }
+
+    /* send array to slaves */
+    /* update rho on each slave */
+    for(int cm=0; cm<iodata.Nms; cm++) {
+      MPI_Send(arhoslave, Mo, MPI_DOUBLE, cm+1,TAG_RHO, MPI_COMM_WORLD);
+    }
+    free(arhoslave);
 
 #ifdef DEBUG
     FILE *dfp;
@@ -159,11 +205,6 @@ cout<<"Reference freq="<<iodata.freq0<<endl;
     /* find sum B(:,i)B(:,i)^T, and its pseudoinverse */
     find_prod_inverse(B,Bi,Npoly,iodata.Nms);
 
-    /* setup regularization factor array */
-    for (int p=0; p<Nadmm; p++) {
-     arho[p]=admm_rho; 
-    }
-
 #ifdef DEBUG
     fprintf(dfp,"B=[\n");
     for (int p=0; p<Npoly; p++) {
@@ -174,7 +215,7 @@ cout<<"Reference freq="<<iodata.freq0<<endl;
     }
     fprintf(dfp,"];\n");
     fprintf(dfp,"rho=%lf;\narho=[",admm_rho);
-    for (int p=0; p<Nadmm; p++) {
+    for (int p=0; p<iodata.M; p++) {
       fprintf(dfp,"%lf ",arho[p]);
     }
     fprintf(dfp,"];\n");
@@ -197,8 +238,13 @@ cout<<"Reference freq="<<iodata.freq0<<endl;
 #ifdef DEBUG
     Ntime=1;
 #endif
-cout<<"Master total timeslots="<<Ntime<<endl;
-cout<<"ADMM iterations="<<Nadmm<<" polynomial order="<<Npoly<<" regularization="<<admm_rho<<endl;
+    cout<<"Master total timeslots="<<Ntime<<endl;
+
+    if (!Data::admm_rho_file) {
+     cout<<"ADMM iterations="<<Nadmm<<" polynomial order="<<Npoly<<" regularization="<<admm_rho<<endl;
+    } else {
+     cout<<"ADMM iterations="<<Nadmm<<" polynomial order="<<Npoly<<" regularization given by text file "<<Data::admm_rho_file<<endl;
+    }
     int msgcode;
     for (int ct=0; ct<Ntime; ct++)  {
       /* send start processing signal to slaves */
@@ -208,11 +254,6 @@ cout<<"ADMM iterations="<<Nadmm<<" polynomial order="<<Npoly<<" regularization="
       }
 
       for (int admm=0; admm<Nadmm; admm++) {
-         /* update rho on each slave */
-         for(int cm=0; cm<iodata.Nms; cm++) {
-          MPI_Send(&arho[admm], 1, MPI_DOUBLE, cm+1,TAG_RHO, MPI_COMM_WORLD);
-         }
-
          /* get Y_i+rho J_i from each slave */
          /* note: for first iteration, reorder values as
             2Nx2 complex  matrix blocks, M times from each  slave 
@@ -270,8 +311,16 @@ cout<<"ADMM iterations="<<Nadmm<<" polynomial order="<<Npoly<<" regularization="
             my_daxpy(8*iodata.N*iodata.M, &Y[cm*8*iodata.N*iodata.M], B[cm*Npoly+ci], &z[ci*8*iodata.N*iodata.M]);
            }
          }
-         /* also scale by 1/rho */
-         my_dscal(8*iodata.N*iodata.M*Npoly,1.0/arho[admm],z);
+         /* also scale by 1/rho, only if rho>0, otherwise set it to 0.0*/
+         for (int cm=0; cm<iodata.M; cm++) {
+          double invscale=0.0;
+          if (arho[cm]>0.0) {
+           invscale=1.0/arho[cm];
+          } 
+          for (int ci=0; ci<Npoly; ci++) {
+            my_dscal(8*iodata.N,invscale,&z[8*iodata.N*iodata.M*ci+8*iodata.N*cm]);
+          }
+         }
 
 #ifdef DEBUG
          fprintf(dfp,"%%%%%%%%%%%%%% time=%d admm=%d\n",ct,admm);
@@ -342,12 +391,29 @@ cout<<"ADMM iterations="<<Nadmm<<" polynomial order="<<Npoly<<" regularization="
           resetcount++;
         }
       }
+
+    /* write Z to solution file, same format as J, but we have Npoly times more
+       values per timeslot per column */
+     if (solfile) {
+      for (int p=0; p<iodata.N*8*Npoly; p++) {
+       fprintf(sfp,"%d ",p);
+       for (int pp=0; pp<iodata.M; pp++) {
+        fprintf(sfp," %e",Z[pp*iodata.N*8*Npoly+p]);
+       }
+       fprintf(sfp,"\n");
+      }
+     }
+
     }
 
     /* send end signal to each slave */
     msgcode=CTRL_END;
     for(int cm=0; cm<iodata.Nms; cm++) {
         MPI_Send(&msgcode, 1, MPI_INT, cm+1,TAG_CTRL, MPI_COMM_WORLD);
+    }
+
+    if (solfile) {
+      fclose(sfp);
     }
 
 

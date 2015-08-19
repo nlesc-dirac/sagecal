@@ -321,10 +321,11 @@ __global__ void
 kernel_evaluatenu_fl_eight(int Nd, float qsum, float *q, float deltanu,float nulow, float nu0) {
   unsigned int tid = blockIdx.x*blockDim.x + threadIdx.x;
   /* each block calculte  psi((nu+8)/2)-log((nu+8)/2) */
+  /* actually p=2, so psi((nu+2)/2)-log((nu+2)/2) */
   float dgm0;
   if (threadIdx.x==0) {
-   dgm0=digamma_fl(nu0*0.5f+4.0f);
-   dgm0=dgm0-logf((nu0+8.0f)*0.5f); /* psi((nu0+8)/2)-log((nu0+8)/2) */
+   dgm0=digamma_fl(nu0*0.5f+1.0f);
+   dgm0=dgm0-logf((nu0+2.0f)*0.5f); /* psi((nu0+8)/2)-log((nu0+8)/2) */
   }
   __syncthreads();
   if (tid<Nd) {
@@ -453,7 +454,7 @@ cudakernel_evaluatenu_fl(int ThreadsPerBlock, int BlocksPerGrid, int Nd, float q
 
 
 /* evaluate expression for finding optimum nu for 
-  a range of nu values, using AECM
+  a range of nu values, using AECM (p=8 before, but now p=2)
   nu0: current value of robust_nu*/
 void
 cudakernel_evaluatenu_fl_eight(int ThreadsPerBlock, int BlocksPerGrid, int Nd, float qsum, float *q, float deltanu,float nulow, float nu0) {

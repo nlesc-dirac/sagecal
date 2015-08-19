@@ -336,3 +336,151 @@ update_nu(double logsumw, int Nd, int Nt, double nulow, double nuhigh, int p, do
   free(q);
   return thisnu;
 }
+
+
+/* x = sqrt(u^2+v^2) */
+static double
+ncp_weight(double ud) {
+/*    fo(x) = 
+              a1*exp(-((x-b1)/c1)^2) + a2*exp(-((x-b2)/c2)^2) + 
+              a3*exp(-((x-b3)/c3)^2) + a4*exp(-((x-b4)/c4)^2) + 
+              a5*exp(-((x-b5)/c5)^2) + a6*exp(-((x-b6)/c6)^2)
+    mean(fo(x)) is about 1
+*/
+ float x=(float)ud;
+ if (x<40.0f) { return 1.0; }
+ if (x>800.0f) {
+  return 1.0;
+ }
+ /* else [40,285] */
+ float r[6];
+ float a1 =-0.9415f;
+ float b1 =117.1f;
+ float c1 =15.08f;
+ float a2 =5.231f;
+ float b2 =49.57f;
+ float c2 =13.79f;
+ float a3 =2.209f;
+ float b3 =67.29f;
+ float c3 =14.86f;
+ float a4 =10.43f;
+ float b4 =72.19f;
+ float c4 =200.8f;
+ float a5 =104.9f;
+ float b5 =98.72f;
+ float c5 =65.8f;
+ float a6 =-101.3f;
+ float b6 =101.2f;
+ float c6 =66.63f;
+ r[0]=(x-b1)/c1;
+ r[1]=(x-b2)/c2;
+ r[2]=(x-b3)/c3;
+ r[3]=(x-b4)/c4;
+ r[4]=(x-b5)/c5;
+ r[5]=(x-b6)/c6;
+ r[0]*=-r[0];
+ r[1]*=-r[1];
+ r[2]*=-r[2];
+ r[3]*=-r[3];
+ r[4]*=-r[4];
+ r[5]*=-r[5];
+ float sum=0.0f;
+ sum+=a1*expf(r[0]);
+ sum+=a2*expf(r[1]);
+ sum+=a3*expf(r[2]);
+ sum+=a4*expf(r[3]);
+ sum+=a5*expf(r[4]);
+ sum+=a6*expf(r[5]);
+ return (1.0/((double)sum+1.0)); /* as x-> inf, goes to 1 */
+}
+
+static void *
+threadfn_setblweight(void *data) {
+ thread_data_baselinewt_t *t=(thread_data_baselinewt_t*)data;
+
+ int ci;
+ for (ci=0; ci<t->Nb; ci++) {
+  /* get sqrt(u^2+v^2) */
+  double uu=t->u[ci+t->boff]*t->freq0;
+  double vv=t->v[ci+t->boff]*t->freq0;
+  double a=ncp_weight(sqrt(uu*uu+vv*vv));
+  t->wt[8*(ci+t->boff)]*=a;
+  t->wt[8*(ci+t->boff)+1]*=a;
+  t->wt[8*(ci+t->boff)+2]*=a;
+  t->wt[8*(ci+t->boff)+3]*=a;
+  t->wt[8*(ci+t->boff)+4]*=a;
+  t->wt[8*(ci+t->boff)+5]*=a;
+  t->wt[8*(ci+t->boff)+6]*=a;
+  t->wt[8*(ci+t->boff)+7]*=a;
+  printf("%lf %lf %lf\n",uu,vv,a);
+ }
+
+ return NULL;
+}
+
+
+/* update weights array wt by multiplying it with the inverse density function
+  1/( 1+f(u,v) ) 
+ as u,v->inf, f(u,v) -> 0 so long baselines are not affected 
+ wt : Nbase*8 x 1
+ u,v : Nbase x 1
+ note: u = u/c, v=v/c here, so need freq to convert to wavelengths */
+void
+add_whitening_weights(int Nbase, double *wt, double *u, double *v, double freq0, int Nt) {
+ pthread_attr_t attr;
+ pthread_t *th_array;
+ thread_data_baselinewt_t *threaddata;
+
+ int ci,nth1,nth;
+ int Nthb0,Nthb;
+
+ Nthb0=(Nbase+Nt-1)/Nt;
+
+ pthread_attr_init(&attr);
+ pthread_attr_setdetachstate(&attr,PTHREAD_CREATE_JOINABLE);
+
+ if ((th_array=(pthread_t*)malloc((size_t)Nt*sizeof(pthread_t)))==0) {
+#ifndef USE_MIC
+   fprintf(stderr,"%s: %d: No free memory\n",__FILE__,__LINE__);
+#endif
+   exit(1);
+ }
+
+ if ((threaddata=(thread_data_baselinewt_t*)malloc((size_t)Nt*sizeof(thread_data_baselinewt_t)))==0) {
+#ifndef USE_MIC
+    fprintf(stderr,"%s: %d: No free memory\n",__FILE__,__LINE__);
+#endif
+    exit(1);
+ }
+
+
+  /* iterate over threads, allocating baselines per thread */
+  ci=0;
+  for (nth=0;  nth<Nt && ci<Nbase; nth++) {
+    if (ci+Nthb0<Nbase) {
+     Nthb=Nthb0;
+    } else {
+     Nthb=Nbase-ci;
+    }
+
+    threaddata[nth].Nb=Nthb;
+    threaddata[nth].boff=ci;
+    threaddata[nth].wt=wt;
+    threaddata[nth].u=u;
+    threaddata[nth].v=v;
+    threaddata[nth].freq0=freq0;
+
+    pthread_create(&th_array[nth],&attr,threadfn_setblweight,(void*)(&threaddata[nth]));
+    /* next baseline set */
+    ci=ci+Nthb;
+  }
+
+  /* now wait for threads to finish */
+  for(nth1=0; nth1<nth; nth1++) {
+   pthread_join(th_array[nth1],NULL);
+  }
+
+ pthread_attr_destroy(&attr);
+ free(th_array);
+ free(threaddata);
+}

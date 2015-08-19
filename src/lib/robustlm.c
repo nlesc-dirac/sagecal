@@ -1204,6 +1204,7 @@ osrlevmar_der_single_cuda_fl(
   int ntiles, /* total tile (data) size being solved for */
   double robust_nulow, double robust_nuhigh, /* robust nu range */
   int randomize, /* if >0 randomize */
+  int whiten, /* if >0 whiten data 1: NCP, 2... */
   void *adata)       /* pointer to possibly additional data, passed uninterpreted to func & jacf.
                       * Set to NULL if not needed
                       */
@@ -1883,6 +1884,7 @@ rlevmar_der_single_nocuda(
   int linsolv, /* 0 Cholesky, 1 QR, 2 SVD */
   int Nt, /* no of threads */
   double robust_nulow, double robust_nuhigh, /* robust nu range */
+  int whiten, /* if >0 whiten data 1: NCP, 2... */
   void *adata)       /* pointer to possibly additional data, passed uninterpreted to func & jacf.
                       * Set to NULL if not needed
                       */
@@ -2019,17 +2021,19 @@ rlevmar_der_single_nocuda(
       exit(1);
   }
   WORK=Ud=Sd=VTd=0;
-//  for (ci=0;ci<M; ci++) {
-//   aones[ci]=1.0;
-//  }
-  me_data_t *dt=(me_data_t*)adata;
-  setweights(M,aones,1.0,dt->Nt);
+  int nw,wt_itmax=3;
+  me_data_t *lmdata=(me_data_t*)adata;
+  double wt_sum,lambda,robust_nu=lmdata->robust_nu;
+  double robust_nu1;
 
+  setweights(M,aones,1.0,lmdata->Nt);
   /*W set initial weights to 1 */
-//  for (ci=0;ci<N; ci++) {
-//   wtd[ci]=1.0;
-//  }
-  setweights(N,wtd,1.0,dt->Nt);
+  setweights(N,wtd,1.0,lmdata->Nt);
+  /* modify weights with whitening weights */
+  if (whiten) {
+   /* use correct offset for u,v based on tile offset */
+   add_whitening_weights(N/8, wtd, &lmdata->u[lmdata->tileoff*lmdata->Nbase], &lmdata->v[lmdata->tileoff*lmdata->Nbase], *(lmdata->freq0), lmdata->Nt);
+  }
 
   /* memory allocation: different solvers */
   if (solve_axb==0) {
@@ -2078,10 +2082,6 @@ rlevmar_der_single_nocuda(
     }
   }
 
-  int nw,wt_itmax=3;
-  me_data_t *lmdata=(me_data_t*)adata;
-  double wt_sum,lambda,robust_nu=lmdata->robust_nu;
-  double robust_nu1;
 
   /* EM iteration loop */
   /************************************************************/
@@ -2403,6 +2403,10 @@ printf("norm ||dp|| =%lf, norm ||p||=%lf\n",Dp_L2,p_L2);
    printf("nu updated from %lf in [%lf,%lf] to %lf\n",robust_nu,robust_nulow, robust_nuhigh,robust_nu1);
 #endif
    robust_nu=robust_nu1;
+   if (whiten) {
+    /* use correct offset for u,v based on tile offset */
+    add_whitening_weights(N/8, wtd, &lmdata->u[lmdata->tileoff*lmdata->Nbase], &lmdata->v[lmdata->tileoff*lmdata->Nbase], *(lmdata->freq0), lmdata->Nt);
+   }
 
    /* normalize weights */
    wt_sum=lambda/(double)N;
@@ -2491,6 +2495,7 @@ osrlevmar_der_single_nocuda(
   int Nt, /* no of threads */
   double robust_nulow, double robust_nuhigh, /* robust nu range */
   int randomize, /* if >0 randomize */
+  int whiten, /* if >0 whiten data 1: NCP, 2... */
   void *adata)       /* pointer to possibly additional data, passed uninterpreted to func & jacf.
                       * Set to NULL if not needed
                       */
@@ -2611,16 +2616,20 @@ osrlevmar_der_single_nocuda(
       exit(1);
   }
   WORK=Ud=Sd=VTd=0;
-//  for (ci=0;ci<M; ci++) {
-//   aones[ci]=1.0;
-//  }
-  me_data_t *dt=(me_data_t*)adata;
-  setweights(M,aones,1.0,dt->Nt);
+  me_data_t *lmdata0=(me_data_t*)adata;
+  int nw,wt_itmax=3;
+  double wt_sum,lambda,robust_nu=lmdata0->robust_nu;
+  double robust_nu1;
+
+
+  setweights(M,aones,1.0,lmdata0->Nt);
   /*W set initial weights to 1 */
-//  for (ci=0;ci<N; ci++) {
-//   wtd[ci]=1.0;
-//  }
-  setweights(N,wtd,1.0,dt->Nt);
+  setweights(N,wtd,1.0,lmdata0->Nt);
+  /* modify weights with whitening weights */
+  if (whiten) {
+   add_whitening_weights(N/8, wtd, &lmdata0->u[lmdata0->tileoff*lmdata0->Nbase], &lmdata0->v[lmdata0->tileoff*lmdata0->Nbase], *(lmdata0->freq0), lmdata0->Nt);
+  }
+
   /* memory allocation: different solvers */
   if (solve_axb==0) {
 
@@ -2668,10 +2677,7 @@ osrlevmar_der_single_nocuda(
     }
   }
 
-  int nw,wt_itmax=3;
-  me_data_t *lmdata0=(me_data_t*)adata;
-  double wt_sum,lambda,robust_nu=lmdata0->robust_nu;
-  double robust_nu1;
+
   /* setup OS subsets and stating offsets */
   /* ME data for Jacobian calculation (need a new one) */
   me_data_t lmdata;
@@ -2736,7 +2742,6 @@ osrlevmar_der_single_nocuda(
     k=k+Npersubset;
     l=l+Ntpersubset;
   }
-
 
   /* EM iteration loop */
   /************************************************************/
@@ -3051,6 +3056,9 @@ printf("norm ||dp|| =%lf, norm ||p||=%lf\n",Dp_L2,p_L2);
    printf("nu updated from %lf in [%lf,%lf] to %lf\n",robust_nu,robust_nulow, robust_nuhigh,robust_nu1);
 #endif
    robust_nu=robust_nu1;
+   if (whiten) {
+    add_whitening_weights(N/8, wtd, &lmdata0->u[lmdata0->tileoff*lmdata0->Nbase], &lmdata0->v[lmdata0->tileoff*lmdata0->Nbase], *(lmdata0->freq0), lmdata0->Nt);
+   }
 
    /* normalize weights */
    wt_sum=lambda/(double)N;

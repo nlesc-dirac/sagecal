@@ -1975,6 +1975,8 @@ sagefit_visibilities_dual_pt(double *u, double *v, double *w, double *x, int N,
     free(robust_nuM);
     if (robust_nu0<nulow) {
      robust_nu0=nulow;
+    } else if (robust_nu0>nuhigh) {
+     robust_nu0=nuhigh;
     }
   }
 
@@ -2363,7 +2365,10 @@ sagefit_visibilities_dual_pt_one_gpu(double *u, double *v, double *w, double *x,
     free(robust_nuM);
     if (robust_nu0<nulow) {
      robust_nu0=nulow;
+    } else if (robust_nu0>nuhigh) {
+     robust_nu0=nuhigh;
     }
+
   }
 
   /******** free threads ***************/
@@ -2503,7 +2508,7 @@ pipeline_slave_code_flt(void *data)
   //printf("state=%d, thread %d\n",gd->status[tid],tid);
   if (gd->status[tid]==PT_DO_WORK_LM || gd->status[tid]==PT_DO_WORK_OSLM
    || gd->status[tid]==PT_DO_WORK_RLM || gd->status[tid]==PT_DO_WORK_OSRLM
-   || gd->status[tid]==PT_DO_WORK_RTR || gd->status[tid]==PT_DO_WORK_RRTR ) {
+   || gd->status[tid]==PT_DO_WORK_RTR || gd->status[tid]==PT_DO_WORK_RRTR || gd->status[tid]==PT_DO_WORK_NSD) {
 /************************* work *********************/
   me_data_t *t=(me_data_t *)gd->lmdata[tid];
   /* divide the tiles into chunks tilesz/nchunk */
@@ -2535,21 +2540,18 @@ pipeline_slave_code_flt(void *data)
      } else if (gd->status[tid]==PT_DO_WORK_RLM) {
       ret=rlevmar_der_single_cuda_fl(&gd->p[tid][ci*(gd->M[tid])], &gd->x[tid][8*cj*t->Nbase], gd->M[tid], 8*ntiles*t->Nbase, gd->itermax[tid], gd->opts[tid], gd->info[tid], gd->cbhandle[tid], gd->gWORK[tid], gd->linsolv, cj, ntiles, gd->nulow,gd->nuhigh,(void*)gd->lmdata[tid]);
      } else if (gd->status[tid]==PT_DO_WORK_OSRLM) {
-      ret=osrlevmar_der_single_cuda_fl(&gd->p[tid][ci*(gd->M[tid])], &gd->x[tid][8*cj*t->Nbase], gd->M[tid], 8*ntiles*t->Nbase, gd->itermax[tid], gd->opts[tid], gd->info[tid], gd->cbhandle[tid], gd->gWORK[tid], gd->linsolv, cj, ntiles, gd->nulow,gd->nuhigh,gd->randomize,(void*)gd->lmdata[tid]);
+      ret=osrlevmar_der_single_cuda_fl(&gd->p[tid][ci*(gd->M[tid])], &gd->x[tid][8*cj*t->Nbase], gd->M[tid], 8*ntiles*t->Nbase, gd->itermax[tid], gd->opts[tid], gd->info[tid], gd->cbhandle[tid], gd->gWORK[tid], gd->linsolv, cj, ntiles, gd->nulow,gd->nuhigh,gd->randomize,0,(void*)gd->lmdata[tid]); /* FIXME 0 for whiten */
      } else if (gd->status[tid]==PT_DO_WORK_RTR) {
       /* note stations: M/8, baselines ntiles*Nbase RSD+RTR */
       float Delta0=0.01f; /* use very small value because previous LM has already made the solution close to true value */
-      /* storage: 
-       need (float) 8N*(BlocksPerGrid+8) + 8N*5 + 8*M + 8*Nbase + 2*Nbase + N
-       where N<=M/8 M<=ntiles*Nbase, Nbase<=ntiles*Nbase,
-         BlocksPerGrid=ceil(ntiles*Nbase/128)
-      so(max): M*( 13 + ntiles*Nbase/128 +1 +1) + 18*ntiles*Nbase
-        where M: no of stations (params/8), ntiles: tile size, Nbase: baselines */
+      /* storage: see function header 
+        */
       ret=rtr_solve_cuda_fl(&gd->p[tid][ci*(gd->M[tid])], &gd->x[tid][8*cj*t->Nbase], gd->M[tid]/8, ntiles*t->Nbase, gd->itermax[tid]+5, gd->itermax[tid]+10, Delta0, Delta0*0.125f, gd->info[tid], gd->cbhandle[tid], gd->gWORK[tid],  cj, ntiles, (void*)gd->lmdata[tid]);
      } else if (gd->status[tid]==PT_DO_WORK_RRTR) {
       float Delta0=0.01f;
-      /* storage (float) 8N*(BlocksPerGrid+8) + 8N*5 + 8*M + 8*Nbase + 2*Nbase + N + M */
       ret=rtr_solve_cuda_robust_fl(&gd->p[tid][ci*(gd->M[tid])], &gd->x[tid][8*cj*t->Nbase], gd->M[tid]/8, ntiles*t->Nbase, gd->itermax[tid]+5, gd->itermax[tid]+10, Delta0, Delta0*0.125f, gd->nulow, gd->nuhigh, gd->info[tid], gd->cbhandle[tid], gd->gWORK[tid],  cj, ntiles, (void*)gd->lmdata[tid]);
+     } else if (gd->status[tid]==PT_DO_WORK_NSD) {
+      ret=nsd_solve_cuda_robust_fl(&gd->p[tid][ci*(gd->M[tid])], &gd->x[tid][8*cj*t->Nbase], gd->M[tid]/8, ntiles*t->Nbase, gd->itermax[tid]+15, gd->nulow, gd->nuhigh, gd->info[tid], gd->cbhandle[tid], gd->gWORK[tid],  cj, ntiles, (void*)gd->lmdata[tid]);
      }
      init_res+=gd->info[tid][0];
      final_res+=gd->info[tid][1];
@@ -2654,7 +2656,6 @@ sagefit_visibilities_dual_pt_flt(double *u, double *v, double *w, double *x, int
   int *cr=0; /* array for random permutation of clusters */
   int c0,c1;
 
-  //opts[0]=LM_INIT_MU; opts[1]=1E-15; opts[2]=1E-15; opts[3]=1E-20;
   opts[0]=CLM_INIT_MU; opts[1]=1E-9; opts[2]=1E-9; opts[3]=1E-9;
   opts[4]=-CLM_DIFF_DELTA;
 
@@ -2747,7 +2748,7 @@ sagefit_visibilities_dual_pt_flt(double *u, double *v, double *w, double *x, int
      fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
      exit(1);
   }
-  if (solver_mode==SM_OSLM_OSRLM_RLBFGS || solver_mode==SM_RLM_RLBFGS || solver_mode==SM_RTR_OSRLM_RLBFGS) {
+  if (solver_mode==SM_OSLM_OSRLM_RLBFGS || solver_mode==SM_RLM_RLBFGS || solver_mode==SM_RTR_OSRLM_RLBFGS || solver_mode==SM_NSD_RLBFGS) {
    if ((robust_nuM=(double*)calloc((size_t)(M),sizeof(double)))==0) {
      fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
      exit(1);
@@ -2775,37 +2776,37 @@ sagefit_visibilities_dual_pt_flt(double *u, double *v, double *w, double *x, int
    int64_t data_sz=0;
    /* size for MLM (disabled) */
    //data_sz=(int64_t)(n+Mm*n+n+n+n+Mm+Mm+Mm*Mm+Mm*Mm+Mm+Mm+Mm+Mm+Mm+Nbase1*8)*sizeof(double)+(int64_t)Nbase1*2*sizeof(char);
-   /* size for RTR (float)  : M*( 13 + ntiles*Nbase/128 +1+1) + 18*ntiles*Nbase
-        where M: no of stations (params/8) ntiles: tile size Nbase: baselines  
+
+   /* size for RTR/NSD (float), 128 is the ThreadsPerBlock   
    */
-   int64_t data_sz_rtr=0;
    if (solver_mode==SM_RTR_OSLM_LBFGS) {
-     data_sz_rtr=(N*(13+Nbase1/128+1+1)+18*Nbase1)*sizeof(float);
+     /* use same size as robust version, probably is lower */
+     data_sz=(8*N*(11+(Nbase1+128-1)/128)+N+8*Nbase1*2+3*Nbase1)*sizeof(float);
    } else if (solver_mode==SM_RTR_OSRLM_RLBFGS) {
-     /* 2 x Nbase more than normal RTR for weight, log(weight) */
-     data_sz_rtr=(N*(13+Nbase1/128+1+1)+20*Nbase1)*sizeof(float);
-   }
-   if (solver_mode==SM_LM_LBFGS || solver_mode==SM_OSLM_LBFGS || solver_mode==SM_RTR_OSLM_LBFGS) {
+     data_sz=(8*N*(11+(Nbase1+128-1)/128)+N+8*Nbase1*2+3*Nbase1)*sizeof(float);
+   } else if (solver_mode==SM_NSD_RLBFGS) {
+     data_sz=(8*N*(7+(Nbase1+128-1)/128)+N+8*Nbase1*2+3*Nbase1)*sizeof(float);
+   } else if (solver_mode==SM_LM_LBFGS || solver_mode==SM_OSLM_LBFGS) {
     /* size for LM */
     data_sz=(int64_t)(n+Mm*n+Mm*Mm+Mm+Mm*Mm+Mm+Mm+Mm+Mm+Nbase1*8+n+n)*sizeof(float)+(int64_t)Nbase1*2*sizeof(char);
-    if(solver_mode==SM_RTR_OSLM_LBFGS) {
-     data_sz=MAX(data_sz,data_sz_rtr);
+    if (linsolv==1) {
+     data_sz+=(int64_t)Mm*sizeof(float);
+    } else if (linsolv==2) {
+     data_sz+=(int64_t)(Mm*Mm+Mm*Mm+Mm)*sizeof(float);
     }
-   } else if (solver_mode==SM_RLM_RLBFGS || solver_mode==SM_OSLM_OSRLM_RLBFGS || solver_mode==SM_RTR_OSRLM_RLBFGS) {
+   } else if (solver_mode==SM_RLM_RLBFGS || solver_mode==SM_OSLM_OSRLM_RLBFGS) {
    /* size for ROBUSTLM */
      data_sz=(int64_t)(n+Mm*n+Mm*Mm+Mm+Mm*Mm+Mm+Mm+Mm+Mm+Nbase1*8+n+n+n+n)*sizeof(float)+(int64_t)Nbase1*2*sizeof(char);
-    if(solver_mode==SM_RTR_OSRLM_RLBFGS) {
-     data_sz=MAX(data_sz,data_sz_rtr);
+    if (linsolv==1) {
+     data_sz+=(int64_t)Mm*sizeof(float);
+    } else if (linsolv==2) {
+     data_sz+=(int64_t)(Mm*Mm+Mm*Mm+Mm)*sizeof(float);
     }
    } else {
     fprintf(stderr,"%s: %d: invalid mode for solver\n",__FILE__,__LINE__);
     exit(1);
    }
-   if (linsolv==1) {
-    data_sz+=(int64_t)Mm*sizeof(float);
-   } else if (linsolv==2) {
-    data_sz+=(int64_t)(Mm*Mm+Mm*Mm+Mm)*sizeof(float);
-   }
+
   tpg.data_size=data_sz;
   tpg.nulow=nulow;
   tpg.nuhigh=nuhigh;
@@ -2938,6 +2939,11 @@ sagefit_visibilities_dual_pt_flt(double *u, double *v, double *w, double *x, int
        lmdata0.robust_nu=lmdata1.robust_nu=robust_nu0; /* initial robust nu */
       } 
       tpg.status[0]=tpg.status[1]=PT_DO_WORK_RRTR;
+     } else if (solver_mode==SM_NSD_RLBFGS) {
+      if (!ci) {
+       lmdata0.robust_nu=lmdata1.robust_nu=robust_nu0; /* initial robust nu */
+      } 
+      tpg.status[0]=tpg.status[1]=PT_DO_WORK_NSD;
      } else {
 #ifndef USE_MIC
         fprintf(stderr,"%s: %d: undefined solver mode\n",__FILE__,__LINE__);
@@ -2965,7 +2971,7 @@ printf("1: %lf -> %lf 2: %lf -> %lf\n\n\n",info0[0],info0[1],info1[0],info1[1]);
       nerr[c1]=0.0;
      }
      /* update robust_nu */
-     if ((solver_mode==SM_RLM_RLBFGS  || solver_mode==SM_OSLM_OSRLM_RLBFGS || solver_mode==SM_RTR_OSRLM_RLBFGS) && (ci==max_emiter-1)) {
+     if ((solver_mode==SM_RLM_RLBFGS  || solver_mode==SM_OSLM_OSRLM_RLBFGS || solver_mode==SM_RTR_OSRLM_RLBFGS || solver_mode==SM_NSD_RLBFGS) && (ci==max_emiter-1)) {
       robust_nuM[c0]+=lmdata0.robust_nu;
       robust_nuM[c1]+=lmdata1.robust_nu;
      }
@@ -3047,11 +3053,15 @@ printf("1: %lf -> %lf 2: %lf -> %lf\n\n\n",info0[0],info0[1],info1[0],info1[1]);
      }  else if (solver_mode==SM_RTR_OSLM_LBFGS) {
         tpg.status[0]=PT_DO_WORK_RTR;
      }  else if (solver_mode==SM_RTR_OSRLM_RLBFGS) {
-       /* last iteration is OSRLM */
        if (!ci) {
         lmdata0.robust_nu=robust_nu0; /* initial robust nu */
        } 
        tpg.status[0]=PT_DO_WORK_RRTR;
+     }  else if (solver_mode==SM_NSD_RLBFGS) {
+       if (!ci) {
+        lmdata0.robust_nu=robust_nu0; /* initial robust nu */
+       } 
+       tpg.status[0]=PT_DO_WORK_NSD;
      } else {
 #ifndef USE_MIC
         fprintf(stderr,"%s: %d: undefined solver mode\n",__FILE__,__LINE__);
@@ -3077,7 +3087,7 @@ printf("1: %lf -> %lf\n\n\n",info0[0],info0[1]);
       nerr[c0]=0.0;
      }
      /* update robust_nu */
-     if ((solver_mode==SM_RLM_RLBFGS || solver_mode==SM_OSLM_OSRLM_RLBFGS || solver_mode==SM_RTR_OSRLM_RLBFGS) && (ci==max_emiter-1)) {
+     if ((solver_mode==SM_RLM_RLBFGS || solver_mode==SM_OSLM_OSRLM_RLBFGS || solver_mode==SM_RTR_OSRLM_RLBFGS || solver_mode==SM_NSD_RLBFGS) && (ci==max_emiter-1)) {
       robust_nuM[c0]+=lmdata0.robust_nu;
      }
      /* once again subtract solved model from data */
@@ -3108,7 +3118,7 @@ printf("1: %lf -> %lf\n\n\n",info0[0],info0[1]);
   free(xdummy1f);
   free(pf);
   free(ddcohf);
-  if (solver_mode==SM_RLM_RLBFGS || solver_mode==SM_OSLM_OSRLM_RLBFGS || solver_mode==SM_RTR_OSRLM_RLBFGS) {
+  if (solver_mode==SM_RLM_RLBFGS || solver_mode==SM_OSLM_OSRLM_RLBFGS || solver_mode==SM_RTR_OSRLM_RLBFGS || solver_mode==SM_NSD_RLBFGS) {
     /* calculate mean robust_nu over all clusters */
     robust_nu0=my_dasum(M,robust_nuM)/(double)M;
 #ifdef DEBUG
@@ -3120,7 +3130,10 @@ printf("1: %lf -> %lf\n\n\n",info0[0],info0[1]);
     free(robust_nuM);
     if (robust_nu0<nulow) {
      robust_nu0=nulow;
+    } else if (robust_nu0>nuhigh) {
+     robust_nu0=nuhigh;
     }
+
   }
   /******** free threads ***************/
   sync_barrier(&(tp.gate1)); /* sync at gate 1*/
@@ -3133,11 +3146,7 @@ printf("1: %lf -> %lf\n\n\n",info0[0],info0[1]);
 
   if (max_lbfgs>0) {
   /* use LBFGS */
-   if (solver_mode==SM_RLM_RLBFGS || solver_mode==SM_OSLM_OSRLM_RLBFGS || solver_mode==SM_RTR_OSRLM_RLBFGS) {
-    /* if RTR, divide by 8 */
-    if (solver_mode==SM_RTR_OSRLM_RLBFGS) {
-     robust_nu0 *=0.125;  
-    }
+   if (solver_mode==SM_RLM_RLBFGS || solver_mode==SM_OSLM_OSRLM_RLBFGS || solver_mode==SM_RTR_OSRLM_RLBFGS || solver_mode==SM_NSD_RLBFGS) {
     lmdata0.robust_nu=robust_nu0;
     ret=lbfgs_fit_robust_cuda(minimize_viz_full_pth, p, x, m, n, max_lbfgs, lbfgs_m, gpu_threads, (void*)&lmdata0);
    } else {

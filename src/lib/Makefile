@@ -1,6 +1,6 @@
 CC=gcc
 CXX=g++
-CFLAGS= -Wall -O3 -g
+CFLAGS= -Wall -O3 -g #-pg
 CLIBS= -lm -lpthread
 #LAPACK=-L/usr/lib/atlas/sse -llapack -lblas
 #LAPACK=-L/usr/local/GotoBLAS2/lib -lgoto2 -lpthread -lgfortran
@@ -51,7 +51,6 @@ rtr_solve_robust_admm.o:rtr_solve_robust_admm.c
 	$(CC) $(CFLAGS) $(INCLUDES) $(GLIBI)  -c $<
 admm_solve.o:admm_solve.c
 	$(CC) $(CFLAGS) $(INCLUDES) $(GLIBI)  -c $<
-
 
 RANLIB=ranlib
 libsagecal.a:$(OBJECTS) sagecal.h
