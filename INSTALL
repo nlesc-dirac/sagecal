@@ -6,7 +6,7 @@ SAGECal Installation
  - glib http://developer.gnome.org/glib
  - BLAS/LAPACK
    Highly recommended is OpenBLAS http://www.openblas.net/
-   Also, to avoid any linking issues, build OpenBLAS from source and link SAGECal with the static library (libopenblas***.a) and NOT libopenblas***.so
+   Also, to avoid any linking issues (and to get best performance), build OpenBLAS from source and link SAGECal with the static library (libopenblas***.a) and NOT libopenblas***.so
  - Compilers gcc/g++ or Intel icc/icpc 
  - If you have NVIDIA GPUs, 
   -- CUDA/CUBLAS and nvcc
