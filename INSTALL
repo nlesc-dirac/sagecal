@@ -13,6 +13,7 @@ SAGECal Installation
   -- CULATOOLS http://www.culatools.com/
  - If you are using Intel Xeon Phi MICs.
   -- Intel MKL and other libraries
+ - Get the source for SAGECal : git clone git://git.code.sf.net/p/sagecal/code sagecal-code
 
 1) The basic way to build is
   1.a) go to ./src/lib  and run make (which will create libsagecal.a)
