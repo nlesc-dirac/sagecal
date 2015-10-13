@@ -203,16 +203,14 @@ pipeline_slave_code_b(void *data)
     checkCudaError(err,__FILE__,__LINE__);
 
     err=cudaStreamDestroy(ms1);
-    cudaFree(hp1);
+    cudaFreeHost(hp1);
     err=cudaStreamDestroy(ms2);
-    cudaFree(hp2);
+    cudaFreeHost(hp2);
     err=cudaStreamDestroy(ms3);
-    cudaFree(hp3);
+    cudaFreeHost(hp3);
     err=cudaStreamDestroy(ms4);
-    cudaFree(hp4);
+    cudaFreeHost(hp4);
     checkCudaError(err,__FILE__,__LINE__);
-
-
   } else if (dp->status[tid]==PT_DO_DGPU) {
     cudaFree(dp->cxo[tid]);
     cudaFree(dp->ccoh[tid]);

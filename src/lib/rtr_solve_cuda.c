@@ -223,7 +223,7 @@ printf("Rnewafter=[\n");
   printf("%f+j*(%f) %f+j*(%f);\n",etalocal[ci].x,etalocal[ci].y,etalocal[ci+2*N].x,etalocal[ci+2*N].y);
  }
 printf("]\n");
- cudaFree(etalocal);
+ cudaFreeHost(etalocal);
 #endif
   checkCublasError(cbstatus,__FILE__,__LINE__);
   cudaFree(Ad); 
@@ -360,7 +360,7 @@ printf("Eta=[\n");
   printf("%f %f %f %f\n",etalocal[ci].x,etalocal[ci].y,etalocal[ci+2*N].x,etalocal[ci+2*N].y);
  }
 printf("]\n");
- cudaFree(etalocal);
+ cudaFreeHost(etalocal);
 #endif
  float beta0=beta;
  float minfx=fx; float minbeta=beta0;
