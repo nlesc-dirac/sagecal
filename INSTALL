@@ -1,4 +1,4 @@
-$Id: INSTALL,v 1.7 2014/01/06 03:20:53 sarod Exp $
+Wed Nov  4 21:14:51 CET 2015
 SAGECal Installation
 ====================
 0) Prerequsites:
@@ -23,7 +23,9 @@ SAGECal Installation
 2) In ./src/lib and ./src/MS you MUST edit the Makefiles to suit your system. Some common items to edit are:
  - LAPACK: directory where LAPACK/OpenBLAS is installed
  - GLIBI/GLIBL: include/lib files for glib
- - CASA_LIBDIR/CASA_INCDIR/CASA_LIBS : casacore include/library location and flies
+ - CASA_LIBDIR/CASA_INCDIR/CASA_LIBS : casacore include/library location and files:
+  Note with new CASACORE might need two include paths, e.g.
+    -I/opt/casacore/include/ -I/opt/casacore/include/casacore
  - CUDAINC/CUDALIB : where CUDA/CUBLAS is installed
  - NVCFLAGS : flags to pass to nvcc, especially -arch option to match your GPU  
  - CULA* : where CULATOOLS are installed
