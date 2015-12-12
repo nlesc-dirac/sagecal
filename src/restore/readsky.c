@@ -501,7 +501,7 @@ read_sky_model_withgain(const char *slistname, glist *slist, int format,const ch
       return 1;
   }
   /* allocate memory for buffer */
-  buff_len = 128;
+  buff_len = MAX_SNAME;
   if((buf = (char*)malloc(sizeof(char)*(size_t)(buff_len)))==NULL) {
         fprintf(stderr,"%s: %d: No free memory\n",__FILE__,__LINE__);
         exit(1);
@@ -644,6 +644,13 @@ read_sky_model_withgain(const char *slistname, glist *slist, int format,const ch
       fprintf(stderr,"%s: %d: no file\n",__FILE__,__LINE__);
       return 1;
   }
+  /* for new versions of sagecal, need to skip first 3 lines */
+  for (ci=0; ci<3; ci++) {
+   do {
+    c = fgetc(cfp);
+   } while (c != '\n');
+  }
+
   c=skip_lines(cfp);
   Ns=0;
   while(c>=0) {
@@ -715,6 +722,13 @@ read_sky_model_withgain(const char *slistname, glist *slist, int format,const ch
       fprintf(stderr,"%s: %d: no file\n",__FILE__,__LINE__);
       return 1;
   }
+  /* for new versions of sagecal, need to skip first 3 lines */
+  for (ci=0; ci<3; ci++) {
+   do {
+    c = fgetc(cfp);
+   } while (c != '\n');
+  }
+
   Nt=0;
   c=skip_lines(cfp);
   while(c>=0) {

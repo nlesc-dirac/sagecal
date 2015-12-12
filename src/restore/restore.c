@@ -118,7 +118,7 @@ calculate_contribution1(struct wcsprm *wcs, double ll, double mm, sinfo *ss, dou
   pixelra[0]=(double)(ss->ra)*180.0/M_PI;
   pixeldec[0]=(double)(ss->dec)*180.0/M_PI;
   if ((status = cels2x(&wcs->cel, 1,1,1,1, pixelra, pixeldec, imgphi, imgtheta, imgl, imgm, statc))) {
-    fprintf(stderr,"wcsp2s ERROR %2d\n", status);
+    fprintf(stderr,"%s: %d: wcsp2s ERROR %2d\n",__FILE__,__LINE__,status);
     /* Handle Invalid pixel coordinates. */
     if (status == 6) status = 0;
   }
@@ -147,7 +147,14 @@ calculate_contribution1(struct wcsprm *wcs, double ll, double mm, sinfo *ss, dou
    fratio=log(freq0/ss->f0);
    fratio1=fratio*fratio;
    fratio2=fratio1*fratio;
-   stokesI=exp(log(ss->sI)+ss->spec_idx*fratio+ss->spec_idx1*fratio1+ss->spec_idx2*fratio2);
+   /* catch -ve and 0 values for sI */
+   if (ss->sI==0.0) {
+    stokesI=0.0;
+   } else if (ss->sI>0.0) {
+    stokesI=exp(log(ss->sI)+ss->spec_idx*fratio+ss->spec_idx1*fratio1+ss->spec_idx2*fratio2);
+   } else {
+    stokesI=-exp(log(-ss->sI)+ss->spec_idx*fratio+ss->spec_idx1*fratio1+ss->spec_idx2*fratio2);
+   }
   } else {
    stokesI=ss->sI;
   }
@@ -515,7 +522,7 @@ read_fits_file_restore(const char *filename, glist *slist, double bmaj,double bm
        pixelc[3]=1.0;
   		 if ((status = wcsp2s(fbuff.wcs, ncoord, naxis, pixelc, imgc, phic, thetac,
 			 worldc, statc))) {
-		 	 fprintf(stderr,"wcsp2s ERROR %2d\n", status);
+		 	 fprintf(stderr,"%s: %d: wcsp2s ERROR %2d\n",__FILE__,__LINE__,status);
 			 /* Handle Invalid pixel coordinates. */
 			 if (status == 8) status = 0;
   	   }
@@ -533,9 +540,20 @@ read_fits_file_restore(const char *filename, glist *slist, double bmaj,double bm
         fratio=log(freq0/ss->f0);
         fratio1=fratio*fratio;
         fratio2=fratio1*fratio;
-        ss->Iscale=exp(log(ss->sI)+ss->spec_idx*fratio+ss->spec_idx1*fratio1+ss->spec_idx2*fratio2)/tempI;
+        /* catch -ve and 0 values for sI */
+        if (ss->sI==0.0) {
+         ss->Iscale=0.0;
+        } else if (ss->sI>0.0) {
+         ss->Iscale=exp(log(ss->sI)+ss->spec_idx*fratio+ss->spec_idx1*fratio1+ss->spec_idx2*fratio2)/tempI;
+        } else {
+         ss->Iscale=-exp(log(-ss->sI)+ss->spec_idx*fratio+ss->spec_idx1*fratio1+ss->spec_idx2*fratio2)/tempI;
+        }
        } else {
-        ss->Iscale=fabs(ss->sI/tempI);
+        if (tempI!=0.0) {
+         ss->Iscale=fabs(ss->sI/tempI);
+        } else {
+         ss->Iscale=0.0;
+        }
        }
       } else {
        ss->Iscale=1.0;
@@ -545,8 +563,8 @@ read_fits_file_restore(const char *filename, glist *slist, double bmaj,double bm
        m0=imgc[1]*M_PI/180.0;
       }
 
-
 #ifdef DEBUG
+     printf("temp=%lf (%lf %lf %lf %lf %lf)\n",tempI,ss->sI,ss->spec_idx,ss->ra,ss->dec,ss->Iscale);
      printf("Original pixel range [%ld,%ld] to [%ld,%ld]\n",fbuff.arr_dims.lpix[0],fbuff.arr_dims.lpix[1],fbuff.arr_dims.hpix[0],fbuff.arr_dims.hpix[1]);
 #endif
       free(pixelc);
@@ -653,7 +671,7 @@ read_fits_file_restore(const char *filename, glist *slist, double bmaj,double bm
 
 		if ((status = wcsp2s(fbuff.wcs, ncoord, naxis, pixelc, imgc, phic, thetac,
 			 worldc, statc))) {
-			 fprintf(stderr,"wcsp2s ERROR %2d\n", status);
+			 fprintf(stderr,"%s: %d: wcsp2s ERROR %2d\n",__FILE__,__LINE__,status);
 			 /* Handle Invalid pixel coordinates. */
 			 if (status == 8) status = 0;
 	  }
@@ -679,7 +697,7 @@ read_fits_file_restore(const char *filename, glist *slist, double bmaj,double bm
        if ( !statc[kk/4] ) {
         /* for pixel (i,j,k,l) in column major it should be 
           (l-1)*Ax3*Ax2*Ax1+(k-1)*Ax2*Ax1+(j-1)*Ax1+i-1 */
-        ll=(jj-1)*new_naxis[0]+ii-1;
+           ll=(jj-1)*new_naxis[0]+ii-1;
            //tempI=calculate_contribution(worldc[kk]*M_PI/180.0, worldc[kk+1]*M_PI/180.0, ss, bmaj,bmin,pa, freq0);
            tempI=calculate_contribution1(fbuff.wcs,imgc[kk]*M_PI/180.0, imgc[kk+1]*M_PI/180.0, ss, bmaj,bmin,pa, freq0);
            tempI *=ss->Iscale;
@@ -734,7 +752,7 @@ read_fits_file_restore(const char *filename, glist *slist, double bmaj,double bm
   /* rerun wcs with shifted center */
   if ((status = wcsp2s(fbuff.wcs, ncoord, naxis, pixelc, imgc, phic, thetac,
 			 worldc, statc))) {
-			 fprintf(stderr,"wcsp2s ERROR %2d\n", status);
+			 fprintf(stderr,"%s: %d: wcsp2s ERROR %2d\n",__FILE__,__LINE__,status);
 			 /* Handle Invalid pixel coordinates. */
 			 if (status == 8) status = 0;
 	}
@@ -846,8 +864,8 @@ print_help(void) {
    fprintf(stderr,"-a : add the value, instead of replacing the value at each pixel\n");
    fprintf(stderr,"-s : subtract the value, instead of replacing the value at each pixel\n");
    fprintf(stderr,"-o : %d: BBS %d: LSM format %d: LSM (3 order spec.idx): default 0\n",FORMAT_BBS,FORMAT_LSM,FORMAT_LSM_SP);
-   fprintf(stderr,"-c : filename: cluster file name (only hybrid!)\n");
-   fprintf(stderr,"-l : filename: solutions file name\n");
+   fprintf(stderr,"-c : filename: cluster file name\n");
+   fprintf(stderr,"-l : filename: solutions file name (new format!)\n");
    fprintf(stderr,"-g : filename: station numbers (0,1,..) whose solutions to ignore\n");
    fprintf(stderr,"Note: application of solutions only works for unpolarized sky model\n\n");
   
@@ -862,7 +880,7 @@ print_help(void) {
 
 void
 print_copyright(void) {
-  printf("Restore 0.0.9 (C) 2011-2015 Sarod Yatawatta\n");
+  printf("Restore 0.0.10 (C) 2011-2015 Sarod Yatawatta\n");
 }
 
 /* for getopt() */

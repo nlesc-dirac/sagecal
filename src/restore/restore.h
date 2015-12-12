@@ -34,6 +34,9 @@
 #include <wcshdr.h>
 #include <wcsfix.h>
 
+/* max source name length, increase it if names get longer */
+#define MAX_SNAME 2048
+
 /***************** glist.c  *************************/
 /* generic list structure */
 typedef struct glist_node_ {
