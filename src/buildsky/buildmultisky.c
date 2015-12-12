@@ -121,6 +121,7 @@ fillup_pixel_hashtablef(long totalrows, long offset, long firstrow, long nrows,
              d2=pt/(arr_dims.d[0]);
              pt-=(arr_dims.d[0])*d2;
              d1=pt;
+             if (d1>0 && d2+1>0){ /* make sure x,y coords are valid */
 #ifdef DEBUG
              printf("coords =(%ld,%ld,%ld,%ld)\n",d1,d2+1,d3,d4);
 #endif
@@ -176,7 +177,7 @@ fillup_pixel_hashtablef(long totalrows, long offset, long firstrow, long nrows,
          } else {
            free(key);
          }
-
+          }
 
           }
     }
@@ -1589,7 +1590,19 @@ write_world_coords_f(const char *imgfile, GHashTable *pixtable, double minpix, i
          fprintf(outf,"# FAKE?? peak flux %lf times average\n",MAX(sIlow,sIhigh));
        }
        if (!outformat) {
-         fprintf(outf,"P%s%dC%d, POINT, %d:%d:%4.2lf, +%d.%d.%4.2lf, %lf, 0.0, 0.0, 0.0, %12.7lg, 0, [%5.3lf,%5.3lf,%5.3lf]\n",unistr,*key_,count,ra_h,ra_m,ra_s,dec_d,dec_m,dec_s,srcx->sI*fluxscale,ref_freq,srcx->sP,srcx->sP1,srcx->sP2);
+         /* do ln() to log() conversion of spectra 
+           ln(I0)+p1*ln(f/f0)+p2*ln(f/f0)^2+... = ln(10)*(log(J0)+q1*log(f/f0)+q2*log(f/f0))^2)+...)
+           =ln(10)*(ln(J0)/ln(10)+q1*ln(f/f0)/ln(10)+q2*ln(f/f0)^2/ln(10)^2+...)
+
+           so
+
+           J0=I0
+           q1=p1
+           q2=p2*ln(10)
+           q3=p3*ln(10)^2
+*/
+         double logsc=log(10.0);
+         fprintf(outf,"P%s%dC%d, POINT, %d:%d:%4.2lf, +%d.%d.%4.2lf, %lf, 0.0, 0.0, 0.0, %12.7lg, 0, [%5.3lf,%5.3lf,%5.3lf]\n",unistr,*key_,count,ra_h,ra_m,ra_s,dec_d,dec_m,dec_s,srcx->sI*fluxscale,ref_freq,srcx->sP,srcx->sP1*logsc,srcx->sP2*logsc*logsc);
        } else {
          fprintf(outf,"P%s%dC%d %d %d %4.3lf %d %d %4.3lf %lf 0 0 0 %lf %lf %lf 0 0 0 0 %lf\n",unistr,*key_,count,ra_h,ra_m,ra_s,dec_d,dec_m,dec_s,srcx->sI*fluxscale,srcx->sP,srcx->sP1,srcx->sP2,ref_freq);
       }

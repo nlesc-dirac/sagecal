@@ -120,7 +120,6 @@ fillup_pixel_hashtable(long totalrows, long offset, long firstrow, long nrows,
            //counts[ii] = 1.;
            tmpval=(int)dptr[ii];
            if (tmpval> 0) {
-             //printf("arr =%lf\n",tmpval);
              /* calculate 4D coords */
              pt=firstrow+ii-1;
              //printf("coord point=%ld ",pt);
@@ -131,8 +130,9 @@ fillup_pixel_hashtable(long totalrows, long offset, long firstrow, long nrows,
              d2=pt/(arr_dims.d[0]);
              pt-=(arr_dims.d[0])*d2;
              d1=pt;
+             if (d1>0 && d2+1>0){ /* make sure x,y coords are valid */
 #ifdef DEBUG
-             printf("coords =(%ld,%ld,%ld,%ld)\n",d1,d2+1,d3,d4);
+             printf("arr=%d coords =(%ld,%ld,%ld,%ld)\n",tmpval,d1,d2+1,d3,d4);
 #endif
              /* find current limit */
 
@@ -188,6 +188,7 @@ fillup_pixel_hashtable(long totalrows, long offset, long firstrow, long nrows,
          }
 
 
+           }
           }
     }
 

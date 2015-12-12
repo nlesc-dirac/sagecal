@@ -48,7 +48,7 @@ print_help(void) {
 
 void
 print_copyright(void) {
-  printf("Buildsky 0.0.7 (C) 2011-2015 Sarod Yatawatta\n");
+  printf("Buildsky 0.0.9 (C) 2011-2016 Sarod Yatawatta\n");
 }
 
 
