@@ -118,7 +118,7 @@ def annotate_lsm_sky(infilename,clusterfilename,outfilename,clid=None,color='yel
       mdec=(float(v.group('col5'))+float(v.group('col6'))/60.0+float(v.group('col7'))/3600.0)
       SR[str(v.group('col1'))]=(mra,mdec,float(v.group('col8')))
     else:  
-      v=pp.search(eachline)
+      v=pp1.search(eachline)
       if v!= None:
         mra=(float(v.group('col2'))+float(v.group('col3'))/60.0+float(v.group('col4'))/3600.0)*360.0/24.0
         mdec=(float(v.group('col5'))+float(v.group('col6'))/60.0+float(v.group('col7'))/3600.0)
