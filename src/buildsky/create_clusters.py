@@ -46,7 +46,7 @@ def read_lsm_sky(infilename):
    \s+             # skip white space
    (?P<col7>[-+]?\d+(\.\d+)?)   # Dec angle - sec 
    \s+             # skip white space
-   (?P<col8>[-+]?\d+(\.\d+)?)   # Stokes I - Flux
+   (?P<col8>[-+]?(\d+(\.\d*)?|\d*\.\d+)([eE][-+]?\d+)?)  # Stokes I - Flux 
    \s+             # skip white space
    (?P<col9>[-+]?(\d+(\.\d*)?|\d*\.\d+)([eE][-+]?\d+)?)  # Stokes Q - Flux 
    \s+             # skip white space
@@ -81,7 +81,7 @@ def read_lsm_sky(infilename):
    \s+             # skip white space
    (?P<col7>[-+]?\d+(\.\d+)?)   # Dec angle - sec 
    \s+             # skip white space
-   (?P<col8>[-+]?\d+(\.\d+)?)   # Stokes I - Flux
+   (?P<col8>[-+]?(\d+(\.\d*)?|\d*\.\d+)([eE][-+]?\d+)?)  # Stokes I - Flux 
    \s+             # skip white space
    (?P<col9>[-+]?(\d+(\.\d*)?|\d*\.\d+)([eE][-+]?\d+)?)  # Stokes Q - Flux 
    \s+             # skip white space
@@ -113,14 +113,14 @@ def read_lsm_sky(infilename):
 
   SR={} # sources
   for eachline in all:
-    v=pp.search(eachline)
+    v=pp1.search(eachline)
     if v!= None:
       # find RA,DEC (rad) and flux
       mra=(float(v.group('col2'))+float(v.group('col3'))/60.0+float(v.group('col4'))/3600.0)*360.0/24.0*math.pi/180.0
       mdec=(float(v.group('col5'))+float(v.group('col6'))/60.0+float(v.group('col7'))/3600.0)*math.pi/180.0
       SR[str(v.group('col1'))]=(v.group('col1'),mra,mdec,float(v.group('col8')))
     else:  
-      v=pp1.search(eachline)
+      v=pp.search(eachline)
       if v!= None:
         mra=(float(v.group('col2'))+float(v.group('col3'))/60.0+float(v.group('col4'))/3600.0)*360.0/24.0*math.pi/180.0
         mdec=(float(v.group('col5'))+float(v.group('col6'))/60.0+float(v.group('col7'))/3600.0)*math.pi/180.0
@@ -308,7 +308,7 @@ if __name__ == '__main__':
   parser.add_option('-i', '--iterations', type='int', help='Number of iterations')
   (opts,args)=parser.parse_args()
 
-  if opts.skymodel and opts.clusters and opts.outfile:
+  if opts.skymodel and opts.clusters and opts.outfile and opts.iterations:
     cluster_this(opts.skymodel,opts.clusters,opts.outfile,opts.iterations)
   else:
    parser.print_help()
