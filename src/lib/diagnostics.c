@@ -28,23 +28,23 @@
 static void
 checkCudaError(cudaError_t err, const char *file, int line)
 {
+#ifdef CUDA_DEBUG
     if(!err)
         return;
     fprintf(stderr,"GPU (CUDA): %s %s %d\n", cudaGetErrorString(err),file,line);
-    culaShutdown();
     exit(EXIT_FAILURE);
+#endif
 }
 
 static void
-checkStatus(culaStatus status, const char *file, int line)
+checkCublasError(cublasStatus_t cbstatus, char *file, int line)
 {
-    char buf[80];
-    if(!status)
-        return;
-    culaGetErrorInfoString(status, culaGetErrorInfo(), buf, sizeof(buf));
-    fprintf(stderr,"GPU (CULA): %s %s %d\n", buf,file,line);
-    culaShutdown();
+#ifdef CUDA_DEBUG
+   if (cbstatus!=CUBLAS_STATUS_SUCCESS) {
+    fprintf(stderr,"%s: %d: CUBLAS failure\n",file,line);
     exit(EXIT_FAILURE);
+   }
+#endif
 }
 
 
@@ -60,7 +60,7 @@ checkStatus(culaStatus status, const char *file, int line)
   adata: has all additional info: coherency,baselines,flags
 */
 static int
-calculate_leverage(float *p, float *rd, float *x, int M, int N, cublasHandle_t cbhandle,  float *gWORK, int tileoff, int ntiles, me_data_t *dp) {
+calculate_leverage(float *p, float *rd, float *x, int M, int N, cublasHandle_t cbhandle, cusolverDnHandle_t solver_handle, float *gWORK, int tileoff, int ntiles, me_data_t *dp) {
 
  /* p needs to be copied to device and x needs to be copied back from device
   rd always remains in the device (select part with the right offset) 
@@ -69,11 +69,11 @@ calculate_leverage(float *p, float *rd, float *x, int M, int N, cublasHandle_t c
  int Nbase=(dp->Nbase)*(ntiles); /* note: we do not use the total tile size */
  float *jacd,*xd,*jacTjacd,*pd,*cohd,*Ud,*VTd,*Sd;
  unsigned long int moff=0;
- char *bbd;
+ short *bbd;
 
  cudaError_t err;
 
- /* total storage N+M*N+M*M+M+Nbase*8+M*M+M*M+M+M+Nbase*3(char)/(float) */ 
+ /* total storage N+M*N+M*M+M+Nbase*8+M*M+M*M+M+M+Nbase*3(short)/(float) */ 
  xd=&gWORK[moff];
  moff+=N;
  jacd=&gWORK[moff];
@@ -91,8 +91,8 @@ calculate_leverage(float *p, float *rd, float *x, int M, int N, cublasHandle_t c
  Sd=&gWORK[moff];
  moff+=M;
 
- bbd=(char*)&gWORK[moff];
- moff+=(Nbase*3*sizeof(char))/sizeof(float);
+ bbd=(short*)&gWORK[moff];
+ moff+=(Nbase*3*sizeof(short))/sizeof(float);
 
  err=cudaMemcpyAsync(pd, p, M*sizeof(float), cudaMemcpyHostToDevice,0);
  checkCudaError(err,__FILE__,__LINE__);
@@ -101,12 +101,26 @@ calculate_leverage(float *p, float *rd, float *x, int M, int N, cublasHandle_t c
  err=cudaMemcpyAsync(cohd, &(dp->ddcohf[(dp->Nbase)*(dp->tilesz)*(dp->clus)*8+(dp->Nbase)*tileoff*8]), Nbase*8*sizeof(float), cudaMemcpyHostToDevice,0);
  checkCudaError(err,__FILE__,__LINE__);
  /* correct offset for baselines */
- err=cudaMemcpyAsync(bbd, &(dp->ddbase[3*(dp->Nbase)*(tileoff)]), Nbase*3*sizeof(char), cudaMemcpyHostToDevice,0);
+ err=cudaMemcpyAsync(bbd, &(dp->ddbase[3*(dp->Nbase)*(tileoff)]), Nbase*3*sizeof(short), cudaMemcpyHostToDevice,0);
  checkCudaError(err,__FILE__,__LINE__);
  cudaDeviceSynchronize();
 
- int ThreadsPerBlock=128;
+ int ThreadsPerBlock=DEFAULT_TH_PER_BK;
  int ci,Mi;
+
+ /* extra storage for cusolver */
+ int work_size=0;
+ int *devInfo;
+ err=cudaMalloc((void**)&devInfo, sizeof(int));
+ checkCudaError(err,__FILE__,__LINE__);
+ float *work;
+ float *rwork;
+ cusolverDnSgesvd_bufferSize(solver_handle, M, M, &work_size);
+ err=cudaMalloc((void**)&work, work_size*sizeof(float));
+ checkCudaError(err,__FILE__,__LINE__);
+ err=cudaMalloc((void**)&rwork, 5*M*sizeof(float));
+ checkCudaError(err,__FILE__,__LINE__);
+
 
  /* set mem to 0 */
  cudaMemset(xd, 0, N*sizeof(float));
@@ -115,16 +129,22 @@ calculate_leverage(float *p, float *rd, float *x, int M, int N, cublasHandle_t c
  cudakernel_jacf_fl2(pd, jacd, M, N, cohd, bbd, Nbase, dp->M, dp->N);
  
  /* calculate JTJ=(J^T J - [e] [W]) */
- culaStatus status;
- status=culaDeviceSgemm('N','T',M,M,N,1.0f,jacd,M,jacd,M,0.0f,jacTjacd,M);
- checkStatus(status,__FILE__,__LINE__);
+ //status=culaDeviceSgemm('N','T',M,M,N,1.0f,jacd,M,jacd,M,0.0f,jacTjacd,M);
+ //checkStatus(status,__FILE__,__LINE__);
+ cublasStatus_t cbstatus=CUBLAS_STATUS_SUCCESS;
+ float cone=1.0f; float czero=0.0f;
+ cbstatus=cublasSgemm(cbhandle,CUBLAS_OP_N,CUBLAS_OP_T,M,M,N,&cone,jacd,M,jacd,M,&czero,jacTjacd,M);
+
+
  /* add mu * I to JTJ */
  cudakernel_diagmu_fl(ThreadsPerBlock, (M+ThreadsPerBlock-1)/ThreadsPerBlock, M, jacTjacd, 1e-9f);
  
  /* calculate inv(JTJ) using SVD */
  /* inv(JTJ) = Ud x Sid x VTd : we take into account that JTJ is symmetric */
- status=culaDeviceSgesvd('A','A',M,M,jacTjacd,M,Sd,Ud,M,VTd,M);
- checkStatus(status,__FILE__,__LINE__);
+ //status=culaDeviceSgesvd('A','A',M,M,jacTjacd,M,Sd,Ud,M,VTd,M);
+ //checkStatus(status,__FILE__,__LINE__);
+ cusolverDnSgesvd(solver_handle,'A','A',M,M,jacTjacd,M,Sd,Ud,M,VTd,M,work,work_size,rwork,devInfo);
+ cudaDeviceSynchronize();
 
 
  /* find Sd= 1/sqrt(Sd) of the singular values (positive singular values) */
@@ -133,8 +153,9 @@ calculate_leverage(float *p, float *rd, float *x, int M, int N, cublasHandle_t c
  /* multiply Ud with Sid (diagonal) Ud <= Ud Sid (columns modified) */
  cudakernel_diagmult_fl(ThreadsPerBlock, (M*M+ThreadsPerBlock-1)/ThreadsPerBlock, M, Ud, Sd);
  /* now multiply Ud VTd to get the square root */
- status=culaDeviceSgemm('N','N',M,M,M,1.0f,Ud,M,VTd,M,0.0f,jacTjacd,M);
- checkStatus(status,__FILE__,__LINE__);
+ //status=culaDeviceSgemm('N','N',M,M,M,1.0f,Ud,M,VTd,M,0.0f,jacTjacd,M);
+ //checkStatus(status,__FILE__,__LINE__);
+ cbstatus=cublasSgemm(cbhandle,CUBLAS_OP_N,CUBLAS_OP_N,M,M,M,&cone,Ud,M,VTd,M,&czero,jacTjacd,M);
 
  /* calculate J^T, without taking flags into account (use same storage as previous J^T) */
  cudakernel_jacf_fl2(pd, jacd, M, N, cohd, bbd, Nbase, dp->M, dp->N);
@@ -146,8 +167,10 @@ calculate_leverage(float *p, float *rd, float *x, int M, int N, cublasHandle_t c
   } else {
    Mi=N-ci*M;
   }
-  status=culaDeviceSgemm('T','N',M,Mi,M,1.0f,jacTjacd,M,&jacd[ci*M*M],M,0.0f,VTd,M);
-  checkStatus(status,__FILE__,__LINE__);
+  //status=culaDeviceSgemm('T','N',M,Mi,M,1.0f,jacTjacd,M,&jacd[ci*M*M],M,0.0f,VTd,M);
+  //checkStatus(status,__FILE__,__LINE__);
+  cbstatus=cublasSgemm(cbhandle,CUBLAS_OP_T,CUBLAS_OP_N,M,Mi,M,&cone,jacTjacd,M,&jacd[ci*M*M],M,&czero,VTd,M);
+
   err=cudaMemcpy(&jacd[ci*M*M],VTd,Mi*M*sizeof(float),cudaMemcpyDeviceToDevice);
   checkCudaError(err,__FILE__,__LINE__);
  }
@@ -159,6 +182,7 @@ calculate_leverage(float *p, float *rd, float *x, int M, int N, cublasHandle_t c
  err=cudaMemcpyAsync(x, xd, N*sizeof(float), cudaMemcpyDeviceToHost,0);
  cudaDeviceSynchronize();
  checkCudaError(err,__FILE__,__LINE__);
+ checkCublasError(cbstatus,__FILE__,__LINE__);
 
  return 0;
 }
@@ -175,6 +199,7 @@ typedef struct gb_data_dg_ {
 
   /* GPU related info */
   cublasHandle_t cbhandle[2]; /* CUBLAS handles */
+  cusolverDnHandle_t solver_handle[2]; 
   float *rd[2]; /* residual vector on the device (invarient) */
   float *gWORK[2]; /* GPU buffers */
   int64_t data_size; /* size of buffer (bytes) */
@@ -215,13 +240,13 @@ pipeline_slave_code_dg(void *data)
 
     /* right offset for rd[] and x[] needed and since no overlap,
        can wait for all chunks to complete  */
-    calculate_leverage(&gd->p[tid][ci*(gd->M[tid])],&gd->rd[tid][8*cj*t->Nbase],&gd->x[tid][8*cj*t->Nbase], gd->M[tid], 8*ntiles*t->Nbase, gd->cbhandle[tid], gd->gWORK[tid], cj, ntiles, gd->lmdata[tid]);
+    calculate_leverage(&gd->p[tid][ci*(gd->M[tid])],&gd->rd[tid][8*cj*t->Nbase],&gd->x[tid][8*cj*t->Nbase], gd->M[tid], 8*ntiles*t->Nbase, gd->cbhandle[tid], gd->solver_handle[tid], gd->gWORK[tid], cj, ntiles, gd->lmdata[tid]);
 
     cj=cj+tilechunk;
    }
 
   } else if (gd->status[tid]==PT_DO_AGPU) {
-    attach_gpu_to_thread2(tid,&gd->cbhandle[tid],&gd->gWORK[tid],gd->data_size,1);
+    attach_gpu_to_thread2(tid,&gd->cbhandle[tid],&gd->solver_handle[tid],&gd->gWORK[tid],gd->data_size,1);
     
     /* copy residual vector to device */
     cudaError_t err;
@@ -233,7 +258,7 @@ pipeline_slave_code_dg(void *data)
     checkCudaError(err,__FILE__,__LINE__);
   } else if (gd->status[tid]==PT_DO_DGPU) {
     cudaFree(gd->rd[tid]);
-    detach_gpu_from_thread2(tid,gd->cbhandle[tid],gd->gWORK[tid],1);
+    detach_gpu_from_thread2(gd->cbhandle[tid],gd->solver_handle[tid],gd->gWORK[tid],1);
   } else if (gd->status[tid]!=PT_DO_NOTHING) { /* catch error */ 
     fprintf(stderr,"%s: %d: invalid mode for slave tid=%d status=%d\n",__FILE__,__LINE__,tid,gd->status[tid]);
     exit(1);
@@ -265,8 +290,12 @@ init_pipeline_dg(th_pipeline *pline,
     fprintf(stderr,"no free memory\n");
     exit(1);
  }
+ if ((pline->thst=(taskhist*)malloc(sizeof(taskhist)))==0) {
+    fprintf(stderr,"no free memory\n");
+    exit(1);
+ }
 
-
+ init_task_hist(pline->thst);
  t0->pline=t1->pline=pline;
  t0->tid=0;
  t1->tid=1; /* link back t1, t2 to data so they could be freed */
@@ -291,6 +320,8 @@ destroy_pipeline_dg(th_pipeline *pline)
  destroy_th_barrier(&(pline->gate1));
  destroy_th_barrier(&(pline->gate2));
  pthread_attr_destroy(&(pline->attr));
+ destroy_task_hist(pline->thst);
+ free(pline->thst);
  free(pline->sd0);
  free(pline->sd1);
  pline->data=NULL;
@@ -321,7 +352,7 @@ calculate_diagnostics(double *u,double *v,double *w,double *p,double *xo,int N,i
   Nbase1=Nbase*tilesz;
 
   double *ddcoh;
-  char *ddbase;
+  short *ddbase;
 
   int c0,c1;
 
@@ -356,7 +387,7 @@ calculate_diagnostics(double *u,double *v,double *w,double *p,double *xo,int N,i
      fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
      exit(1);
   }
-  if ((ddbase=(char*)calloc((size_t)(Nbase1*3),sizeof(char)))==0) {
+  if ((ddbase=(short*)calloc((size_t)(Nbase1*3),sizeof(short)))==0) {
      fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
      exit(1);
   }
@@ -402,7 +433,7 @@ calculate_diagnostics(double *u,double *v,double *w,double *p,double *xo,int N,i
    */
    int Mm=8*N; /* no of parameters */
    int64_t data_sz=0;
-   data_sz=(int64_t)(n+Mm*n+3*Mm*Mm+3*Mm+Nbase1*8)*sizeof(float)+(int64_t)Nbase1*3*sizeof(char);
+   data_sz=(int64_t)(n+Mm*n+3*Mm*Mm+3*Mm+Nbase1*8)*sizeof(float)+(int64_t)Nbase1*3*sizeof(short);
   tpg.data_size=data_sz;
   tpg.lmdata[0]=&lmdata0;
   tpg.lmdata[1]=&lmdata1;

@@ -211,404 +211,6 @@ mylm_fit_single_pth(double *p, double *x, int m, int n, void *data) {
 }
 
 
-/* worker thread function for prediction */
-/* assuming no hybrid parameters */
-static void *
-predict_threadfn_withgain0(void *data) {
- thread_data_base_t *t=(thread_data_base_t*)data;
- 
- int ci,cm,sta1,sta2;
- complex double C[4],G1[4],G2[4],T1[4],T2[4];
- int M=(t->M);
- cm=(t->clus);
- for (ci=0; ci<t->Nb; ci++) {
-   /* iterate over the sky model and calculate contribution */
-   /* for this x[8*ci:8*(ci+1)-1] */
-   memset(&(t->x[8*ci]),0,sizeof(double)*8);
-
-      /* if this baseline is flagged, we do not compute */
-   if (!t->barr[ci].flag) {
-
-   /* stations for this baseline */
-   sta1=t->barr[ci].sta1;
-   sta2=t->barr[ci].sta2;
-     /* gains for this cluster, for sta1,sta2 */
-     G1[0]=(t->p[sta1*8])+_Complex_I*(t->p[sta1*8+1]);
-     G1[1]=(t->p[sta1*8+2])+_Complex_I*(t->p[sta1*8+3]);
-     G1[2]=(t->p[sta1*8+4])+_Complex_I*(t->p[sta1*8+5]);
-     G1[3]=(t->p[sta1*8+6])+_Complex_I*(t->p[sta1*8+7]);
-     G2[0]=(t->p[sta2*8])+_Complex_I*(t->p[sta2*8+1]);
-     G2[1]=(t->p[sta2*8+2])+_Complex_I*(t->p[sta2*8+3]);
-     G2[2]=(t->p[sta2*8+4])+_Complex_I*(t->p[sta2*8+5]);
-     G2[3]=(t->p[sta2*8+6])+_Complex_I*(t->p[sta2*8+7]);
-
-
-      /* use pre calculated values */
-      C[0]=t->coh[4*M*ci+4*cm];
-      C[1]=t->coh[4*M*ci+4*cm+1];
-      C[2]=t->coh[4*M*ci+4*cm+2];
-      C[3]=t->coh[4*M*ci+4*cm+3];
-
-
-     /* form G1*C*G2' */
-     /* T1=G1*C  */
-     amb(G1,C,T1);
-     /* T2=T1*G2' */
-     ambt(T1,G2,T2);
-
-     /* add to baseline visibilities */
-     t->x[8*ci]+=creal(T2[0]);
-     t->x[8*ci+1]+=cimag(T2[0]);
-     t->x[8*ci+2]+=creal(T2[1]);
-     t->x[8*ci+3]+=cimag(T2[1]);
-     t->x[8*ci+4]+=creal(T2[2]);
-     t->x[8*ci+5]+=cimag(T2[2]);
-     t->x[8*ci+6]+=creal(T2[3]);
-     t->x[8*ci+7]+=cimag(T2[3]);
-   }
- }
-
- return NULL;
-}
-
-
-/* minimization function (multithreaded) : not considering 
-  hybrid parameter space */
-/* p: size mx1 parameters
-   x: size nx1 data calculated
-   data: extra info needed */
-static void
-mylm_fit_single_pth0(double *p, double *x, int m, int n, void *data) {
-
-  me_data_t *dp=(me_data_t*)data;
-  /* u,v,w : size Nbase*tilesz x 1  x: size Nbase*8*tilesz x 1 */
-  /* barr: size Nbase*tilesz x 1 carr: size Mx1 */
-  /* pp: size 8*N*M x 1 */
-  /* pm: size Mx1 of double */
-
-  int nth,nth1,ci;
-
-  /* no of threads */
-  int Nt=(dp->Nt);
-  int Nthb0,Nthb;
-  pthread_attr_t attr;
-  pthread_t *th_array;
-  thread_data_base_t *threaddata;
-
-  int Nbase1=(dp->Nbase)*(dp->tilesz);
-  int boff=(dp->Nbase)*(dp->tileoff);
-
-  /* calculate min baselines a thread can handle */
-  //Nthb0=ceil((double)Nbase1/(double)Nt);
-  Nthb0=(Nbase1+Nt-1)/Nt;
-
-  /* setup threads */
-  pthread_attr_init(&attr);
-  pthread_attr_setdetachstate(&attr,PTHREAD_CREATE_JOINABLE);
-
-  if ((th_array=(pthread_t*)malloc((size_t)Nt*sizeof(pthread_t)))==0) {
-   fprintf(stderr,"%s: %d: No free memory\n",__FILE__,__LINE__);
-   exit(1);
-  }
-  if ((threaddata=(thread_data_base_t*)malloc((size_t)Nt*sizeof(thread_data_base_t)))==0) {
-    fprintf(stderr,"%s: %d: No free memory\n",__FILE__,__LINE__);
-    exit(1);
-  }
-
-  /* iterate over threads, allocating baselines per thread */
-  ci=0;
-  for (nth=0;  nth<Nt && ci<Nbase1; nth++) {
-    /* this thread will handle baselines [ci:min(Nbase1-1,ci+Nthb0-1)] */
-    /* determine actual no. of baselines */
-    if (ci+Nthb0<Nbase1) {
-     Nthb=Nthb0;
-    } else {
-     Nthb=Nbase1-ci;
-    }
-
-    threaddata[nth].Nb=Nthb;
-    threaddata[nth].barr=&(dp->barr[ci+boff]);
-    threaddata[nth].u=&(dp->u[ci]);
-    threaddata[nth].v=&(dp->v[ci]);
-    threaddata[nth].w=&(dp->w[ci]);
-    threaddata[nth].carr=dp->carr;
-    threaddata[nth].M=dp->M;
-    threaddata[nth].x=&(x[8*ci]);
-    threaddata[nth].N=dp->N;
-    threaddata[nth].p=p; /* note the difference: here p assumes no hybrid */
-    threaddata[nth].clus=(dp->clus);
-    threaddata[nth].coh=&(dp->coh[4*(dp->M)*(ci+boff)]);
-    
-    //printf("thread %d predict  data from %d baselines %d\n",nth,8*ci,Nthb);
-    pthread_create(&th_array[nth],&attr,predict_threadfn_withgain0,(void*)(&threaddata[nth]));
-    /* next baseline set */
-    ci=ci+Nthb;
-  }
-
-  /* now wait for threads to finish */
-  for(nth1=0; nth1<nth; nth1++) {
-   pthread_join(th_array[nth1],NULL);
-  }
-
- pthread_attr_destroy(&attr);
-
-
- free(th_array);
- free(threaddata);
-
- return;
-}
-
-
-/* minimization function (single thread) */
-/* p: size mx1 parameters
-   x: size nx1 data calculated
-   data: extra info needed */
-static void
-mylm_fit_single(double *p, double *x, int m, int n, void *data) {
-
-  me_data_t *dp=(me_data_t*)data;
-  /* u,v,w : size Nbase*tilesz x 1  x: size Nbase*8*tilesz x 1 */
-  /* barr: size Nbase*tilesz x 1 carr: size Mx1 */
-  /* pp: size 8*N*M x 1 */
-
-  double phterm,sinph,cosph;
-  int ci,cm,cn,sta1,sta2;
-
-  complex double C[4],G1[4],G2[4],T1[4],T2[4];
-  complex double prodterm;
-
-
- cm=dp->clus; /* which cluster to use */
- for (ci=0; ci<(dp->Nbase); ci++) {
-   /* iterate over the sky model and calculate contribution */
-   /* for this x[8*ci:8*(ci+1)-1] */
-   memset(&(x[8*ci]),0,sizeof(double)*8);
-
-   /* if this baseline is flagged, we do not compute */
-   if (!dp->barr[ci].flag) {
-
-   /* stations for this baseline */
-   sta1=dp->barr[ci].sta1;
-   sta2=dp->barr[ci].sta2;
-     /* gains for this cluster, for sta1,sta2 */
-     G1[0]=(p[sta1*8])+_Complex_I*(p[sta1*8+1]);
-     G1[1]=(p[sta1*8+2])+_Complex_I*(p[sta1*8+3]);
-     G1[2]=(p[sta1*8+4])+_Complex_I*(p[sta1*8+5]);
-     G1[3]=(p[sta1*8+6])+_Complex_I*(p[sta1*8+7]);
-     G2[0]=(p[sta2*8])+_Complex_I*(p[sta2*8+1]);
-     G2[1]=(p[sta2*8+2])+_Complex_I*(p[sta2*8+3]);
-     G2[2]=(p[sta2*8+4])+_Complex_I*(p[sta2*8+5]);
-     G2[3]=(p[sta2*8+6])+_Complex_I*(p[sta2*8+7]);
-
-
-     memset(C,0,sizeof(complex double)*4);
-     for (cn=0; cn<dp->carr[cm].N; cn++) {
-       phterm=2.0*M_PI*(dp->u[ci]*dp->carr[cm].ll[cn]+dp->v[ci]*dp->carr[cm].mm[cn]+dp->w[ci]*dp->carr[cm].nn[cn]);
-       sinph=sin(phterm);
-       cosph=cos(phterm);
-       /* accumulate coherency, scaled by 1/2 */
-       prodterm=dp->carr[cm].sI[cn]*(cosph+_Complex_I*sinph)*0.5;
-       C[0]+=prodterm;
-       C[3]+=prodterm;
-     }
-
-     /* form G1*C*G2' */
-     //memset(T1,0,sizeof(complex double)*4);
-     //memset(T2,0,sizeof(complex double)*4);
-     /* T1=G1*C  */
-     amb(G1,C,T1);
-     /* T2=T1*G2' */
-     ambt(T1,G2,T2);
-
-     /* add to baseline visibilities */
-     x[8*ci]+=creal(T2[0]);
-     x[8*ci+1]+=cimag(T2[0]);
-     x[8*ci+2]+=creal(T2[1]);
-     x[8*ci+3]+=cimag(T2[1]);
-     x[8*ci+4]+=creal(T2[2]);
-     x[8*ci+5]+=cimag(T2[2]);
-     x[8*ci+6]+=creal(T2[3]);
-     x[8*ci+7]+=cimag(T2[3]);
-   }
- }
-
-}
-
-
-/* worker thread function for prediction */
-static void *
-jacobian_threadfn(void *data) {
- thread_data_jac_t *t=(thread_data_jac_t*)data;
- 
- int ci,cm,cn,sta1,sta2,col;
- complex double C[4],G1[4],G2[4],T1[4],T2[4];
- double pp1[8],pp2[8];
- int M=(t->M);
- cm=(t->clus);
- int stc,stoff;
-
- /* Loop order to minimize cache misses */
- /* we calculate the jacobian (nxm) columns [startc...endc] */
- for (col=t->start_col; col<=t->end_col; col++) {
- /* iterate over row */
- for (ci=0; ci<t->Nb; ci++) {
-
-   /* if this baseline is flagged,
-     or if this parameter does not belong to sta1 or sta2
-     we do not compute */
-   stc=col/8; /* 0..N-1 */
-   /* stations for this baseline */
-   sta1=t->barr[ci].sta1;
-   sta2=t->barr[ci].sta2;
-
-   /* change order for checking condition to minimize cache misses 
-     since sta2 will appear more, first check that ??? */
-   if ( ((stc==sta2)||(stc==sta1)) && (!t->barr[ci].flag) ) {
-
-      /* use pre calculated values */
-      C[0]=t->coh[4*M*ci+4*cm];
-      C[1]=t->coh[4*M*ci+4*cm+1];
-      C[2]=t->coh[4*M*ci+4*cm+2];
-      C[3]=t->coh[4*M*ci+4*cm+3];
-
-     /* which parameter exactly 0..7 */
-     stoff=col%8;
-     //printf("sta1=%d,sta2=%d,stc=%d,off=%d,col=%d,param=%d\n",sta1,sta2,stc,col%8,col,stc*8+stoff);
-     if (stc==sta1) {
-      for (cn=0; cn<8; cn++) {
-       pp1[cn]=0.0;
-       pp2[cn]=t->p[sta2*8+cn];
-      }
-      pp1[stoff]=1.0;
-     } else if (stc==sta2) {
-      for (cn=0; cn<8; cn++) {
-       pp2[cn]=0.0;
-       pp1[cn]=t->p[sta1*8+cn];
-      }
-      pp2[stoff]=1.0;
-     }
-     /* gains for this cluster, for sta1,sta2 */
-     G1[0]=pp1[0]+_Complex_I*pp1[1];
-     G1[1]=pp1[2]+_Complex_I*pp1[3];
-     G1[2]=pp1[4]+_Complex_I*pp1[5];
-     G1[3]=pp1[6]+_Complex_I*pp1[7];
-     G2[0]=pp2[0]+_Complex_I*pp2[1];
-     G2[1]=pp2[2]+_Complex_I*pp2[3];
-     G2[2]=pp2[4]+_Complex_I*pp2[5];
-     G2[3]=pp2[6]+_Complex_I*pp2[7];
-
-     /* form G1*C*G2' */
-     /* T1=G1*C  */
-     amb(G1,C,T1);
-     /* T2=T1*G2' */
-     ambt(T1,G2,T2);
-
-     /* add to baseline visibilities */
-     /* NOTE: row major order */
-     t->jac[col+(t->m)*8*ci]=creal(T2[0]);
-     t->jac[col+(t->m)*(8*ci+1)]=cimag(T2[0]);
-     t->jac[col+(t->m)*(8*ci+2)]=creal(T2[1]);
-     t->jac[col+(t->m)*(8*ci+3)]=cimag(T2[1]);
-     t->jac[col+(t->m)*(8*ci+4)]=creal(T2[2]);
-     t->jac[col+(t->m)*(8*ci+5)]=cimag(T2[2]);
-     t->jac[col+(t->m)*(8*ci+6)]=creal(T2[3]);
-     t->jac[col+(t->m)*(8*ci+7)]=cimag(T2[3]);
-
-   } 
-   }
- }
-
- return NULL;
-}
-
-/* jacobian function (multithreaded) */
-/* p: size mx1 parameters
-   jac: size nxm jacobian to be calculated (row major)
-   data: extra info needed */
-static void
-mylm_jac_single_pth(double *p, double *jac, int m, int n, void *data) {
-
-  me_data_t *dp=(me_data_t*)data;
-  /* u,v,w : size Nbase*tilesz x 1  x: size Nbase*8*tilesz x 1 */
-  /* barr: size Nbase*tilesz x 1 carr: size Mx1 */
-  /* pp: size 8*N*M x 1 */
-  /* pm: size Mx1 of double */
-
-  int nth,ci;
-
-  /* no of threads */
-  int Nt=(dp->Nt);
-  int Nthcol;
-  pthread_attr_t attr;
-  pthread_t *th_array;
-  thread_data_jac_t *threaddata;
-
-  int Nbase=(dp->Nbase);
-
-
-  /* calculate min columns of the jacobian one thread can handle */
-  Nthcol=(m+Nt-1)/Nt;
-
-  /* setup threads */
-  pthread_attr_init(&attr);
-  pthread_attr_setdetachstate(&attr,PTHREAD_CREATE_JOINABLE);
-
-  if ((th_array=(pthread_t*)malloc((size_t)Nt*sizeof(pthread_t)))==0) {
-   fprintf(stderr,"%s: %d: No free memory\n",__FILE__,__LINE__);
-   exit(1);
-  }
-  if ((threaddata=(thread_data_jac_t*)malloc((size_t)Nt*sizeof(thread_data_jac_t)))==0) {
-    fprintf(stderr,"%s: %d: No free memory\n",__FILE__,__LINE__);
-    exit(1);
-  }
-  /* set jacobian to all zeros */
-  memset(jac,0,sizeof(double)*n*m);
-  /* iterate over threads, allocating baselines per thread */
-  ci=0;
-  for (nth=0;  nth<Nt; nth++) {
-    /* this thread will handle columns [ci:min(m-1,ci+Nthcol0-1)] */
-    threaddata[nth].Nb=Nbase; /* n=Nbase*8 */
-    threaddata[nth].n=n; /* n=Nbase*8 */
-    threaddata[nth].m=m; /* no of parameters */
-    threaddata[nth].barr=dp->barr;
-    threaddata[nth].u=dp->u;
-    threaddata[nth].v=dp->v;
-    threaddata[nth].w=dp->w;
-    threaddata[nth].carr=dp->carr;
-    threaddata[nth].M=dp->M;
-    threaddata[nth].jac=jac; /* NOTE: jacobian is in row major order */
-    threaddata[nth].N=dp->N;
-    threaddata[nth].p=p;
-    threaddata[nth].clus=(dp->clus);
-    threaddata[nth].coh=dp->coh;
-    threaddata[nth].start_col=ci;
-    threaddata[nth].end_col=ci+Nthcol-1;
-    if (threaddata[nth].end_col>=m) {
-     threaddata[nth].end_col=m-1;
-    }
-    
-    //printf("thread %d calculate cols %d to %d\n",nth,threaddata[nth].start_col, threaddata[nth].end_col);
-    pthread_create(&th_array[nth],&attr,jacobian_threadfn,(void*)(&threaddata[nth]));
-    /* next baseline set */
-    ci=ci+Nthcol;
-  }
-
-  /* now wait for threads to finish */
-  for(nth=0; nth<Nt; nth++) {
-   pthread_join(th_array[nth],NULL);
-  }
-
- pthread_attr_destroy(&attr);
-
- free(th_array);
- free(threaddata);
-
- return;
-}
-
-
-
 /******************** end sage minimization *****************************/
 
 void
@@ -645,96 +247,6 @@ print_levmar_info(double e_0, double e_final,int itermax, int info, int fnum, in
 
 
 /******************** full minimization *****************************/
-/* minimization function (single thread)  full parameter space*/
-/* p: size mx1 parameters
-   x: size nx1 data calculated
-   data: extra info needed */
-static void
-minimize_viz_full(double *p, double *x, int m, int n, void *data) {
-
-  me_data_t *dp=(me_data_t*)data;
-  /* u,v,w : size Nbase*tilesz x 1  x: size Nbase*8*tilesz x 1 */
-  /* barr: size Nbase*tilesz x 1 carr: size Mx1 */
-  /* pp: size 8*N*M x 1 */
-  /* pm: size Mx1 of double */
-
-  double **pm;
-
-  double phterm,sinph,cosph;
-  int ci,cm,cn,sta1,sta2;
-  
-  complex double C[4],G1[4],G2[4],T1[4],T2[4];
-  complex double prodterm;
-
-  /* pointers to parameters */
-  if ((pm=(double**)calloc((size_t)(dp->M),sizeof(double*)))==0) {
-     fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
-     exit(1);
-  }
-  /* setup the pointers */
-  for (ci=0; ci<(dp->M); ci++) {
-   pm[ci]=&(p[ci*8*((dp->N))]);
-  }
-
- for (ci=0; ci<(dp->Nbase); ci++) {
-   /* iterate over the sky model and calculate contribution */
-   /* for this x[8*ci:8*(ci+1)-1] */
-   memset(&(x[8*ci]),0,sizeof(double)*8);
-
-   /* if this baseline is flagged, we do not compute */
-   if (!dp->barr[ci].flag) {
-
-   /* stations for this baseline */
-   sta1=dp->barr[ci].sta1;
-   sta2=dp->barr[ci].sta2;
-   for (cm=0; cm<(dp->M); cm++) { /* clusters */
-     /* gains for this cluster, for sta1,sta2 */
-     G1[0]=(pm[cm][sta1*8])+_Complex_I*(pm[cm][sta1*8+1]);
-     G1[1]=(pm[cm][sta1*8+2])+_Complex_I*(pm[cm][sta1*8+3]);
-     G1[2]=(pm[cm][sta1*8+4])+_Complex_I*(pm[cm][sta1*8+5]);
-     G1[3]=(pm[cm][sta1*8+6])+_Complex_I*(pm[cm][sta1*8+7]);
-     G2[0]=(pm[cm][sta2*8])+_Complex_I*(pm[cm][sta2*8+1]);
-     G2[1]=(pm[cm][sta2*8+2])+_Complex_I*(pm[cm][sta2*8+3]);
-     G2[2]=(pm[cm][sta2*8+4])+_Complex_I*(pm[cm][sta2*8+5]);
-     G2[3]=(pm[cm][sta2*8+6])+_Complex_I*(pm[cm][sta2*8+7]);
-
-
-     memset(C,0,sizeof(complex double)*4);
-     for (cn=0; cn<dp->carr[cm].N; cn++) {
-       phterm=2.0*M_PI*(dp->u[ci]*dp->carr[cm].ll[cn]+dp->v[ci]*dp->carr[cm].mm[cn]+dp->w[ci]*dp->carr[cm].nn[cn]);
-       sinph=sin(phterm);
-       cosph=cos(phterm);
-       /* accumulate coherency, scaled by 1/2 */
-       prodterm=dp->carr[cm].sI[cn]*(cosph+_Complex_I*sinph)*0.5;
-       C[0]+=prodterm;
-       C[3]+=prodterm;
-     }
-
-     /* form G1*C*G2' */
-     //memset(T1,0,sizeof(complex double)*4);
-     //memset(T2,0,sizeof(complex double)*4);
-     /* T1=G1*C  */
-     amb(G1,C,T1);
-     /* T2=T1*G2' */
-     ambt(T1,G2,T2);
-
-     /* add to baseline visibilities */
-     x[8*ci]+=creal(T2[0]);
-     x[8*ci+1]+=cimag(T2[0]);
-     x[8*ci+2]+=creal(T2[1]);
-     x[8*ci+3]+=cimag(T2[1]);
-     x[8*ci+4]+=creal(T2[2]);
-     x[8*ci+5]+=cimag(T2[2]);
-     x[8*ci+6]+=creal(T2[3]);
-     x[8*ci+7]+=cimag(T2[3]);
-   }
-  }
- }
-
- free(pm);
-
- return;
-}
 
 /* worker thread function for prediction */
 static void *
@@ -905,207 +417,8 @@ minimize_viz_full_pth(double *p, double *x, int m, int n, void *data) {
 }
 
 
-/* worker thread function for prediction */
-static void *
-predict_threadfn_withgain_full_final(void *data) {
- thread_data_base_t *t=(thread_data_base_t*)data;
- 
- int ci,cm,sta1,sta2;
- double *pm;
- complex double C[4],G1[4],G2[4],T1[4],T2[4];
- int M=(t->M);
- int Ntilebase=(t->Nbase)*(t->tilesz);
- int px;
-
- for (ci=0; ci<t->Nb; ci++) {
-   /* iterate over the sky model and calculate contribution */
-   /* for this x[8*ci:8*(ci+1)-1] */
-   memset(&(t->x[8*ci]),0,sizeof(double)*8);
-
-   /* if this baseline is flagged, we do not compute */
-   if (!t->barr[ci+t->boff].flag || (t->barr[ci+t->boff].flag==2) ) {
-
-   /* stations for this baseline */
-   sta1=t->barr[ci+t->boff].sta1;
-   sta2=t->barr[ci+t->boff].sta2;
-   for (cm=0; cm<M; cm++) { /* clusters */
-     /* gains for this cluster, for sta1,sta2 */
-     px=(ci+t->boff)/((Ntilebase+t->carr[cm].nchunk-1)/t->carr[cm].nchunk);
-     //pm=&(t->p[cm*8*N]);
-     pm=&(t->p[t->carr[cm].p[px]]);
-
-     G1[0]=(pm[sta1*8])+_Complex_I*(pm[sta1*8+1]);
-     G1[1]=(pm[sta1*8+2])+_Complex_I*(pm[sta1*8+3]);
-     G1[2]=(pm[sta1*8+4])+_Complex_I*(pm[sta1*8+5]);
-     G1[3]=(pm[sta1*8+6])+_Complex_I*(pm[sta1*8+7]);
-     G2[0]=(pm[sta2*8])+_Complex_I*(pm[sta2*8+1]);
-     G2[1]=(pm[sta2*8+2])+_Complex_I*(pm[sta2*8+3]);
-     G2[2]=(pm[sta2*8+4])+_Complex_I*(pm[sta2*8+5]);
-     G2[3]=(pm[sta2*8+6])+_Complex_I*(pm[sta2*8+7]);
-
-
-      /* use pre calculated values */
-      C[0]=t->coh[4*M*ci+4*cm];
-      C[1]=t->coh[4*M*ci+4*cm+1];
-      C[2]=t->coh[4*M*ci+4*cm+2];
-      C[3]=t->coh[4*M*ci+4*cm+3];
-
-     /* form G1*C*G2' */
-     /* T1=G1*C  */
-     amb(G1,C,T1);
-     /* T2=T1*G2' */
-     ambt(T1,G2,T2);
-
-     /* add to baseline visibilities */
-     t->x[8*ci]+=creal(T2[0]);
-     t->x[8*ci+1]+=cimag(T2[0]);
-     t->x[8*ci+2]+=creal(T2[1]);
-     t->x[8*ci+3]+=cimag(T2[1]);
-     t->x[8*ci+4]+=creal(T2[2]);
-     t->x[8*ci+5]+=cimag(T2[2]);
-     t->x[8*ci+6]+=creal(T2[3]);
-     t->x[8*ci+7]+=cimag(T2[3]);
-   }
-  }
- }
-
- return NULL;
-}
-
-
-/* minimization function (multithreaded), with short baselines */
-/* p: size mx1 parameters
-   x: size nx1 data calculated
-   data: extra info needed */
-static void
-minimize_viz_full_pth_final(double *p, double *x, int m, int n, void *data) {
-
-  me_data_t *dp=(me_data_t*)data;
-  /* u,v,w : size Nbase*tilesz x 1  x: size Nbase*8*tilesz x 1 */
-  /* barr: size Nbase*tilesz x 1 carr: size Mx1 */
-  /* pp: size 8*N*M x 1 */
-  /* pm: size Mx1 of double */
-
-  int nth,nth1,ci;
-
-  /* no of threads */
-  int Nt=(dp->Nt);
-  int Nthb0,Nthb;
-  pthread_attr_t attr;
-  pthread_t *th_array;
-  thread_data_base_t *threaddata;
-
-  int Nbase1=(dp->Nbase)*(dp->tilesz);
-
-  /* calculate min baselines a thread can handle */
-  Nthb0=(Nbase1+Nt-1)/Nt;
-
-  /* setup threads */
-  pthread_attr_init(&attr);
-  pthread_attr_setdetachstate(&attr,PTHREAD_CREATE_JOINABLE);
-
-  if ((th_array=(pthread_t*)malloc((size_t)Nt*sizeof(pthread_t)))==0) {
-   fprintf(stderr,"%s: %d: No free memory\n",__FILE__,__LINE__);
-   exit(1);
-  }
-  if ((threaddata=(thread_data_base_t*)malloc((size_t)Nt*sizeof(thread_data_base_t)))==0) {
-    fprintf(stderr,"%s: %d: No free memory\n",__FILE__,__LINE__);
-    exit(1);
-  }
-
-
-  /* iterate over threads, allocating baselines per thread */
-  ci=0;
-  for (nth=0;  nth<Nt && ci<Nbase1; nth++) {
-    /* this thread will handle baselines [ci:min(Nbase1-1,ci+Nthb0-1)] */
-    /* determine actual no. of baselines */
-    if (ci+Nthb0<Nbase1) {
-     Nthb=Nthb0;
-    } else {
-     Nthb=Nbase1-ci;
-    }
-
-    threaddata[nth].boff=ci;
-    threaddata[nth].Nb=Nthb;
-    threaddata[nth].barr=dp->barr;
-    threaddata[nth].u=&(dp->u[ci]);
-    threaddata[nth].v=&(dp->v[ci]);
-    threaddata[nth].w=&(dp->w[ci]);
-    threaddata[nth].carr=dp->carr;
-    threaddata[nth].M=dp->M;
-    threaddata[nth].x=&(x[8*ci]);
-    threaddata[nth].p=p;
-    threaddata[nth].N=dp->N;
-    threaddata[nth].Nbase=dp->Nbase;
-    threaddata[nth].tilesz=dp->tilesz;
-    threaddata[nth].coh=&(dp->coh[4*(dp->M)*ci]);
-    
-    //printf("thread %d predict  data from %d baselines %d\n",nth,8*ci,Nthb);
-    pthread_create(&th_array[nth],&attr,predict_threadfn_withgain_full_final,(void*)(&threaddata[nth]));
-    /* next baseline set */
-    ci=ci+Nthb;
-  }
-
-  /* now wait for threads to finish */
-  for(nth1=0; nth1<nth; nth1++) {
-   pthread_join(th_array[nth1],NULL);
-  }
-
- pthread_attr_destroy(&attr);
-
-
- free(th_array);
- free(threaddata);
-
-}
-
 /******************** end full minimization *****************************/
 /******************** minimization  with 2 GPU  *****************************/
-static void *
-pth_run_lmfit(void *data) {
-  thread_clm_data *dp=(thread_clm_data*)data;
-  me_data_t *t=(me_data_t *)dp->lmdata;
-  int ret;
-  int ci;
-
-  cublasHandle_t cbhandle;
-  /* divide the tiles into chunks tilesz/nchunk */
-  int tilechunk=(t->tilesz+t->carr[t->clus].nchunk-1)/t->carr[t->clus].nchunk;
-  int cj=0; 
-  int ntiles;
-  double init_res,final_res;
-  init_res=final_res=0.0;
-  if (dp->card<2) {
-   attach_gpu_to_thread(dp->card,&cbhandle);
-   /* for GPU, the cost func and jacobian are not used */
-   /* loop over each chunk, with right parameter set and data set */
-   for (ci=0; ci<t->carr[t->clus].nchunk; ci++) {
-     /* divide the tiles into chunks tilesz/nchunk */
-     if (cj+tilechunk<t->tilesz) {
-      ntiles=tilechunk;
-     } else {
-      ntiles=t->tilesz-cj;
-     }
-
-     //ret=clevmar_der_single_cuda(NULL, NULL, dp->p, dp->x, dp->M, dp->N, dp->itermax, dp->opts, dp->info, dp->card, dp->linsolv, (void*)dp->lmdata);  
-     
-     //ret=clevmar_der_single_cuda(NULL, NULL, &dp->p[ci*(dp->M)], &dp->x[8*cj*t->Nbase], dp->M, 8*ntiles*t->Nbase, dp->itermax, dp->opts, dp->info, cbhandle, dp->linsolv, cj, ntiles, (void*)dp->lmdata);
-     ret=mlm_der_single_cuda(NULL, NULL, &dp->p[ci*(dp->M)], &dp->x[8*cj*t->Nbase], dp->M, 8*ntiles*t->Nbase, dp->itermax, NULL, dp->info, cbhandle, NULL, dp->linsolv, cj, ntiles, (void*)dp->lmdata);
-
-     init_res+=dp->info[0];
-     final_res+=dp->info[1];
-     cj=cj+tilechunk;
-   }
-
-  detach_gpu_from_thread(cbhandle);
-  } 
-
-  dp->info[0]=init_res;
-  dp->info[1]=final_res;
-  
-  return NULL;
-}
-
 /* struct and function for qsort */
 typedef struct w_n_ {
  int i;
@@ -1164,331 +477,9 @@ random_permutation(int n, int weighted_iter, double *w) {
   }
   return p;
 }
-
-int
-sagefit_visibilities_dual(double *u, double *v, double *w, double *x, int N,   
-   int Nbase, int tilesz,  baseline_t *barr,  clus_source_t *carr, complex double *coh, int M, int Mt, double freq0, double fdelta, double *pp, double uvmin, int Nt, int max_emiter, int max_iter, int max_lbfgs, int lbfgs_m, int gpu_threads, int linsolv, double nulow, double nuhigh, int randomize, double *mean_nu, double *res_0, double *res_1) {
-  /* u,v,w : size Nbase*tilesz x 1  x: size Nbase*8*tilesz x 1 */
-  /* barr: size Nbase*tilesz x 1 carr: size Mx1 */
-  /* pp: size 8*N*M x 1 */
-  /* pm: size Mx1 of double */
-
-
-  int  ci,cj,ret;
-  double *p; // parameters: m x 1
-  int m, n;
-  double opts[CLM_OPTS_SZ], info0[CLM_INFO_SZ], info1[CLM_INFO_SZ];
-  me_data_t lmdata0,lmdata1;
-  int Nbase1;
-
-  double *xdummy0,*xdummy1,*xsub,*xo;
-  double *nerr; /* array to store cost reduction per cluster */
-  int weighted_iter,this_itermax0,this_itermax1,total_iter;
-  double total_err;
-
-  /* rearraged memory for GPU use */
-  double *ddcoh;
-  char *ddbase;
-
-  int *cr=0; /* array for random permutation of clusters */
-  int c0,c1;
-
-  //opts[0]=LM_INIT_MU; opts[1]=1E-15; opts[2]=1E-15; opts[3]=1E-20;
-  opts[0]=CLM_INIT_MU; opts[1]=1E-9; opts[2]=1E-9; opts[3]=1E-9;
-  opts[4]=-CLM_DIFF_DELTA;
-
-  /*  no. of parameters >= than the no of clusters*8N */
-  m=N*Mt*8;
-  /* no of data */
-  n=Nbase*tilesz*8;
-
-  /* true no of baselines */
-  Nbase1=Nbase*tilesz;
-
-/********* thread data ******************/
-  pthread_attr_t attr;
-  pthread_t *th_array;
-  thread_clm_data *threaddata;
-  int Nthreads=2; /* NOTE: use 2 GPU cards */
-/****************************************/
-
-  /* use full parameter space */
-  p=pp;
-  lmdata0.clus=lmdata1.clus=-1;
-  /* setup data for lmfit */
-  lmdata0.u=lmdata1.u=u;
-  lmdata0.v=lmdata1.v=v;
-  lmdata0.w=lmdata1.w=w;
-  lmdata0.Nbase=lmdata1.Nbase=Nbase;
-  lmdata0.tilesz=lmdata1.tilesz=tilesz;
-  lmdata0.N=lmdata1.N=N;
-  lmdata0.barr=lmdata1.barr=barr;
-  lmdata0.carr=lmdata1.carr=carr;
-  lmdata0.M=lmdata1.M=M;
-  lmdata0.Mt=lmdata1.Mt=Mt;
-  lmdata0.freq0=lmdata1.freq0=&freq0;
-  lmdata0.Nt=lmdata1.Nt=Nt;
-  lmdata0.coh=lmdata1.coh=coh;
-  /* rearrange coh for GPU use */
-  if ((ddcoh=(double*)calloc((size_t)(M*Nbase1*8),sizeof(double)))==0) {
-     fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
-     exit(1);
-  }
-  if ((ddbase=(char*)calloc((size_t)(Nbase1*2),sizeof(char)))==0) {
-     fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
-     exit(1);
-  }
-  rearrange_coherencies(Nbase1, barr, coh, ddcoh, ddbase, M, Nt);
-  lmdata0.ddcoh=lmdata1.ddcoh=ddcoh;
-  lmdata0.ddbase=lmdata1.ddbase=ddbase;
-
-  if ((xsub=(double*)calloc((size_t)(n),sizeof(double)))==0) {
-     fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
-     exit(1);
-  }
-  if ((xo=(double*)calloc((size_t)(n),sizeof(double)))==0) {
-     fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
-     exit(1);
-  }
-  if ((xdummy0=(double*)calloc((size_t)(n),sizeof(double)))==0) {
-     fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
-     exit(1);
-  }
-  if ((xdummy1=(double*)calloc((size_t)(n),sizeof(double)))==0) {
-     fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
-     exit(1);
-  }
-  if ((nerr=(double*)calloc((size_t)(M),sizeof(double)))==0) {
-     fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
-     exit(1);
-  }
-  
-
-  /* remember for each partition how much the cost function decreases
-     in the next EM iteration, we allocate more LM iters to partitions
-     where const function significantly decreases. So two stages
-     1) equal LM iters (find the decrease) 2) weighted LM iters */
-  weighted_iter=0;
-  total_iter=M*max_iter; /* total iterations per EM */
-/********** setup threads *******************************/
-  pthread_attr_init(&attr);
-  pthread_attr_setdetachstate(&attr,PTHREAD_CREATE_JOINABLE);
-  if ((th_array=(pthread_t*)malloc((size_t)Nthreads*sizeof(pthread_t)))==0) {
-   fprintf(stderr,"%s: %d: No free memory\n",__FILE__,__LINE__);
-   exit(1);
-  }
-  if ((threaddata=(thread_clm_data*)malloc((size_t)Nthreads*sizeof(thread_clm_data)))==0) { 
-    fprintf(stderr,"%s: %d: No free memory\n",__FILE__,__LINE__);
-    exit(1);
-  }
-  
-/********** done setup threads *******************************/
-
-  /* initial residual calculation
-       subtract full model from data  */
-  minimize_viz_full_pth(p, xsub, m, n, (void*)&lmdata0);
-  memcpy(xo,x,(size_t)(n)*sizeof(double));
-  my_daxpy(n, xsub, -1.0, xo);
-  *res_0=my_dnrm2(n,xo)/(double)n;
-
-  for (ci=0; ci<max_emiter; ci++) {
-  /**************** EM iteration ***********************/
-    if (randomize) {
-     /* find a random permutation of clusters */
-     cr=random_permutation(M,weighted_iter,nerr);
-    }
-
-    for (cj=0; cj<M/2; cj++) { /* iter per cluster pairs */
-     if (randomize) {
-      c0=cr[2*cj];
-      c1=cr[2*cj+1];
-     } else {
-      c0=2*cj;
-      c1=2*cj+1;
-     }
-     /* calculate max LM iter for this cluster */
-     if (weighted_iter) {
-       /* assume permutation gives a sorted pair 
-       with almost equal nerr[] values */
-       this_itermax0=(int)floor((0.33*nerr[c0]+0.60/(double)M)*((double)total_iter));
-       this_itermax1=(int)floor((0.33*nerr[c1]+0.60/(double)M)*((double)total_iter));
-     } else {
-       this_itermax0=this_itermax1=max_iter;
-     }
-     //printf("Cluster pair %d(iter=%d,wt=%lf),%d(iter=%d,wt=%lf)\n",c0,this_itermax0,nerr[c0],c1,this_itermax1,nerr[c1]);
-     if (this_itermax0>0 || this_itermax1>0) {
-     /* calculate contribution from hidden data, subtract from x */
-     /* since x has already subtracted this model, just add
-        the ones we are solving for */
-     memcpy(xdummy0,xo,(size_t)(n)*sizeof(double));
-     memcpy(xdummy1,xo,(size_t)(n)*sizeof(double));
-     lmdata0.clus=c0;
-     lmdata1.clus=c1;
-
-     /* NOTE: conditional mean x^i = s^i + 0.5 * residual^i */
-     /* so xdummy=0.5 ( 2*model + residual ) */
-     mylm_fit_single_pth(p, xsub, 8*N, n, (void*)&lmdata0);
-     my_daxpy(n, xsub, 2.0, xdummy0);
-     my_dscal(n, 0.5, xdummy0);
-     my_daxpy(n, xsub, 1.0, xo);
-     mylm_fit_single_pth(p, xsub, 8*N, n, (void*)&lmdata1);
-     my_daxpy(n, xsub, 2.0, xdummy1);
-     my_dscal(n, 0.5, xdummy1);
-     my_daxpy(n, xsub, 1.0, xo);
-/**************************************************************************/
-     /* run this from a separate thread */
-     //threaddata[0].p=&p[8*N*c0];
-     threaddata[0].p=&p[carr[c0].p[0]];
-     threaddata[0].x=xdummy0;
-     threaddata[0].M=8*N; /* even though size of p is > M, dont change this */
-     threaddata[0].N=n; /* Nbase*tilesz*8 */
-     threaddata[0].itermax=this_itermax0;
-     threaddata[0].opts=opts;
-     threaddata[0].info=info0;
-     threaddata[0].card=0; /* first card */
-     threaddata[0].linsolv=linsolv;
-     threaddata[0].lmdata=&lmdata0;
-
-     //threaddata[1].p=&p[8*N*c1];
-     threaddata[1].p=&p[carr[c1].p[0]];
-     threaddata[1].x=xdummy1;
-     threaddata[1].M=8*N; /* even though size of p is > M, dont change this */
-     threaddata[1].N=n; /* Nbase*tilesz*8 */
-     threaddata[1].itermax=this_itermax1;
-     threaddata[1].opts=opts;
-     threaddata[1].info=info1;
-     threaddata[1].card=1; /* second card */
-     threaddata[1].linsolv=linsolv;
-     threaddata[1].lmdata=&lmdata1;
-
-     /* not: each thread will run minimization for each chunk of data */
-     pthread_create(&th_array[0],&attr,pth_run_lmfit,(void*)(&threaddata[0]));
-     pthread_create(&th_array[1],&attr,pth_run_lmfit,(void*)(&threaddata[1]));
-
-     pthread_join(th_array[0],NULL);
-     pthread_join(th_array[1],NULL);
-/**************************************************************************/
-
-     nerr[c0]=(info0[0]-info0[1])/info0[0];
-     nerr[c1]=(info1[0]-info1[1])/info1[0];
-
-     /* once again subtract solved model from data */
-     mylm_fit_single_pth(p, xsub, 8*N, n, (void*)&lmdata0);
-     my_daxpy(n, xsub, -1.0, xo);
-     mylm_fit_single_pth(p, xsub, 8*N, n, (void*)&lmdata1);
-     my_daxpy(n, xsub, -1.0, xo);
-
-    }
-   }
-   /* odd cluster out, if M is odd */
-   if (M%2) {
-     if (randomize) {
-      c0=cr[M-1];
-     } else {
-      c0=M-1;
-     }
-     /* calculate max LM iter for this cluster */
-     if (weighted_iter) {
-       this_itermax0=(int)floor((0.33*nerr[c0]+0.66/(double)M)*((double)total_iter));
-     } else {
-       this_itermax0=max_iter;
-     }
-    //printf("Cluster %d(iter=%d, wt=%lf)\n",c0,this_itermax0,nerr[c0]);
-     if (this_itermax0>0) {
-     /* calculate contribution from hidden data, subtract from x */
-     memcpy(xdummy0,xo,(size_t)(n)*sizeof(double));
-     lmdata0.clus=c0;
-     mylm_fit_single_pth(p, xsub, 8*N, n, (void*)&lmdata0);
-     my_daxpy(n, xsub, 1.0, xdummy0);
-     my_daxpy(n, xsub, 1.0, xo);
-
-/**************************************************************************/
-     /* run this from a separate thread */
-     //threaddata[0].p=&p[8*N*c0];
-     threaddata[0].p=&p[carr[c0].p[0]];
-     threaddata[0].x=xdummy0;
-     threaddata[0].M=8*N;
-     threaddata[0].N=n;
-     threaddata[0].itermax=this_itermax0;
-     threaddata[0].opts=opts;
-     threaddata[0].info=info0;
-     threaddata[0].card=0; /* first card */
-     threaddata[0].linsolv=linsolv;
-     threaddata[0].lmdata=&lmdata0;
-
-     pthread_create(&th_array[0],&attr,pth_run_lmfit,(void*)(&threaddata[0]));
-
-     pthread_join(th_array[0],NULL);
-/**************************************************************************/
-
-     nerr[c0]=(info0[0]-info0[1])/info0[0];
-     /* once again subtract solved model from data */
-     mylm_fit_single_pth(p, xsub, 8*N, n, (void*)&lmdata0);
-     my_daxpy(n, xsub, -1.0, xo);
-     }
-   }
-   /* normalize nerr array so that the sum is 1 */
-   total_err=my_dasum(M,nerr);
-   if (total_err>0.0) {
-    my_dscal(M, 1.0/total_err, nerr);
-   }
-   if (randomize && M>1) {
-    /* flip weighting flag */
-    weighted_iter=!weighted_iter;
-    free(cr);
-   }
-  /**************** End EM iteration ***********************/
- }
-  free(nerr);
-  free(xo);
-  free(xdummy0);
-  free(xdummy1);
-  free(ddcoh);
-  free(ddbase);
-
-  /******** free threads ***************/
-  free(th_array);
-  free(threaddata);
-  pthread_attr_destroy(&attr);
-  /******** done free threads ***************/
-
-  if (max_lbfgs>0) {
-  /* use LBFGS */
-   ret=lbfgs_fit(minimize_viz_full_pth, p, x, m, n, max_lbfgs, lbfgs_m, gpu_threads, (void*)&lmdata0);
-
-  } 
-  /* final residual calculation */
-  minimize_viz_full_pth(p, xsub, m, n, (void*)&lmdata0);
-  my_daxpy(n, xsub, -1.0, x);
-
-  *res_1=my_dnrm2(n,x)/(double)n;
-
-  *mean_nu=1.0;
-  free(xsub);
-
- /* if final residual > initial residual, 
-    return -1, else 0
- */
- if (*res_1>*res_0) {
-   return -1;
- }
- return 0;
-}
-
-
-
 /***************** reimplementation using persistant  GPU threads ***********/
 /****** 2GPU version ****************************/
 /*********   pipeline functions *****************/
-/* master run the pipeline */
-static void
-exec_pipeline(th_pipeline *pline)
-{
- //sync_barrier(&(pline->gate1));
- /* do something here */
- //sync_barrier(&(pline->gate2));
-}
-
 /* slave thread 2GPU function */
 static void *
 pipeline_slave_code(void *data)
@@ -1511,7 +502,6 @@ pipeline_slave_code(void *data)
   int tilechunk=(t->tilesz+t->carr[t->clus].nchunk-1)/t->carr[t->clus].nchunk;
 
 
-  int ret;
   int ci;
 
   int cj=0; 
@@ -1528,14 +518,12 @@ pipeline_slave_code(void *data)
      } else {
       ntiles=t->tilesz-cj;
      }
-     /* modified LM is disabled */
-     //ret=mlm_der_single_cuda(NULL, NULL, &gd->p[tid][ci*(gd->M[tid])], &gd->x[tid][8*cj*t->Nbase], gd->M[tid], 8*ntiles*t->Nbase, gd->itermax[tid], NULL, gd->info[tid], gd->cbhandle[tid], gd->gWORK[tid], gd->linsolv, cj, ntiles, (void*)gd->lmdata[tid]);
      if (gd->status[tid]==PT_DO_WORK_LM) {
-      ret=clevmar_der_single_cuda(NULL, NULL, &gd->p[tid][ci*(gd->M[tid])], &gd->x[tid][8*cj*t->Nbase], gd->M[tid], 8*ntiles*t->Nbase, gd->itermax[tid], gd->opts[tid], gd->info[tid], gd->cbhandle[tid], gd->gWORK[tid], gd->linsolv, cj, ntiles, (void*)gd->lmdata[tid]);
+      clevmar_der_single_cuda(NULL, NULL, &gd->p[tid][ci*(gd->M[tid])], &gd->x[tid][8*cj*t->Nbase], gd->M[tid], 8*ntiles*t->Nbase, gd->itermax[tid], gd->opts[tid], gd->info[tid], gd->cbhandle[tid], gd->solver_handle[tid], gd->gWORK[tid], gd->linsolv, cj, ntiles, (void*)gd->lmdata[tid]);
      } else if (gd->status[tid]==PT_DO_WORK_OSLM) {
-      ret=oslevmar_der_single_cuda(NULL, NULL, &gd->p[tid][ci*(gd->M[tid])], &gd->x[tid][8*cj*t->Nbase], gd->M[tid], 8*ntiles*t->Nbase, gd->itermax[tid], gd->opts[tid], gd->info[tid], gd->cbhandle[tid], gd->gWORK[tid], gd->linsolv, cj, ntiles, gd->randomize, (void*)gd->lmdata[tid]);
+      oslevmar_der_single_cuda(NULL, NULL, &gd->p[tid][ci*(gd->M[tid])], &gd->x[tid][8*cj*t->Nbase], gd->M[tid], 8*ntiles*t->Nbase, gd->itermax[tid], gd->opts[tid], gd->info[tid], gd->cbhandle[tid], gd->solver_handle[tid], gd->gWORK[tid], gd->linsolv, cj, ntiles, gd->randomize, (void*)gd->lmdata[tid]);
      } else if (gd->status[tid]==PT_DO_WORK_RLM) {
-      ret=rlevmar_der_single_cuda(NULL, NULL, &gd->p[tid][ci*(gd->M[tid])], &gd->x[tid][8*cj*t->Nbase], gd->M[tid], 8*ntiles*t->Nbase, gd->itermax[tid], gd->opts[tid], gd->info[tid], gd->cbhandle[tid], gd->gWORK[tid], gd->linsolv, cj, ntiles, gd->nulow,gd->nuhigh, (void*)gd->lmdata[tid]);
+      rlevmar_der_single_cuda(NULL, NULL, &gd->p[tid][ci*(gd->M[tid])], &gd->x[tid][8*cj*t->Nbase], gd->M[tid], 8*ntiles*t->Nbase, gd->itermax[tid], gd->opts[tid], gd->info[tid], gd->cbhandle[tid], gd->solver_handle[tid], gd->gWORK[tid], gd->linsolv, cj, ntiles, gd->nulow,gd->nuhigh, (void*)gd->lmdata[tid]);
      }
      init_res+=gd->info[tid][0];
      final_res+=gd->info[tid][1];
@@ -1549,9 +537,9 @@ pipeline_slave_code(void *data)
  
 /************************* work *********************/
   } else if (gd->status[tid]==PT_DO_AGPU) {
-   attach_gpu_to_thread1(tid,&gd->cbhandle[tid],&gd->gWORK[tid],gd->data_size);
+   attach_gpu_to_thread1(select_work_gpu(MAX_GPU_ID,td->pline->thst),&gd->cbhandle[tid],&gd->solver_handle[tid],&gd->gWORK[tid],gd->data_size);
   } else if (gd->status[tid]==PT_DO_DGPU) {
-   detach_gpu_from_thread1(tid,gd->cbhandle[tid],gd->gWORK[tid]);
+   detach_gpu_from_thread1(gd->cbhandle[tid],gd->solver_handle[tid],gd->gWORK[tid]);
   } else if (gd->status[tid]==PT_DO_MEMRESET) {
    reset_gpu_memory(gd->gWORK[tid],gd->data_size);
   }
@@ -1582,8 +570,12 @@ init_pipeline(th_pipeline *pline,
     fprintf(stderr,"no free memory\n");
     exit(1);
  }
+ if ((pline->thst=(taskhist*)malloc(sizeof(taskhist)))==0) {
+    fprintf(stderr,"no free memory\n");
+    exit(1);
+ }
 
-
+ init_task_hist(pline->thst);
  t0->pline=t1->pline=pline;
  t0->tid=0;
  t1->tid=1; /* link back t1, t2 to data so they could be freed */
@@ -1606,6 +598,8 @@ destroy_pipeline(th_pipeline *pline)
  destroy_th_barrier(&(pline->gate1));
  destroy_th_barrier(&(pline->gate2));
  pthread_attr_destroy(&(pline->attr));
+ destroy_task_hist(pline->thst);
+ free(pline->thst);
  free(pline->sd0);
  free(pline->sd1);
  pline->data=NULL;
@@ -1620,7 +614,7 @@ sagefit_visibilities_dual_pt(double *u, double *v, double *w, double *x, int N,
   /* pm: size Mx1 of double */
 
 
-  int  ci,cj,ret;
+  int  ci,cj;
   double *p; // parameters: m x 1
   int m, n;
   double opts[CLM_OPTS_SZ], info0[CLM_INFO_SZ], info1[CLM_INFO_SZ];
@@ -1635,7 +629,7 @@ sagefit_visibilities_dual_pt(double *u, double *v, double *w, double *x, int N,
 
   /* rearraged memory for GPU use */
   double *ddcoh;
-  char *ddbase;
+  short *ddbase;
 
   int *cr=0; /* array for random permutation of clusters */
   int c0,c1;
@@ -1680,7 +674,7 @@ sagefit_visibilities_dual_pt(double *u, double *v, double *w, double *x, int N,
      fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
      exit(1);
   }
-  if ((ddbase=(char*)calloc((size_t)(Nbase1*2),sizeof(char)))==0) {
+  if ((ddbase=(short*)calloc((size_t)(Nbase1*2),sizeof(short)))==0) {
      fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
      exit(1);
   }
@@ -1733,14 +727,12 @@ sagefit_visibilities_dual_pt(double *u, double *v, double *w, double *x, int N,
    /* determine total size for memory allocation */
    int Mm=8*N;
    int64_t data_sz=0;
-   /* size for MLM (disabled) */
-   //data_sz=(int64_t)(n+Mm*n+n+n+n+Mm+Mm+Mm*Mm+Mm*Mm+Mm+Mm+Mm+Mm+Mm+Nbase1*8)*sizeof(double)+(int64_t)Nbase1*2*sizeof(char);
    if (solver_mode==0 || solver_mode==1) {
    /* size for LM */
-    data_sz=(int64_t)(n+Mm*n+Mm*Mm+Mm+Mm*Mm+Mm+Mm+Mm+Mm+Nbase1*8+n+n)*sizeof(double)+(int64_t)Nbase1*2*sizeof(char);
+    data_sz=(int64_t)(n+Mm*n+Mm*Mm+Mm+Mm*Mm+Mm+Mm+Mm+Mm+Nbase1*8+n+n)*sizeof(double)+(int64_t)Nbase1*2*sizeof(short);
    } else if (solver_mode==2) {
    /* size for ROBUSTLM */
-    data_sz=(int64_t)(n+Mm*n+Mm*Mm+Mm+Mm*Mm+Mm+Mm+Mm+Mm+Nbase1*8+n+n+n+n)*sizeof(double)+(int64_t)Nbase1*2*sizeof(char);
+    data_sz=(int64_t)(n+Mm*n+Mm*Mm+Mm+Mm*Mm+Mm+Mm+Mm+Mm+Nbase1*8+n+n+n+n)*sizeof(double)+(int64_t)Nbase1*2*sizeof(short);
    } else {
     fprintf(stderr,"%s: %d: invalid mode for solver\n",__FILE__,__LINE__);
     exit(1);
@@ -1993,11 +985,10 @@ sagefit_visibilities_dual_pt(double *u, double *v, double *w, double *x, int N,
   /* use LBFGS */
    if (solver_mode==2) {
     lmdata0.robust_nu=robust_nu0;
-    ret=lbfgs_fit_robust_cuda(minimize_viz_full_pth, p, x, m, n, max_lbfgs, lbfgs_m, gpu_threads, (void*)&lmdata0);
-    //ret=lbfgs_fit_robust(minimize_viz_full_pth, p, x, m, n, max_lbfgs, lbfgs_m, gpu_threads, (void*)&lmdata0);
+    lbfgs_fit_robust_cuda(minimize_viz_full_pth, p, x, m, n, max_lbfgs, lbfgs_m, gpu_threads, (void*)&lmdata0);
     /* also print robust nu to output */
    } else {
-    ret=lbfgs_fit(minimize_viz_full_pth, p, x, m, n, max_lbfgs, lbfgs_m, gpu_threads, (void*)&lmdata0);
+    lbfgs_fit(minimize_viz_full_pth, p, x, m, n, max_lbfgs, lbfgs_m, gpu_threads, (void*)&lmdata0);
    }
   } 
 
@@ -2046,7 +1037,6 @@ pipeline_slave_code_one_gpu(void *data)
   int tilechunk=(t->tilesz+t->carr[t->clus].nchunk-1)/t->carr[t->clus].nchunk;
 
 
-  int ret;
   int ci;
 
   int cj=0; 
@@ -2064,13 +1054,12 @@ pipeline_slave_code_one_gpu(void *data)
       ntiles=t->tilesz-cj;
      }
 
-     //ret=mlm_der_single_cuda(NULL, NULL, &gd->p[tid][ci*(gd->M[tid])], &gd->x[tid][8*cj*t->Nbase], gd->M[tid], 8*ntiles*t->Nbase, gd->itermax[tid], NULL, gd->info[tid], gd->cbhandle[tid], gd->gWORK[tid], gd->linsolv, cj, ntiles, (void*)gd->lmdata[tid]);
      if (gd->status[tid]==PT_DO_WORK_LM) {
-      ret=clevmar_der_single_cuda(NULL, NULL, &gd->p[tid][ci*(gd->M[tid])], &gd->x[tid][8*cj*t->Nbase], gd->M[tid], 8*ntiles*t->Nbase, gd->itermax[tid], gd->opts[tid], gd->info[tid], gd->cbhandle[tid], gd->gWORK[tid], gd->linsolv, cj, ntiles,  (void*)gd->lmdata[tid]);
+      clevmar_der_single_cuda(NULL, NULL, &gd->p[tid][ci*(gd->M[tid])], &gd->x[tid][8*cj*t->Nbase], gd->M[tid], 8*ntiles*t->Nbase, gd->itermax[tid], gd->opts[tid], gd->info[tid], gd->cbhandle[tid], gd->solver_handle[tid], gd->gWORK[tid], gd->linsolv, cj, ntiles,  (void*)gd->lmdata[tid]);
      } else if (gd->status[tid]==PT_DO_WORK_OSLM) {
-      ret=oslevmar_der_single_cuda(NULL, NULL, &gd->p[tid][ci*(gd->M[tid])], &gd->x[tid][8*cj*t->Nbase], gd->M[tid], 8*ntiles*t->Nbase, gd->itermax[tid], gd->opts[tid], gd->info[tid], gd->cbhandle[tid], gd->gWORK[tid], gd->linsolv, cj, ntiles, gd->randomize, (void*)gd->lmdata[tid]);
+      oslevmar_der_single_cuda(NULL, NULL, &gd->p[tid][ci*(gd->M[tid])], &gd->x[tid][8*cj*t->Nbase], gd->M[tid], 8*ntiles*t->Nbase, gd->itermax[tid], gd->opts[tid], gd->info[tid], gd->cbhandle[tid], gd->solver_handle[tid],  gd->gWORK[tid], gd->linsolv, cj, ntiles, gd->randomize, (void*)gd->lmdata[tid]);
      } else if (gd->status[tid]==PT_DO_WORK_RLM || gd->status[tid]==PT_DO_WORK_OSRLM) {
-      ret=rlevmar_der_single_cuda(NULL, NULL, &gd->p[tid][ci*(gd->M[tid])], &gd->x[tid][8*cj*t->Nbase], gd->M[tid], 8*ntiles*t->Nbase, gd->itermax[tid], gd->opts[tid], gd->info[tid], gd->cbhandle[tid], gd->gWORK[tid], gd->linsolv, cj, ntiles,  gd->nulow, gd->nuhigh, (void*)gd->lmdata[tid]);
+      rlevmar_der_single_cuda(NULL, NULL, &gd->p[tid][ci*(gd->M[tid])], &gd->x[tid][8*cj*t->Nbase], gd->M[tid], 8*ntiles*t->Nbase, gd->itermax[tid], gd->opts[tid], gd->info[tid], gd->cbhandle[tid], gd->solver_handle[tid], gd->gWORK[tid], gd->linsolv, cj, ntiles,  gd->nulow, gd->nuhigh, (void*)gd->lmdata[tid]);
      }
      init_res+=gd->info[tid][0];
      final_res+=gd->info[tid][1];
@@ -2084,9 +1073,9 @@ pipeline_slave_code_one_gpu(void *data)
  
 /************************* work *********************/
   } else if (gd->status[tid]==PT_DO_AGPU) {
-   attach_gpu_to_thread1(tid,&gd->cbhandle[tid],&gd->gWORK[tid],gd->data_size);
+   attach_gpu_to_thread1(select_work_gpu(MAX_GPU_ID,td->pline->thst),&gd->cbhandle[tid],&gd->solver_handle[tid],&gd->gWORK[tid],gd->data_size);
   } else if (gd->status[tid]==PT_DO_DGPU) {
-   detach_gpu_from_thread1(tid,gd->cbhandle[tid],gd->gWORK[tid]);
+   detach_gpu_from_thread1(gd->cbhandle[tid],gd->solver_handle[tid],gd->gWORK[tid]);
   } else if (gd->status[tid]==PT_DO_MEMRESET) {
    reset_gpu_memory(gd->gWORK[tid],gd->data_size);
   }
@@ -2113,7 +1102,12 @@ init_pipeline_one_gpu(th_pipeline *pline,
     fprintf(stderr,"no free memory\n");
     exit(1);
  }
+ if ((pline->thst=(taskhist*)malloc(sizeof(taskhist)))==0) {
+    fprintf(stderr,"no free memory\n");
+    exit(1);
+ }
 
+ init_task_hist(pline->thst);
  t0->pline=pline;
  t0->tid=0;
  pline->sd0=t0;
@@ -2132,6 +1126,8 @@ destroy_pipeline_one_gpu(th_pipeline *pline)
  destroy_th_barrier(&(pline->gate1));
  destroy_th_barrier(&(pline->gate2));
  pthread_attr_destroy(&(pline->attr));
+ destroy_task_hist(pline->thst);
+ free(pline->thst);
  free(pline->sd0);
  pline->data=NULL;
 }
@@ -2139,7 +1135,7 @@ destroy_pipeline_one_gpu(th_pipeline *pline)
 int
 sagefit_visibilities_dual_pt_one_gpu(double *u, double *v, double *w, double *x, int N,   
    int Nbase, int tilesz,  baseline_t *barr,  clus_source_t *carr, complex double *coh, int M, int Mt, double freq0, double fdelta, double *pp, double uvmin, int Nt, int max_emiter, int max_iter, int max_lbfgs, int lbfgs_m, int gpu_threads, int linsolv, int solver_mode,  double nulow, double nuhigh, int randomize, double *mean_nu, double *res_0, double *res_1) {
-  int  ci,cj,ret;
+  int  ci,cj;
   double *p; // parameters: m x 1
   int m, n;
   double opts[CLM_OPTS_SZ], info[CLM_INFO_SZ];
@@ -2163,7 +1159,7 @@ sagefit_visibilities_dual_pt_one_gpu(double *u, double *v, double *w, double *x,
 
   /* rearraged memory for GPU use */
   double *ddcoh;
-  char *ddbase;
+  short *ddbase;
 
 /********* thread data ******************/
   /* barrier */
@@ -2218,7 +1214,7 @@ sagefit_visibilities_dual_pt_one_gpu(double *u, double *v, double *w, double *x,
      fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
      exit(1);
   }
-  if ((ddbase=(char*)calloc((size_t)(Nbase1*2),sizeof(char)))==0) {
+  if ((ddbase=(short*)calloc((size_t)(Nbase1*2),sizeof(short)))==0) {
      fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
      exit(1);
   }
@@ -2235,10 +1231,10 @@ sagefit_visibilities_dual_pt_one_gpu(double *u, double *v, double *w, double *x,
   int Mm=8*N;
   if (solver_mode==0 || solver_mode==1) {
    /* size for LM */
-   data_sz=(int64_t)(n+Mm*n+Mm*Mm+Mm+Mm*Mm+Mm+Mm+Mm+Mm+Nbase1*8+n+n)*sizeof(double)+(int64_t)Nbase1*2*sizeof(char);
+   data_sz=(int64_t)(n+Mm*n+Mm*Mm+Mm+Mm*Mm+Mm+Mm+Mm+Mm+Nbase1*8+n+n)*sizeof(double)+(int64_t)Nbase1*2*sizeof(short);
   } else if (solver_mode==2||solver_mode==3) {
    /* size for ROBUSTLM */
-    data_sz=(int64_t)(n+Mm*n+Mm*Mm+Mm+Mm*Mm+Mm+Mm+Mm+Mm+Nbase1*8+n+n+n+n)*sizeof(double)+(int64_t)Nbase1*2*sizeof(char);
+    data_sz=(int64_t)(n+Mm*n+Mm*Mm+Mm+Mm*Mm+Mm+Mm+Mm+Mm+Nbase1*8+n+n+n+n)*sizeof(double)+(int64_t)Nbase1*2*sizeof(short);
   } else {
     fprintf(stderr,"%s: %d: invalid mode for solver\n",__FILE__,__LINE__);
     exit(1);
@@ -2384,9 +1380,9 @@ sagefit_visibilities_dual_pt_one_gpu(double *u, double *v, double *w, double *x,
    /* use LBFGS */
    if (solver_mode==2 || solver_mode==3) {
     lmdata.robust_nu=robust_nu0;
-    ret=lbfgs_fit_robust_cuda(minimize_viz_full_pth, p, x, m, n, max_lbfgs, lbfgs_m, gpu_threads, (void*)&lmdata);
+    lbfgs_fit_robust_cuda(minimize_viz_full_pth, p, x, m, n, max_lbfgs, lbfgs_m, gpu_threads, (void*)&lmdata);
    } else {
-    ret=lbfgs_fit(minimize_viz_full_pth, p, x, m, n, max_lbfgs, lbfgs_m, gpu_threads, (void*)&lmdata);
+    lbfgs_fit(minimize_viz_full_pth, p, x, m, n, max_lbfgs, lbfgs_m, gpu_threads, (void*)&lmdata);
    }
   }
   /* final residual calculation */
@@ -2412,7 +1408,6 @@ sagefit_visibilities_dual_pt_one_gpu(double *u, double *v, double *w, double *x,
 int
 bfgsfit_visibilities_gpu(double *u, double *v, double *w, double *x, int N,   
    int Nbase, int tilesz,  baseline_t *barr,  clus_source_t *carr, complex double *coh, int M, int Mt, double freq0, double fdelta, double *pp, double uvmin, int Nt, int max_lbfgs, int lbfgs_m, int gpu_threads, int solver_mode,  double mean_nu, double *res_0, double *res_1) {
-  int  ret;
   double *p; // parameters: m x 1
   int m, n;
   me_data_t lmdata;
@@ -2462,9 +1457,9 @@ bfgsfit_visibilities_gpu(double *u, double *v, double *w, double *x, int N,
    /* use LBFGS */
    if (solver_mode==2 || solver_mode==3) {
     lmdata.robust_nu=mean_nu;
-    ret=lbfgs_fit_robust_cuda(minimize_viz_full_pth, p, x, m, n, max_lbfgs, lbfgs_m, gpu_threads, (void*)&lmdata);
+    lbfgs_fit_robust_cuda(minimize_viz_full_pth, p, x, m, n, max_lbfgs, lbfgs_m, gpu_threads, (void*)&lmdata);
    } else {
-    ret=lbfgs_fit(minimize_viz_full_pth, p, x, m, n, max_lbfgs, lbfgs_m, gpu_threads, (void*)&lmdata);
+    lbfgs_fit(minimize_viz_full_pth, p, x, m, n, max_lbfgs, lbfgs_m, gpu_threads, (void*)&lmdata);
    }
   }
   /* final residual calculation */
@@ -2515,7 +1510,6 @@ pipeline_slave_code_flt(void *data)
   int tilechunk=(t->tilesz+t->carr[t->clus].nchunk-1)/t->carr[t->clus].nchunk;
 
 
-  int ret;
   int ci;
 
   int cj=0; 
@@ -2534,24 +1528,24 @@ pipeline_slave_code_flt(void *data)
      }
 
      if (gd->status[tid]==PT_DO_WORK_LM) {
-      ret=clevmar_der_single_cuda_fl(&gd->p[tid][ci*(gd->M[tid])], &gd->x[tid][8*cj*t->Nbase], gd->M[tid], 8*ntiles*t->Nbase, gd->itermax[tid], gd->opts[tid], gd->info[tid], gd->cbhandle[tid], gd->gWORK[tid], gd->linsolv, cj, ntiles, (void*)gd->lmdata[tid]);
+      clevmar_der_single_cuda_fl(&gd->p[tid][ci*(gd->M[tid])], &gd->x[tid][8*cj*t->Nbase], gd->M[tid], 8*ntiles*t->Nbase, gd->itermax[tid], gd->opts[tid], gd->info[tid], gd->cbhandle[tid], gd->solver_handle[tid], gd->gWORK[tid], gd->linsolv, cj, ntiles, (void*)gd->lmdata[tid]);
      } else if (gd->status[tid]==PT_DO_WORK_OSLM) {
-      ret=oslevmar_der_single_cuda_fl(&gd->p[tid][ci*(gd->M[tid])], &gd->x[tid][8*cj*t->Nbase], gd->M[tid], 8*ntiles*t->Nbase, gd->itermax[tid], gd->opts[tid], gd->info[tid], gd->cbhandle[tid], gd->gWORK[tid], gd->linsolv, cj, ntiles, gd->randomize, (void*)gd->lmdata[tid]);
+      oslevmar_der_single_cuda_fl(&gd->p[tid][ci*(gd->M[tid])], &gd->x[tid][8*cj*t->Nbase], gd->M[tid], 8*ntiles*t->Nbase, gd->itermax[tid], gd->opts[tid], gd->info[tid], gd->cbhandle[tid], gd->solver_handle[tid], gd->gWORK[tid], gd->linsolv, cj, ntiles, gd->randomize, (void*)gd->lmdata[tid]);
      } else if (gd->status[tid]==PT_DO_WORK_RLM) {
-      ret=rlevmar_der_single_cuda_fl(&gd->p[tid][ci*(gd->M[tid])], &gd->x[tid][8*cj*t->Nbase], gd->M[tid], 8*ntiles*t->Nbase, gd->itermax[tid], gd->opts[tid], gd->info[tid], gd->cbhandle[tid], gd->gWORK[tid], gd->linsolv, cj, ntiles, gd->nulow,gd->nuhigh,(void*)gd->lmdata[tid]);
+      rlevmar_der_single_cuda_fl(&gd->p[tid][ci*(gd->M[tid])], &gd->x[tid][8*cj*t->Nbase], gd->M[tid], 8*ntiles*t->Nbase, gd->itermax[tid], gd->opts[tid], gd->info[tid], gd->cbhandle[tid], gd->solver_handle[tid], gd->gWORK[tid], gd->linsolv, cj, ntiles, gd->nulow,gd->nuhigh,(void*)gd->lmdata[tid]);
      } else if (gd->status[tid]==PT_DO_WORK_OSRLM) {
-      ret=osrlevmar_der_single_cuda_fl(&gd->p[tid][ci*(gd->M[tid])], &gd->x[tid][8*cj*t->Nbase], gd->M[tid], 8*ntiles*t->Nbase, gd->itermax[tid], gd->opts[tid], gd->info[tid], gd->cbhandle[tid], gd->gWORK[tid], gd->linsolv, cj, ntiles, gd->nulow,gd->nuhigh,gd->randomize,0,(void*)gd->lmdata[tid]); /* FIXME 0 for whiten */
+      osrlevmar_der_single_cuda_fl(&gd->p[tid][ci*(gd->M[tid])], &gd->x[tid][8*cj*t->Nbase], gd->M[tid], 8*ntiles*t->Nbase, gd->itermax[tid], gd->opts[tid], gd->info[tid], gd->cbhandle[tid], gd->solver_handle[tid], gd->gWORK[tid], gd->linsolv, cj, ntiles, gd->nulow,gd->nuhigh,gd->randomize,(void*)gd->lmdata[tid]); 
      } else if (gd->status[tid]==PT_DO_WORK_RTR) {
       /* note stations: M/8, baselines ntiles*Nbase RSD+RTR */
       float Delta0=0.01f; /* use very small value because previous LM has already made the solution close to true value */
       /* storage: see function header 
         */
-      ret=rtr_solve_cuda_fl(&gd->p[tid][ci*(gd->M[tid])], &gd->x[tid][8*cj*t->Nbase], gd->M[tid]/8, ntiles*t->Nbase, gd->itermax[tid]+5, gd->itermax[tid]+10, Delta0, Delta0*0.125f, gd->info[tid], gd->cbhandle[tid], gd->gWORK[tid],  cj, ntiles, (void*)gd->lmdata[tid]);
+      rtr_solve_cuda_fl(&gd->p[tid][ci*(gd->M[tid])], &gd->x[tid][8*cj*t->Nbase], gd->M[tid]/8, ntiles*t->Nbase, gd->itermax[tid]+5, gd->itermax[tid]+10, Delta0, Delta0*0.125f, gd->info[tid], gd->cbhandle[tid], gd->solver_handle[tid], cj, ntiles, (void*)gd->lmdata[tid]);
      } else if (gd->status[tid]==PT_DO_WORK_RRTR) {
       float Delta0=0.01f;
-      ret=rtr_solve_cuda_robust_fl(&gd->p[tid][ci*(gd->M[tid])], &gd->x[tid][8*cj*t->Nbase], gd->M[tid]/8, ntiles*t->Nbase, gd->itermax[tid]+5, gd->itermax[tid]+10, Delta0, Delta0*0.125f, gd->nulow, gd->nuhigh, gd->info[tid], gd->cbhandle[tid], gd->gWORK[tid],  cj, ntiles, (void*)gd->lmdata[tid]);
+      rtr_solve_cuda_robust_fl(&gd->p[tid][ci*(gd->M[tid])], &gd->x[tid][8*cj*t->Nbase], gd->M[tid]/8, ntiles*t->Nbase, gd->itermax[tid]+5, gd->itermax[tid]+10, Delta0, Delta0*0.125f, gd->nulow, gd->nuhigh, gd->info[tid], gd->cbhandle[tid], gd->solver_handle[tid],  cj, ntiles, (void*)gd->lmdata[tid]);
      } else if (gd->status[tid]==PT_DO_WORK_NSD) {
-      ret=nsd_solve_cuda_robust_fl(&gd->p[tid][ci*(gd->M[tid])], &gd->x[tid][8*cj*t->Nbase], gd->M[tid]/8, ntiles*t->Nbase, gd->itermax[tid]+15, gd->nulow, gd->nuhigh, gd->info[tid], gd->cbhandle[tid], gd->gWORK[tid],  cj, ntiles, (void*)gd->lmdata[tid]);
+      nsd_solve_cuda_robust_fl(&gd->p[tid][ci*(gd->M[tid])], &gd->x[tid][8*cj*t->Nbase], gd->M[tid]/8, ntiles*t->Nbase, gd->itermax[tid]+15, gd->nulow, gd->nuhigh, gd->info[tid], gd->cbhandle[tid], gd->solver_handle[tid],  cj, ntiles, (void*)gd->lmdata[tid]);
      }
      init_res+=gd->info[tid][0];
      final_res+=gd->info[tid][1];
@@ -2566,9 +1560,9 @@ pipeline_slave_code_flt(void *data)
 /************************* work *********************/
   } else if (gd->status[tid]==PT_DO_AGPU) {
    /* also enable cula : 1 at end */
-   attach_gpu_to_thread2(tid,&gd->cbhandle[tid],&gd->gWORK[tid],gd->data_size,1);
+   attach_gpu_to_thread2(select_work_gpu(MAX_GPU_ID,td->pline->thst),&gd->cbhandle[tid],&gd->solver_handle[tid],&gd->gWORK[tid],gd->data_size,1);
   } else if (gd->status[tid]==PT_DO_DGPU) {
-   detach_gpu_from_thread2(tid,gd->cbhandle[tid],gd->gWORK[tid],1);
+   detach_gpu_from_thread2(gd->cbhandle[tid],gd->solver_handle[tid],gd->gWORK[tid],1);
   } else if (gd->status[tid]==PT_DO_MEMRESET) {
    reset_gpu_memory((double*)gd->gWORK[tid],gd->data_size);
   } else if (gd->status[tid]!=PT_DO_NOTHING) { /* catch error */
@@ -2602,8 +1596,12 @@ init_pipeline_flt(th_pipeline *pline,
     fprintf(stderr,"no free memory\n");
     exit(1);
  }
+ if ((pline->thst=(taskhist*)malloc(sizeof(taskhist)))==0) {
+    fprintf(stderr,"no free memory\n");
+    exit(1);
+ }
 
-
+ init_task_hist(pline->thst);
  t0->pline=t1->pline=pline;
  t0->tid=0;
  t1->tid=1; /* link back t1, t2 to data so they could be freed */
@@ -2626,6 +1624,8 @@ destroy_pipeline_flt(th_pipeline *pline)
  destroy_th_barrier(&(pline->gate1));
  destroy_th_barrier(&(pline->gate2));
  pthread_attr_destroy(&(pline->attr));
+ destroy_task_hist(pline->thst);
+ free(pline->thst);
  free(pline->sd0);
  free(pline->sd1);
  pline->data=NULL;
@@ -2637,7 +1637,7 @@ sagefit_visibilities_dual_pt_flt(double *u, double *v, double *w, double *x, int
    int Nbase, int tilesz,  baseline_t *barr,  clus_source_t *carr, complex double *coh, int M, int Mt, double freq0, double fdelta, double *pp, double uvmin, int Nt, int max_emiter, int max_iter, int max_lbfgs, int lbfgs_m, int gpu_threads, int linsolv,int solver_mode,  double nulow, double nuhigh, int randomize, double *mean_nu, double *res_0, double *res_1) {
 
 
-  int  ci,cj,ret;
+  int  ci,cj;
   double *p; // parameters: m x 1
   int m, n;
   double opts[CLM_OPTS_SZ], info0[CLM_INFO_SZ], info1[CLM_INFO_SZ];
@@ -2651,7 +1651,7 @@ sagefit_visibilities_dual_pt_flt(double *u, double *v, double *w, double *x, int
 
   /* rearraged memory for GPU use */
   double *ddcoh;
-  char *ddbase;
+  short *ddbase;
 
   int *cr=0; /* array for random permutation of clusters */
   int c0,c1;
@@ -2704,7 +1704,7 @@ sagefit_visibilities_dual_pt_flt(double *u, double *v, double *w, double *x, int
      fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
      exit(1);
   }
-  if ((ddbase=(char*)calloc((size_t)(Nbase1*2),sizeof(char)))==0) {
+  if ((ddbase=(short*)calloc((size_t)(Nbase1*2),sizeof(short)))==0) {
      fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
      exit(1);
   }
@@ -2774,21 +1774,18 @@ sagefit_visibilities_dual_pt_flt(double *u, double *v, double *w, double *x, int
    /* determine total size for memory allocation */
    int Mm=8*N;
    int64_t data_sz=0;
-   /* size for MLM (disabled) */
-   //data_sz=(int64_t)(n+Mm*n+n+n+n+Mm+Mm+Mm*Mm+Mm*Mm+Mm+Mm+Mm+Mm+Mm+Nbase1*8)*sizeof(double)+(int64_t)Nbase1*2*sizeof(char);
-
-   /* size for RTR/NSD (float), 128 is the ThreadsPerBlock   
+   /* Do NOT use fixed buffer for for RTR/NSD
    */
    if (solver_mode==SM_RTR_OSLM_LBFGS) {
-     /* use same size as robust version, probably is lower */
-     data_sz=(8*N*(11+(Nbase1+128-1)/128)+N+8*Nbase1*2+3*Nbase1)*sizeof(float);
+     /* use dummy data size */
+     data_sz=8*sizeof(float);
    } else if (solver_mode==SM_RTR_OSRLM_RLBFGS) {
-     data_sz=(8*N*(11+(Nbase1+128-1)/128)+N+8*Nbase1*2+3*Nbase1)*sizeof(float);
+     data_sz=8*sizeof(float);
    } else if (solver_mode==SM_NSD_RLBFGS) {
-     data_sz=(8*N*(7+(Nbase1+128-1)/128)+N+8*Nbase1*2+3*Nbase1)*sizeof(float);
+     data_sz=8*sizeof(float);
    } else if (solver_mode==SM_LM_LBFGS || solver_mode==SM_OSLM_LBFGS) {
     /* size for LM */
-    data_sz=(int64_t)(n+Mm*n+Mm*Mm+Mm+Mm*Mm+Mm+Mm+Mm+Mm+Nbase1*8+n+n)*sizeof(float)+(int64_t)Nbase1*2*sizeof(char);
+    data_sz=(int64_t)(n+Mm*n+Mm*Mm+Mm+Mm*Mm+Mm+Mm+Mm+Mm+Nbase1*8+n+n)*sizeof(float)+(int64_t)Nbase1*2*sizeof(short);
     if (linsolv==1) {
      data_sz+=(int64_t)Mm*sizeof(float);
     } else if (linsolv==2) {
@@ -2796,7 +1793,7 @@ sagefit_visibilities_dual_pt_flt(double *u, double *v, double *w, double *x, int
     }
    } else if (solver_mode==SM_RLM_RLBFGS || solver_mode==SM_OSLM_OSRLM_RLBFGS) {
    /* size for ROBUSTLM */
-     data_sz=(int64_t)(n+Mm*n+Mm*Mm+Mm+Mm*Mm+Mm+Mm+Mm+Mm+Nbase1*8+n+n+n+n)*sizeof(float)+(int64_t)Nbase1*2*sizeof(char);
+     data_sz=(int64_t)(n+Mm*n+Mm*Mm+Mm+Mm*Mm+Mm+Mm+Mm+Mm+Nbase1*8+n+n+n+n)*sizeof(float)+(int64_t)Nbase1*2*sizeof(short);
     if (linsolv==1) {
      data_sz+=(int64_t)Mm*sizeof(float);
     } else if (linsolv==2) {
@@ -3148,9 +2145,9 @@ printf("1: %lf -> %lf\n\n\n",info0[0],info0[1]);
   /* use LBFGS */
    if (solver_mode==SM_RLM_RLBFGS || solver_mode==SM_OSLM_OSRLM_RLBFGS || solver_mode==SM_RTR_OSRLM_RLBFGS || solver_mode==SM_NSD_RLBFGS) {
     lmdata0.robust_nu=robust_nu0;
-    ret=lbfgs_fit_robust_cuda(minimize_viz_full_pth, p, x, m, n, max_lbfgs, lbfgs_m, gpu_threads, (void*)&lmdata0);
+    lbfgs_fit_robust_cuda(minimize_viz_full_pth, p, x, m, n, max_lbfgs, lbfgs_m, gpu_threads, (void*)&lmdata0);
    } else {
-   ret=lbfgs_fit(minimize_viz_full_pth, p, x, m, n, max_lbfgs, lbfgs_m, gpu_threads, (void*)&lmdata0);
+    lbfgs_fit(minimize_viz_full_pth, p, x, m, n, max_lbfgs, lbfgs_m, gpu_threads, (void*)&lmdata0);
    }
   } 
 

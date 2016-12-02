@@ -21,6 +21,7 @@
 #include <cuComplex.h>
 #include <stdio.h>
 #include <cublas_v2.h>
+#include "sagecal.h"
 
 /* enable this for checking for kernel failure */
 //#define CUDA_DBG
@@ -54,7 +55,7 @@ atmb(const cuFloatComplex *__restrict__ a, const cuFloatComplex *__restrict__ b,
 
 
 __global__ void 
-kernel_fns_fhess(int N, int Nbase, cuFloatComplex *x, cuFloatComplex *eta, cuFloatComplex *hess0, float *y, float *coh, char *bbh) {
+kernel_fns_fhess(int N, int Nbase, const cuFloatComplex *__restrict__ x, const cuFloatComplex *__restrict__ eta, cuFloatComplex *__restrict__ hess0, const float *__restrict__ y, const float *__restrict__ coh, const short *__restrict__ bbh) {
 
   /* eta0: each block will store result in its own block */
   /* global thread index : equal to the baseline */
@@ -208,7 +209,7 @@ kernel_fns_fhess(int N, int Nbase, cuFloatComplex *x, cuFloatComplex *eta, cuFlo
 }
 
 __global__ void 
-kernel_fns_fhess_robust1(int N, int Nbase, cuFloatComplex *x, cuFloatComplex *eta, cuFloatComplex *hess0, float *y, float *coh, char *bbh, float *wtd) {
+kernel_fns_fhess_robust1(int N, int Nbase, const cuFloatComplex *__restrict__ x, const cuFloatComplex *__restrict__ eta, cuFloatComplex *__restrict__ hess0, const float *__restrict__ y, const float *__restrict__ coh, const short *__restrict__ bbh, const float *__restrict__ wtd) {
 
   /* eta0: each block will store result in its own block */
   /* global thread index : equal to the baseline */
@@ -385,7 +386,7 @@ kernel_fns_fhess_robust1(int N, int Nbase, cuFloatComplex *x, cuFloatComplex *et
 
 
 __global__ void 
-kernel_fns_fhess_robust(int N, int Nbase, cuFloatComplex *x, cuFloatComplex *eta, cuFloatComplex *hess0, float *y, float *coh, char *bbh, float *wtd) {
+kernel_fns_fhess_robust(int N, int Nbase, const cuFloatComplex *__restrict__ x, const cuFloatComplex *__restrict__ eta, cuFloatComplex *__restrict__ hess0, const float *__restrict__ y, const float *__restrict__ coh, const short *__restrict__ bbh, const float *__restrict__ wtd) {
 
   /* hess0: each block will store result in its own block */
   int bid=blockIdx.x;
@@ -576,7 +577,7 @@ kernel_fns_fhess_robust(int N, int Nbase, cuFloatComplex *x, cuFloatComplex *eta
 
 
 __global__ void 
-kernel_fns_fgrad(int N, int Nbase, cuFloatComplex *x, cuFloatComplex *eta0, float *y, float *coh, char *bbh) {
+kernel_fns_fgrad(int N, int Nbase, const cuFloatComplex *__restrict__ x, cuFloatComplex *__restrict__ eta0, const float *__restrict__ y, const float *__restrict__ coh, const short *__restrict__ bbh) {
 
   /* eta0: each block will store result in its own block */
   /* global thread index : equal to the baseline */
@@ -679,15 +680,6 @@ kernel_fns_fgrad(int N, int Nbase, cuFloatComplex *x, cuFloatComplex *eta0, floa
       eta0[2*sta2+1+bid*4*N]=cuCaddf(eta0[2*sta2+1+bid*4*N],eta[8*ci+6]);
       eta0[2*sta2+2*N+1+bid*4*N]=cuCaddf(eta0[2*sta2+2*N+1+bid*4*N],eta[8*ci+7]);
 
-/*DBG      eta0[2*sta1+bid*4*N]=make_cuFloatComplex(1.0f,0.0f);
-      eta0[2*sta1+2*N+bid*4*N]=make_cuFloatComplex(1.0f,0.0f);
-      eta0[2*sta1+1+bid*4*N]=make_cuFloatComplex(1.0f,0.0f);
-      eta0[2*sta1+2*N+1+bid*4*N]=make_cuFloatComplex(1.0f,0.0f);
-      eta0[2*sta2+bid*4*N]=make_cuFloatComplex(1.0f,0.0f);
-      eta0[2*sta2+2*N+bid*4*N]=make_cuFloatComplex(1.0f,0.0f);
-      eta0[2*sta2+1+bid*4*N]=make_cuFloatComplex(1.0f,0.0f);
-      eta0[2*sta2+2*N+1+bid*4*N]=make_cuFloatComplex(1.0f,0.0f);
-*/
     }
    }
   }
@@ -695,7 +687,7 @@ kernel_fns_fgrad(int N, int Nbase, cuFloatComplex *x, cuFloatComplex *eta0, floa
 }
 
 __global__ void 
-kernel_fns_fgrad_robust(int N, int Nbase, cuFloatComplex *x, cuFloatComplex *eta0, float *y, float *coh, char *bbh, float *wtd) {
+kernel_fns_fgrad_robust(int N, int Nbase, const cuFloatComplex *__restrict__ x, cuFloatComplex *__restrict__ eta0, const float *__restrict__ y, const float *__restrict__ coh, const short *__restrict__ bbh, const float *__restrict__ wtd) {
 
   /* eta0: each block will store result in its own block */
   int bid=blockIdx.x;
@@ -839,7 +831,7 @@ kernel_fns_fgrad_robust(int N, int Nbase, cuFloatComplex *x, cuFloatComplex *eta
 }
 
 __global__ void
-kernel_fns_sumblocks_pertime(int N, int Nblocks, int offset, cuFloatComplex *eta0) {
+kernel_fns_sumblocks_pertime(int N, int Nblocks, int offset, cuFloatComplex *__restrict__ eta0) {
  /* offset: values in 0...4N
     each block will sum Nblocks in eta0 and store it in first value */
   extern __shared__ cuFloatComplex etas[];
@@ -869,7 +861,7 @@ kernel_fns_sumblocks_pertime(int N, int Nblocks, int offset, cuFloatComplex *eta
 
 
 __global__ void
-kernel_fns_sumblocks_alltime(int N, int Nblocks, int Ntime, int offset, cuFloatComplex *eta0, cuFloatComplex *eta) {
+kernel_fns_sumblocks_alltime(int N, int Nblocks, int Ntime, int offset, cuFloatComplex *__restrict__ eta0, cuFloatComplex *__restrict__ eta) {
   /* offset: value in 0...Ntime-1 */
   /* each block will sum values out of 4N, each thread will read values from different blocks separated by Nblocks */
   /* also move blocks separed by Nblocks close together */
@@ -906,7 +898,7 @@ kernel_fns_sumblocks_alltime(int N, int Nblocks, int Ntime, int offset, cuFloatC
 
 
 __global__ void
-kernel_fns_sumelements_alltime(int Ntime,int offset, cuFloatComplex *eta0, cuFloatComplex *C) {
+kernel_fns_sumelements_alltime(int Ntime,int offset, const cuFloatComplex *__restrict__ eta0, cuFloatComplex *__restrict__ C) {
   /* C: 2x2, eta0: 2x2Ntime, sum eta0 and store it in C (C initialized to 0) */
   /* 4 blocks, blockDim.x threads */
   extern __shared__ cuFloatComplex etas[];
@@ -935,7 +927,7 @@ kernel_fns_sumelements_alltime(int Ntime,int offset, cuFloatComplex *eta0, cuFlo
 
 
 __global__ void
-kernel_fns_rhs_alltime(cuFloatComplex *C) {
+kernel_fns_rhs_alltime(cuFloatComplex *__restrict__ C) {
  /* C: 2 x 2 Nblocks , each block (4) threads will work on 2x2 matrix */
   extern __shared__ cuFloatComplex etas[];
   int bid=blockIdx.x; /* 0..ntime-1 */
@@ -970,7 +962,7 @@ kernel_fns_rhs_alltime(cuFloatComplex *C) {
 }
 
 __global__ void 
-kernel_fns_fgrad_robust1(int N, int Nbase, cuFloatComplex *x, cuFloatComplex *eta0, float *y, float *coh, char *bbh, float *wtd) {
+kernel_fns_fgrad_robust1(int N, int Nbase, const cuFloatComplex *__restrict__ x, cuFloatComplex *__restrict__ eta0, const float *__restrict__ y, const float *__restrict__ coh, const short *__restrict__ bbh, const float *__restrict__ wtd) {
 
   /* eta0: each block will store result in its own block */
   /* global thread index : equal to the baseline */
@@ -1102,7 +1094,7 @@ kernel_fns_fgrad_robust1(int N, int Nbase, cuFloatComplex *x, cuFloatComplex *et
 }
 
 __global__ void 
-kernel_fns_fgradsum(int N, int B, int blockDim_2, cuFloatComplex *etaloc, cuFloatComplex *eta) {
+kernel_fns_fgradsum(int N, int B, int blockDim_2, const cuFloatComplex *__restrict__ etaloc, cuFloatComplex *__restrict__ eta) {
   int bid=blockIdx.x;
   int tid=threadIdx.x;
   /* B x cuFloatComplex values */
@@ -1133,7 +1125,7 @@ kernel_fns_fgradsum(int N, int B, int blockDim_2, cuFloatComplex *etaloc, cuFloa
 }
 
 __global__ void 
-kernel_fns_f(int N, int Nbase, cuFloatComplex *x, float *y, float *coh, char *bbh, float *ed) {
+kernel_fns_f(int N, int Nbase, const cuFloatComplex *__restrict__ x, const float *__restrict__ y, const float *__restrict__ coh, const short *__restrict__ bbh, float *__restrict__ ed) {
 
   // Each block saves error into shared memory
   extern __shared__ float ek[];
@@ -1235,7 +1227,7 @@ kernel_fns_f(int N, int Nbase, cuFloatComplex *x, float *y, float *coh, char *bb
 }
 
 __global__ void 
-kernel_fns_f_robust(int N, int Nbase, cuFloatComplex *x, float *y, float *coh, char *bbh, float *wtd, float *ed) {
+kernel_fns_f_robust(int N, int Nbase, const cuFloatComplex *__restrict__ x, const float *__restrict__ y, const float *__restrict__ coh, const short *__restrict__ bbh, const float *__restrict__ wtd, float *__restrict__ ed) {
 
   // Each block saves error into shared memory
   extern __shared__ float ek[];
@@ -1339,7 +1331,7 @@ kernel_fns_f_robust(int N, int Nbase, cuFloatComplex *x, float *y, float *coh, c
 
 /* update weights */
 __global__ void 
-kernel_fns_fupdate_weights(int N, int Nbase, cuFloatComplex *x, float *y, float *coh, char *bbh, float *wtd, float nu0) {
+kernel_fns_fupdate_weights(int N, int Nbase, const cuFloatComplex *__restrict__ x, const float *__restrict__ y, const float *__restrict__ coh, const short *__restrict__ bbh, float *__restrict__ wtd, float nu0) {
 
   /* global thread index : equal to the baseline */
   unsigned int n = threadIdx.x + blockDim.x*blockIdx.x;
@@ -1411,7 +1403,7 @@ kernel_fns_fupdate_weights(int N, int Nbase, cuFloatComplex *x, float *y, float 
 
 /* update weights and log(weight) */
 __global__ void 
-kernel_fns_fupdate_weights_q(int N, int Nbase, cuFloatComplex *x, float *y, float *coh, char *bbh, float *wtd, float *qd, float nu0) {
+kernel_fns_fupdate_weights_q(int N, int Nbase, const cuFloatComplex *__restrict__ x, const float *__restrict__ y, const float *__restrict__ coh, const short *__restrict__ bbh, float *__restrict__ wtd, float *__restrict__ qd, float nu0) {
 
   /* global thread index : equal to the baseline */
   unsigned int n = threadIdx.x + blockDim.x*blockIdx.x;
@@ -1488,7 +1480,7 @@ kernel_fns_fupdate_weights_q(int N, int Nbase, cuFloatComplex *x, float *y, floa
 /* sum up all N elements of vector input 
  and save (per block) in output (size > number of blocks) */
 __global__ void 
-plus_reduce_multi(float *input, int N, int blockDim_2, float *output) {
+plus_reduce_multi(const float *__restrict__ input, int N, int blockDim_2, float *__restrict__ output) {
  // Each block loads its elements into shared memory
  extern __shared__ float x[];
  int tid = threadIdx.x;
@@ -1519,7 +1511,7 @@ plus_reduce_multi(float *input, int N, int blockDim_2, float *output) {
 /* sum up all N elements of vector input 
  NOTE: only 1 block should be used */
 __global__ void 
-plus_reduce(float *input, int N, int blockDim_2, float *total) {
+plus_reduce(const float *__restrict__ input, int N, int blockDim_2, float *total) {
  // Each block loads its elements into shared memory
  extern __shared__ float x[];
  int tid = threadIdx.x;
@@ -1548,7 +1540,7 @@ plus_reduce(float *input, int N, int blockDim_2, float *total) {
 
 
 __global__ void 
-kernel_fns_fscale(int N,  cuFloatComplex *eta, float *iw) {
+kernel_fns_fscale(int N,  cuFloatComplex *__restrict__ eta, const float *__restrict__ iw) {
   unsigned int n = threadIdx.x + blockDim.x*blockIdx.x;
   if (n<N) {
    float w=iw[n];
@@ -1571,10 +1563,12 @@ extern "C"
 static void
 checkCublasError(cublasStatus_t cbstatus, const char *file, int line)
 {
+#ifdef CUDA_DBG
    if (cbstatus!=CUBLAS_STATUS_SUCCESS) {
     fprintf(stderr,"%s: %d: CUBLAS failure\n",file,line);
     exit(EXIT_FAILURE);
    }
+#endif
 }
 
 /* need power of 2 for tree reduction to work */
@@ -1602,22 +1596,14 @@ NearestPowerOf2 (int n){
 */
 /* need BlocksPerGrid+1+L float storage */
 float 
-cudakernel_fns_f(int ThreadsPerBlock, int BlocksPerGrid, int N, int M, cuFloatComplex *x, float *y, float *coh, char *bbh, float *gWORK) {
+cudakernel_fns_f(int ThreadsPerBlock, int BlocksPerGrid, int N, int M, cuFloatComplex *x, float *y, float *coh, short *bbh) {
 #ifdef CUDA_DBG
   cudaError_t error;
 #endif
   float *ed,*eo;
-  unsigned long int moff=0;
-  ed=&gWORK[moff];
-  /* make sure offset is multiple of 4 */
-  if (!BlocksPerGrid || BlocksPerGrid%4) { 
-   moff+=(BlocksPerGrid/4+1)*4;
-  } else {
-   moff+=BlocksPerGrid;
-  }
+  cudaMalloc((void**)&ed, sizeof(float)*BlocksPerGrid);
   cudaMemset(ed, 0, sizeof(float)*BlocksPerGrid);
   kernel_fns_f<<< BlocksPerGrid, ThreadsPerBlock, sizeof(float)*ThreadsPerBlock >>>(N, M, x, y, coh, bbh,ed);
-  cudaDeviceSynchronize();
 #ifdef CUDA_DBG
   error = cudaGetLastError();
   if(error != cudaSuccess) {
@@ -1628,25 +1614,20 @@ cudakernel_fns_f(int ThreadsPerBlock, int BlocksPerGrid, int N, int M, cuFloatCo
 #endif
   float total;
   float *totald;
-  totald=&gWORK[moff];
-  /* multiple of 4 */
-  moff+=4;
+  cudaMalloc((void**)&totald, sizeof(float));
   cudaMemset(totald, 0, sizeof(float));
-  int T=128; /* max possible threads, use a smaller no to have large no. of blocks, but not too large to exceed no. of. SMs in the card*/
+  int T=DEFAULT_TH_PER_BK; /* max possible threads, use a smaller no to have large no. of blocks, but not too large to exceed no. of. SMs in the card*/
   /* we use 1 block, so need to launch BlocksPerGrid number of threads */
   if (BlocksPerGrid<T) {
     /* one kernel launch is enough */
     plus_reduce<<< 1, BlocksPerGrid, sizeof(float)*BlocksPerGrid>>>(ed, BlocksPerGrid, NearestPowerOf2(BlocksPerGrid), totald);
-  cudaDeviceSynchronize();
   } else {
     /* multiple kernel launches */
     int L=(BlocksPerGrid+T-1)/T;
-    eo=&gWORK[moff];
-    moff+=L;
+    cudaMalloc((void**)&eo, sizeof(float)*L);
     plus_reduce_multi<<< L, T, sizeof(float)*T>>>(ed, BlocksPerGrid, NearestPowerOf2(T), eo);
-  cudaDeviceSynchronize();
     plus_reduce<<< 1, L, sizeof(float)*L>>>(eo, L, NearestPowerOf2(L), totald);
-  cudaDeviceSynchronize();
+    cudaFree(eo);
   }
 #ifdef CUDA_DBG
   error = cudaGetLastError();
@@ -1657,7 +1638,8 @@ cudakernel_fns_f(int ThreadsPerBlock, int BlocksPerGrid, int N, int M, cuFloatCo
   }
 #endif
   cudaMemcpy(&total,totald,sizeof(float),cudaMemcpyDeviceToHost);
-  cudaDeviceSynchronize();
+  cudaFree(ed);
+  cudaFree(totald);
   return total;
 }
 
@@ -1675,22 +1657,14 @@ cudakernel_fns_f(int ThreadsPerBlock, int BlocksPerGrid, int N, int M, cuFloatCo
 */
 /* need BlocksPerGrid+4+L float storage <= (2 BlocksPerGrid + 4) */
 float 
-cudakernel_fns_f_robust(int ThreadsPerBlock, int BlocksPerGrid, int N, int M, cuFloatComplex *x, float *y, float *coh, char *bbh, float *wtd, float *gWORK) {
+cudakernel_fns_f_robust(int ThreadsPerBlock, int BlocksPerGrid, int N, int M, cuFloatComplex *x, float *y, float *coh, short *bbh, float *wtd) {
 #ifdef CUDA_DBG
   cudaError_t error;
 #endif
   float *ed,*eo;
-  unsigned long int moff=0;
-  ed=&gWORK[moff];
-  /* make sure offset is multiple of 4 */
-  if (!BlocksPerGrid || BlocksPerGrid%4) { 
-   moff+=(BlocksPerGrid/4+1)*4;
-  } else {
-   moff+=BlocksPerGrid;
-  }
+  cudaMalloc((void**)&ed, sizeof(float)*BlocksPerGrid);
   cudaMemset(ed, 0, sizeof(float)*BlocksPerGrid);
   kernel_fns_f_robust<<< BlocksPerGrid, ThreadsPerBlock, sizeof(float)*ThreadsPerBlock >>>(N, M, x, y, coh, bbh, wtd, ed);
-  cudaDeviceSynchronize();
 
 #ifdef CUDA_DBG
   error = cudaGetLastError();
@@ -1702,25 +1676,20 @@ cudakernel_fns_f_robust(int ThreadsPerBlock, int BlocksPerGrid, int N, int M, cu
 #endif
   float total;
   float *totald;
-  totald=&gWORK[moff];
-  /* multiple of 4 */
-  moff+=4;
+  cudaMalloc((void**)&totald, sizeof(float));
   cudaMemset(totald, 0, sizeof(float));
-  int T=128; /* max possible threads, use a smaller no to have large no. of blocks, but not too large to exceed no. of. SMs in the card*/
+  int T=DEFAULT_TH_PER_BK; /* max possible threads, use a smaller no to have large no. of blocks, but not too large to exceed no. of. SMs in the card*/
   /* we use 1 block, so need to launch BlocksPerGrid number of threads */
   if (BlocksPerGrid<T) {
     /* one kernel launch is enough */
     plus_reduce<<< 1, BlocksPerGrid, sizeof(float)*BlocksPerGrid>>>(ed, BlocksPerGrid, NearestPowerOf2(BlocksPerGrid), totald);
-  cudaDeviceSynchronize();
   } else {
     /* multiple kernel launches */
     int L=(BlocksPerGrid+T-1)/T;
-    eo=&gWORK[moff];
-    moff+=L;
+    cudaMalloc((void**)&eo, sizeof(float)*L);
     plus_reduce_multi<<< L, T, sizeof(float)*T>>>(ed, BlocksPerGrid, NearestPowerOf2(T), eo);
-  cudaDeviceSynchronize();
     plus_reduce<<< 1, L, sizeof(float)*L>>>(eo, L, NearestPowerOf2(L), totald);
-  cudaDeviceSynchronize();
+    cudaFree(eo);
   }
 #ifdef CUDA_DBG
   error = cudaGetLastError();
@@ -1731,29 +1700,28 @@ cudakernel_fns_f_robust(int ThreadsPerBlock, int BlocksPerGrid, int N, int M, cu
   }
 #endif
   cudaMemcpy(&total,totald,sizeof(float),cudaMemcpyDeviceToHost);
-  cudaDeviceSynchronize();
+  cudaFree(ed);
+  cudaFree(totald);
+
   return total;
 }
 
 /* gradient, output eta: reset to 0 initially */
 /* need 8N*BlocksPerGrid float storage */
 void
-cudakernel_fns_fgradflat(int ThreadsPerBlock, int BlocksPerGrid, int N, int M, cuFloatComplex *x, cuFloatComplex *eta, float *y, float *coh, char *bbh, float *gWORK) {
+cudakernel_fns_fgradflat(int ThreadsPerBlock, int BlocksPerGrid, int N, int M, cuFloatComplex *x, cuFloatComplex *eta, float *y, float *coh, short *bbh) {
 #ifdef CUDA_DBG
   cudaError_t error;
 #endif
   cuFloatComplex *etaloc;
   /* each block stores result in 2Nx2 block, so need BlocksPerGrid x 2Nx 2 storage */
-  unsigned long int moff=0;
-  etaloc=(cuFloatComplex *)&gWORK[moff];
-  moff+=8*N*BlocksPerGrid;
+  cudaMalloc((void**)&etaloc, sizeof(cuFloatComplex)*BlocksPerGrid*4*N);
   cudaMemset(etaloc, 0, sizeof(cuFloatComplex)*BlocksPerGrid*4*N);
   cudaMemset(eta, 0, sizeof(cuFloatComplex)*4*N);
   /* eachekernel require 2xThreadsPerBlocx2 x 2 complex float for storing eta values
     2*ThreadsPerBloc x1 int array for station numbers
      and  */
   kernel_fns_fgrad<<< BlocksPerGrid, ThreadsPerBlock, sizeof(cuFloatComplex)*8*ThreadsPerBlock + sizeof(int)*2*ThreadsPerBlock >>>(N, M, x, etaloc, y, coh, bbh);
-  cudaDeviceSynchronize();
 
 #ifdef CUDA_DBG
   error = cudaGetLastError();
@@ -1770,7 +1738,6 @@ cudakernel_fns_fgradflat(int ThreadsPerBlock, int BlocksPerGrid, int N, int M, c
   if (T>BlocksPerGrid) {
    int B=((BlocksPerGrid+1)/2)*2; /* even no of threads */
    kernel_fns_fgradsum<<< 4*N, B, sizeof(cuFloatComplex)*B>>>(N, BlocksPerGrid, NearestPowerOf2(B),  etaloc, eta);
-  cudaDeviceSynchronize();
 #ifdef CUDA_DBG
    error = cudaGetLastError();
    if(error != cudaSuccess) {
@@ -1791,7 +1758,6 @@ cudakernel_fns_fgradflat(int ThreadsPerBlock, int BlocksPerGrid, int N, int M, c
       myT=BlocksPerGrid-ct;
     }
     kernel_fns_fgradsum<<< 4*N, myT, sizeof(cuFloatComplex)*myT >>>(N, myT, NearestPowerOf2(myT),  &etaloc[ct*4*N], eta);
-  cudaDeviceSynchronize();
 #ifdef CUDA_DBG
     error = cudaGetLastError();
     if(error != cudaSuccess) {
@@ -1802,27 +1768,26 @@ cudakernel_fns_fgradflat(int ThreadsPerBlock, int BlocksPerGrid, int N, int M, c
     ct=ct+T;
    }
   }
+
+  cudaFree(etaloc);
 }
 
 /* Robust gradient, output eta: reset to 0 initially */
 /* need 8N*BlocksPerGrid float storage */
 void
-cudakernel_fns_fgradflat_robust1(int ThreadsPerBlock, int BlocksPerGrid, int N, int M, cuFloatComplex *x, cuFloatComplex *eta, float *y, float *coh, char *bbh, float *wtd, float *gWORK) {
+cudakernel_fns_fgradflat_robust1(int ThreadsPerBlock, int BlocksPerGrid, int N, int M, cuFloatComplex *x, cuFloatComplex *eta, float *y, float *coh, short *bbh, float *wtd) {
 #ifdef CUDA_DBG
   cudaError_t error;
 #endif
   cuFloatComplex *etaloc;
   /* each block stores result in 2Nx2 block, so need BlocksPerGrid x 2Nx 2 storage */
-  unsigned long int moff=0;
-  etaloc=(cuFloatComplex *)&gWORK[moff];
-  moff+=8*N*BlocksPerGrid;
+  cudaMalloc((void**)&etaloc, sizeof(cuFloatComplex)*BlocksPerGrid*4*N);
   cudaMemset(etaloc, 0, sizeof(cuFloatComplex)*BlocksPerGrid*4*N);
   cudaMemset(eta, 0, sizeof(cuFloatComplex)*4*N);
   /* eachekernel require 2xThreadsPerBlocx2 x 2 complex float for storing eta values
     2*ThreadsPerBloc x1 int array for station numbers
      and  */
   kernel_fns_fgrad_robust1<<< BlocksPerGrid, ThreadsPerBlock, sizeof(cuFloatComplex)*8*ThreadsPerBlock + sizeof(int)*2*ThreadsPerBlock >>>(N, M, x, etaloc, y, coh, bbh, wtd);
-  cudaDeviceSynchronize();
 #ifdef CUDA_DBG
   error = cudaGetLastError();
   if(error != cudaSuccess) {
@@ -1838,7 +1803,6 @@ cudakernel_fns_fgradflat_robust1(int ThreadsPerBlock, int BlocksPerGrid, int N, 
   if (T>BlocksPerGrid) {
    int B=((BlocksPerGrid+1)/2)*2; /* even no of threads */
    kernel_fns_fgradsum<<< 4*N, B, sizeof(cuFloatComplex)*B>>>(N, BlocksPerGrid, NearestPowerOf2(B),  etaloc, eta);
-  cudaDeviceSynchronize();
 #ifdef CUDA_DBG
    error = cudaGetLastError();
    if(error != cudaSuccess) {
@@ -1859,7 +1823,6 @@ cudakernel_fns_fgradflat_robust1(int ThreadsPerBlock, int BlocksPerGrid, int N, 
       myT=BlocksPerGrid-ct;
     }
     kernel_fns_fgradsum<<< 4*N, myT, sizeof(cuFloatComplex)*myT >>>(N, myT, NearestPowerOf2(myT),  &etaloc[ct*4*N], eta);
-  cudaDeviceSynchronize();
 #ifdef CUDA_DBG
     error = cudaGetLastError();
     if(error != cudaSuccess) {
@@ -1870,6 +1833,7 @@ cudakernel_fns_fgradflat_robust1(int ThreadsPerBlock, int BlocksPerGrid, int N, 
     ct=ct+T;
    }
   }
+  cudaFree(etaloc);
 }
 
 
@@ -1877,15 +1841,13 @@ cudakernel_fns_fgradflat_robust1(int ThreadsPerBlock, int BlocksPerGrid, int N, 
 /* Ai: inverse of A matrix for projection */
 /* need 8N*BlocksPerGrid float storage */
 void
-cudakernel_fns_fgradflat_robust(int ThreadsPerBlock, int BlocksPerGrid, int N, int M, cuFloatComplex *x, cuFloatComplex *eta, float *y, float *coh, char *bbh, float *wtd, cuFloatComplex *Ai, cublasHandle_t cbhandle, float *gWORK) {
+cudakernel_fns_fgradflat_robust(int ThreadsPerBlock, int BlocksPerGrid, int N, int M, cuFloatComplex *x, cuFloatComplex *eta, float *y, float *coh, short *bbh, float *wtd, cuFloatComplex *Ai, cublasHandle_t cbhandle) {
 #ifdef CUDA_DBG
   cudaError_t error;
 #endif
   cuFloatComplex *etaloc;
   /* each block stores result in 2Nx2 block, so need BlocksPerGrid x 2Nx 2 storage */
-  unsigned long int moff=0;
-  etaloc=(cuFloatComplex *)&gWORK[moff];
-  moff+=8*N*BlocksPerGrid;
+  cudaMalloc((void**)&etaloc, sizeof(cuFloatComplex)*BlocksPerGrid*4*N);
   cudaMemset(etaloc, 0, sizeof(cuFloatComplex)*BlocksPerGrid*4*N);
   cudaMemset(eta, 0, sizeof(cuFloatComplex)*4*N);
   /* each block requires 2xThreadsPerBloc x2 x 2 complex float for storing eta values
@@ -1895,7 +1857,6 @@ cudakernel_fns_fgradflat_robust(int ThreadsPerBlock, int BlocksPerGrid, int N, i
    also ThreadsPerBlock>= N
    */
   kernel_fns_fgrad_robust<<< BlocksPerGrid, ThreadsPerBlock, sizeof(cuFloatComplex)*8*ThreadsPerBlock + sizeof(int)*2*ThreadsPerBlock >>>(N, M, x, etaloc, y, coh, bbh, wtd);
-  cudaDeviceSynchronize();
 #ifdef CUDA_DBG
   error = cudaGetLastError();
   if(error != cudaSuccess) {
@@ -1919,13 +1880,12 @@ cudakernel_fns_fgradflat_robust(int ThreadsPerBlock, int BlocksPerGrid, int N, i
   /* timeslots */
   int ntime=(M+nbase-1)/nbase;
   /* threads to use (need to use small value to enable enough shared memory) */
-  int T=64;
+  int T=DEFAULT_TH_PER_BK_2;
   /* sum Bt values each to the first value */
   for (int ci=0; ci<(4*N+T-1)/T; ci++) {
     /* create blocks equal to timeslots, each will need Bt*T complex float storage, ci*T is the offset of 0...4N-1 values */
     /* each thread will sum Bt values */
     kernel_fns_sumblocks_pertime<<< ntime, T, sizeof(cuFloatComplex)*Bt*T >>>(N, Bt, ci*T, etaloc);
-    cudaDeviceSynchronize();
 #ifdef DEBUG
     printf("sum blocks %d, threads %d thread offset %d, numblocks/time %d\n",ntime,T,ci*T,Bt);
 #endif
@@ -1940,10 +1900,9 @@ cudakernel_fns_fgradflat_robust(int ThreadsPerBlock, int BlocksPerGrid, int N, i
 #endif
 
   /* now create 4N blocks, each block will sum elements in 0...4N-1 of ntime values, separated by Bt blocks */
-  T=64; /* even number */
+  T=DEFAULT_TH_PER_BK_2; /* even number */
   for (int ci=0; ci<(ntime+T-1)/T; ci++) {
     kernel_fns_sumblocks_alltime<<< 4*N, T, sizeof(cuFloatComplex)*T >>>(N, Bt, ntime, ci*T, etaloc, eta);
-    cudaDeviceSynchronize();
 #ifdef DEBUG
     printf("sum all blocks %d, timeslots %d, threads %d block offset %d, spacing %d\n",4*N,ntime,T,ci*T,Bt);
 #endif
@@ -1974,7 +1933,6 @@ cudakernel_fns_fgradflat_robust(int ThreadsPerBlock, int BlocksPerGrid, int N, i
   /* 2x2 matrix: 4 threads per block, ntime blocks */
   T=4;
   kernel_fns_rhs_alltime<<< ntime, T, sizeof(cuFloatComplex)*T >>>(C);
-  cudaDeviceSynchronize();
 #ifdef CUDA_DBG
   error = cudaGetLastError();
   if(error != cudaSuccess) {
@@ -1991,10 +1949,9 @@ cudakernel_fns_fgradflat_robust(int ThreadsPerBlock, int BlocksPerGrid, int N, i
 
   /* now average 2x 2ntime matrix etaloc to one 2x2 matrix, stoared at C */
   cudaMemset(C, 0, sizeof(cuFloatComplex)*4);
-  T=64; /* even number */
+  T=DEFAULT_TH_PER_BK_2; /* even number */
   for (int ci=0; ci<(ntime+T-1)/T; ci++) {
     kernel_fns_sumelements_alltime<<< 4, T, sizeof(cuFloatComplex)*T >>>(ntime,ci*T, etaloc, C);
-    cudaDeviceSynchronize();
   }
 #ifdef CUDA_DBG
   error = cudaGetLastError();
@@ -2010,21 +1967,20 @@ cudakernel_fns_fgradflat_robust(int ThreadsPerBlock, int BlocksPerGrid, int N, i
   cbstatus=cublasCgemm(cbhandle,CUBLAS_OP_N,CUBLAS_OP_N,2*N,2,2,&a1,x,2*N,C,2,&a2,eta,2*N);
   checkCublasError(cbstatus,__FILE__,__LINE__);
 
+  cudaFree(etaloc);
 }
 
 
 /* Robust gradient (Euclidean), output eta: reset to 0 initially */
 /* need 8N*BlocksPerGrid float storage */
 void
-cudakernel_fns_fgradflat_robust_admm(int ThreadsPerBlock, int BlocksPerGrid, int N, int M, cuFloatComplex *x, cuFloatComplex *eta, float *y, float *coh, char *bbh, float *wtd, cublasHandle_t cbhandle, float *gWORK) {
+cudakernel_fns_fgradflat_robust_admm(int ThreadsPerBlock, int BlocksPerGrid, int N, int M, cuFloatComplex *x, cuFloatComplex *eta, float *y, float *coh, short *bbh, float *wtd, cublasHandle_t cbhandle) {
 #ifdef CUDA_DBG
   cudaError_t error;
 #endif
   cuFloatComplex *etaloc;
   /* each block stores result in 2Nx2 block, so need BlocksPerGrid x 2Nx 2 storage */
-  unsigned long int moff=0;
-  etaloc=(cuFloatComplex *)&gWORK[moff];
-  moff+=8*N*BlocksPerGrid;
+  cudaMalloc((void**)&etaloc, sizeof(cuFloatComplex)*BlocksPerGrid*4*N);
   cudaMemset(etaloc, 0, sizeof(cuFloatComplex)*BlocksPerGrid*4*N);
   cudaMemset(eta, 0, sizeof(cuFloatComplex)*4*N);
   /* each block requires 2xThreadsPerBloc x2 x 2 complex float for storing eta values
@@ -2034,7 +1990,6 @@ cudakernel_fns_fgradflat_robust_admm(int ThreadsPerBlock, int BlocksPerGrid, int
    also ThreadsPerBlock>= N
    */
   kernel_fns_fgrad_robust<<< BlocksPerGrid, ThreadsPerBlock, sizeof(cuFloatComplex)*8*ThreadsPerBlock + sizeof(int)*2*ThreadsPerBlock >>>(N, M, x, etaloc, y, coh, bbh, wtd);
-  cudaDeviceSynchronize();
 #ifdef CUDA_DBG
   error = cudaGetLastError();
   if(error != cudaSuccess) {
@@ -2055,13 +2010,12 @@ cudakernel_fns_fgradflat_robust_admm(int ThreadsPerBlock, int BlocksPerGrid, int
   /* timeslots */
   int ntime=(M+nbase-1)/nbase;
   /* threads to use (need to use small value to enable enough shared memory) */
-  int T=64;
+  int T=DEFAULT_TH_PER_BK_2;
   /* sum Bt values each to the first value */
   for (int ci=0; ci<(4*N+T-1)/T; ci++) {
     /* create blocks equal to timeslots, each will need Bt*T complex float storage, ci*T is the offset of 0...4N-1 values */
     /* each thread will sum Bt values */
     kernel_fns_sumblocks_pertime<<< ntime, T, sizeof(cuFloatComplex)*Bt*T >>>(N, Bt, ci*T, etaloc);
-    cudaDeviceSynchronize();
 #ifdef DEBUG
     printf("sum blocks %d, threads %d thread offset %d, numblocks/time %d\n",ntime,T,ci*T,Bt);
 #endif
@@ -2076,10 +2030,9 @@ cudakernel_fns_fgradflat_robust_admm(int ThreadsPerBlock, int BlocksPerGrid, int
 #endif
 
   /* now create 4N blocks, each block will sum elements in 0...4N-1 of ntime values, separated by Bt blocks */
-  T=64; /* even number */
+  T=DEFAULT_TH_PER_BK_2; /* even number */
   for (int ci=0; ci<(ntime+T-1)/T; ci++) {
     kernel_fns_sumblocks_alltime<<< 4*N, T, sizeof(cuFloatComplex)*T >>>(N, Bt, ntime, ci*T, etaloc, eta);
-    cudaDeviceSynchronize();
 #ifdef DEBUG
     printf("sum all blocks %d, timeslots %d, threads %d block offset %d, spacing %d\n",4*N,ntime,T,ci*T,Bt);
 #endif
@@ -2095,10 +2048,9 @@ cudakernel_fns_fgradflat_robust_admm(int ThreadsPerBlock, int BlocksPerGrid, int
 
   /* now etaloc : 4N x ntime (== 2N x 2ntime) blocks correspond to eta for each timeslot */
   /* now average 2x 2ntime matrix etaloc to one 2x2 matrix, stoared at eta */
-  T=64; /* even number */
+  T=DEFAULT_TH_PER_BK_2; /* even number */
   for (int ci=0; ci<(ntime+T-1)/T; ci++) {
     kernel_fns_sumelements_alltime<<< 4, T, sizeof(cuFloatComplex)*T >>>(ntime,ci*T, etaloc, eta);
-    cudaDeviceSynchronize();
   }
 #ifdef CUDA_DBG
   error = cudaGetLastError();
@@ -2108,6 +2060,7 @@ cudakernel_fns_fgradflat_robust_admm(int ThreadsPerBlock, int BlocksPerGrid, int
   }
 #endif
 
+  cudaFree(etaloc);
 }
 
 
@@ -2116,22 +2069,19 @@ cudakernel_fns_fgradflat_robust_admm(int ThreadsPerBlock, int BlocksPerGrid, int
   output fhess: reset to 0 initially */
 /* need 8N*BlocksPerGrid float storage */
 void
-cudakernel_fns_fhessflat(int ThreadsPerBlock, int BlocksPerGrid, int N, int M, cuFloatComplex *x, cuFloatComplex *eta, cuFloatComplex *fhess, float *y, float *coh, char *bbh, float *gWORK) {
+cudakernel_fns_fhessflat(int ThreadsPerBlock, int BlocksPerGrid, int N, int M, cuFloatComplex *x, cuFloatComplex *eta, cuFloatComplex *fhess, float *y, float *coh, short *bbh) {
 #ifdef CUDA_DBG
   cudaError_t error;
 #endif
   cuFloatComplex *etaloc;
   /* each block stores result in 2Nx2 block, so need BlocksPerGrid x 2Nx 2 storage */
-  int moff=0;
-  etaloc=(cuFloatComplex*)&gWORK[moff];
-  moff+=8*N*BlocksPerGrid;
+  cudaMalloc((void**)&etaloc, sizeof(cuFloatComplex)*BlocksPerGrid*4*N);
   cudaMemset(etaloc, 0, sizeof(cuFloatComplex)*BlocksPerGrid*4*N);
   cudaMemset(fhess, 0, sizeof(cuFloatComplex)*4*N);
   /* eachekernel require 2xThreadsPerBlocx2 x 2 complex float for storing eta values
     2*ThreadsPerBloc x1 int array for station numbers
      and  */
   kernel_fns_fhess<<< BlocksPerGrid, ThreadsPerBlock, sizeof(cuFloatComplex)*8*ThreadsPerBlock + sizeof(int)*2*ThreadsPerBlock >>>(N, M, x, eta, etaloc, y, coh, bbh);
-  cudaDeviceSynchronize();
 
 #ifdef CUDA_DBG
   error = cudaGetLastError();
@@ -2148,7 +2098,6 @@ cudakernel_fns_fhessflat(int ThreadsPerBlock, int BlocksPerGrid, int N, int M, c
   if (T>BlocksPerGrid) {
    int B=((BlocksPerGrid+1)/2)*2; /* even no of threads */
    kernel_fns_fgradsum<<< 4*N, B, sizeof(cuFloatComplex)*B>>>(N, BlocksPerGrid, NearestPowerOf2(B),  etaloc, fhess);
-   cudaDeviceSynchronize();
 #ifdef CUDA_DBG
    error = cudaGetLastError();
    if(error != cudaSuccess) {
@@ -2169,7 +2118,6 @@ cudakernel_fns_fhessflat(int ThreadsPerBlock, int BlocksPerGrid, int N, int M, c
       myT=BlocksPerGrid-ct;
     }
     kernel_fns_fgradsum<<< 4*N, myT, sizeof(cuFloatComplex)*myT >>>(N, myT, NearestPowerOf2(myT),  &etaloc[ct*4*N], fhess);
-    cudaDeviceSynchronize();
 #ifdef CUDA_DBG
     error = cudaGetLastError();
     if(error != cudaSuccess) {
@@ -2181,6 +2129,7 @@ cudakernel_fns_fhessflat(int ThreadsPerBlock, int BlocksPerGrid, int N, int M, c
    }
   }
 
+  cudaFree(etaloc);
 }
 
 
@@ -2188,22 +2137,19 @@ cudakernel_fns_fhessflat(int ThreadsPerBlock, int BlocksPerGrid, int N, int M, c
   output fhess: reset to 0 initially */
 /* need 8N*BlocksPerGrid float storage */
 void
-cudakernel_fns_fhessflat_robust1(int ThreadsPerBlock, int BlocksPerGrid, int N, int M, cuFloatComplex *x, cuFloatComplex *eta, cuFloatComplex *fhess, float *y, float *coh, char *bbh, float *wtd, float *gWORK) {
+cudakernel_fns_fhessflat_robust1(int ThreadsPerBlock, int BlocksPerGrid, int N, int M, cuFloatComplex *x, cuFloatComplex *eta, cuFloatComplex *fhess, float *y, float *coh, short *bbh, float *wtd) {
 #ifdef CUDA_DBG
   cudaError_t error;
 #endif
   cuFloatComplex *etaloc;
   /* each block stores result in 2Nx2 block, so need BlocksPerGrid x 2Nx 2 storage */
-  int moff=0;
-  etaloc=(cuFloatComplex*)&gWORK[moff];
-  moff+=8*N*BlocksPerGrid;
+  cudaMalloc((void**)&etaloc, sizeof(cuFloatComplex)*BlocksPerGrid*4*N);
   cudaMemset(etaloc, 0, sizeof(cuFloatComplex)*BlocksPerGrid*4*N);
   cudaMemset(fhess, 0, sizeof(cuFloatComplex)*4*N);
   /* eachekernel require 2xThreadsPerBlocx2 x 2 complex float for storing eta values
     2*ThreadsPerBloc x1 int array for station numbers
      and  */
   kernel_fns_fhess_robust1<<< BlocksPerGrid, ThreadsPerBlock, sizeof(cuFloatComplex)*8*ThreadsPerBlock + sizeof(int)*2*ThreadsPerBlock >>>(N, M, x, eta, etaloc, y, coh, bbh, wtd);
-  cudaDeviceSynchronize();
 #ifdef CUDA_DBG
   error = cudaGetLastError();
   if(error != cudaSuccess) {
@@ -2219,7 +2165,6 @@ cudakernel_fns_fhessflat_robust1(int ThreadsPerBlock, int BlocksPerGrid, int N, 
   if (T>BlocksPerGrid) {
    int B=((BlocksPerGrid+1)/2)*2; /* even no of threads */
    kernel_fns_fgradsum<<< 4*N, B, sizeof(cuFloatComplex)*B>>>(N, BlocksPerGrid, NearestPowerOf2(B),  etaloc, fhess);
-   cudaDeviceSynchronize();
 #ifdef CUDA_DBG
    error = cudaGetLastError();
    if(error != cudaSuccess) {
@@ -2240,7 +2185,6 @@ cudakernel_fns_fhessflat_robust1(int ThreadsPerBlock, int BlocksPerGrid, int N, 
       myT=BlocksPerGrid-ct;
     }
     kernel_fns_fgradsum<<< 4*N, myT, sizeof(cuFloatComplex)*myT >>>(N, myT, NearestPowerOf2(myT),  &etaloc[ct*4*N], fhess);
-    cudaDeviceSynchronize();
 #ifdef CUDA_DBG
     error = cudaGetLastError();
     if(error != cudaSuccess) {
@@ -2252,6 +2196,7 @@ cudakernel_fns_fhessflat_robust1(int ThreadsPerBlock, int BlocksPerGrid, int N, 
    }
   }
 
+  cudaFree(etaloc);
 }
 
 
@@ -2259,22 +2204,19 @@ cudakernel_fns_fhessflat_robust1(int ThreadsPerBlock, int BlocksPerGrid, int N, 
   output fhess: reset to 0 initially */
 /* need 8N*BlocksPerGrid float storage */
 void
-cudakernel_fns_fhessflat_robust(int ThreadsPerBlock, int BlocksPerGrid, int N, int M, cuFloatComplex *x, cuFloatComplex *eta, cuFloatComplex *fhess, float *y, float *coh, char *bbh, float *wtd, cuFloatComplex *Ai, cublasHandle_t cbhandle, float *gWORK) {
+cudakernel_fns_fhessflat_robust(int ThreadsPerBlock, int BlocksPerGrid, int N, int M, cuFloatComplex *x, cuFloatComplex *eta, cuFloatComplex *fhess, float *y, float *coh, short *bbh, float *wtd, cuFloatComplex *Ai, cublasHandle_t cbhandle) {
 #ifdef CUDA_DBG
   cudaError_t error;
 #endif
   cuFloatComplex *etaloc;
   /* each block stores result in 2Nx2 block, so need BlocksPerGrid x 2Nx 2 storage */
-  unsigned long int moff=0;
-  etaloc=(cuFloatComplex*)&gWORK[moff];
-  moff+=8*N*BlocksPerGrid;
+  cudaMalloc((void**)&etaloc, sizeof(cuFloatComplex)*BlocksPerGrid*4*N);
   cudaMemset(etaloc, 0, sizeof(cuFloatComplex)*BlocksPerGrid*4*N);
   cudaMemset(fhess, 0, sizeof(cuFloatComplex)*4*N);
   /* eachekernel require 2xThreadsPerBlocx2 x 2 complex float for storing eta values
     2*ThreadsPerBloc x1 int array for station numbers
    */
   kernel_fns_fhess_robust<<< BlocksPerGrid, ThreadsPerBlock, sizeof(cuFloatComplex)*8*ThreadsPerBlock + sizeof(int)*2*ThreadsPerBlock >>>(N, M, x, eta, etaloc, y, coh, bbh, wtd);
-  cudaDeviceSynchronize();
 #ifdef CUDA_DBG
   error = cudaGetLastError();
   if(error != cudaSuccess) {
@@ -2291,13 +2233,12 @@ cudakernel_fns_fhessflat_robust(int ThreadsPerBlock, int BlocksPerGrid, int N, i
   /* timeslots */
   int ntime=(M+nbase-1)/nbase;
   /* threads to use (need to use small value to enable enough shared memory) */
-  int T=64;
+  int T=DEFAULT_TH_PER_BK_2;
   /* sum Bt values each to the first value */
   for (int ci=0; ci<(4*N+T-1)/T; ci++) {
     /* create blocks equal to timeslots, each will need Bt*T complex float storage, ci*T is the offset of 0...4N-1 values */
     /* each thread will sum Bt values */
     kernel_fns_sumblocks_pertime<<< ntime, T, sizeof(cuFloatComplex)*Bt*T >>>(N, Bt, ci*T, etaloc);
-    cudaDeviceSynchronize();
 #ifdef DEBUG
     printf("sum blocks %d, threads %d thread offset %d, numblocks/time %d\n",ntime,T,ci*T,Bt);
 #endif
@@ -2311,10 +2252,9 @@ cudakernel_fns_fhessflat_robust(int ThreadsPerBlock, int BlocksPerGrid, int N, i
 #endif
 
   /* now create 4N blocks, each block will sum elements in 0...4N-1 of ntime values, separated by Bt blocks */
-  T=64; /* even number */
+  T=DEFAULT_TH_PER_BK_2; /* even number */
   for (int ci=0; ci<(ntime+T-1)/T; ci++) {
     kernel_fns_sumblocks_alltime<<< 4*N, T, sizeof(cuFloatComplex)*T >>>(N, Bt, ntime, ci*T, etaloc, fhess);
-    cudaDeviceSynchronize();
 #ifdef DEBUG
     printf("sum all blocks %d, timeslots %d, threads %d block offset %d, spacing %d\n",4*N,ntime,T,ci*T,Bt);
 #endif
@@ -2345,7 +2285,6 @@ cudakernel_fns_fhessflat_robust(int ThreadsPerBlock, int BlocksPerGrid, int N, i
   /* 2x2 matrix: 4 threads per block, ntime blocks */
   T=4;
   kernel_fns_rhs_alltime<<< ntime, T, sizeof(cuFloatComplex)*T >>>(C);
-  cudaDeviceSynchronize();
 #ifdef CUDA_DBG
   error = cudaGetLastError();
   if(error != cudaSuccess) {
@@ -2362,10 +2301,9 @@ cudakernel_fns_fhessflat_robust(int ThreadsPerBlock, int BlocksPerGrid, int N, i
 
   /* now average 2x 2ntime matrix etaloc to one 2x2 matrix, stoared at C */
   cudaMemset(C, 0, sizeof(cuFloatComplex)*4);
-  T=64; /* even number */
+  T=DEFAULT_TH_PER_BK_2; /* even number */
   for (int ci=0; ci<(ntime+T-1)/T; ci++) {
     kernel_fns_sumelements_alltime<<< 4, T, sizeof(cuFloatComplex)*T >>>(ntime,ci*T, etaloc, C);
-    cudaDeviceSynchronize();
   }
 #ifdef CUDA_DBG
   error = cudaGetLastError();
@@ -2381,6 +2319,7 @@ cudakernel_fns_fhessflat_robust(int ThreadsPerBlock, int BlocksPerGrid, int N, i
   cbstatus=cublasCgemm(cbhandle,CUBLAS_OP_N,CUBLAS_OP_N,2*N,2,2,&a1,x,2*N,C,2,&a2,fhess,2*N);
   checkCublasError(cbstatus,__FILE__,__LINE__);
 
+  cudaFree(etaloc);
 }
 
 
@@ -2388,22 +2327,19 @@ cudakernel_fns_fhessflat_robust(int ThreadsPerBlock, int BlocksPerGrid, int N, i
   output fhess: reset to 0 initially */
 /* need 8N*BlocksPerGrid float storage */
 void
-cudakernel_fns_fhessflat_robust_admm(int ThreadsPerBlock, int BlocksPerGrid, int N, int M, cuFloatComplex *x, cuFloatComplex *eta, cuFloatComplex *fhess, float *y, float *coh, char *bbh, float *wtd, cublasHandle_t cbhandle, float *gWORK) {
+cudakernel_fns_fhessflat_robust_admm(int ThreadsPerBlock, int BlocksPerGrid, int N, int M, cuFloatComplex *x, cuFloatComplex *eta, cuFloatComplex *fhess, float *y, float *coh, short *bbh, float *wtd, cublasHandle_t cbhandle) {
 #ifdef CUDA_DBG
   cudaError_t error;
 #endif
   cuFloatComplex *etaloc;
   /* each block stores result in 2Nx2 block, so need BlocksPerGrid x 2Nx 2 storage */
-  unsigned long int moff=0;
-  etaloc=(cuFloatComplex*)&gWORK[moff];
-  moff+=8*N*BlocksPerGrid;
+  cudaMalloc((void**)&etaloc, sizeof(cuFloatComplex)*BlocksPerGrid*4*N);
   cudaMemset(etaloc, 0, sizeof(cuFloatComplex)*BlocksPerGrid*4*N);
   cudaMemset(fhess, 0, sizeof(cuFloatComplex)*4*N);
   /* eachekernel require 2xThreadsPerBlocx2 x 2 complex float for storing eta values
     2*ThreadsPerBloc x1 int array for station numbers
    */
   kernel_fns_fhess_robust<<< BlocksPerGrid, ThreadsPerBlock, sizeof(cuFloatComplex)*8*ThreadsPerBlock + sizeof(int)*2*ThreadsPerBlock >>>(N, M, x, eta, etaloc, y, coh, bbh, wtd);
-  cudaDeviceSynchronize();
 #ifdef CUDA_DBG
   error = cudaGetLastError();
   if(error != cudaSuccess) {
@@ -2420,13 +2356,12 @@ cudakernel_fns_fhessflat_robust_admm(int ThreadsPerBlock, int BlocksPerGrid, int
   /* timeslots */
   int ntime=(M+nbase-1)/nbase;
   /* threads to use (need to use small value to enable enough shared memory) */
-  int T=64;
+  int T=DEFAULT_TH_PER_BK_2;
   /* sum Bt values each to the first value */
   for (int ci=0; ci<(4*N+T-1)/T; ci++) {
     /* create blocks equal to timeslots, each will need Bt*T complex float storage, ci*T is the offset of 0...4N-1 values */
     /* each thread will sum Bt values */
     kernel_fns_sumblocks_pertime<<< ntime, T, sizeof(cuFloatComplex)*Bt*T >>>(N, Bt, ci*T, etaloc);
-    cudaDeviceSynchronize();
 #ifdef DEBUG
     printf("sum blocks %d, threads %d thread offset %d, numblocks/time %d\n",ntime,T,ci*T,Bt);
 #endif
@@ -2441,10 +2376,9 @@ cudakernel_fns_fhessflat_robust_admm(int ThreadsPerBlock, int BlocksPerGrid, int
 #endif
 
   /* now create 4N blocks, each block will sum elements in 0...4N-1 of ntime values, separated by Bt blocks */
-  T=64; /* even number */
+  T=DEFAULT_TH_PER_BK_2; /* even number */
   for (int ci=0; ci<(ntime+T-1)/T; ci++) {
     kernel_fns_sumblocks_alltime<<< 4*N, T, sizeof(cuFloatComplex)*T >>>(N, Bt, ntime, ci*T, etaloc, fhess);
-    cudaDeviceSynchronize();
 #ifdef DEBUG
     printf("sum all blocks %d, timeslots %d, threads %d block offset %d, spacing %d\n",4*N,ntime,T,ci*T,Bt);
 #endif
@@ -2459,10 +2393,9 @@ cudakernel_fns_fhessflat_robust_admm(int ThreadsPerBlock, int BlocksPerGrid, int
 #endif
 
   /* now etaloc : 4N x ntime (== 2N x 2ntime) blocks correspond to eta for each timeslot */
-  T=64; /* even number */
+  T=DEFAULT_TH_PER_BK_2; /* even number */
   for (int ci=0; ci<(ntime+T-1)/T; ci++) {
     kernel_fns_sumelements_alltime<<< 4, T, sizeof(cuFloatComplex)*T >>>(ntime,ci*T, etaloc, fhess);
-    cudaDeviceSynchronize();
   }
 #ifdef CUDA_DBG
   error = cudaGetLastError();
@@ -2471,6 +2404,8 @@ cudakernel_fns_fhessflat_robust_admm(int ThreadsPerBlock, int BlocksPerGrid, int
     exit(-1);
   }
 #endif
+
+  cudaFree(etaloc);
 }
 
 
@@ -2483,13 +2418,13 @@ cudakernel_fns_fhessflat_robust_admm(int ThreadsPerBlock, int BlocksPerGrid, int
 void
 cudakernel_fns_fscale(int N, cuFloatComplex *eta, float *iw) {
 #ifdef CUDA_DBG
- cudaError_t error;
+  cudaError_t error;
 #endif
  /* since N is small ~60, use small no. of threads per block */
- int T=32;
- int B=(N+T-1)/T;
- kernel_fns_fscale<<< T, B>>>(N, eta, iw);
- cudaDeviceSynchronize();
+  int T=32;
+  int B=(N+T-1)/T;
+  kernel_fns_fscale<<< T, B>>>(N, eta, iw);
+  cudaDeviceSynchronize();
 #ifdef CUDA_DBG
  error = cudaGetLastError();
  if(error != cudaSuccess) {
@@ -2512,7 +2447,7 @@ cudakernel_fns_fscale(int N, cuFloatComplex *eta, float *iw) {
 
 */
 void
-cudakernel_fns_fupdate_weights(int ThreadsPerBlock, int BlocksPerGrid, int N, int M, cuFloatComplex *x, float *y, float *coh, char *bbh, float *wtd, float nu0) {
+cudakernel_fns_fupdate_weights(int ThreadsPerBlock, int BlocksPerGrid, int N, int M, cuFloatComplex *x, float *y, float *coh, short *bbh, float *wtd, float nu0) {
 #ifdef CUDA_DBG
   cudaError_t error;
 #endif
@@ -2540,7 +2475,7 @@ cudakernel_fns_fupdate_weights(int ThreadsPerBlock, int BlocksPerGrid, int N, in
   qd: weight Mx1
 */
 void
-cudakernel_fns_fupdate_weights_q(int ThreadsPerBlock, int BlocksPerGrid, int N, int M, cuFloatComplex *x, float *y, float *coh, char *bbh, float *wtd, float *qd, float nu0) {
+cudakernel_fns_fupdate_weights_q(int ThreadsPerBlock, int BlocksPerGrid, int N, int M, cuFloatComplex *x, float *y, float *coh, short *bbh, float *wtd, float *qd, float nu0) {
 #ifdef CUDA_DBG
   cudaError_t error;
 #endif

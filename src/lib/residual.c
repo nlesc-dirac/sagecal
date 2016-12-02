@@ -27,18 +27,6 @@
 #include "sagecal.h"
 
 /* Jones matrix multiplication 
-   C=A*B*sc, sc is a scalar
-*/
-static void
-ambw(complex double * __restrict a, complex double * __restrict b, complex double * __restrict c, double sc) {
- c[0]=(a[0]*b[0]+a[1]*b[2])*sc;
- c[1]=(a[0]*b[1]+a[1]*b[3])*sc;
- c[2]=(a[2]*b[0]+a[3]*b[2])*sc;
- c[3]=(a[2]*b[1]+a[3]*b[3])*sc;
-}
-
-
-/* Jones matrix multiplication 
    C=A*B
 */
 static void
@@ -62,193 +50,8 @@ ambt(complex double * __restrict a, complex double * __restrict b, complex doubl
 }
 
 
-/* worker thread function for prediction */
-static void *
-residual_threadfn_withinterpolation(void *data) {
- thread_data_base_t *t=(thread_data_base_t*)data;
- 
- int ci,cm,sta1,sta2,tt;
- double *pm;
- complex double C[4],G1[4],G2[4],T1[4],T2[4];
- int M=(t->M);
- int Ntilebase=(t->Nbase)*(t->tilesz);
- int px;
- double wt;
- for (ci=0; ci<t->Nb; ci++) {
-   /* iterate over the sky model and calculate contribution */
-   /* for this x[8*ci:8*(ci+1)-1] */
-   /* if this baseline is flagged, we do not compute */
-
-   /* stations for this baseline */
-   tt=(ci+t->boff)/t->Nbase; /* which timeslot */
-   wt=(double)tt/(double)t->tilesz;
-   sta1=t->barr[ci+t->boff].sta1;
-   sta2=t->barr[ci+t->boff].sta2;
-   for (cm=0; cm<M; cm++) { /* clusters */
-     /* check if cluster id >=0 to do a subtraction */
-     if (t->carr[cm].id>=0) {
-
-     /* depending on the chunk size and the baseline index,
-        select right set of parameters 
-       data x=[0,........,Nbase*tilesz]
-       divided into nchunk chunks
-       p[0] -> x[0.....Nbase*tilesz/nchunk-1]
-       p[1] -> x[Nbase*tilesz/nchunk......2*Nbase*tilesz-1]
-       ....
-       p[last] -> x[(nchunk-1)*Nbase*tilesz/nchunk......Nbase*tilesz]
-
-       so given bindex,  right p[] is bindex/((Nbase*tilesz+nchunk-1)/nchunk)
-       */
-     px=(ci+t->boff)/((Ntilebase+t->carr[cm].nchunk-1)/t->carr[cm].nchunk);
-     /* gains for this cluster, for sta1,sta2 */
-     //pm=&(t->p0[cm*8*N]); 
-     pm=&(t->p0[t->carr[cm].p[px]]);
-     G1[0]=(pm[sta1*8])+_Complex_I*(pm[sta1*8+1]);
-     G1[1]=(pm[sta1*8+2])+_Complex_I*(pm[sta1*8+3]);
-     G1[2]=(pm[sta1*8+4])+_Complex_I*(pm[sta1*8+5]);
-     G1[3]=(pm[sta1*8+6])+_Complex_I*(pm[sta1*8+7]);
-     G2[0]=(pm[sta2*8])+_Complex_I*(pm[sta2*8+1]);
-     G2[1]=(pm[sta2*8+2])+_Complex_I*(pm[sta2*8+3]);
-     G2[2]=(pm[sta2*8+4])+_Complex_I*(pm[sta2*8+5]);
-     G2[3]=(pm[sta2*8+6])+_Complex_I*(pm[sta2*8+7]);
-
-
-      /* use pre calculated values */
-      C[0]=t->coh[4*M*ci+4*cm];
-      C[1]=t->coh[4*M*ci+4*cm+1];
-      C[2]=t->coh[4*M*ci+4*cm+2];
-      C[3]=t->coh[4*M*ci+4*cm+3];
-
-     /* form G1*C*G2' */
-     /* T1=G1*C  */
-     ambw(G1,C,T1,1.0-wt);
-     /* T2=T1*G2' */
-     ambt(T1,G2,T2);
-
-     /* add to baseline visibilities */
-     t->x[8*ci]-=creal(T2[0]);
-     t->x[8*ci+1]-=cimag(T2[0]);
-     t->x[8*ci+2]-=creal(T2[1]);
-     t->x[8*ci+3]-=cimag(T2[1]);
-     t->x[8*ci+4]-=creal(T2[2]);
-     t->x[8*ci+5]-=cimag(T2[2]);
-     t->x[8*ci+6]-=creal(T2[3]);
-     t->x[8*ci+7]-=cimag(T2[3]);
-
-     /* second parameter set */
-     //pm=&(t->p[cm*8*N]);
-     pm=&(t->p[t->carr[cm].p[px]]);
-     G1[0]=(pm[sta1*8])+_Complex_I*(pm[sta1*8+1]);
-     G1[1]=(pm[sta1*8+2])+_Complex_I*(pm[sta1*8+3]);
-     G1[2]=(pm[sta1*8+4])+_Complex_I*(pm[sta1*8+5]);
-     G1[3]=(pm[sta1*8+6])+_Complex_I*(pm[sta1*8+7]);
-     G2[0]=(pm[sta2*8])+_Complex_I*(pm[sta2*8+1]);
-     G2[1]=(pm[sta2*8+2])+_Complex_I*(pm[sta2*8+3]);
-     G2[2]=(pm[sta2*8+4])+_Complex_I*(pm[sta2*8+5]);
-     G2[3]=(pm[sta2*8+6])+_Complex_I*(pm[sta2*8+7]);
-
-     /* form G1*C*G2' */
-     /* T1=G1*C  */
-     ambw(G1,C,T1,wt);
-     /* T2=T1*G2' */
-     ambt(T1,G2,T2);
-
-     /* add to baseline visibilities */
-     t->x[8*ci]-=creal(T2[0]);
-     t->x[8*ci+1]-=cimag(T2[0]);
-     t->x[8*ci+2]-=creal(T2[1]);
-     t->x[8*ci+3]-=cimag(T2[1]);
-     t->x[8*ci+4]-=creal(T2[2]);
-     t->x[8*ci+5]-=cimag(T2[2]);
-     t->x[8*ci+6]-=creal(T2[3]);
-     t->x[8*ci+7]-=cimag(T2[3]);
-     }
-   }
- }
-
- return NULL;
-}
-
-/* worker thread function for subtraction */
-static void *
-residual_threadfn_nointerpolation0(void *data) {
- thread_data_base_t *t=(thread_data_base_t*)data;
- 
- int ci,cm,sta1,sta2;
- double *pm;
- complex double C[4],G1[4],G2[4],T1[4],T2[4];
- int M=(t->M);
- int Ntilebase=(t->Nbase)*(t->tilesz);
- int px;
- for (ci=0; ci<t->Nb; ci++) {
-   /* iterate over the sky model and calculate contribution */
-   /* for this x[8*ci:8*(ci+1)-1] */
-   /* if this baseline is flagged, we do not compute */
-
-   /* stations for this baseline */
-   sta1=t->barr[ci+t->boff].sta1;
-   sta2=t->barr[ci+t->boff].sta2;
-   for (cm=0; cm<M; cm++) { /* clusters */
-      /* check if cluster id >=0 to do a subtraction */
-     if (t->carr[cm].id>=0) {
-     /* gains for this cluster, for sta1,sta2 */
-     /* depending on the chunk size and the baseline index,
-        select right set of parameters 
-       data x=[0,........,Nbase*tilesz]
-       divided into nchunk chunks
-       p[0] -> x[0.....Nbase*tilesz/nchunk-1]
-       p[1] -> x[Nbase*tilesz/nchunk......2*Nbase*tilesz-1]
-       ....
-       p[last] -> x[(nchunk-1)*Nbase*tilesz/nchunk......Nbase*tilesz]
-
-       so given bindex,  right p[] is bindex/((Nbase*tilesz+nchunk-1)/nchunk)
-       */
-     px=(ci+t->boff)/((Ntilebase+t->carr[cm].nchunk-1)/t->carr[cm].nchunk);
-     //printf("base %d, cluster %d, parm off %d abs %d\n",t->bindex[ci],cm,px,t->carr[cm].p[px]);
-     //pm=&(t->p0[cm*8*N]);
-     pm=&(t->p0[t->carr[cm].p[px]]);
-     G1[0]=(pm[sta1*8])+_Complex_I*(pm[sta1*8+1]);
-     G1[1]=(pm[sta1*8+2])+_Complex_I*(pm[sta1*8+3]);
-     G1[2]=(pm[sta1*8+4])+_Complex_I*(pm[sta1*8+5]);
-     G1[3]=(pm[sta1*8+6])+_Complex_I*(pm[sta1*8+7]);
-     G2[0]=(pm[sta2*8])+_Complex_I*(pm[sta2*8+1]);
-     G2[1]=(pm[sta2*8+2])+_Complex_I*(pm[sta2*8+3]);
-     G2[2]=(pm[sta2*8+4])+_Complex_I*(pm[sta2*8+5]);
-     G2[3]=(pm[sta2*8+6])+_Complex_I*(pm[sta2*8+7]);
-
-
-      /* use pre calculated values */
-      C[0]=t->coh[4*M*ci+4*cm];
-      C[1]=t->coh[4*M*ci+4*cm+1];
-      C[2]=t->coh[4*M*ci+4*cm+2];
-      C[3]=t->coh[4*M*ci+4*cm+3];
-
-     /* form G1*C*G2' */
-     /* T1=G1*C  */
-     amb(G1,C,T1);
-     /* T2=T1*G2' */
-     ambt(T1,G2,T2);
-
-     /* add to baseline visibilities */
-     t->x[8*ci]-=creal(T2[0]);
-     t->x[8*ci+1]-=cimag(T2[0]);
-     t->x[8*ci+2]-=creal(T2[1]);
-     t->x[8*ci+3]-=cimag(T2[1]);
-     t->x[8*ci+4]-=creal(T2[2]);
-     t->x[8*ci+5]-=cimag(T2[2]);
-     t->x[8*ci+6]-=creal(T2[3]);
-     t->x[8*ci+7]-=cimag(T2[3]);
-     }
-   }
- }
-
- return NULL;
-}
-
-
 /* worker thread function for subtraction
   also correct residual with solutions for cluster id 0 */
-
 static void *
 residual_threadfn_nointerpolation(void *data) {
  thread_data_base_t *t=(thread_data_base_t*)data;
@@ -328,7 +131,6 @@ residual_threadfn_nointerpolation(void *data) {
     C[3]=t->x[8*ci+6]+_Complex_I*t->x[8*ci+7];
     px=(ci+t->boff)/((Ntilebase+t->carr[cm].nchunk-1)/t->carr[cm].nchunk);
     pm=&(t->pinv[8*t->N*px]);
-    /* FIXME: is pinv column major or row major, it seems column major */
     G1[0]=(pm[sta1*8])+_Complex_I*(pm[sta1*8+1]);
     G1[1]=(pm[sta1*8+2])+_Complex_I*(pm[sta1*8+3]);
     G1[2]=(pm[sta1*8+4])+_Complex_I*(pm[sta1*8+5]);
@@ -513,11 +315,11 @@ residual_threadfn_onefreq(void *data) {
  thread_data_base_t *t=(thread_data_base_t*)data;
  
  int ci,cm,cn,sta1,sta2;
+ double *PHr=0,*PHi=0,*G=0,*II=0,*QQ=0,*UU=0,*VV=0; /* arrays to store calculations */
  double *pm;
- double phterm,sinph,cosph,freq0;
- complex double prodterm;
+ double freq0;
+ double fdelta2=t->fdelta*0.5;
 
- double fratio,fratio1,fratio2; 
  complex double C[4],G1[4],G2[4],T1[4],T2[4];
  int M=(t->M);
  int Ntilebase=(t->Nbase)*(t->tilesz);
@@ -563,57 +365,147 @@ residual_threadfn_onefreq(void *data) {
 /***********************************************/
       /* calculate coherencies for each freq */
       memset(C,0,sizeof(complex double)*4);
+
+     /* setup memory */
+     if (posix_memalign((void*)&PHr,sizeof(double),((size_t)t->carr[cm].N*sizeof(double)))!=0) {
+      fprintf(stderr,"%s: %d: No free memory\n",__FILE__,__LINE__);
+      exit(1);
+     }
+     if (posix_memalign((void*)&PHi,sizeof(double),((size_t)t->carr[cm].N*sizeof(double)))!=0) {
+      fprintf(stderr,"%s: %d: No free memory\n",__FILE__,__LINE__);
+      exit(1);
+     }
+     if (posix_memalign((void*)&G,sizeof(double),((size_t)t->carr[cm].N*sizeof(double)))!=0) {
+      fprintf(stderr,"%s: %d: No free memory\n",__FILE__,__LINE__);
+      exit(1);
+     }
+     if (posix_memalign((void*)&II,sizeof(double),((size_t)t->carr[cm].N*sizeof(double)))!=0) {
+      fprintf(stderr,"%s: %d: No free memory\n",__FILE__,__LINE__);
+      exit(1);
+     }
+     if (posix_memalign((void*)&QQ,sizeof(double),((size_t)t->carr[cm].N*sizeof(double)))!=0) {
+      fprintf(stderr,"%s: %d: No free memory\n",__FILE__,__LINE__);
+      exit(1);
+     }
+     if (posix_memalign((void*)&UU,sizeof(double),((size_t)t->carr[cm].N*sizeof(double)))!=0) {
+      fprintf(stderr,"%s: %d: No free memory\n",__FILE__,__LINE__);
+      exit(1);
+     }
+     if (posix_memalign((void*)&VV,sizeof(double),((size_t)t->carr[cm].N*sizeof(double)))!=0) {
+      fprintf(stderr,"%s: %d: No free memory\n",__FILE__,__LINE__);
+      exit(1);
+     }
+     /* phase (real,imag) parts */
+     /* note u=u/c, v=v/c, w=w/c here */
+     /* phterm is 2pi(u/c l +v/c m +w/c n) */
      for (cn=0; cn<t->carr[cm].N; cn++) {
-       /* note u=u/c, v=v/c, w=w/c here */
-       /* phterm is 2pi(u/c l +v/c m +w/c n) */
-       phterm=2.0*M_PI*(t->u[ci]*t->carr[cm].ll[cn]+t->v[ci]*t->carr[cm].mm[cn]+t->w[ci]*t->carr[cm].nn[cn]);
-       sincos(phterm*freq0,&sinph,&cosph);
-       /* caltulate coherency, NOT scaled by 1/2, with spectral index */
-       if (t->carr[cm].spec_idx[cn]!=0.0) {
-         fratio=log(freq0/t->carr[cm].f0[cn]);
-         fratio1=fratio*fratio;
-         fratio2=fratio1*fratio;
-         /* catch -ve and 0 sI */
-         if (t->carr[cm].sI0[cn]>0.0) {
-          prodterm=exp(log(t->carr[cm].sI0[cn])+t->carr[cm].spec_idx[cn]*fratio+t->carr[cm].spec_idx1[cn]*fratio1+t->carr[cm].spec_idx2[cn]*fratio2)*(cosph+_Complex_I*sinph);
-         } else {
-          prodterm=(t->carr[cm].sI0[cn]==0.0?0.0:-exp(log(-t->carr[cm].sI0[cn])+t->carr[cm].spec_idx[cn]*fratio+t->carr[cm].spec_idx1[cn]*fratio1+t->carr[cm].spec_idx2[cn]*fratio2)*(cosph+_Complex_I*sinph));
-         }
-       } else {
-         prodterm=t->carr[cm].sI[cn]*(cosph+_Complex_I*sinph);
-       }
+       G[cn]=2.0*M_PI*(t->u[ci]*t->carr[cm].ll[cn]+t->v[ci]*t->carr[cm].mm[cn]+t->w[ci]*t->carr[cm].nn[cn]);
+     }
+     for (cn=0; cn<t->carr[cm].N; cn++) {
+       sincos(G[cn]*freq0,&PHi[cn],&PHr[cn]);
+     }
+
+     /* term due to shape of source, also multiplied by freq/time smearing */
+     for (cn=0; cn<t->carr[cm].N; cn++) {
        /* freq smearing : extra term delta * sinc(delta/2 * phterm) */
-       phterm*=t->fdelta*0.5;
-       if (phterm!=0.0) {
-         sinph=sin(phterm)/phterm;
-         prodterm*=sinph;
+       if (G[cn]!=0.0) {
+         double smfac=G[cn]*fdelta2;
+         double sinph=sin(smfac)/smfac;
+         G[cn]=fabs(sinph);
+       } else {
+         G[cn]=1.0;
        }
+     }
+
+     /* multiply (re,im) phase term with smearing/shape factor */
+     for (cn=0; cn<t->carr[cm].N; cn++) {
+       PHr[cn]*=G[cn];
+       PHi[cn]*=G[cn];
+     }
+
+
+     for (cn=0; cn<t->carr[cm].N; cn++) {
        /* time smearing TMS eq. 6.81 for EW-array formula */
-       //prodterm*=time_smear(t->carr[cm].ll[cn],t->carr[cm].mm[cn],t->dec0,t->tdelta,t->u[ci],t->v[ci],t->w[ci],t->freq0);
+       //G[cn]*=time_smear(t->carr[cm].ll[cn],t->carr[cm].mm[cn],t->dec0,t->tdelta,t->u[ci],t->v[ci],t->w[ci],t->freq0);
 
        /* check if source type is not a point source for additional 
           calculations */
-       if (t->carr[cm].stype[cn]==STYPE_POINT) {
-        C[0]+=prodterm;
-        C[3]+=prodterm;
-       } else if (t->carr[cm].stype[cn]==STYPE_SHAPELET) {
-        prodterm*=shapelet_contrib(t->carr[cm].ex[cn],t->u[ci]*freq0,t->v[ci]*freq0,t->w[ci]*freq0);
-        C[0]+=prodterm;
-        C[3]+=prodterm;
-       } else if (t->carr[cm].stype[cn]==STYPE_GAUSSIAN) {
-        prodterm*=gaussian_contrib(t->carr[cm].ex[cn],t->u[ci]*freq0,t->v[ci]*freq0,t->w[ci]*freq0);
-        C[0]+=prodterm;
-        C[3]+=prodterm;
-       } else if (t->carr[cm].stype[cn]==STYPE_DISK) {
-        prodterm*=disk_contrib(t->carr[cm].ex[cn],t->u[ci]*freq0,t->v[ci]*freq0,t->w[ci]*freq0);
-        C[0]+=prodterm;
-        C[3]+=prodterm;
-       } else if (t->carr[cm].stype[cn]==STYPE_RING) {
-        prodterm*=ring_contrib(t->carr[cm].ex[cn],t->u[ci]*freq0,t->v[ci]*freq0,t->w[ci]*freq0);
-        C[0]+=prodterm;
-        C[3]+=prodterm;
+       if (t->carr[cm].stype[cn]!=STYPE_POINT) {
+        complex double sterm=PHr[cn]+_Complex_I*PHi[cn];
+        if (t->carr[cm].stype[cn]==STYPE_SHAPELET) {
+         sterm*=shapelet_contrib(t->carr[cm].ex[cn],t->u[ci]*freq0,t->v[ci]*freq0,t->w[ci]*freq0);
+        } else if (t->carr[cm].stype[cn]==STYPE_GAUSSIAN) {
+         sterm*=gaussian_contrib(t->carr[cm].ex[cn],t->u[ci]*freq0,t->v[ci]*freq0,t->w[ci]*freq0);
+        } else if (t->carr[cm].stype[cn]==STYPE_DISK) {
+         sterm*=disk_contrib(t->carr[cm].ex[cn],t->u[ci]*freq0,t->v[ci]*freq0,t->w[ci]*freq0);
+        } else if (t->carr[cm].stype[cn]==STYPE_RING) {
+         sterm*=ring_contrib(t->carr[cm].ex[cn],t->u[ci]*freq0,t->v[ci]*freq0,t->w[ci]*freq0);
+        }
+        PHr[cn]=creal(sterm);
+        PHi[cn]=cimag(sterm);
+       }
+
+     }
+
+     /* flux of each source, at each freq */
+     for (cn=0; cn<t->carr[cm].N; cn++) {
+       /* coherencies are NOT scaled by 1/2, with spectral index */
+       if (t->carr[cm].spec_idx[cn]!=0.0) {
+         double fratio=log(freq0/t->carr[cm].f0[cn]);
+         double fratio1=fratio*fratio;
+         double fratio2=fratio1*fratio;
+         double tempfr=t->carr[cm].spec_idx[cn]*fratio+t->carr[cm].spec_idx1[cn]*fratio1+t->carr[cm].spec_idx2[cn]*fratio2;
+         /* catch -ve and 0 sI */
+         if (t->carr[cm].sI0[cn]>0.0) {
+          II[cn]=exp(log(t->carr[cm].sI0[cn])+tempfr);
+         } else {
+          II[cn]=(t->carr[cm].sI0[cn]==0.0?0.0:-exp(log(-t->carr[cm].sI0[cn])+tempfr));
+         }
+         if (t->carr[cm].sQ0[cn]>0.0) {
+          QQ[cn]=exp(log(t->carr[cm].sQ0[cn])+tempfr);
+         } else {
+          QQ[cn]=(t->carr[cm].sQ0[cn]==0.0?0.0:-exp(log(-t->carr[cm].sQ0[cn])+tempfr));
+         }
+         if (t->carr[cm].sU0[cn]>0.0) {
+          UU[cn]=exp(log(t->carr[cm].sU0[cn])+tempfr);
+         } else {
+          UU[cn]=(t->carr[cm].sU0[cn]==0.0?0.0:-exp(log(-t->carr[cm].sU0[cn])+tempfr));
+         }
+         if (t->carr[cm].sV0[cn]>0.0) {
+          VV[cn]=exp(log(t->carr[cm].sV0[cn])+tempfr);
+         } else {
+          VV[cn]=(t->carr[cm].sV0[cn]==0.0?0.0:-exp(log(-t->carr[cm].sV0[cn])+tempfr));
+         }
+       } else {
+         II[cn]=t->carr[cm].sI[cn];
+         QQ[cn]=t->carr[cm].sQ[cn];
+         UU[cn]=t->carr[cm].sU[cn];
+         VV[cn]=t->carr[cm].sV[cn];
        }
      }
+ 
+
+     /* add up terms together */
+     for (cn=0; cn<t->carr[cm].N; cn++) {
+       complex double Ph,IIl,QQl,UUl,VVl;
+       Ph=(PHr[cn]+_Complex_I*PHi[cn]);
+       IIl=Ph*II[cn];
+       QQl=Ph*QQ[cn];
+       UUl=Ph*UU[cn];
+       VVl=Ph*VV[cn];
+       C[0]+=IIl+QQl;
+       C[1]+=UUl+_Complex_I*VVl;
+       C[2]+=UUl-_Complex_I*VVl;
+       C[3]+=IIl-QQl;
+     }
+
+     free(PHr);
+     free(PHi);
+     free(G);
+     free(II);
+     free(QQ);
+     free(UU);
+     free(VV);
 
 /***********************************************/
       /* form G1*C*G2' */
@@ -785,11 +677,11 @@ residual_threadfn_multifreq(void *data) {
  thread_data_base_t *t=(thread_data_base_t*)data;
  
  int ci,cm,cf,cn,sta1,sta2;
+ double *PHr=0,*PHi=0,*G=0,*II=0,*QQ=0,*UU=0,*VV=0; /* arrays to store calculations */
  double *pm;
- double phterm,sinph,cosph,freq0;
- complex double prodterm;
+ double freq0;
+ double fdelta2=t->fdelta*0.5;
 
- double fratio,fratio1,fratio2; 
  complex double C[4],G1[4],G2[4],T1[4],T2[4];
  int M=(t->M);
  int Ntilebase=(t->Nbase)*(t->tilesz);
@@ -836,57 +728,145 @@ residual_threadfn_multifreq(void *data) {
 /***********************************************/
       /* calculate coherencies for each freq */
       memset(C,0,sizeof(complex double)*4);
-     for (cn=0; cn<t->carr[cm].N; cn++) {
-       /* note u=u/c, v=v/c, w=w/c here */
-       /* phterm is 2pi(u/c l +v/c m +w/c n) */
-       phterm=2.0*M_PI*(t->u[ci]*t->carr[cm].ll[cn]+t->v[ci]*t->carr[cm].mm[cn]+t->w[ci]*t->carr[cm].nn[cn]);
-       sincos(phterm*freq0,&sinph,&cosph);
-       /* caltulate coherency, NOT scaled by 1/2, with spectral index */
-       if (t->carr[cm].spec_idx[cn]!=0.0) {
-         fratio=log(freq0/t->carr[cm].f0[cn]);
-         fratio1=fratio*fratio;
-         fratio2=fratio1*fratio;
-         /* catch -ve and 0 sI */
-         if (t->carr[cm].sI0[cn]>0.0) {
-          prodterm=exp(log(t->carr[cm].sI0[cn])+t->carr[cm].spec_idx[cn]*fratio+t->carr[cm].spec_idx1[cn]*fratio1+t->carr[cm].spec_idx2[cn]*fratio2)*(cosph+_Complex_I*sinph);
-         } else {
-          prodterm=(t->carr[cm].sI0[cn]==0.0?0.0:-exp(log(-t->carr[cm].sI0[cn])+t->carr[cm].spec_idx[cn]*fratio+t->carr[cm].spec_idx1[cn]*fratio1+t->carr[cm].spec_idx2[cn]*fratio2)*(cosph+_Complex_I*sinph));
-         }
-       } else {
-         prodterm=t->carr[cm].sI[cn]*(cosph+_Complex_I*sinph);
-       }
-       /* freq smearing : extra term delta * sinc(delta/2 * phterm) */
-       phterm*=t->fdelta*0.5;
-       if (phterm!=0.0) {
-         sinph=sin(phterm)/phterm;
-         prodterm*=sinph;
-       }
-       /* time smearing TMS eq. 6.81 for EW-array formula */
-       //prodterm*=time_smear(t->carr[cm].ll[cn],t->carr[cm].mm[cn],t->dec0,t->tdelta,t->u[ci],t->v[ci],t->w[ci],t->freq0);
 
-       /* check if source type is not a point source for additional 
-          calculations */
-       if (t->carr[cm].stype[cn]==STYPE_POINT) {
-        C[0]+=prodterm;
-        C[3]+=prodterm;
-       } else if (t->carr[cm].stype[cn]==STYPE_SHAPELET) {
-        prodterm*=shapelet_contrib(t->carr[cm].ex[cn],t->u[ci]*freq0,t->v[ci]*freq0,t->w[ci]*freq0);
-        C[0]+=prodterm;
-        C[3]+=prodterm;
-       } else if (t->carr[cm].stype[cn]==STYPE_GAUSSIAN) {
-        prodterm*=gaussian_contrib(t->carr[cm].ex[cn],t->u[ci]*freq0,t->v[ci]*freq0,t->w[ci]*freq0);
-        C[0]+=prodterm;
-        C[3]+=prodterm;
-       } else if (t->carr[cm].stype[cn]==STYPE_DISK) {
-        prodterm*=disk_contrib(t->carr[cm].ex[cn],t->u[ci]*freq0,t->v[ci]*freq0,t->w[ci]*freq0);
-        C[0]+=prodterm;
-        C[3]+=prodterm;
-       } else if (t->carr[cm].stype[cn]==STYPE_RING) {
-        prodterm*=ring_contrib(t->carr[cm].ex[cn],t->u[ci]*freq0,t->v[ci]*freq0,t->w[ci]*freq0);
-        C[0]+=prodterm;
-        C[3]+=prodterm;
+     /* setup memory */
+     if (posix_memalign((void*)&PHr,sizeof(double),((size_t)t->carr[cm].N*sizeof(double)))!=0) {
+      fprintf(stderr,"%s: %d: No free memory\n",__FILE__,__LINE__);
+      exit(1);
+     }
+     if (posix_memalign((void*)&PHi,sizeof(double),((size_t)t->carr[cm].N*sizeof(double)))!=0) {
+      fprintf(stderr,"%s: %d: No free memory\n",__FILE__,__LINE__);
+      exit(1);
+     }
+     if (posix_memalign((void*)&G,sizeof(double),((size_t)t->carr[cm].N*sizeof(double)))!=0) {
+      fprintf(stderr,"%s: %d: No free memory\n",__FILE__,__LINE__);
+      exit(1);
+     }
+     if (posix_memalign((void*)&II,sizeof(double),((size_t)t->carr[cm].N*sizeof(double)))!=0) {
+      fprintf(stderr,"%s: %d: No free memory\n",__FILE__,__LINE__);
+      exit(1);
+     }
+     if (posix_memalign((void*)&QQ,sizeof(double),((size_t)t->carr[cm].N*sizeof(double)))!=0) {
+      fprintf(stderr,"%s: %d: No free memory\n",__FILE__,__LINE__);
+      exit(1);
+     }
+     if (posix_memalign((void*)&UU,sizeof(double),((size_t)t->carr[cm].N*sizeof(double)))!=0) {
+      fprintf(stderr,"%s: %d: No free memory\n",__FILE__,__LINE__);
+      exit(1);
+     }
+     if (posix_memalign((void*)&VV,sizeof(double),((size_t)t->carr[cm].N*sizeof(double)))!=0) {
+      fprintf(stderr,"%s: %d: No free memory\n",__FILE__,__LINE__);
+      exit(1);
+     }
+
+     /* phase (real,imag) parts */
+     /* note u=u/c, v=v/c, w=w/c here */
+     /* phterm is 2pi(u/c l +v/c m +w/c n) */
+     for (cn=0; cn<t->carr[cm].N; cn++) {
+       G[cn]=2.0*M_PI*(t->u[ci]*t->carr[cm].ll[cn]+t->v[ci]*t->carr[cm].mm[cn]+t->w[ci]*t->carr[cm].nn[cn]);
+     }
+     for (cn=0; cn<t->carr[cm].N; cn++) {
+       sincos(G[cn]*freq0,&PHi[cn],&PHr[cn]);
+     }
+
+     /* term due to shape of source, also multiplied by freq/time smearing */
+     for (cn=0; cn<t->carr[cm].N; cn++) {
+       /* freq smearing : extra term delta * sinc(delta/2 * phterm) */
+       if (G[cn]!=0.0) {
+         double smfac=G[cn]*fdelta2;
+         double sinph=sin(smfac)/smfac;
+         G[cn]=fabs(sinph);
+       } else {
+         G[cn]=1.0;
        }
      }
+
+     /* multiply (re,im) phase term with smearing/shape factor */
+     for (cn=0; cn<t->carr[cm].N; cn++) {
+       PHr[cn]*=G[cn];
+       PHi[cn]*=G[cn];
+     }
+
+
+     for (cn=0; cn<t->carr[cm].N; cn++) {
+       /* check if source type is not a point source for additional 
+          calculations */
+       if (t->carr[cm].stype[cn]!=STYPE_POINT) {
+        complex double sterm=PHr[cn]+_Complex_I*PHi[cn];
+        if (t->carr[cm].stype[cn]==STYPE_SHAPELET) {
+         sterm*=shapelet_contrib(t->carr[cm].ex[cn],t->u[ci]*freq0,t->v[ci]*freq0,t->w[ci]*freq0);
+        } else if (t->carr[cm].stype[cn]==STYPE_GAUSSIAN) {
+         sterm*=gaussian_contrib(t->carr[cm].ex[cn],t->u[ci]*freq0,t->v[ci]*freq0,t->w[ci]*freq0);
+        } else if (t->carr[cm].stype[cn]==STYPE_DISK) {
+         sterm*=disk_contrib(t->carr[cm].ex[cn],t->u[ci]*freq0,t->v[ci]*freq0,t->w[ci]*freq0);
+        } else if (t->carr[cm].stype[cn]==STYPE_RING) {
+         sterm*=ring_contrib(t->carr[cm].ex[cn],t->u[ci]*freq0,t->v[ci]*freq0,t->w[ci]*freq0);
+        }
+        PHr[cn]=creal(sterm);
+        PHi[cn]=cimag(sterm);
+       }
+
+     }
+
+
+     for (cn=0; cn<t->carr[cm].N; cn++) {
+       /* coherencies are NOT scaled by 1/2, with spectral index */
+       if (t->carr[cm].spec_idx[cn]!=0.0) {
+         double fratio=log(freq0/t->carr[cm].f0[cn]);
+         double fratio1=fratio*fratio;
+         double fratio2=fratio1*fratio;
+         double tempfr=t->carr[cm].spec_idx[cn]*fratio+t->carr[cm].spec_idx1[cn]*fratio1+t->carr[cm].spec_idx2[cn]*fratio2;
+         /* catch -ve and 0 sI */
+         if (t->carr[cm].sI0[cn]>0.0) {
+          II[cn]=exp(log(t->carr[cm].sI0[cn])+tempfr);
+         } else {
+          II[cn]=(t->carr[cm].sI0[cn]==0.0?0.0:-exp(log(-t->carr[cm].sI0[cn])+tempfr));
+         }
+         if (t->carr[cm].sQ0[cn]>0.0) {
+          QQ[cn]=exp(log(t->carr[cm].sQ0[cn])+tempfr);
+         } else {
+          QQ[cn]=(t->carr[cm].sQ0[cn]==0.0?0.0:-exp(log(-t->carr[cm].sQ0[cn])+tempfr));
+         }
+         if (t->carr[cm].sU0[cn]>0.0) {
+          UU[cn]=exp(log(t->carr[cm].sU0[cn])+tempfr);
+         } else {
+          UU[cn]=(t->carr[cm].sU0[cn]==0.0?0.0:-exp(log(-t->carr[cm].sU0[cn])+tempfr));
+         }
+         if (t->carr[cm].sV0[cn]>0.0) {
+          VV[cn]=exp(log(t->carr[cm].sV0[cn])+tempfr);
+         } else {
+          VV[cn]=(t->carr[cm].sV0[cn]==0.0?0.0:-exp(log(-t->carr[cm].sV0[cn])+tempfr));
+         }
+       } else {
+         II[cn]=t->carr[cm].sI[cn];
+         QQ[cn]=t->carr[cm].sQ[cn];
+         UU[cn]=t->carr[cm].sU[cn];
+         VV[cn]=t->carr[cm].sV[cn];
+       }
+     }
+
+     /* add up terms together */
+     for (cn=0; cn<t->carr[cm].N; cn++) {
+       complex double Ph,IIl,QQl,UUl,VVl;
+       Ph=(PHr[cn]+_Complex_I*PHi[cn]);
+       IIl=Ph*II[cn];
+       QQl=Ph*QQ[cn];
+       UUl=Ph*UU[cn];
+       VVl=Ph*VV[cn];
+       C[0]+=IIl+QQl;
+       C[1]+=UUl+_Complex_I*VVl;
+       C[2]+=UUl-_Complex_I*VVl;
+       C[3]+=IIl-QQl;
+     }
+
+     free(PHr);
+     free(PHi);
+     free(G);
+     free(II);
+     free(QQ);
+     free(UU);
+     free(VV);
+
 
 /***********************************************/
       /* form G1*C*G2' */
@@ -947,7 +927,7 @@ residual_threadfn_multifreq(void *data) {
 
 
 int
-calculate_residuals_multifreq(double *u,double *v,double *w,double *p,double *x,int N,int Nbase,int tilesz,baseline_t *barr, clus_source_t *carr, int M,double *freqs,int Nchan, double fdelta,double tdelta,double dec0,int Nt, int ccid, double rho) {
+calculate_residuals_multifreq(double *u,double *v,double *w,double *p,double *x,int N,int Nbase,int tilesz,baseline_t *barr, clus_source_t *carr, int M,double *freqs,int Nchan, double fdelta,double tdelta,double dec0,int Nt, int ccid, double rho, int phase_only) {
   int nth,nth1,ci,cj;
 
   int Nthb0,Nthb;
@@ -958,7 +938,7 @@ calculate_residuals_multifreq(double *u,double *v,double *w,double *p,double *x,
   int Nbase1=Nbase*tilesz;
 
   int cm;
-  double *pm,*pinv=0;
+  double *pm,*pinv=0,*pphase=0;
   cm=-1;
   /* find if any cluster is specified for correction of data */
   for (cj=0; cj<M; cj++) { /* clusters */
@@ -974,12 +954,30 @@ calculate_residuals_multifreq(double *u,double *v,double *w,double *p,double *x,
      fprintf(stderr,"%s: %d: No free memory\n",__FILE__,__LINE__);
      exit(1);
    }
-   for (cj=0; cj<carr[cm].nchunk; cj++) {
-    pm=&(p[carr[cm].p[cj]]); /* start of solutions */
-    /* invert N solutions */
-    for (ci=0; ci<N; ci++) {
-     mat_invert(&pm[8*ci],&pinv[8*ci+8*N*cj], rho);
+   if (!phase_only) {
+    for (cj=0; cj<carr[cm].nchunk; cj++) {
+     pm=&(p[carr[cm].p[cj]]); /* start of solutions */
+     /* invert N solutions */
+     for (ci=0; ci<N; ci++) {
+      mat_invert(&pm[8*ci],&pinv[8*ci+8*N*cj], rho);
+     }
     }
+   } else {
+    /* joint diagonalize solutions and get only phases before inverting */
+    if ((pphase=(double*)malloc((size_t)8*N*sizeof(double)))==0) {
+     fprintf(stderr,"%s: %d: No free memory\n",__FILE__,__LINE__);
+     exit(1);
+    }
+    for (cj=0; cj<carr[cm].nchunk; cj++) {
+      pm=&(p[carr[cm].p[cj]]); /* start of solutions */
+      /* extract phase of pm, output to pphase */
+      extract_phases(pm,pphase,N,10);
+      /* invert N solutions */
+      for (ci=0; ci<N; ci++) {
+       mat_invert(&pphase[8*ci],&pinv[8*ci+8*N*cj], rho);
+      }
+    }
+    free(pphase);
    }
   } 
     
@@ -1059,11 +1057,12 @@ static void *
 visibilities_threadfn_multifreq(void *data) {
  thread_data_base_t *t=(thread_data_base_t*)data;
  
- int ci,cm,cf,cn;
- double phterm,sinph,cosph,freq0;
- complex double prodterm;
 
- double fratio,fratio1,fratio2; 
+ double *PHr=0,*PHi=0,*G=0,*II=0,*QQ=0,*UU=0,*VV=0; /* arrays to store calculations */
+ int ci,cm,cf,cn;
+ double freq0;
+ double fdelta2=t->fdelta*0.5;
+
  complex double C[4];
  int M=(t->M);
  int Ntilebase=(t->Nbase)*(t->tilesz);
@@ -1077,57 +1076,147 @@ visibilities_threadfn_multifreq(void *data) {
 /***********************************************/
       /* calculate coherencies for each freq */
       memset(C,0,sizeof(complex double)*4);
-     for (cn=0; cn<t->carr[cm].N; cn++) {
-       /* note u=u/c, v=v/c, w=w/c here */
-       /* phterm is 2pi(u/c l +v/c m +w/c n) */
-       phterm=2.0*M_PI*(t->u[ci]*t->carr[cm].ll[cn]+t->v[ci]*t->carr[cm].mm[cn]+t->w[ci]*t->carr[cm].nn[cn]);
-       sincos(phterm*freq0,&sinph,&cosph);
-       /* caltulate coherency, NOT scaled by 1/2, with spectral index */
-       if (t->carr[cm].spec_idx[cn]!=0.0) {
-         fratio=log(freq0/t->carr[cm].f0[cn]);
-         fratio1=fratio*fratio;
-         fratio2=fratio1*fratio;
-         /* catch -ve and 0 sI */ 
-         if (t->carr[cm].sI0[cn]>0.0) {
-          prodterm=exp(log(t->carr[cm].sI0[cn])+t->carr[cm].spec_idx[cn]*fratio+t->carr[cm].spec_idx1[cn]*fratio1+t->carr[cm].spec_idx2[cn]*fratio2)*(cosph+_Complex_I*sinph);
-         } else {
-          prodterm=(t->carr[cm].sI0[cn]==0.0?0.0:-exp(log(-t->carr[cm].sI0[cn])+t->carr[cm].spec_idx[cn]*fratio+t->carr[cm].spec_idx1[cn]*fratio1+t->carr[cm].spec_idx2[cn]*fratio2)*(cosph+_Complex_I*sinph));
-         }
-       } else {
-         prodterm=t->carr[cm].sI[cn]*(cosph+_Complex_I*sinph);
-       }
-       /* freq smearing : extra term delta * sinc(delta/2 * phterm) */
-       phterm*=t->fdelta*0.5;
-       if (phterm!=0.0) {
-         sinph=sin(phterm)/phterm;
-         prodterm*=sinph;
-       }
-       /* time smearing TMS eq. 6.81 for EW-array formula */
-       //prodterm*=time_smear(t->carr[cm].ll[cn],t->carr[cm].mm[cn],t->dec0,t->tdelta,t->u[ci],t->v[ci],t->w[ci],t->freq0);
+     /* FIXME: use arrays Nx1 to try to vectorize this part */
 
-       /* check if source type is not a point source for additional 
-          calculations */
-       if (t->carr[cm].stype[cn]==STYPE_POINT) {
-        C[0]+=prodterm;
-        C[3]+=prodterm;
-       } else if (t->carr[cm].stype[cn]==STYPE_SHAPELET) {
-        prodterm*=shapelet_contrib(t->carr[cm].ex[cn],t->u[ci]*freq0,t->v[ci]*freq0,t->w[ci]*freq0);
-        C[0]+=prodterm;
-        C[3]+=prodterm;
-       } else if (t->carr[cm].stype[cn]==STYPE_GAUSSIAN) {
-        prodterm*=gaussian_contrib(t->carr[cm].ex[cn],t->u[ci]*freq0,t->v[ci]*freq0,t->w[ci]*freq0);
-        C[0]+=prodterm;
-        C[3]+=prodterm;
-       } else if (t->carr[cm].stype[cn]==STYPE_DISK) {
-        prodterm*=disk_contrib(t->carr[cm].ex[cn],t->u[ci]*freq0,t->v[ci]*freq0,t->w[ci]*freq0);
-        C[0]+=prodterm;
-        C[3]+=prodterm;
-       } else if (t->carr[cm].stype[cn]==STYPE_RING) {
-        prodterm*=ring_contrib(t->carr[cm].ex[cn],t->u[ci]*freq0,t->v[ci]*freq0,t->w[ci]*freq0);
-        C[0]+=prodterm;
-        C[3]+=prodterm;
+     /* setup memory */
+     if (posix_memalign((void*)&PHr,sizeof(double),((size_t)t->carr[cm].N*sizeof(double)))!=0) {
+      fprintf(stderr,"%s: %d: No free memory\n",__FILE__,__LINE__);
+      exit(1);
+     }
+     if (posix_memalign((void*)&PHi,sizeof(double),((size_t)t->carr[cm].N*sizeof(double)))!=0) {
+      fprintf(stderr,"%s: %d: No free memory\n",__FILE__,__LINE__);
+      exit(1);
+     }
+     if (posix_memalign((void*)&G,sizeof(double),((size_t)t->carr[cm].N*sizeof(double)))!=0) {
+      fprintf(stderr,"%s: %d: No free memory\n",__FILE__,__LINE__);
+      exit(1);
+     }
+     if (posix_memalign((void*)&II,sizeof(double),((size_t)t->carr[cm].N*sizeof(double)))!=0) {
+      fprintf(stderr,"%s: %d: No free memory\n",__FILE__,__LINE__);
+      exit(1);
+     }
+     if (posix_memalign((void*)&QQ,sizeof(double),((size_t)t->carr[cm].N*sizeof(double)))!=0) {
+      fprintf(stderr,"%s: %d: No free memory\n",__FILE__,__LINE__);
+      exit(1);
+     }
+     if (posix_memalign((void*)&UU,sizeof(double),((size_t)t->carr[cm].N*sizeof(double)))!=0) {
+      fprintf(stderr,"%s: %d: No free memory\n",__FILE__,__LINE__);
+      exit(1);
+     }
+     if (posix_memalign((void*)&VV,sizeof(double),((size_t)t->carr[cm].N*sizeof(double)))!=0) {
+      fprintf(stderr,"%s: %d: No free memory\n",__FILE__,__LINE__);
+      exit(1);
+     }
+
+     /* phase (real,imag) parts */
+     /* note u=u/c, v=v/c, w=w/c here */
+     /* phterm is 2pi(u/c l +v/c m +w/c n) */
+     for (cn=0; cn<t->carr[cm].N; cn++) {
+       G[cn]=2.0*M_PI*(t->u[ci]*t->carr[cm].ll[cn]+t->v[ci]*t->carr[cm].mm[cn]+t->w[ci]*t->carr[cm].nn[cn]);
+     }
+     for (cn=0; cn<t->carr[cm].N; cn++) {
+       sincos(G[cn]*freq0,&PHi[cn],&PHr[cn]);
+     }
+
+     /* term due to shape of source, also multiplied by freq/time smearing */
+     for (cn=0; cn<t->carr[cm].N; cn++) {
+       /* freq smearing : extra term delta * sinc(delta/2 * phterm) */
+       if (G[cn]!=0.0) {
+         double smfac=G[cn]*fdelta2;
+         double sinph=sin(smfac)/smfac;
+         G[cn]=fabs(sinph);
+       } else {
+         G[cn]=1.0;
        }
      }
+
+     /* multiply (re,im) phase term with smearing/shape factor */
+     for (cn=0; cn<t->carr[cm].N; cn++) {
+       PHr[cn]*=G[cn];
+       PHi[cn]*=G[cn];
+     }
+
+
+     for (cn=0; cn<t->carr[cm].N; cn++) {
+       /* check if source type is not a point source for additional 
+          calculations */
+       if (t->carr[cm].stype[cn]!=STYPE_POINT) {
+        complex double sterm=PHr[cn]+_Complex_I*PHi[cn];
+        if (t->carr[cm].stype[cn]==STYPE_SHAPELET) {
+         sterm*=shapelet_contrib(t->carr[cm].ex[cn],t->u[ci]*freq0,t->v[ci]*freq0,t->w[ci]*freq0);
+        } else if (t->carr[cm].stype[cn]==STYPE_GAUSSIAN) {
+         sterm*=gaussian_contrib(t->carr[cm].ex[cn],t->u[ci]*freq0,t->v[ci]*freq0,t->w[ci]*freq0);
+        } else if (t->carr[cm].stype[cn]==STYPE_DISK) {
+         sterm*=disk_contrib(t->carr[cm].ex[cn],t->u[ci]*freq0,t->v[ci]*freq0,t->w[ci]*freq0);
+        } else if (t->carr[cm].stype[cn]==STYPE_RING) {
+         sterm*=ring_contrib(t->carr[cm].ex[cn],t->u[ci]*freq0,t->v[ci]*freq0,t->w[ci]*freq0);
+        }
+        PHr[cn]=creal(sterm);
+        PHi[cn]=cimag(sterm);
+       }
+
+     }
+
+
+     /* flux of each source, at each freq */
+     for (cn=0; cn<t->carr[cm].N; cn++) {
+       /* coherencies are NOT scaled by 1/2, with spectral index */
+       if (t->carr[cm].spec_idx[cn]!=0.0) {
+         double fratio=log(freq0/t->carr[cm].f0[cn]);
+         double fratio1=fratio*fratio;
+         double fratio2=fratio1*fratio;
+         double tempfr=t->carr[cm].spec_idx[cn]*fratio+t->carr[cm].spec_idx1[cn]*fratio1+t->carr[cm].spec_idx2[cn]*fratio2;
+         /* catch -ve and 0 sI */ 
+         if (t->carr[cm].sI0[cn]>0.0) {
+          II[cn]=exp(log(t->carr[cm].sI0[cn])+tempfr);
+         } else {
+          II[cn]=(t->carr[cm].sI0[cn]==0.0?0.0:-exp(log(-t->carr[cm].sI0[cn])+tempfr));
+         }
+         if (t->carr[cm].sQ0[cn]>0.0) {
+          QQ[cn]=exp(log(t->carr[cm].sQ0[cn])+tempfr);
+         } else {
+          QQ[cn]=(t->carr[cm].sQ0[cn]==0.0?0.0:-exp(log(-t->carr[cm].sQ0[cn])+tempfr));
+         }
+         if (t->carr[cm].sU0[cn]>0.0) {
+          UU[cn]=exp(log(t->carr[cm].sU0[cn])+tempfr);
+         } else {
+          UU[cn]=(t->carr[cm].sU0[cn]==0.0?0.0:-exp(log(-t->carr[cm].sU0[cn])+tempfr));
+         }
+         if (t->carr[cm].sV0[cn]>0.0) {
+          VV[cn]=exp(log(t->carr[cm].sV0[cn])+tempfr);
+         } else {
+          VV[cn]=(t->carr[cm].sV0[cn]==0.0?0.0:-exp(log(-t->carr[cm].sV0[cn])+tempfr));
+         }
+       } else {
+         II[cn]=t->carr[cm].sI[cn];
+         QQ[cn]=t->carr[cm].sQ[cn];
+         UU[cn]=t->carr[cm].sU[cn];
+         VV[cn]=t->carr[cm].sV[cn];
+       }
+     }
+
+
+     /* add up terms together */
+     for (cn=0; cn<t->carr[cm].N; cn++) {
+       complex double Ph,IIl,QQl,UUl,VVl;
+       Ph=(PHr[cn]+_Complex_I*PHi[cn]);
+       IIl=Ph*II[cn];
+       QQl=Ph*QQ[cn];
+       UUl=Ph*UU[cn];
+       VVl=Ph*VV[cn];
+       C[0]+=IIl+QQl;
+       C[1]+=UUl+_Complex_I*VVl;
+       C[2]+=UUl-_Complex_I*VVl;
+       C[3]+=IIl-QQl;
+     }
+
+     free(PHr);
+     free(PHi);
+     free(G);
+     free(II);
+     free(QQ);
+     free(UU);
+     free(VV);
 
 /***********************************************/
       /* add to baseline visibilities */
@@ -1149,7 +1238,6 @@ visibilities_threadfn_multifreq(void *data) {
 
 
 
-/* FIXME: tail timeslots still not written properly (probably due to flagging while reading data) */
 int
 predict_visibilities_multifreq(double *u,double *v,double *w,double *x,int N,int Nbase,int tilesz,baseline_t *barr, clus_source_t *carr, int M,double *freqs,int Nchan, double fdelta,double tdelta, double dec0,int Nt, int add_to_data) {
   int nth,nth1,ci;
@@ -1243,11 +1331,11 @@ predictwithgain_threadfn_multifreq(void *data) {
  thread_data_base_t *t=(thread_data_base_t*)data;
  
  int ci,cm,cf,cn,sta1,sta2;
+ double *PHr=0,*PHi=0,*G=0,*II=0,*QQ=0,*UU=0,*VV=0; /* arrays to store calculations */
  double *pm;
- double phterm,sinph,cosph,freq0;
- complex double prodterm;
+ double freq0;
+ double fdelta2=t->fdelta*0.5;
 
- double fratio,fratio1,fratio2; 
  complex double C[4],G1[4],G2[4],T1[4],T2[4];
  int M=(t->M);
  int Ntilebase=(t->Nbase)*(t->tilesz);
@@ -1299,57 +1387,145 @@ predictwithgain_threadfn_multifreq(void *data) {
 /***********************************************/
       /* calculate coherencies for each freq */
       memset(C,0,sizeof(complex double)*4);
-     for (cn=0; cn<t->carr[cm].N; cn++) {
-       /* note u=u/c, v=v/c, w=w/c here */
-       /* phterm is 2pi(u/c l +v/c m +w/c n) */
-       phterm=2.0*M_PI*(t->u[ci]*t->carr[cm].ll[cn]+t->v[ci]*t->carr[cm].mm[cn]+t->w[ci]*t->carr[cm].nn[cn]);
-       sincos(phterm*freq0,&sinph,&cosph);
-       /* caltulate coherency, NOT scaled by 1/2, with spectral index */
-       if (t->carr[cm].spec_idx[cn]!=0.0) {
-         fratio=log(freq0/t->carr[cm].f0[cn]);
-         fratio1=fratio*fratio;
-         fratio2=fratio1*fratio;
-         /* catch -ve and 0 sI */
-         if (t->carr[cm].sI0[cn]>0.0) {
-          prodterm=exp(log(t->carr[cm].sI0[cn])+t->carr[cm].spec_idx[cn]*fratio+t->carr[cm].spec_idx1[cn]*fratio1+t->carr[cm].spec_idx2[cn]*fratio2)*(cosph+_Complex_I*sinph);
-         } else {
-          prodterm=(t->carr[cm].sI0[cn]==0.0?0.0:-exp(log(-t->carr[cm].sI0[cn])+t->carr[cm].spec_idx[cn]*fratio+t->carr[cm].spec_idx1[cn]*fratio1+t->carr[cm].spec_idx2[cn]*fratio2)*(cosph+_Complex_I*sinph));
-         }
-       } else {
-         prodterm=t->carr[cm].sI[cn]*(cosph+_Complex_I*sinph);
-       }
-       /* freq smearing : extra term delta * sinc(delta/2 * phterm) */
-       phterm*=t->fdelta*0.5;
-       if (phterm!=0.0) {
-         sinph=sin(phterm)/phterm;
-         prodterm*=sinph;
-       }
-       /* time smearing TMS eq. 6.81 for EW-array formula */
-       //prodterm*=time_smear(t->carr[cm].ll[cn],t->carr[cm].mm[cn],t->dec0,t->tdelta,t->u[ci],t->v[ci],t->w[ci],t->freq0);
+     /* setup memory */
+     if (posix_memalign((void*)&PHr,sizeof(double),((size_t)t->carr[cm].N*sizeof(double)))!=0) {
+      fprintf(stderr,"%s: %d: No free memory\n",__FILE__,__LINE__);
+      exit(1);
+     }
+     if (posix_memalign((void*)&PHi,sizeof(double),((size_t)t->carr[cm].N*sizeof(double)))!=0) {
+      fprintf(stderr,"%s: %d: No free memory\n",__FILE__,__LINE__);
+      exit(1);
+     }
+     if (posix_memalign((void*)&G,sizeof(double),((size_t)t->carr[cm].N*sizeof(double)))!=0) {
+      fprintf(stderr,"%s: %d: No free memory\n",__FILE__,__LINE__);
+      exit(1);
+     }
+     if (posix_memalign((void*)&II,sizeof(double),((size_t)t->carr[cm].N*sizeof(double)))!=0) {
+      fprintf(stderr,"%s: %d: No free memory\n",__FILE__,__LINE__);
+      exit(1);
+     }
+     if (posix_memalign((void*)&QQ,sizeof(double),((size_t)t->carr[cm].N*sizeof(double)))!=0) {
+      fprintf(stderr,"%s: %d: No free memory\n",__FILE__,__LINE__);
+      exit(1);
+     }
+     if (posix_memalign((void*)&UU,sizeof(double),((size_t)t->carr[cm].N*sizeof(double)))!=0) {
+      fprintf(stderr,"%s: %d: No free memory\n",__FILE__,__LINE__);
+      exit(1);
+     }
+     if (posix_memalign((void*)&VV,sizeof(double),((size_t)t->carr[cm].N*sizeof(double)))!=0) {
+      fprintf(stderr,"%s: %d: No free memory\n",__FILE__,__LINE__);
+      exit(1);
+     }
 
-       /* check if source type is not a point source for additional 
-          calculations */
-       if (t->carr[cm].stype[cn]==STYPE_POINT) {
-        C[0]+=prodterm;
-        C[3]+=prodterm;
-       } else if (t->carr[cm].stype[cn]==STYPE_SHAPELET) {
-        prodterm*=shapelet_contrib(t->carr[cm].ex[cn],t->u[ci]*freq0,t->v[ci]*freq0,t->w[ci]*freq0);
-        C[0]+=prodterm;
-        C[3]+=prodterm;
-       } else if (t->carr[cm].stype[cn]==STYPE_GAUSSIAN) {
-        prodterm*=gaussian_contrib(t->carr[cm].ex[cn],t->u[ci]*freq0,t->v[ci]*freq0,t->w[ci]*freq0);
-        C[0]+=prodterm;
-        C[3]+=prodterm;
-       } else if (t->carr[cm].stype[cn]==STYPE_DISK) {
-        prodterm*=disk_contrib(t->carr[cm].ex[cn],t->u[ci]*freq0,t->v[ci]*freq0,t->w[ci]*freq0);
-        C[0]+=prodterm;
-        C[3]+=prodterm;
-       } else if (t->carr[cm].stype[cn]==STYPE_RING) {
-        prodterm*=ring_contrib(t->carr[cm].ex[cn],t->u[ci]*freq0,t->v[ci]*freq0,t->w[ci]*freq0);
-        C[0]+=prodterm;
-        C[3]+=prodterm;
+     /* phase (real,imag) parts */
+     /* note u=u/c, v=v/c, w=w/c here */
+     /* phterm is 2pi(u/c l +v/c m +w/c n) */
+     for (cn=0; cn<t->carr[cm].N; cn++) {
+       G[cn]=2.0*M_PI*(t->u[ci]*t->carr[cm].ll[cn]+t->v[ci]*t->carr[cm].mm[cn]+t->w[ci]*t->carr[cm].nn[cn]);
+     }
+     for (cn=0; cn<t->carr[cm].N; cn++) {
+       sincos(G[cn]*freq0,&PHi[cn],&PHr[cn]);
+     }
+
+     /* term due to shape of source, also multiplied by freq/time smearing */
+     for (cn=0; cn<t->carr[cm].N; cn++) {
+       /* freq smearing : extra term delta * sinc(delta/2 * phterm) */
+       if (G[cn]!=0.0) {
+         double smfac=G[cn]*fdelta2;
+         double sinph=sin(smfac)/smfac;
+         G[cn]=fabs(sinph);
+       } else {
+         G[cn]=1.0;
        }
      }
+
+     /* multiply (re,im) phase term with smearing/shape factor */
+     for (cn=0; cn<t->carr[cm].N; cn++) {
+       PHr[cn]*=G[cn];
+       PHi[cn]*=G[cn];
+     }
+
+
+     for (cn=0; cn<t->carr[cm].N; cn++) {
+       /* check if source type is not a point source for additional 
+          calculations */
+       if (t->carr[cm].stype[cn]!=STYPE_POINT) {
+        complex double sterm=PHr[cn]+_Complex_I*PHi[cn];
+        if (t->carr[cm].stype[cn]==STYPE_SHAPELET) {
+         sterm*=shapelet_contrib(t->carr[cm].ex[cn],t->u[ci]*freq0,t->v[ci]*freq0,t->w[ci]*freq0);
+        } else if (t->carr[cm].stype[cn]==STYPE_GAUSSIAN) {
+         sterm*=gaussian_contrib(t->carr[cm].ex[cn],t->u[ci]*freq0,t->v[ci]*freq0,t->w[ci]*freq0);
+        } else if (t->carr[cm].stype[cn]==STYPE_DISK) {
+         sterm*=disk_contrib(t->carr[cm].ex[cn],t->u[ci]*freq0,t->v[ci]*freq0,t->w[ci]*freq0);
+        } else if (t->carr[cm].stype[cn]==STYPE_RING) {
+         sterm*=ring_contrib(t->carr[cm].ex[cn],t->u[ci]*freq0,t->v[ci]*freq0,t->w[ci]*freq0);
+        }
+        PHr[cn]=creal(sterm);
+        PHi[cn]=cimag(sterm);
+       }
+
+     }
+
+
+     /* flux of each source, at each freq */
+     for (cn=0; cn<t->carr[cm].N; cn++) {
+       /* coherencies are NOT scaled by 1/2, with spectral index */
+       if (t->carr[cm].spec_idx[cn]!=0.0) {
+         double fratio=log(freq0/t->carr[cm].f0[cn]);
+         double fratio1=fratio*fratio;
+         double fratio2=fratio1*fratio;
+         double tempfr=t->carr[cm].spec_idx[cn]*fratio+t->carr[cm].spec_idx1[cn]*fratio1+t->carr[cm].spec_idx2[cn]*fratio2;
+         /* catch -ve and 0 sI */
+         if (t->carr[cm].sI0[cn]>0.0) {
+          II[cn]=exp(log(t->carr[cm].sI0[cn])+tempfr);
+         } else {
+          II[cn]=(t->carr[cm].sI0[cn]==0.0?0.0:-exp(log(-t->carr[cm].sI0[cn])+tempfr));
+         }
+         if (t->carr[cm].sQ0[cn]>0.0) {
+          QQ[cn]=exp(log(t->carr[cm].sQ0[cn])+tempfr);
+         } else {
+          QQ[cn]=(t->carr[cm].sQ0[cn]==0.0?0.0:-exp(log(-t->carr[cm].sQ0[cn])+tempfr));
+         }
+         if (t->carr[cm].sU0[cn]>0.0) {
+          UU[cn]=exp(log(t->carr[cm].sU0[cn])+tempfr);
+         } else {
+          UU[cn]=(t->carr[cm].sU0[cn]==0.0?0.0:-exp(log(-t->carr[cm].sU0[cn])+tempfr));
+         }
+         if (t->carr[cm].sV0[cn]>0.0) {
+          VV[cn]=exp(log(t->carr[cm].sV0[cn])+tempfr);
+         } else {
+          VV[cn]=(t->carr[cm].sV0[cn]==0.0?0.0:-exp(log(-t->carr[cm].sV0[cn])+tempfr));
+         }
+       } else {
+         II[cn]=t->carr[cm].sI[cn];
+         QQ[cn]=t->carr[cm].sQ[cn];
+         UU[cn]=t->carr[cm].sU[cn];
+         VV[cn]=t->carr[cm].sV[cn];
+       }
+     }
+
+     /* add up terms together */
+     for (cn=0; cn<t->carr[cm].N; cn++) {
+       complex double Ph,IIl,QQl,UUl,VVl;
+       Ph=(PHr[cn]+_Complex_I*PHi[cn]);
+       IIl=Ph*II[cn];
+       QQl=Ph*QQ[cn];
+       UUl=Ph*UU[cn];
+       VVl=Ph*VV[cn];
+       C[0]+=IIl+QQl;
+       C[1]+=UUl+_Complex_I*VVl;
+       C[2]+=UUl-_Complex_I*VVl;
+       C[3]+=IIl-QQl;
+     }
+
+     free(PHr);
+     free(PHi);
+     free(G);
+     free(II);
+     free(QQ);
+     free(UU);
+     free(VV);
+
 
 /***********************************************/
       /* form G1*C*G2' */
@@ -1407,7 +1583,7 @@ predictwithgain_threadfn_multifreq(void *data) {
 }
 
 int
-predict_visibilities_multifreq_withsol(double *u,double *v,double *w,double *p,double *x,int *ignlist,int N,int Nbase,int tilesz,baseline_t *barr, clus_source_t *carr, int M,double *freqs,int Nchan, double fdelta,double tdelta,double dec0,int Nt, int add_to_data, int ccid, double rho) {
+predict_visibilities_multifreq_withsol(double *u,double *v,double *w,double *p,double *x,int *ignlist,int N,int Nbase,int tilesz,baseline_t *barr, clus_source_t *carr, int M,double *freqs,int Nchan, double fdelta,double tdelta,double dec0,int Nt, int add_to_data, int ccid, double rho, int phase_only) {
   int nth,nth1,ci;
 
   int Nthb0,Nthb;
@@ -1419,7 +1595,7 @@ predict_visibilities_multifreq_withsol(double *u,double *v,double *w,double *p,d
 
 
   int cm,cj;
-  double *pm,*pinv=0;
+  double *pm,*pinv=0,*pphase=0;
   cm=-1;
   /* find if any cluster is specified for correction of data */
   for (cj=0; cj<M; cj++) { /* clusters */
@@ -1435,12 +1611,30 @@ predict_visibilities_multifreq_withsol(double *u,double *v,double *w,double *p,d
      fprintf(stderr,"%s: %d: No free memory\n",__FILE__,__LINE__);
      exit(1);
    }
-   for (cj=0; cj<carr[cm].nchunk; cj++) {
-    pm=&(p[carr[cm].p[cj]]); /* start of solutions */
-    /* invert N solutions */
-    for (ci=0; ci<N; ci++) {
-     mat_invert(&pm[8*ci],&pinv[8*ci+8*N*cj], rho);
+   if (!phase_only) {
+    for (cj=0; cj<carr[cm].nchunk; cj++) {
+     pm=&(p[carr[cm].p[cj]]); /* start of solutions */
+     /* invert N solutions */
+     for (ci=0; ci<N; ci++) {
+      mat_invert(&pm[8*ci],&pinv[8*ci+8*N*cj], rho);
+     }
     }
+   } else {
+    /* joint diagonalize solutions and get only phases before inverting */
+    if ((pphase=(double*)malloc((size_t)8*N*sizeof(double)))==0) {
+     fprintf(stderr,"%s: %d: No free memory\n",__FILE__,__LINE__);
+     exit(1);
+    }
+    for (cj=0; cj<carr[cm].nchunk; cj++) {
+      pm=&(p[carr[cm].p[cj]]); /* start of solutions */
+      /* extract phase of pm, output to pphase */
+      extract_phases(pm,pphase,N,10);
+      /* invert N solutions */
+      for (ci=0; ci<N; ci++) {
+       mat_invert(&pphase[8*ci],&pinv[8*ci+8*N*cj], rho);
+      }
+    }
+    free(pphase);
    }
   }
     

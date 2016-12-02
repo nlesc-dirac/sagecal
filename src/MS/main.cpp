@@ -25,13 +25,17 @@
 #include <pthread.h>
 
 #include<sagecal.h>
+#ifndef LMCUT
+#define LMCUT 40
+#endif
+
 
 using namespace std;
 using namespace Data;
 
 void
 print_copyright(void) {
-  cout<<"SAGECal 0.3.8 (C) 2011-2015 Sarod Yatawatta"<<endl;
+  cout<<"SAGECal 0.4.5 (C) 2011-2016 Sarod Yatawatta"<<endl;
 }
 
 
@@ -58,11 +62,13 @@ print_help(void) {
    cout << "-a 0,1,2 : if 1, only simulate, if 2, simulate and add to residual, (multiplied by solutions if solutions file is also given): default " <<Data::DoSim<< endl;
    cout << "-z ignore_clusters: if only doing a simulation, ignore the cluster ids listed in this file" << endl;
    cout << "-b 0,1 : if 1, solve for each channel: default " <<Data::doChan<< endl;
+   cout << "-B 0,1 : if 1, predict array beam: default " <<Data::doBeam<< endl;
    cout << "-x exclude baselines length (lambda) lower than this in calibration : default "<<Data::min_uvcut << endl;
    cout << "-y exclude baselines length (lambda) higher than this in calibration : default "<<Data::max_uvcut << endl;
    cout <<endl<<"Advanced options:"<<endl;
    cout << "-k cluster_id : correct residuals with solution of this cluster : default "<<Data::ccid<< endl;
    cout << "-o robust rho, robust matrix inversion during correction: default "<<Data::rho<< endl;
+   cout << "-J 0,1 : if >0, use phase only correction: default "<<Data::phaseOnly<< endl;
    cout << "-j 0,1,2... 0 : OSaccel, 1 no OSaccel, 2: OSRLM, 3: RLM, 4: RTR, 5: RRTR, 6:NSD : default "<<Data::solver_mode<< endl;
    cout << "-L robust nu, lower bound: default "<<Data::nulow<< endl;
    cout << "-H robust nu, upper bound: default "<<Data::nuhigh<< endl;
@@ -82,7 +88,7 @@ ParseCmdLine(int ac, char **av) {
         print_help();
         exit(0);
     }
-    while((c=getopt(ac, av, "a:b:c:d:e:f:g:j:k:l:m:n:o:p:s:t:x:y:z:D:F:I:O:L:H:R:W:h"))!= -1)
+    while((c=getopt(ac, av, "a:b:c:d:e:f:g:j:k:l:m:n:o:p:s:t:x:y:z:B:D:F:I:J:O:L:H:R:W:h"))!= -1)
     {
         switch(c)
         {
@@ -111,6 +117,10 @@ ParseCmdLine(int ac, char **av) {
             case 'b':
                 doChan= atoi(optarg);
                 if (doChan>1) { doChan=1; }
+                break;
+            case 'B':
+                doBeam= atoi(optarg);
+                if (doBeam>1) { doBeam=1; }
                 break;
             case 'F':
                 format= atoi(optarg);
@@ -157,6 +167,9 @@ ParseCmdLine(int ac, char **av) {
                 break;
             case 'W': 
                 whiten= atoi(optarg);
+                break;
+            case 'J': 
+                phaseOnly= atoi(optarg);
                 break;
             case 'x': 
                 Data::min_uvcut= atof(optarg);
@@ -211,6 +224,7 @@ main(int argc, char **argv) {
       exit(1);
     }
     Data::IOData iodata;
+    Data::LBeam beam;
     iodata.tilesz=Data::TileSize;
     iodata.deltat=1.0;
     vector<string> msnames;
@@ -218,7 +232,11 @@ main(int argc, char **argv) {
      Data::readMSlist(Data::MSlist,&msnames);
     }
     if (Data::TableName) {
-     Data::readAuxData(Data::TableName,&iodata);
+     if (!doBeam) {
+      Data::readAuxData(Data::TableName,&iodata);
+     } else {
+      Data::readAuxData(Data::TableName,&iodata,&beam);
+     }
      cout<<"Only one MS"<<endl;
     } else if (Data::MSlist) {
      Data::readAuxDataList(msnames,&iodata);
@@ -228,6 +246,8 @@ main(int argc, char **argv) {
     if (Data::randomize) {
      srand(time(0)); /* use different seed */
     }
+
+    openblas_set_num_threads(1);//Data::Nt;
     /**********************************************************/
      int M,Mt,ci,cj,ck;  
    /* parameters */
@@ -381,15 +401,18 @@ main(int argc, char **argv) {
     cout<<"For "<<iodata.tilesz<<" samples, solution time interval (s): "<<iodata.deltat*(double)iodata.tilesz<<endl;
     cout<<"Freq: "<<iodata.freq0/1e6<<" MHz, Chan: "<<iodata.Nchan<<" Bandwidth: "<<iodata.deltaf/1e6<<" MHz"<<endl;
     vector<MSIter*> msitr;
+    vector<MeasurementSet*> msvector;
     if (Data::TableName) {
       MeasurementSet *ms=new MeasurementSet(Data::TableName,Table::Update); 
       MSIter *mi=new MSIter(*ms,sort,iodata.deltat*(double)iodata.tilesz);
       msitr.push_back(mi);
+      msvector.push_back(ms);
     } else if (Data::MSlist) {
      for(int cm=0; cm<iodata.Nms; cm++) {
       MeasurementSet *ms=new MeasurementSet(msnames[cm].c_str(),Table::Update); 
       MSIter *mi=new MSIter(*ms,sort,iodata.deltat*(double)iodata.tilesz);
       msitr.push_back(mi);
+      msvector.push_back(ms);
      }
     }
 
@@ -409,25 +432,45 @@ main(int argc, char **argv) {
       fprintf(sfp,"%lf %lf %lf %d %d %d\n",iodata.freq0*1e-6,iodata.deltaf*1e-6,(double)iodata.tilesz*iodata.deltat/60.0,iodata.N,M,Mt);
     }
 
+
     /* starting iterations are doubled */
     int start_iter=1;
+    int sources_precessed=0;
+
+    double inv_c=1.0/CONST_C;
+
     while (msitr[0]->more()) {
       start_time = time(0);
       if (iodata.Nms==1) {
-       Data::loadData(msitr[0]->table(),iodata);
+       if (!doBeam) {
+        Data::loadData(msitr[0]->table(),iodata,&iodata.fratio);
+       } else {
+        Data::loadData(msitr[0]->table(),iodata,beam,&iodata.fratio);
+       }
       } else { 
-       Data::loadDataList(msitr,iodata);
+       Data::loadDataList(msitr,iodata,&iodata.fratio);
       }
+    /* rescale u,v,w by 1/c NOT to wavelengths, that is done later in prediction */
+    my_dscal(iodata.Nbase*iodata.tilesz,inv_c,iodata.u);
+    my_dscal(iodata.Nbase*iodata.tilesz,inv_c,iodata.v);
+    my_dscal(iodata.Nbase*iodata.tilesz,inv_c,iodata.w);
 
     /**********************************************************/
     /* update baseline flags */
     /* and set x[]=0 for flagged values */
     preset_flags_and_data(iodata.Nbase*iodata.tilesz,iodata.flag,barr,iodata.x,Data::Nt);
+    /* if data is being whitened, whiten x here,
+     no need for a copy because we use xo for residual calculation */
+    if (Data::whiten) {
+     whiten_data(iodata.Nbase*iodata.tilesz,iodata.x,iodata.u,iodata.v,iodata.freq0,Data::Nt);
+    }
+    /* precess source locations (also beam pointing) from J2000 to JAPP if we do any beam predictions,
+      using first time slot as epoch */
+    if (doBeam && !sources_precessed) {
+      precess_source_locations(beam.time_utc[iodata.tilesz/2],carr,M,&beam.p_ra0,&beam.p_dec0,Data::Nt);
+      sources_precessed=1;
+    }
 
-    /* rescale u,v,w by 1/c NOT to wavelengths, that is done later in prediction */
-    my_dscal(iodata.Nbase*iodata.tilesz,1.0/CONST_C,iodata.u);
-    my_dscal(iodata.Nbase*iodata.tilesz,1.0/CONST_C,iodata.v);
-    my_dscal(iodata.Nbase*iodata.tilesz,1.0/CONST_C,iodata.w);
 
 #ifdef USE_MIC
   double *mic_u,*mic_v,*mic_w,*mic_x;
@@ -457,7 +500,19 @@ main(int argc, char **argv) {
    /* FIXME: uvmin is not needed in calibration, because its taken care of by flags */
     if (!Data::DoSim) {
     /****************** calibration **************************/
-    precalculate_coherencies(iodata.u,iodata.v,iodata.w,coh,iodata.N,iodata.Nbase*iodata.tilesz,barr,carr,M,iodata.freq0,iodata.deltaf,iodata.deltat,iodata.dec0,Data::min_uvcut,Data::max_uvcut,Data::Nt);
+////#ifndef HAVE_CUDA
+    if (!doBeam) {
+     precalculate_coherencies(iodata.u,iodata.v,iodata.w,coh,iodata.N,iodata.Nbase*iodata.tilesz,barr,carr,M,iodata.freq0,iodata.deltaf,iodata.deltat,iodata.dec0,Data::min_uvcut,Data::max_uvcut,Data::Nt);
+    } else {
+     precalculate_coherencies_withbeam(iodata.u,iodata.v,iodata.w,coh,iodata.N,iodata.Nbase*iodata.tilesz,barr,carr,M,iodata.freq0,iodata.deltaf,iodata.deltat,iodata.dec0,Data::min_uvcut,Data::max_uvcut,
+  beam.p_ra0,beam.p_dec0,iodata.freq0,beam.sx,beam.sy,beam.time_utc,iodata.tilesz,beam.Nelem,beam.xx,beam.yy,beam.zz,Data::Nt);
+    }
+////#endif
+////#ifdef HAVE_CUDA
+////     precalculate_coherencies_withbeam_gpu(iodata.u,iodata.v,iodata.w,coh,iodata.N,iodata.Nbase*iodata.tilesz,barr,carr,M,iodata.freq0,iodata.deltaf,iodata.deltat,iodata.dec0,Data::min_uvcut,Data::max_uvcut,
+////  beam.p_ra0,beam.p_dec0,iodata.freq0,beam.sx,beam.sy,beam.time_utc,iodata.tilesz,beam.Nelem,beam.xx,beam.yy,beam.zz,doBeam,Data::Nt);
+////#endif
+
     
 #ifndef HAVE_CUDA
     if (start_iter) {
@@ -475,8 +530,8 @@ main(int argc, char **argv) {
      inout(p: length(8*mic_N*Mt)) 
      sagefit_visibilities_mic(mic_u,mic_v,mic_w,mic_x,mic_N,mic_Nbase,mic_tilesz,barr,mic_chunks,mic_pindex,coh,M,Mt,mic_freq0,mic_deltaf,p,mic_data_min_uvcut,mic_data_Nt,2*mic_data_max_emiter,mic_data_max_iter,(mic_data_dochan? 0 :mic_data_max_lbfgs),mic_data_lbfgs_m,mic_data_gpu_threads,mic_data_linsolv,mic_data_solver_mode,mic_data_nulow,mic_data_nuhigh,mic_data_randomize,&mean_nu,&res_0,&res_1);
 #else /* NOT MIC */
-     sagefit_visibilities(iodata.u,iodata.v,iodata.w,iodata.x,iodata.N,iodata.Nbase,iodata.tilesz,barr,carr,coh,M,Mt,iodata.freq0,iodata.deltaf,p,Data::min_uvcut,Data::Nt,(iodata.N<=64?2*Data::max_emiter:4*Data::max_emiter),Data::max_iter,(Data::doChan? 0 :Data::max_lbfgs),Data::lbfgs_m,Data::gpu_threads,Data::linsolv,(iodata.N<=64 && Data::solver_mode==SM_RTR_OSLM_LBFGS?SM_OSLM_LBFGS:(iodata.N<=64 && (Data::solver_mode==SM_RTR_OSRLM_RLBFGS||Data::solver_mode==SM_NSD_RLBFGS)?SM_OSLM_OSRLM_RLBFGS:Data::solver_mode)),Data::nulow,Data::nuhigh,Data::randomize,Data::whiten,&mean_nu,&res_0,&res_1);
-     //sagefit_visibilities(iodata.u,iodata.v,iodata.w,iodata.x,iodata.N,iodata.Nbase,iodata.tilesz,barr,carr,coh,M,Mt,iodata.freq0,iodata.deltaf,p,Data::min_uvcut,Data::Nt,2*Data::max_emiter,Data::max_iter,(Data::doChan? 0 :Data::max_lbfgs),Data::lbfgs_m,Data::gpu_threads,Data::linsolv,Data::solver_mode,Data::nulow,Data::nuhigh,Data::randomize,Data::whiten,&mean_nu,&res_0,&res_1);
+     sagefit_visibilities(iodata.u,iodata.v,iodata.w,iodata.x,iodata.N,iodata.Nbase,iodata.tilesz,barr,carr,coh,M,Mt,iodata.freq0,iodata.deltaf,p,Data::min_uvcut,Data::Nt,(iodata.N<=LMCUT?2*Data::max_emiter:4*Data::max_emiter),Data::max_iter,(Data::doChan? 0 :Data::max_lbfgs),Data::lbfgs_m,Data::gpu_threads,Data::linsolv,(iodata.N<=LMCUT && Data::solver_mode==SM_RTR_OSLM_LBFGS?SM_OSLM_LBFGS:(iodata.N<=LMCUT && (Data::solver_mode==SM_RTR_OSRLM_RLBFGS||Data::solver_mode==SM_NSD_RLBFGS)?SM_OSLM_OSRLM_RLBFGS:Data::solver_mode)),Data::nulow,Data::nuhigh,Data::randomize,&mean_nu,&res_0,&res_1);
+     //sagefit_visibilities(iodata.u,iodata.v,iodata.w,iodata.x,iodata.N,iodata.Nbase,iodata.tilesz,barr,carr,coh,M,Mt,iodata.freq0,iodata.deltaf,p,Data::min_uvcut,Data::Nt,2*Data::max_emiter,Data::max_iter,(Data::doChan? 0 :Data::max_lbfgs),Data::lbfgs_m,Data::gpu_threads,Data::linsolv,Data::solver_mode,Data::nulow,Data::nuhigh,Data::randomize,&mean_nu,&res_0,&res_1);
 #endif /* USE_MIC */
      start_iter=0;
     } else {
@@ -494,14 +549,14 @@ main(int argc, char **argv) {
      inout(p: length(8*mic_N*Mt)) 
      sagefit_visibilities_mic(mic_u,mic_v,mic_w,mic_x,mic_N,mic_Nbase,mic_tilesz,barr,mic_chunks,mic_pindex,coh,M,Mt,mic_freq0,mic_deltaf,p,mic_data_min_uvcut,mic_data_Nt,mic_data_max_emiter,mic_data_max_iter,(mic_data_dochan? 0: mic_data_max_lbfgs),mic_data_lbfgs_m,mic_data_gpu_threads,mic_data_linsolv,mic_data_solver_mode,mic_data_nulow,mic_data_nuhigh,mic_data_randomize,&mean_nu,&res_0,&res_1);
 #else /* NOT MIC */
-     sagefit_visibilities(iodata.u,iodata.v,iodata.w,iodata.x,iodata.N,iodata.Nbase,iodata.tilesz,barr,carr,coh,M,Mt,iodata.freq0,iodata.deltaf,p,Data::min_uvcut,Data::Nt,Data::max_emiter,Data::max_iter,(Data::doChan? 0: Data::max_lbfgs),Data::lbfgs_m,Data::gpu_threads,Data::linsolv,Data::solver_mode,Data::nulow,Data::nuhigh,Data::randomize,Data::whiten,&mean_nu,&res_0,&res_1);
+     sagefit_visibilities(iodata.u,iodata.v,iodata.w,iodata.x,iodata.N,iodata.Nbase,iodata.tilesz,barr,carr,coh,M,Mt,iodata.freq0,iodata.deltaf,p,Data::min_uvcut,Data::Nt,Data::max_emiter,Data::max_iter,(Data::doChan? 0: Data::max_lbfgs),Data::lbfgs_m,Data::gpu_threads,Data::linsolv,Data::solver_mode,Data::nulow,Data::nuhigh,Data::randomize,&mean_nu,&res_0,&res_1);
 #endif /* USE_MIC */
     }
 #endif /* !HAVE_CUDA */
 #ifdef HAVE_CUDA
 #ifdef ONE_GPU
     if (start_iter) {
-     sagefit_visibilities_dual_pt_one_gpu(iodata.u,iodata.v,iodata.w,iodata.x,iodata.N,iodata.Nbase,iodata.tilesz,barr,carr,coh,M,Mt,iodata.freq0,iodata.deltaf,p,Data::min_uvcut,Data::Nt, (iodata.N<=64?2*Data::max_emiter:4*Data::max_emiter),Data::max_iter,(Data::doChan? 0: Data::max_lbfgs),Data::lbfgs_m,Data::gpu_threads,Data::linsolv,(iodata.N<=64 && Data::solver_mode==SM_RTR_OSLM_LBFGS?SM_OSLM_LBFGS:(iodata.N<=64 && (Data::solver_mode==SM_RTR_OSRLM_RLBFGS||Data::solver_mode==SM_NSD_RLBFGS)?SM_OSLM_OSRLM_RLBFGS:Data::solver_mode)),Data::nulow,Data::nuhigh,Data::randomize,&mean_nu,&res_0,&res_1);
+     sagefit_visibilities_dual_pt_one_gpu(iodata.u,iodata.v,iodata.w,iodata.x,iodata.N,iodata.Nbase,iodata.tilesz,barr,carr,coh,M,Mt,iodata.freq0,iodata.deltaf,p,Data::min_uvcut,Data::Nt, (iodata.N<=LMCUT?2*Data::max_emiter:4*Data::max_emiter),Data::max_iter,(Data::doChan? 0: Data::max_lbfgs),Data::lbfgs_m,Data::gpu_threads,Data::linsolv,(iodata.N<=LMCUT && Data::solver_mode==SM_RTR_OSLM_LBFGS?SM_OSLM_LBFGS:(iodata.N<=LMCUT && (Data::solver_mode==SM_RTR_OSRLM_RLBFGS||Data::solver_mode==SM_NSD_RLBFGS)?SM_OSLM_OSRLM_RLBFGS:Data::solver_mode)),Data::nulow,Data::nuhigh,Data::randomize,&mean_nu,&res_0,&res_1);
      start_iter=0;
     } else {
      sagefit_visibilities_dual_pt_one_gpu(iodata.u,iodata.v,iodata.w,iodata.x,iodata.N,iodata.Nbase,iodata.tilesz,barr,carr,coh,M,Mt,iodata.freq0,iodata.deltaf,p,Data::min_uvcut,Data::Nt,Data::max_emiter,Data::max_iter,(Data::doChan? 0:Data::max_lbfgs),Data::lbfgs_m,Data::gpu_threads,Data::linsolv,Data::solver_mode,Data::nulow,Data::nuhigh,Data::randomize,&mean_nu,&res_0,&res_1);
@@ -509,7 +564,7 @@ main(int argc, char **argv) {
 #endif /* ONE_GPU */
 #ifndef ONE_GPU
     if (start_iter) {
-     sagefit_visibilities_dual_pt_flt(iodata.u,iodata.v,iodata.w,iodata.x,iodata.N,iodata.Nbase,iodata.tilesz,barr,carr,coh,M,Mt,iodata.freq0,iodata.deltaf,p,Data::min_uvcut,Data::Nt,(iodata.N<=64?2*Data::max_emiter:4*Data::max_emiter),Data::max_iter,(Data::doChan? 0:Data::max_lbfgs),Data::lbfgs_m,Data::gpu_threads,Data::linsolv,(iodata.N<=64 && Data::solver_mode==SM_RTR_OSLM_LBFGS?SM_OSLM_LBFGS:(iodata.N<=64 && (Data::solver_mode==SM_RTR_OSRLM_RLBFGS||Data::solver_mode==SM_NSD_RLBFGS)?SM_OSLM_OSRLM_RLBFGS:Data::solver_mode)),Data::nulow,Data::nuhigh,Data::randomize,&mean_nu,&res_0,&res_1);
+     sagefit_visibilities_dual_pt_flt(iodata.u,iodata.v,iodata.w,iodata.x,iodata.N,iodata.Nbase,iodata.tilesz,barr,carr,coh,M,Mt,iodata.freq0,iodata.deltaf,p,Data::min_uvcut,Data::Nt,(iodata.N<=LMCUT?2*Data::max_emiter:4*Data::max_emiter),Data::max_iter,(Data::doChan? 0:Data::max_lbfgs),Data::lbfgs_m,Data::gpu_threads,Data::linsolv,(iodata.N<=LMCUT && Data::solver_mode==SM_RTR_OSLM_LBFGS?SM_OSLM_LBFGS:(iodata.N<=LMCUT && (Data::solver_mode==SM_RTR_OSRLM_RLBFGS||Data::solver_mode==SM_NSD_RLBFGS)?SM_OSLM_OSRLM_RLBFGS:Data::solver_mode)),Data::nulow,Data::nuhigh,Data::randomize,&mean_nu,&res_0,&res_1);
      ///DBG sagefit_visibilities_dual_pt_flt(iodata.u,iodata.v,iodata.w,iodata.x,iodata.N,iodata.Nbase,iodata.tilesz,barr,carr,coh,M,Mt,iodata.freq0,iodata.deltaf,p,Data::min_uvcut,Data::Nt,2*Data::max_emiter,Data::max_iter,(Data::doChan? 0:Data::max_lbfgs),Data::lbfgs_m,Data::gpu_threads,Data::linsolv,Data::solver_mode,Data::nulow,Data::nuhigh,Data::randomize,&mean_nu,&res_0,&res_1);
      start_iter=0;
     } else {
@@ -568,7 +623,14 @@ main(int argc, char **argv) {
       free(pfreq);
       free(xfreq);
     } else {
-     calculate_residuals_multifreq(iodata.u,iodata.v,iodata.w,p,iodata.xo,iodata.N,iodata.Nbase,iodata.tilesz,barr,carr,M,iodata.freqs,iodata.Nchan,iodata.deltaf,iodata.deltat,iodata.dec0,Data::Nt,Data::ccid,Data::rho);
+     /* since residual is calculated not using x (instead using xo), no need to unwhiten data
+        in case x was whitened */
+     if (!doBeam) {
+      calculate_residuals_multifreq(iodata.u,iodata.v,iodata.w,p,iodata.xo,iodata.N,iodata.Nbase,iodata.tilesz,barr,carr,M,iodata.freqs,iodata.Nchan,iodata.deltaf,iodata.deltat,iodata.dec0,Data::Nt,Data::ccid,Data::rho,Data::phaseOnly);
+     } else {
+      calculate_residuals_multifreq_withbeam(iodata.u,iodata.v,iodata.w,p,iodata.xo,iodata.N,iodata.Nbase,iodata.tilesz,barr,carr,M,iodata.freqs,iodata.Nchan,iodata.deltaf,iodata.deltat,iodata.dec0,
+beam.p_ra0,beam.p_dec0,iodata.freq0,beam.sx,beam.sy,beam.time_utc,beam.Nelem,beam.xx,beam.yy,beam.zz,Data::Nt,Data::ccid,Data::rho,Data::phaseOnly);
+     }
     }
     /****************** end calibration **************************/
     /****************** begin diagnostics ************************/
@@ -581,11 +643,22 @@ main(int argc, char **argv) {
    } else {
     /************ simulation only mode ***************************/
     if (!solfile) {
-     predict_visibilities_multifreq(iodata.u,iodata.v,iodata.w,iodata.xo,iodata.N,iodata.Nbase,iodata.tilesz,barr,carr,M,iodata.freqs,iodata.Nchan,iodata.deltaf,iodata.deltat,iodata.dec0,Data::Nt,(Data::DoSim>1?1:0));
+////#ifndef HAVE_CUDA
+     if (!doBeam) {
+      predict_visibilities_multifreq(iodata.u,iodata.v,iodata.w,iodata.xo,iodata.N,iodata.Nbase,iodata.tilesz,barr,carr,M,iodata.freqs,iodata.Nchan,iodata.deltaf,iodata.deltat,iodata.dec0,Data::Nt,(Data::DoSim>1?1:0));
+     } else {
+      predict_visibilities_multifreq_withbeam(iodata.u,iodata.v,iodata.w,iodata.xo,iodata.N,iodata.Nbase,iodata.tilesz,barr,carr,M,iodata.freqs,iodata.Nchan,iodata.deltaf,iodata.deltat,iodata.dec0,
+  beam.p_ra0,beam.p_dec0,iodata.freq0,beam.sx,beam.sy,beam.time_utc,beam.Nelem,beam.xx,beam.yy,beam.zz, Data::Nt,(Data::DoSim>1?1:0));
+     }
+////#endif
+////#ifdef HAVE_CUDA
+////      predict_visibilities_multifreq_withbeam_gpu(iodata.u,iodata.v,iodata.w,iodata.xo,iodata.N,iodata.Nbase,iodata.tilesz,barr,carr,M,iodata.freqs,iodata.Nchan,iodata.deltaf,iodata.deltat,iodata.dec0,
+////  beam.p_ra0,beam.p_dec0,iodata.freq0,beam.sx,beam.sy,beam.time_utc,beam.Nelem,beam.xx,beam.yy,beam.zz,doBeam,Data::Nt,(Data::DoSim>1?1:0));
+////#endif
     } else {
      read_solutions(sfp,p,carr,iodata.N,M);
     /* if solution file is given, read in the solutions and predict */
-     predict_visibilities_multifreq_withsol(iodata.u,iodata.v,iodata.w,p,iodata.xo,ignorelist,iodata.N,iodata.Nbase,iodata.tilesz,barr,carr,M,iodata.freqs,iodata.Nchan,iodata.deltaf,iodata.deltat,iodata.dec0,Data::Nt,(Data::DoSim>1?1:0),Data::ccid,Data::rho);
+    predict_visibilities_multifreq_withsol(iodata.u,iodata.v,iodata.w,p,iodata.xo,ignorelist,iodata.N,iodata.Nbase,iodata.tilesz,barr,carr,M,iodata.freqs,iodata.Nchan,iodata.deltaf,iodata.deltat,iodata.dec0,Data::Nt,(Data::DoSim>1?1:0),Data::ccid,Data::rho,Data::phaseOnly);
     }
     /************ end simulation only mode ***************************/
    }
@@ -643,7 +716,17 @@ main(int argc, char **argv) {
     }
     }
 
-   Data::freeData(iodata);
+
+    for(int cm=0; cm<iodata.Nms; cm++) {
+     delete msitr[cm];
+     delete msvector[cm];
+    }
+
+   if (!doBeam) {
+    Data::freeData(iodata);
+   } else {
+    Data::freeData(iodata,beam);
+   }
 
 #ifdef USE_MIC
    free(mic_pindex);
@@ -661,21 +744,26 @@ main(int argc, char **argv) {
     free(carr[ci].mm);
     free(carr[ci].nn);
     free(carr[ci].sI);
+    free(carr[ci].sQ);
+    free(carr[ci].sU);
+    free(carr[ci].sV);
     free(carr[ci].p);
+    free(carr[ci].ra);
+    free(carr[ci].dec);
     for (cj=0; cj<carr[ci].N; cj++) {
      /* do a proper typecast before freeing */
      switch (carr[ci].stype[cj]) {
       case STYPE_GAUSSIAN:
         exg=(exinfo_gaussian*)carr[ci].ex[cj];
-        if (exg) free(exg);
+        if (exg) { free(exg); carr[ci].ex[cj]=0; }
         break;
       case STYPE_DISK:
         exd=(exinfo_disk*)carr[ci].ex[cj];
-        if (exd) free(exd);
+        if (exd) { free(exd); carr[ci].ex[cj]=0; }
         break;
       case STYPE_RING:
         exr=(exinfo_ring*)carr[ci].ex[cj];
-        if (exr) free(exr);
+        if (exr) { free(exr); carr[ci].ex[cj]=0; }
         break;
       case STYPE_SHAPELET:
         exs=(exinfo_shapelet*)carr[ci].ex[cj];
@@ -684,6 +772,7 @@ main(int argc, char **argv) {
             free(exs->modes);
           }
           free(exs);
+          carr[ci].ex[cj]=0;
         }
         break;
       default:
@@ -693,6 +782,9 @@ main(int argc, char **argv) {
     free(carr[ci].ex);
     free(carr[ci].stype);
     free(carr[ci].sI0);
+    free(carr[ci].sQ0);
+    free(carr[ci].sU0);
+    free(carr[ci].sV0);
     free(carr[ci].f0);
     free(carr[ci].spec_idx);
     free(carr[ci].spec_idx1);
@@ -712,6 +804,9 @@ main(int argc, char **argv) {
   }
   /**********************************************************/
 
+#ifdef HAVE_CUDA
+  cudaDeviceReset();
+#endif
    cout<<"Done."<<endl;    
    return 0;
 }

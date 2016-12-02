@@ -19,6 +19,7 @@
 
 #include "sagecal.h"
 #include <math.h>
+#include <stdio.h>
 
 //#define DEBUG
 /* build matrix with polynomial terms
@@ -27,14 +28,17 @@
   Nf: frequencies
   freqs: Nfx1 array freqs
   freq0: reference freq
-  type : 0 for [1 ((f-fo)/fo) ((f-fo)/fo)^2 ...] basis functions
-  type : 1 : normalize each row such that norm is 1
+  type : 
+  0 :[1 ((f-fo)/fo) ((f-fo)/fo)^2 ...] basis functions
+  1 : normalize each row such that norm is 1
+  2 : Bernstein poly \sum N_C_r x^r (1-x)^r where x in [0,1] : use min,max values of freq to normalize
+     Note: freqs might not be in sorted order, so need to search array to find min,max values
+  3: [1 ((f-fo)/fo) (fo/f-1) ((f-fo)/fo)^2 (fo/f-1)^2 ... ] basis, for this case odd Npoly  preferred
 */
 int
 setup_polynomials(double *B, int Npoly, int Nf, double *freqs, double freq0, int type) {
 
-  /* Npoly: no. of basis functions, that are evaluated at Nms freq values */
-  /* default : 1 ((f-fo)/fo) ((f-fo)/fo)^2 ... Npoly-1 powers */
+  if (type==0 || type==1) {
   double frat,dsum;
   double invf=1.0/freq0;
   int ci,cm;
@@ -73,6 +77,103 @@ setup_polynomials(double *B, int Npoly, int Nf, double *freqs, double freq0, int
      }
    }
   }
+  } else if (type==2) {
+   /* Bernstein polynomials */
+   int idmax=my_idamax(Nf, freqs, 1);
+   int idmin=my_idamin(Nf, freqs, 1);
+   double fmax=freqs[idmax-1];
+   double fmin=freqs[idmin-1];
+   double *fact; /* factorial array */
+   double *px,*p1x; /* arrays for powers of x and (1+x) */
+   if ((fact=(double*)calloc((size_t)Npoly,sizeof(double)))==0) {
+    printf("%s: %d: no free memory\n",__FILE__,__LINE__);
+    exit(1);
+   }
+   if ((px=(double*)calloc((size_t)Npoly*Nf,sizeof(double)))==0) {
+    printf("%s: %d: no free memory\n",__FILE__,__LINE__);
+    exit(1);
+   }
+   if ((p1x=(double*)calloc((size_t)Npoly*Nf,sizeof(double)))==0) {
+    printf("%s: %d: no free memory\n",__FILE__,__LINE__);
+    exit(1);
+   }
+
+
+   fact[0]=1.0;
+   int ci,cj;
+   for (ci=1; ci<Npoly; ci++) {
+     fact[ci]=fact[ci-1]*(double)ci;
+   }
+   double invf=1.0/(fmax-fmin);
+   double frat;
+   for (ci=0; ci<Nf; ci++) {
+     /* normalize coordinates */
+     frat=(freqs[ci]-fmin)*invf;
+     px[ci]=1.0;
+     p1x[ci]=1.0;
+     px[ci+Nf]=frat;
+     p1x[ci+Nf]=1.0-frat;
+   }
+   for (cj=2; cj<Npoly; cj++) {
+    for (ci=0; ci<Nf; ci++) {
+     px[cj*Nf+ci]=px[(cj-1)*Nf+ci]*px[Nf+ci]; 
+     p1x[cj*Nf+ci]=p1x[(cj-1)*Nf+ci]*p1x[Nf+ci]; 
+    }
+   }
+   for (cj=0; cj<Npoly; cj++) { /* ci: freq, cj: poly order */
+     frat=fact[Npoly-1]/(fact[Npoly-cj-1]*fact[cj]);
+     for (ci=0; ci<Nf; ci++) {
+      B[ci*Npoly+cj]=frat*px[cj*Nf+ci]*p1x[(Npoly-cj-1)*Nf+ci];
+     }
+   }
+
+#ifdef DEBUG
+   printf("BT=[\n");
+   for(cj=0; cj<Npoly; cj++) {
+    for (ci=0; ci<Nf; ci++) {
+    printf("%lf ",B[ci*Npoly+cj]); 
+   }
+   printf("\n");
+   }
+   printf("];\n");
+#endif
+   free(fact);
+   free(px);
+   free(p1x);
+  } else if (type==3) { /* [1 (f-fo)/fo (fo/f-1) ... */
+   double frat;
+   double invf=1.0/freq0;
+   int ci,cm;
+   for (ci=0; ci<Nf; ci++) {
+     B[ci*Npoly]=1.0;
+     frat=(freqs[ci]-freq0)*invf;
+     double lastval=frat;
+     for (cm=1; cm<Npoly; cm+=2) { /* odd values 1,3,5,... */
+      B[ci*Npoly+cm]=lastval;
+      lastval*=frat;
+     }
+     frat=(freq0/freqs[ci]-1.0);
+     lastval=frat;
+     for (cm=2; cm<Npoly; cm+=2) { /* even values 2,4,6,... */
+      B[ci*Npoly+cm]=lastval;
+      lastval*=frat;
+     }
+   }
+#ifdef DEBUG
+  int cj;
+  printf("BT=[\n");
+  for(cj=0; cj<Npoly; cj++) {
+   for (ci=0; ci<Nf; ci++) {
+    printf("%lf ",B[ci*Npoly+cj]); 
+   }
+   printf("\n");
+  }
+  printf("];\n");
+#endif
+
+  } else {
+    fprintf(stderr,"%s : %d: undefined polynomial type\n",__FILE__,__LINE__);
+  }
   return 0;
 }
 
@@ -83,9 +184,11 @@ setup_polynomials(double *B, int Npoly, int Nf, double *freqs, double freq0, int
   Bi: Npoly x Npoly pseudo inverse of sum( B(:,col) x B(:,col)' )
   Npoly : total basis functions
   Nf: frequencies
+  fratio: Nfx1 array of weighing factors depending on the flagged data of each freq
+  Sum taken is a weighted sum, using weights in fratio
 */
 int
-find_prod_inverse(double *B, double *Bi, int Npoly, int Nf) {
+find_prod_inverse(double *B, double *Bi, int Npoly, int Nf, double *fratio) {
 
   int ci,status,lwork=0;
   double w[1],*WORK,*U,*S,*VT;
@@ -94,7 +197,7 @@ find_prod_inverse(double *B, double *Bi, int Npoly, int Nf) {
   /* find sum */
   for (ci=0; ci<Nf; ci++) { 
    /* outer product */
-   my_dgemm('N','T',Npoly,Npoly,1,1.0,&B[ci*Npoly],Npoly,&B[ci*Npoly],Npoly,1.0,Bi,Npoly);
+   my_dgemm('N','T',Npoly,Npoly,1,fratio[ci],&B[ci*Npoly],Npoly,&B[ci*Npoly],Npoly,1.0,Bi,Npoly);
   }
 #ifdef DEBUG
   int cj;

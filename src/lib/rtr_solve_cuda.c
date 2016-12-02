@@ -30,36 +30,26 @@
 //#define DEBUG
 /* helper functions for diagnostics */
 static void
-checkStatus(culaStatus status, char *file, int line)
-{
-    char buf[80];
-    if(!status)
-        return;
-    culaGetErrorInfoString(status, culaGetErrorInfo(), buf, sizeof(buf));
-    fprintf(stderr,"GPU (CULA): %s %s %d\n", buf,file,line);
-    culaShutdown();
-    exit(EXIT_FAILURE);
-}
-
-
-static void
 checkCudaError(cudaError_t err, char *file, int line)
 {
+#ifdef CUDA_DEBUG
     if(!err)
         return;
     fprintf(stderr,"GPU (CUDA): %s %s %d\n", cudaGetErrorString(err),file,line);
-    culaShutdown();
     exit(EXIT_FAILURE);
+#endif
 }
 
 
 static void
 checkCublasError(cublasStatus_t cbstatus, char *file, int line)
 {
+#ifdef CUDA_DEBUG
    if (cbstatus!=CUBLAS_STATUS_SUCCESS) {
     fprintf(stderr,"%s: %d: CUBLAS failure\n",file,line);
     exit(EXIT_FAILURE);  
    }
+#endif
 }
 
 
@@ -67,18 +57,19 @@ checkCublasError(cublasStatus_t cbstatus, char *file, int line)
    rnew: new value */
 /* rnew = x + r */
 void
-cudakernel_fns_R(int N, cuFloatComplex *x, cuFloatComplex *r, cuFloatComplex *rnew, cublasHandle_t cbhandle) {
+cudakernel_fns_R(int N, cuFloatComplex *x, cuFloatComplex *r, cuFloatComplex *rnew, cublasHandle_t cbhandle, cusolverDnHandle_t solver_handle) {
   cublasStatus_t cbstatus;
   cbstatus=cublasCcopy(cbhandle,4*N,x,1,rnew,1);
   cuFloatComplex alpha;
   alpha.x=1.0f; alpha.y=0.0f;
   cbstatus=cublasCaxpy(cbhandle,4*N, &alpha, r, 1, rnew, 1);
+  checkCublasError(cbstatus,__FILE__,__LINE__);
 }
 
 
 /* inner product (metric) */
 float
-cudakernel_fns_g(int N,cuFloatComplex *x,cuFloatComplex *eta, cuFloatComplex *gamma,cublasHandle_t cbhandle) {
+cudakernel_fns_g(int N,cuFloatComplex *x,cuFloatComplex *eta, cuFloatComplex *gamma,cublasHandle_t cbhandle, cusolverDnHandle_t solver_handle) {
  /* 2 x real( trace(eta'*gamma) )
   = 2 x real( eta(:,1)'*gamma(:,1) + eta(:,2)'*gamma(:,2) )
   no need to calculate off diagonal terms
@@ -90,6 +81,7 @@ cudakernel_fns_g(int N,cuFloatComplex *x,cuFloatComplex *eta, cuFloatComplex *ga
  //complex double v2=my_cdot(2*N,&eta[2*N],&gamma[2*N]);
  cbstatus=cublasCdotc(cbhandle,2*N,&eta[2*N],1,&gamma[2*N],1,&r2);
 
+ checkCublasError(cbstatus,__FILE__,__LINE__);
  return 2.0f*(r1.x+r2.x);
 }
 
@@ -97,7 +89,7 @@ cudakernel_fns_g(int N,cuFloatComplex *x,cuFloatComplex *eta, cuFloatComplex *ga
 /* Projection 
    rnew: new value */
 void
-cudakernel_fns_proj(int N, cuFloatComplex *x, cuFloatComplex *z, cuFloatComplex *rnew, cublasHandle_t cbhandle) {
+cudakernel_fns_proj(int N, cuFloatComplex *x, cuFloatComplex *z, cuFloatComplex *rnew, cublasHandle_t cbhandle, cusolverDnHandle_t solver_handle) {
   /* projection  = Z-X Om, where
    Om X^H X+X^H X Om = X^H  Z - Z^H X
    is solved to find Om */
@@ -177,9 +169,29 @@ cudakernel_fns_proj(int N, cuFloatComplex *x, cuFloatComplex *z, cuFloatComplex 
   cudaMalloc((void **)&bd, 4*sizeof(cuFloatComplex));
   cudaMemcpy(bd,b,4*sizeof(cuFloatComplex),cudaMemcpyHostToDevice);
 
-  culaStatus status;
-  status=culaDeviceCgels('N',4,4,1,(culaDeviceFloatComplex *)Ad,4,(culaDeviceFloatComplex *)bd,4);
-  checkStatus(status,__FILE__,__LINE__);
+  //culaStatus status;
+  //status=culaDeviceCgels('N',4,4,1,(culaDeviceFloatComplex *)Ad,4,(culaDeviceFloatComplex *)bd,4);
+  //checkStatus(status,__FILE__,__LINE__);
+  int work_size=0;
+  int *devInfo;
+  cudaError_t err;
+  err=cudaMalloc((void**)&devInfo, sizeof(int));
+  checkCudaError(err,__FILE__,__LINE__);
+  cuFloatComplex *work,*taud;
+  cusolverDnCgeqrf_bufferSize(solver_handle, 4, 4, (cuFloatComplex *)Ad, 4, &work_size);
+  err=cudaMalloc((void**)&work, work_size*sizeof(cuFloatComplex));
+  err=cudaMalloc((void**)&taud, 4*sizeof(cuFloatComplex));
+  checkCudaError(err,__FILE__,__LINE__);
+  cusolverDnCgeqrf(solver_handle, 4, 4, Ad, 4, taud, work, work_size, devInfo);
+  cusolverDnCunmqr(solver_handle, CUBLAS_SIDE_LEFT, CUBLAS_OP_C, 4, 1, 4, Ad, 4, taud, bd, 4, work, work_size, devInfo);
+  cuFloatComplex cone; cone.x=1.0f; cone.y=0.0f;
+  cbstatus=cublasCtrsm(cbhandle,CUBLAS_SIDE_LEFT,CUBLAS_FILL_MODE_UPPER,CUBLAS_OP_N,CUBLAS_DIAG_NON_UNIT,4,1,&cone,Ad,4,bd,4);
+
+
+  cudaFree(work); 
+  cudaFree(taud); 
+  cudaFree(devInfo); 
+
 
 #ifdef DEBUG
   cudaMemcpy(b,bd,4*sizeof(cuFloatComplex),cudaMemcpyDeviceToHost);
@@ -233,20 +245,16 @@ printf("]\n");
 /* gradient, also projected to tangent space */
 /* need 8N*BlocksPerGrid+ 8N*2 float storage */
 static void
-cudakernel_fns_fgrad(int ThreadsPerBlock, int BlocksPerGrid, int N, int M, cuFloatComplex *x, cuFloatComplex *eta, float *y, float *coh, char *bbh, float *iw, int negate, cublasHandle_t cbhandle,float *gWORK) {
+cudakernel_fns_fgrad(int ThreadsPerBlock, int BlocksPerGrid, int N, int M, cuFloatComplex *x, cuFloatComplex *eta, float *y, float *coh, short *bbh, float *iw, int negate, cublasHandle_t cbhandle, cusolverDnHandle_t solver_handle) {
  cuFloatComplex *tempeta,*tempb;
- cublasStatus_t cbstatus;
+ cublasStatus_t cbstatus=CUBLAS_STATUS_SUCCESS;
  cuFloatComplex alpha;
- unsigned long int moff=0;
- tempeta=(cuFloatComplex*)&gWORK[moff];
- moff+=8*N; 
- tempb=(cuFloatComplex*)&gWORK[moff];
- moff+=8*N;
- float *gWORK1=&gWORK[moff];
+ cudaMalloc((void**)&tempeta, sizeof(cuFloatComplex)*4*N);
+ cudaMalloc((void**)&tempb, sizeof(cuFloatComplex)*4*N);
  /* max size of M for one kernel call, to determine optimal blocks */
- int T=128*ThreadsPerBlock;
+ int T=DEFAULT_TH_PER_BK*ThreadsPerBlock;
  if (M<T) {
-  cudakernel_fns_fgradflat(ThreadsPerBlock, BlocksPerGrid, N, M, x, tempeta, y, coh, bbh, gWORK1);
+  cudakernel_fns_fgradflat(ThreadsPerBlock, BlocksPerGrid, N, M, x, tempeta, y, coh, bbh);
  } else {
    /* reset memory to zero */
    cudaMemset(tempeta, 0, sizeof(cuFloatComplex)*4*N);
@@ -261,7 +269,7 @@ cudakernel_fns_fgrad(int ThreadsPerBlock, int BlocksPerGrid, int N, int M, cuFlo
       myT=M-ct;
     }
     int B=(myT+ThreadsPerBlock-1)/ThreadsPerBlock;
-    cudakernel_fns_fgradflat(ThreadsPerBlock, B, N, myT, x, tempb, &y[ct*8], &coh[ct*8], &bbh[ct*2], gWORK1);
+    cudakernel_fns_fgradflat(ThreadsPerBlock, B, N, myT, x, tempb, &y[ct*8], &coh[ct*8], &bbh[ct*2]);
     alpha.x=1.0f;alpha.y=0.0f;
     /* tempeta <= tempeta + tempb */
     cbstatus=cublasCaxpy(cbhandle,4*N, &alpha, tempb, 1, tempeta, 1);
@@ -274,27 +282,26 @@ cudakernel_fns_fgrad(int ThreadsPerBlock, int BlocksPerGrid, int N, int M, cuFlo
   alpha.x=-1.0f;alpha.y=0.0f;
   cbstatus=cublasCscal(cbhandle,4*N,&alpha,tempeta,1);
  } 
- cudakernel_fns_proj(N, x, tempeta, eta, cbhandle);
+ cudakernel_fns_proj(N, x, tempeta, eta, cbhandle, solver_handle);
+ checkCublasError(cbstatus,__FILE__,__LINE__);
+ cudaFree(tempeta);
+ cudaFree(tempb);
 }
 
 /* Hessian, also projected to tangent space */
 /* need 8N*BlocksPerGrid+ 8N*2 float storage */
 static void
-cudakernel_fns_fhess(int ThreadsPerBlock, int BlocksPerGrid, int N, int M, cuFloatComplex *x, cuFloatComplex *eta, cuFloatComplex *fhess, float *y, float *coh, char *bbh, float *iw, cublasHandle_t cbhandle, float *gWORK) {
+cudakernel_fns_fhess(int ThreadsPerBlock, int BlocksPerGrid, int N, int M, cuFloatComplex *x, cuFloatComplex *eta, cuFloatComplex *fhess, float *y, float *coh, short *bbh, float *iw, cublasHandle_t cbhandle, cusolverDnHandle_t solver_handle) {
  cuFloatComplex *tempeta,*tempb;
- unsigned long int moff=0;
- tempeta=(cuFloatComplex*)&gWORK[moff];
- moff+=8*N;
- tempb=(cuFloatComplex*)&gWORK[moff];
- moff+=8*N;
- float *gWORK1=&gWORK[moff];
+ cudaMalloc((void**)&tempeta, sizeof(cuFloatComplex)*4*N);
+ cudaMalloc((void**)&tempb, sizeof(cuFloatComplex)*4*N);
 
  cuFloatComplex alpha;
- cublasStatus_t cbstatus;
+ cublasStatus_t cbstatus=CUBLAS_STATUS_SUCCESS;
  /* max size of M for one kernel call, to determine optimal blocks */
- int T=128*ThreadsPerBlock;
+ int T=DEFAULT_TH_PER_BK*ThreadsPerBlock;
  if (M<T) {
-  cudakernel_fns_fhessflat(ThreadsPerBlock, BlocksPerGrid, N, M, x, eta, tempeta, y, coh, bbh, gWORK1);
+  cudakernel_fns_fhessflat(ThreadsPerBlock, BlocksPerGrid, N, M, x, eta, tempeta, y, coh, bbh);
  } else {
    /* reset memory to zero */
    cudaMemset(tempeta, 0, sizeof(cuFloatComplex)*4*N);
@@ -309,7 +316,7 @@ cudakernel_fns_fhess(int ThreadsPerBlock, int BlocksPerGrid, int N, int M, cuFlo
       myT=M-ct;
     }
     int B=(myT+ThreadsPerBlock-1)/ThreadsPerBlock;
-    cudakernel_fns_fhessflat(ThreadsPerBlock, B, N, myT, x, eta, tempb, &y[ct*8], &coh[ct*8], &bbh[ct*2], gWORK1);
+    cudakernel_fns_fhessflat(ThreadsPerBlock, B, N, myT, x, eta, tempb, &y[ct*8], &coh[ct*8], &bbh[ct*2]);
     alpha.x=1.0f;alpha.y=0.0f;
     /* tempeta <= tempeta + tempb */
     cbstatus=cublasCaxpy(cbhandle,4*N, &alpha, tempb, 1, tempeta, 1);
@@ -318,7 +325,10 @@ cudakernel_fns_fhess(int ThreadsPerBlock, int BlocksPerGrid, int N, int M, cuFlo
  }
 
  cudakernel_fns_fscale(N, tempeta, iw);
- cudakernel_fns_proj(N, x, tempeta, fhess, cbhandle);
+ cudakernel_fns_proj(N, x, tempeta, fhess, cbhandle, solver_handle);
+ checkCublasError(cbstatus,__FILE__,__LINE__);
+ cudaFree(tempeta);
+ cudaFree(tempb);
 }
 
 /* Armijo step calculation,
@@ -328,24 +338,21 @@ cudakernel_fns_fhess(int ThreadsPerBlock, int BlocksPerGrid, int N, int M, cuFlo
 */
 /* need 8N*BlocksPerGrid+ 8N*2 float storage */
 static int
-armijostep(int ThreadsPerBlock, int BlocksPerGrid, int N, int M, cuFloatComplex *x, cuFloatComplex *teta, float *y, float *coh, char *bbh, float *iw, float *mincost, cublasHandle_t cbhandle, float *gWORK) {
+armijostep(int ThreadsPerBlock, int BlocksPerGrid, int N, int M, cuFloatComplex *x, cuFloatComplex *teta, float *y, float *coh, short *bbh, float *iw, float *mincost, cublasHandle_t cbhandle,  cusolverDnHandle_t solver_handle) {
  float alphabar=10.0f;
  float beta=0.2f;
  float sigma=0.5f;
  cublasStatus_t cbstatus;
  /* temp storage, re-using global storage */ 
  cuFloatComplex *eta, *x_prop;
- unsigned long int moff=0;
- eta=(cuFloatComplex*)&gWORK[moff];
- moff+=8*N;
- x_prop=(cuFloatComplex*)&gWORK[moff];
- moff+=8*N;
- float *gWORK1=&gWORK[moff];
+ cudaMalloc((void**)&eta, sizeof(cuFloatComplex)*4*N);
+ cudaMalloc((void**)&x_prop, sizeof(cuFloatComplex)*4*N);
+
 
  //double fx=fns_f(x,y,gdata);
- float fx=cudakernel_fns_f(ThreadsPerBlock,BlocksPerGrid,N,M,x,y,coh,bbh,gWORK1);
+ float fx=cudakernel_fns_f(ThreadsPerBlock,BlocksPerGrid,N,M,x,y,coh,bbh);
  //fns_fgrad(x,eta,y,gdata,0);
- cudakernel_fns_fgrad(ThreadsPerBlock,BlocksPerGrid,N,M,x,eta,y,coh,bbh,iw,0,cbhandle, gWORK1);
+ cudakernel_fns_fgrad(ThreadsPerBlock,BlocksPerGrid,N,M,x,eta,y,coh,bbh,iw,0,cbhandle, solver_handle);
 #ifdef DEBUG
  float eta_nrm;
  cublasScnrm2(cbhandle,4*N,eta,1,&eta_nrm);
@@ -369,7 +376,7 @@ printf("]\n");
  cuFloatComplex alpha;
  *mincost=fx;
 
- float metric0=cudakernel_fns_g(N,x,eta,eta,cbhandle);
+ float metric0=cudakernel_fns_g(N,x,eta,eta,cbhandle,solver_handle);
  for (m=0; m<50; m++) {
    /* abeta=(beta0)*alphabar*eta; */
    //my_ccopy(4*dp->N,eta,1,teta,1);
@@ -379,9 +386,9 @@ printf("]\n");
    cbstatus=cublasCscal(cbhandle,4*N,&alpha,teta,1);
    /* Rx=R(x,teta); */
    //fns_R(dp->N,x,teta,x_prop);
-   cudakernel_fns_R(N,x,teta,x_prop,cbhandle);
+   cudakernel_fns_R(N,x,teta,x_prop,cbhandle,solver_handle);
    //lhs=fns_f(x_prop,y,gdata);
-   lhs=cudakernel_fns_f(ThreadsPerBlock,BlocksPerGrid,N,M,x_prop,y,coh,bbh,gWORK1);
+   lhs=cudakernel_fns_f(ThreadsPerBlock,BlocksPerGrid,N,M,x_prop,y,coh,bbh);
    if (lhs<minfx) {
      minfx=lhs;
      *mincost=minfx;
@@ -412,6 +419,10 @@ printf("m=%d lhs=%e rhs=%e rat=%e norm=%e\n",m,lhs,rhs,lhs/rhs,metric);
  //my_cscal(4*dp->N,minbeta*alphabar+0.0*_Complex_I,teta);
  cbstatus=cublasCscal(cbhandle,4*N,&alpha,teta,1);
 
+ checkCublasError(cbstatus,__FILE__,__LINE__);
+ cudaFree(eta);
+ cudaFree(x_prop);
+
  return nocostred;
 }
 
@@ -427,23 +438,16 @@ printf("m=%d lhs=%e rhs=%e rat=%e norm=%e\n",m,lhs,rhs,lhs/rhs,metric);
 */
 /* need 8N*(BlocksPerGrid+2)+ 8N*6 float storage */
 static int
-tcg_solve_cuda(int ThreadsPerBlock, int BlocksPerGrid, int N, int M, cuFloatComplex *x, cuFloatComplex *grad, cuFloatComplex *eta, cuFloatComplex *fhess, float Delta, float theta, float kappa, int max_inner, int min_inner, float *y, float *coh, char *bbh, float *iw, cublasHandle_t cbhandle, float *gWORK) { 
+tcg_solve_cuda(int ThreadsPerBlock, int BlocksPerGrid, int N, int M, cuFloatComplex *x, cuFloatComplex *grad, cuFloatComplex *eta, cuFloatComplex *fhess, float Delta, float theta, float kappa, int max_inner, int min_inner, float *y, float *coh, short *bbh, float *iw, cublasHandle_t cbhandle, cusolverDnHandle_t solver_handle) { 
   cuFloatComplex *r,*z,*delta,*Hxd, *rnew;
   float  e_Pe, r_r, norm_r, z_r, d_Pd, d_Hd, alpha, e_Pe_new,
      e_Pd, Deltasq, tau, zold_rold, beta, norm_r0;
   int cj, stop_tCG;
-  unsigned long int moff=0;
-  r=(cuFloatComplex*)&gWORK[moff];
-  moff+=8*N;
-  z=(cuFloatComplex*)&gWORK[moff];
-  moff+=8*N;
-  delta=(cuFloatComplex*)&gWORK[moff];
-  moff+=8*N;
-  Hxd=(cuFloatComplex*)&gWORK[moff];
-  moff+=8*N;
-  rnew=(cuFloatComplex*)&gWORK[moff];
-  moff+=8*N;
-  float *gWORK1=&gWORK[moff];
+  cudaMalloc((void**)&r, sizeof(cuFloatComplex)*4*N);
+  cudaMalloc((void**)&z, sizeof(cuFloatComplex)*4*N);
+  cudaMalloc((void**)&delta, sizeof(cuFloatComplex)*4*N);
+  cudaMalloc((void**)&Hxd, sizeof(cuFloatComplex)*4*N);
+  cudaMalloc((void**)&rnew, sizeof(cuFloatComplex)*4*N);
 
   cublasStatus_t cbstatus;
   cuFloatComplex a0;
@@ -455,13 +459,13 @@ tcg_solve_cuda(int ThreadsPerBlock, int BlocksPerGrid, int N, int M, cuFloatComp
   e_Pe=0.0f;
 
 
-  r_r=cudakernel_fns_g(N,x,r,r,cbhandle);
+  r_r=cudakernel_fns_g(N,x,r,r,cbhandle,solver_handle);
   norm_r=sqrtf(r_r);
   norm_r0=norm_r;
 
   cbstatus=cublasCcopy(cbhandle,4*N,r,1,z,1);
 
-  z_r=cudakernel_fns_g(N,x,z,r,cbhandle);
+  z_r=cudakernel_fns_g(N,x,z,r,cbhandle,solver_handle);
   d_Pd=z_r;
 
   /*
@@ -470,7 +474,7 @@ tcg_solve_cuda(int ThreadsPerBlock, int BlocksPerGrid, int N, int M, cuFloatComp
   cudaMemset(delta, 0, sizeof(cuFloatComplex)*4*N); 
   a0.x=-1.0f; a0.y=0.0f;
   cbstatus=cublasCaxpy(cbhandle,4*N, &a0, z, 1, delta, 1);
-  e_Pd=cudakernel_fns_g(N,x,eta,delta,cbhandle);
+  e_Pd=cudakernel_fns_g(N,x,eta,delta,cbhandle,solver_handle);
 
   stop_tCG=5;
 
@@ -478,8 +482,8 @@ tcg_solve_cuda(int ThreadsPerBlock, int BlocksPerGrid, int N, int M, cuFloatComp
     for j = 1:max_inner,
   */
   for(cj=1; cj<=max_inner; cj++) {
-    cudakernel_fns_fhess(ThreadsPerBlock,BlocksPerGrid,N,M,x,delta,Hxd,y,coh,bbh,iw, cbhandle, gWORK1);
-    d_Hd=cudakernel_fns_g(N,x,delta,Hxd,cbhandle);
+    cudakernel_fns_fhess(ThreadsPerBlock,BlocksPerGrid,N,M,x,delta,Hxd,y,coh,bbh,iw, cbhandle, solver_handle);
+    d_Hd=cudakernel_fns_g(N,x,delta,Hxd,cbhandle,solver_handle);
 
     alpha=z_r/d_Hd;
     e_Pe_new = e_Pe + 2.0f*alpha*e_Pd + alpha*alpha*d_Pd;
@@ -503,9 +507,9 @@ tcg_solve_cuda(int ThreadsPerBlock, int BlocksPerGrid, int N, int M, cuFloatComp
     cbstatus=cublasCaxpy(cbhandle,4*N, &a0, Hxd, 1, fhess, 1);
     
     cbstatus=cublasCaxpy(cbhandle,4*N, &a0, Hxd, 1, r, 1);
-    cudakernel_fns_proj(N, x, r, rnew, cbhandle);
+    cudakernel_fns_proj(N, x, r, rnew, cbhandle,solver_handle);
     cbstatus=cublasCcopy(cbhandle,4*N,rnew,1,r,1);
-    r_r=cudakernel_fns_g(N,x,r,r,cbhandle);
+    r_r=cudakernel_fns_g(N,x,r,r,cbhandle,solver_handle);
     norm_r=sqrtf(r_r);
 
     /*
@@ -522,7 +526,7 @@ tcg_solve_cuda(int ThreadsPerBlock, int BlocksPerGrid, int N, int M, cuFloatComp
     cbstatus=cublasCcopy(cbhandle,4*N,r,1,z,1);
     zold_rold=z_r;
 
-    z_r=cudakernel_fns_g(N,x,z,r,cbhandle);
+    z_r=cudakernel_fns_g(N,x,z,r,cbhandle,solver_handle);
 
     beta=z_r/zold_rold;
     a0.x=beta; 
@@ -535,6 +539,12 @@ tcg_solve_cuda(int ThreadsPerBlock, int BlocksPerGrid, int N, int M, cuFloatComp
     d_Pd = z_r + beta*beta*d_Pd;
   }
 
+  checkCublasError(cbstatus,__FILE__,__LINE__);
+  cudaFree(r);
+  cudaFree(z);
+  cudaFree(delta);
+  cudaFree(Hxd);
+  cudaFree(rnew);
   return stop_tCG;
 }
 
@@ -552,7 +562,7 @@ rtr_solve_cuda_fl(
   double *info, /* initial and final residuals */
 
   cublasHandle_t cbhandle, /* device handle */
-  float *gWORK, /* GPU allocated memory */
+  cusolverDnHandle_t solver_handle, /* solver handle */
   int tileoff, /* tile offset when solving for many chunks */
   int ntiles, /* total tile (data) size being solved for */
   me_data_t *adata)
@@ -560,7 +570,7 @@ rtr_solve_cuda_fl(
 
   /* general note: all device variables end with a 'd' */
   cudaError_t err;
-  cublasStatus_t cbstatus;
+  cublasStatus_t cbstatus=CUBLAS_STATUS_SUCCESS;
 
   /* ME data */
   me_data_t *dp=(me_data_t*)adata;
@@ -568,10 +578,10 @@ rtr_solve_cuda_fl(
   /* coherency on device */
   float *cohd;
   /* baseline-station map on device/host */
-  char *bbd;
+  short *bbd;
 
   /* calculate no of cuda threads and blocks */
-  int ThreadsPerBlock=128;
+  int ThreadsPerBlock=DEFAULT_TH_PER_BK;
   int BlocksPerGrid=(M+ThreadsPerBlock-1)/ThreadsPerBlock;
 
 
@@ -623,42 +633,20 @@ rtr_solve_cuda_fl(
  }
 
 
- unsigned long int moff=0;
- fgradxd=(cuFloatComplex*)&gWORK[moff];
- moff+=8*N; /* 4N complex means 8N float */
- etad=(cuFloatComplex*)&gWORK[moff];
- moff+=8*N;
- Hetad=(cuFloatComplex*)&gWORK[moff];
- moff+=8*N;
- x_propd=(cuFloatComplex*)&gWORK[moff];
- moff+=8*N;
- xd=(cuFloatComplex*)&gWORK[moff];
- moff+=8*N;
+ cudaMalloc((void**)&fgradxd, sizeof(cuFloatComplex)*4*N);
+ cudaMalloc((void**)&etad, sizeof(cuFloatComplex)*4*N);
+ cudaMalloc((void**)&Hetad, sizeof(cuFloatComplex)*4*N);
+ cudaMalloc((void**)&x_propd, sizeof(cuFloatComplex)*4*N);
+ cudaMalloc((void**)&xd, sizeof(cuFloatComplex)*4*N);
+ cudaMalloc((void**)&yd, sizeof(float)*8*M);
+ cudaMalloc((void**)&cohd, sizeof(float)*8*Nbase);
+ cudaMalloc((void**)&bbd, sizeof(short)*2*Nbase);
+ cudaMalloc((void**)&iwd, sizeof(float)*N);
 
- yd=&gWORK[moff];
- moff+=8*M;
- cohd=&gWORK[moff];
- moff+=Nbase*8;
- bbd=(char*)&gWORK[moff];
- unsigned long int charstor=(Nbase*2*sizeof(char))/sizeof(float);
- if (!charstor || charstor%4) {
-  moff+=(charstor/4+1)*4; /* NOTE +4 multiple to align memory */
- } else {
-  moff+=charstor;
- }
- iwd=&gWORK[moff];
- if (!(N%4)) {
-  moff+=N;
- } else {
-  moff+=(N/4+1)*4;
- }
  /* need 8N*(BlocksPerGrid+8) for tcg_solve+grad/hess storage,
    so total storage needed is 
    8N*(BlocksPerGrid+8) + 8N*5 + 8*M + 8*Nbase + 2*Nbase + N
  */
- /* remaining memory */
- float *gWORK1=&gWORK[moff];
-
  /* yd <=y : V */
  err=cudaMemcpy(yd, y, 8*M*sizeof(float), cudaMemcpyHostToDevice);
  checkCudaError(err,__FILE__,__LINE__);
@@ -668,7 +656,7 @@ rtr_solve_cuda_fl(
  err=cudaMemcpy(cohd, &(dp->ddcohf[(dp->Nbase)*(dp->tilesz)*(dp->clus)*8+(dp->Nbase)*tileoff*8]), Nbase*8*sizeof(float), cudaMemcpyHostToDevice);
  checkCudaError(err,__FILE__,__LINE__);
  /* correct offset for baselines */
- err=cudaMemcpy(bbd, &(dp->ddbase[2*(dp->Nbase)*(tileoff)]), Nbase*2*sizeof(char), cudaMemcpyHostToDevice);
+ err=cudaMemcpy(bbd, &(dp->ddbase[2*(dp->Nbase)*(tileoff)]), Nbase*2*sizeof(short), cudaMemcpyHostToDevice);
  checkCudaError(err,__FILE__,__LINE__);
  /* xd <=x : solution */
  err=cudaMemcpy(xd, x, 8*N*sizeof(float), cudaMemcpyHostToDevice);
@@ -682,7 +670,7 @@ rtr_solve_cuda_fl(
  checkCudaError(err,__FILE__,__LINE__);
  free(iw);
 
- fx=cudakernel_fns_f(ThreadsPerBlock,BlocksPerGrid,N,M,xd,yd,cohd,bbd,gWORK1);
+ fx=cudakernel_fns_f(ThreadsPerBlock,BlocksPerGrid,N,M,xd,yd,cohd,bbd);
  fx0=fx;
 #ifdef DEBUG
 printf("Initial Cost=%g\n",fx0);
@@ -694,9 +682,9 @@ printf("Initial Cost=%g\n",fx0);
   /* Armijo step */
   /* teta=armijostep(V,C,N,x); */
   //armijostep(N,x,eta,y,&gdata);
-  rsdstat=armijostep(ThreadsPerBlock, BlocksPerGrid, N, M, xd, etad, yd, cohd, bbd,iwd,&fx,cbhandle,gWORK1);
+  rsdstat=armijostep(ThreadsPerBlock, BlocksPerGrid, N, M, xd, etad, yd, cohd, bbd,iwd,&fx,cbhandle,solver_handle);
   /* x=R(x,teta); */
-  cudakernel_fns_R(N,xd,etad,x_propd,cbhandle);
+  cudakernel_fns_R(N,xd,etad,x_propd,cbhandle,solver_handle);
   //my_ccopy(4*N,x_propd,1,xd,1);
   if (!rsdstat) {
    /* cost reduced, update solution */
@@ -752,8 +740,8 @@ printf("NEW RSD cost=%g\n",fx);
   int stop_outer=(itmax_rtr>0?0:1);
   int stop_inner=0;
   if (!stop_outer) {
-   cudakernel_fns_fgrad(ThreadsPerBlock,BlocksPerGrid,N,M,xd,fgradxd,yd,cohd,bbd,iwd,1,cbhandle, gWORK1);
-   norm_grad=sqrtf(cudakernel_fns_g(N,xd,fgradxd,fgradxd,cbhandle));
+   cudakernel_fns_fgrad(ThreadsPerBlock,BlocksPerGrid,N,M,xd,fgradxd,yd,cohd,bbd,iwd,1,cbhandle,solver_handle);
+   norm_grad=sqrtf(cudakernel_fns_g(N,xd,fgradxd,fgradxd,cbhandle,solver_handle));
   }
   Delta=Delta0;
   /* initial residual */
@@ -772,25 +760,25 @@ printf("NEW RSD cost=%g\n",fx);
 
 
     /* solve TR subproblem, also returns Hessian */
-    stop_inner=tcg_solve_cuda(ThreadsPerBlock,BlocksPerGrid, N, M, xd, fgradxd, etad, Hetad, Delta, theta, kappa, max_inner, min_inner,yd,cohd,bbd,iwd,cbhandle, gWORK1);
+    stop_inner=tcg_solve_cuda(ThreadsPerBlock,BlocksPerGrid, N, M, xd, fgradxd, etad, Hetad, Delta, theta, kappa, max_inner, min_inner,yd,cohd,bbd,iwd,cbhandle, solver_handle);
     /*
         Heta = fns.fhess(x,eta);
     */
     /*
       compute the retraction of the proposal
     */
-   cudakernel_fns_R(N,xd,etad,x_propd,cbhandle);
+   cudakernel_fns_R(N,xd,etad,x_propd,cbhandle,solver_handle);
 
     /*
       compute cost of the proposal
     */
-    fx_prop=cudakernel_fns_f(ThreadsPerBlock,BlocksPerGrid,N,M,x_propd,yd,cohd,bbd,gWORK1);
+    fx_prop=cudakernel_fns_f(ThreadsPerBlock,BlocksPerGrid,N,M,x_propd,yd,cohd,bbd);
 
     /*
       check the performance of the quadratic model
     */
     rhonum=fx-fx_prop;
-    rhoden=-cudakernel_fns_g(N,xd,fgradxd,etad,cbhandle)-0.5f*cudakernel_fns_g(N,xd,Hetad,etad,cbhandle);
+    rhoden=-cudakernel_fns_g(N,xd,fgradxd,etad,cbhandle,solver_handle)-0.5f*cudakernel_fns_g(N,xd,Hetad,etad,cbhandle,solver_handle);
     /* regularization of rho ratio */
     /* 
     rho_reg = max(1, abs(fx)) * eps * options.rho_regularization;
@@ -830,8 +818,8 @@ printf("NEW RSD cost=%g\n",fx);
     if (model_decreased && rho>rho_prime) {
      cbstatus=cublasCcopy(cbhandle,4*N,x_propd,1,xd,1);
      fx=fx_prop;
-     cudakernel_fns_fgrad(ThreadsPerBlock,BlocksPerGrid,N,M,xd,fgradxd,yd,cohd,bbd,iwd,1,cbhandle, gWORK1);
-     norm_grad=sqrtf(cudakernel_fns_g(N,xd,fgradxd,fgradxd,cbhandle));
+     cudakernel_fns_fgrad(ThreadsPerBlock,BlocksPerGrid,N,M,xd,fgradxd,yd,cohd,bbd,iwd,1,cbhandle,solver_handle);
+     norm_grad=sqrtf(cudakernel_fns_g(N,xd,fgradxd,fgradxd,cbhandle,solver_handle));
     }
 
     /*
@@ -860,7 +848,9 @@ printf("NEW RTR cost=%g\n",fx);
 #endif
 
 /***************************************************/
+ checkCublasError(cbstatus,__FILE__,__LINE__);
  cudaDeviceSynchronize();
+
   if(fx0>fx) {
   //printf("Cost final %g  initial %g\n",fx,fx0);
   /* copy back current solution */
@@ -888,6 +878,17 @@ printf("NEW RTR cost=%g\n",fx);
 
   }
   free(x);
+
+ cudaFree(fgradxd);
+ cudaFree(etad);
+ cudaFree(Hetad);
+ cudaFree(x_propd);
+ cudaFree(xd);
+ cudaFree(yd);
+ cudaFree(cohd);
+ cudaFree(bbd);
+ cudaFree(iwd);
+
 
   return 0;
 }

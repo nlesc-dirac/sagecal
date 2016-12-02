@@ -41,12 +41,21 @@
 #endif
 
 #ifdef HAVE_CUDA
-// new version
-#include <cula_lapack_device.h>
-#include <cula_blas_device.h>
-//#include <cuda_runtime.h> /* comment this out to link with g++ */
 #include <cublas_v2.h>
+#include <cusolverDn.h>
+#include <cuda_runtime_api.h>
 #endif /* HAVE_CUDA */
+
+#ifndef MAX_GPU_ID
+#define MAX_GPU_ID 3 /* use 0 (1 GPU), 1 (2 GPUs), ... */
+#endif
+/* default value for threads per block */
+#ifndef DEFAULT_TH_PER_BK 
+#define DEFAULT_TH_PER_BK 128
+#endif
+#ifndef DEFAULT_TH_PER_BK_2
+#define DEFAULT_TH_PER_BK_2 64
+#endif
 
 
 /* speed of light */
@@ -117,6 +126,11 @@ typedef struct exinfo_shapelet_ {
 } exinfo_shapelet;
 
 
+/* when to project l,m coordinates */
+#ifndef PROJ_CUT
+#define PROJ_CUT 0.998
+#endif
+
 
 /* struct for a cluster GList item */
 typedef struct clust_t_{
@@ -131,18 +145,19 @@ typedef struct clust_n_{
 
 /* struct to store source info in hash table */
 typedef struct sinfo_t_ {
- double ll,mm,sI; /* note sI is updated for central freq */
+ double ll,mm,ra,dec,sI[4]; /* sI:4x1 for I,Q,U,V, note sI is updated for central freq (ra,dec) for Az,El */
  unsigned char stype; /* source type */
  void *exdata; /* pointer to carry additional data, if needed */
- double sI0,f0,spec_idx,spec_idx1,spec_idx2; /* for multi channel data, original sI, f0 and spectral index */
+ double sI0[4],f0,spec_idx,spec_idx1,spec_idx2; /* for multi channel data, original sI,Q,U,V, f0 and spectral index */
 } sinfo_t;
 
 /* struct for array of the sky model, with clusters */
 typedef struct clus_source_t_ {
  int N; /* no of source in this cluster */
  int id; /* cluster id */
- double *ll,*mm,*nn,*sI; /* arrays Nx1 of source info */
+ double *ll,*mm,*nn,*sI,*sQ,*sU,*sV; /* arrays Nx1 of source info, note: sI is at reference freq of data */
  /* nn=sqrt(1-ll^2-mm^2)-1 */
+ double *ra,*dec; /* arrays Nx1 for Az,El calculation */
  unsigned char *stype; /* source type array Nx1 */
  void **ex; /* array for extra source information Nx1 */
 
@@ -150,7 +165,7 @@ typedef struct clus_source_t_ {
  int *p; /* array nchunkx1 points to parameter array indices */
 
 
- double *sI0,*f0,*spec_idx,*spec_idx1,*spec_idx2; /* for multi channel data, original sI, f0 and spectral index */
+ double *sI0,*sQ0,*sU0,*sV0,*f0,*spec_idx,*spec_idx1,*spec_idx2; /* for multi channel data, original sI, f0 and spectral index */
 } clus_source_t;
 
 /* strutct to store baseline to station mapping */
@@ -162,7 +177,7 @@ typedef struct baseline_t_ {
 } baseline_t;
 
 
-/* structure for worker threads for function calculation */
+/* structure for worker threads for various function calculations */
 typedef struct thread_data_base_ {
   int Nb; /* no of baselines this handle */
   int boff; /* baseline offset per thread */
@@ -201,7 +216,35 @@ typedef struct thread_data_base_ {
   /* following used for multifrequency (channel) data */
   double *freqs;
   int Nchan;
+
+  /* following used for calculating beam */
+  double *arrayfactor; /* storage for precomputed beam */
+  /* if clus==0, reset memory before adding */
+
 } thread_data_base_t;
+
+/* structure for worker threads for 
+   precalculating beam array factor */
+typedef struct thread_data_arrayfac_ {
+  int Ns; /* total no of sources per thread */
+  int soff; /* starting source */
+  int Ntime; /* total timeslots */
+  double *time_utc; /* Ntimex1 array */
+  int N; /* no. of stations */
+  double *longitude, *latitude;
+
+  double ra0,dec0,freq0; /* reference pointing and freq */
+  int Nf; /* no. of frequencies to calculate */
+  double *freqs; /* Nfx1 array */
+
+  int *Nelem; /* Nx1 array of element counts */
+  double **xx,**yy,**zz; /* Nx1 arrays to element coords of each station, size Nelem[]x1 */
+  
+  clus_source_t *carr; /* sky model, with clusters Mx1 */
+  int cid; /* cluster id to calculate beam */
+  baseline_t *barr; /* pointer to baseline-> stations mapping array */
+  double *beamgain; /* output */
+} thread_data_arrayfac_t;
 
 
 /* structure for worker threads for presetting
@@ -225,7 +268,7 @@ typedef struct thread_data_coharr_ {
   baseline_t *barr; /* pointer to baseline-> stations mapping array */
   complex double *coh; /* output vector in complex form, (not used always) size 4*M*Nb */
   double *ddcoh; /* coherencies, rearranged for easy copying to GPU, also real,imag instead of complex */
-  char *ddbase; /* baseline to station maps, same as barr, assume no of stations < 127, if flagged set to -1 OR (sta1,sta2,flag) 3 values for each baseline */
+  short *ddbase; /* baseline to station maps, same as barr, assume no of stations < 32k, if flagged set to -1 OR (sta1,sta2,flag) 3 values for each baseline */
 } thread_data_coharr_t;
 
 /* structure for worker threads for type conversion */
@@ -250,7 +293,7 @@ typedef struct thread_data_count_ {
  int Nb; /* no of baselines this handle */
  int boff; /* baseline offset per thread */
 
- char *ddbase;
+ short *ddbase;
 
  int *bcount;
 
@@ -322,9 +365,9 @@ typedef struct me_data_t_ {
 
   /* following only used by GPU LM version */
   double *ddcoh; /* coherencies, rearranged for easy copying to GPU, also real,imag instead of complex */
-  char *ddbase; /* baseline to station maps, same as barr, size 2*Nbase*tilesz x 1, assume no of stations < 127, if flagged set to -1 */
+  short *ddbase; /* baseline to station maps, same as barr, size 2*Nbase*tilesz x 1, assume no of stations < 32k, if flagged set to -1 */
   /* following used only by LBFGS */
-  char *hbb; /*  baseline to station maps, same as ddbase size 2*Nbase*tilesz x 1, assume no of stations < 127, if flagged set to -1 */
+  short *hbb; /*  baseline to station maps, same as ddbase size 2*Nbase*tilesz x 1, assume no of stations < 32k, if flagged set to -1 */
   int *ptoclus; /* param no -> cluster mapping, size 2*M x 1 
       for each cluster : chunk size, start param index */
 
@@ -342,7 +385,7 @@ typedef struct me_data_t_ {
 typedef struct thread_gpu_data_t {
   int ThreadsPerBlock;
   int BlocksPerGrid;
-  int card; /* which gpu ? 0 or 1 */
+  int card; /* which gpu ? */
    
   int Nbase; /* no of baselines */
   int tilesz; /* tile size */
@@ -358,7 +401,7 @@ typedef struct thread_gpu_data_t {
   int g_start; /* at which point in g do we start calculation */
   int g_end; /* at which point in g do we end calculation */
 
-  char *hbb; /*  baseline to station maps, same as ddbase size 2*Nbase*tilesz x 1, assume no of stations < 127, if flagged set to -1 */
+  short *hbb; /*  baseline to station maps, same as ddbase size 2*Nbase*tilesz x 1, assume no of stations < 32k, if flagged set to -1 */
   int *ptoclus; /* param no -> cluster mapping, size 2*M x 1 
       for each cluster : chunk size, start param index */
 
@@ -411,7 +454,7 @@ typedef struct thread_data_vecnu_{
 typedef struct thread_data_onezero_ {
   int startbase; /* starting baseline */
   int endbase; /* ending baseline */
-  char *ddbase; /* baseline to station maps, (sta1,sta2,flag) */
+  short *ddbase; /* baseline to station maps, (sta1,sta2,flag) */
   float *x; /* data vector */
 } thread_data_onezero_t;
 
@@ -563,21 +606,21 @@ precalculate_coherencies(double *u, double *v, double *w, complex double *x, int
    ddbase: 2*Nbase x 1 (sta1,sta2) = -1 if flagged
 */
 extern int
-rearrange_coherencies(int Nbase, baseline_t *barr, complex double *coh, double *ddcoh, char *ddbase, int M, int Nt);
+rearrange_coherencies(int Nbase, baseline_t *barr, complex double *coh, double *ddcoh, short *ddbase, int M, int Nt);
 /* ddbase: 3*Nbase x 1 (sta1,sta2,flag) */
 extern int
-rearrange_coherencies2(int Nbase, baseline_t *barr, complex double *coh, double *ddcoh, char *ddbase, int M, int Nt);
+rearrange_coherencies2(int Nbase, baseline_t *barr, complex double *coh, double *ddcoh, short *ddbase, int M, int Nt);
 
 /* rearranges baselines for GPU use later */
 /* barr: 2*Nbase x 1
    ddbase: 2*Nbase x 1
 */
 extern int
-rearrange_baselines(int Nbase, baseline_t *barr, char *ddbase, int Nt);
+rearrange_baselines(int Nbase, baseline_t *barr, short *ddbase, int Nt);
 
 /* cont how many baselines contribute to each station */
 extern int
-count_baselines(int Nbase, int N, float *iw, char *ddbase, int Nt);
+count_baselines(int Nbase, int N, float *iw, short *ddbase, int Nt);
 
 /* initialize array b (size Nx1) to given value a */
 #ifdef USE_MIC
@@ -620,7 +663,7 @@ float_to_double(double *darr, float *farr,int n, int Nt);
    x: 8*Nbase (set to 0's and 1's)
 */
 extern int
-create_onezerovec(int Nbase, char *ddbase, float *x, int Nt);
+create_onezerovec(int Nbase, short *ddbase, float *x, int Nt);
 
 /* 
   find sum1=sum(|x|), and sum2=y^T |x|
@@ -870,6 +913,19 @@ __attribute__ ((target(MIC)))
 #endif
 extern void
 my_fcopy(int N, float *x, int Nx, float *y, int Ny);
+
+
+/* LAPACK eigen value expert routine, real symmetric  matrix */
+extern int
+my_dsyevx(char jobz, char range, char uplo, int N, double *A, int lda,
+  double vl, double vu, int il, int iu, double abstol, int M, double  *W,
+  double *Z, int ldz, double *WORK, int lwork, int *iwork, int *ifail);
+
+/* BLAS vector outer product
+   A= alpha x x^H + A
+*/
+extern void
+my_zher(char uplo, int N, double alpha, complex double *x, int incx, complex double *A, int lda);
 /****************************** lbfgs.c ****************************/
 /****************************** lbfgs_nocuda.c ****************************/
 /* LBFGS routines */
@@ -907,7 +963,6 @@ extern int
 lbfgs_fit_robust(
    void (*func)(double *p, double *hx, int m, int n, void *adata),
    double *p, double *x, int m, int n, int itmax, int lbfgs_m, int gpu_threads,
- int whiten, /* if >0 whiten data 1: NCP, 2... */
  void *adata);
 #ifdef HAVE_CUDA
 extern int
@@ -940,6 +995,8 @@ lbfgs_fit_robust_cuda(
   Nt: no. of threads
   ccid: which cluster to use as correction
   rho: MMSE robust parameter J+rho I inverted
+
+  phase_only: if >0, and if there is any correction done, use only phase of diagonal elements for correction 
 */
 extern int
 calculate_residuals(double *u,double *v,double *w,double *p,double *x,int N,int Nbase,int tilesz,baseline_t *barr, clus_source_t *carr, int M,double freq0,double fdelta,double tdelta,double dec0, int Nt, int ccid, double rho);
@@ -955,7 +1012,7 @@ calculate_residuals(double *u,double *v,double *w,double *p,double *x,int N,int 
   dec0: declination for time smearing
 */
 extern int
-calculate_residuals_multifreq(double *u,double *v,double *w,double *p,double *x,int N,int Nbase,int tilesz,baseline_t *barr, clus_source_t *carr, int M,double *freqs,int Nchan, double fdelta,double tdelta,double dec0, int Nt, int ccid, double rho);
+calculate_residuals_multifreq(double *u,double *v,double *w,double *p,double *x,int N,int Nbase,int tilesz,baseline_t *barr, clus_source_t *carr, int M,double *freqs,int Nchan, double fdelta,double tdelta,double dec0, int Nt, int ccid, double rho, int phase_only);
 
 /* 
   calculate visibilities for multiple channels, no solutions are used
@@ -969,7 +1026,7 @@ predict_visibilities_multifreq(double *u,double *v,double *w,double *x,int N,int
  also correct final data with solutions for cluster ccid, if valid
 */
 extern int
-predict_visibilities_multifreq_withsol(double *u,double *v,double *w,double *p,double *x,int *ignorelist,int N,int Nbase,int tilesz,baseline_t *barr, clus_source_t *carr, int M,double *freqs,int Nchan, double fdelta,double tdelta,double dec0,int Nt,int add_to_data, int ccid, double rho);
+predict_visibilities_multifreq_withsol(double *u,double *v,double *w,double *p,double *x,int *ignorelist,int N,int Nbase,int tilesz,baseline_t *barr, clus_source_t *carr, int M,double *freqs,int Nchan, double fdelta,double tdelta,double dec0,int Nt,int add_to_data, int ccid, double rho,int phase_only);
 /****************************** mderiv.cu ****************************/
 /* cuda driver for kernel */
 /* ThreadsPerBlock: keep <= 128
@@ -988,20 +1045,20 @@ predict_visibilities_multifreq_withsol(double *u,double *v,double *w,double *p,d
    grad: Nparamsx1 gradient values
 */
 extern void 
-cudakernel_lbfgs(int ThreadsPerBlock, int BlocksPerGrid, int N, int tilesz, int M, int Ns, int Nparam, int goff, double *x, double *coh, double *p, char *bb, int *ptoclus, double *grad);
+cudakernel_lbfgs(int ThreadsPerBlock, int BlocksPerGrid, int N, int tilesz, int M, int Ns, int Nparam, int goff, double *x, double *coh, double *p, short *bb, int *ptoclus, double *grad);
 /* x: data vector, not residual */
 extern void 
-cudakernel_lbfgs_r(int ThreadsPerBlock, int BlocksPerGrid, int N, int tilesz, int M, int Ns, int Nparam, int goff, double *x, double *coh, double *p, char *bb, int *ptoclus, double *grad);
+cudakernel_lbfgs_r(int ThreadsPerBlock, int BlocksPerGrid, int N, int tilesz, int M, int Ns, int Nparam, int goff, double *x, double *coh, double *p, short *bb, int *ptoclus, double *grad);
 extern void 
-cudakernel_lbfgs_r_robust(int ThreadsPerBlock, int BlocksPerGrid, int N, int tilesz, int M, int Ns, int Nparam, int goff, double *x, double *coh, double *p, char *bb, int *ptoclus, double *grad, double robust_nu);
+cudakernel_lbfgs_r_robust(int ThreadsPerBlock, int BlocksPerGrid, int N, int tilesz, int M, int Ns, int Nparam, int goff, double *x, double *coh, double *p, short *bb, int *ptoclus, double *grad, double robust_nu);
 
 
 /* cost function calculation, each GPU works with Nbase baselines out of Nbasetotal baselines 
  */
 extern double
-cudakernel_lbfgs_cost(int ThreadsPerBlock, int BlocksPerGrid, int Nbase, int boff, int M, int Ns, int Nbasetotal, double *x, double *coh, double *p, char *bb, int *ptoclus);
+cudakernel_lbfgs_cost(int ThreadsPerBlock, int BlocksPerGrid, int Nbase, int boff, int M, int Ns, int Nbasetotal, double *x, double *coh, double *p, short *bb, int *ptoclus);
 extern double
-cudakernel_lbfgs_cost_robust(int ThreadsPerBlock, int BlocksPerGrid, int Nbase, int boff, int M, int Ns, int Nbasetotal, double *x, double *coh, double *p, char *bb, int *ptoclus, double robust_nu);
+cudakernel_lbfgs_cost_robust(int ThreadsPerBlock, int BlocksPerGrid, int Nbase, int boff, int M, int Ns, int Nbasetotal, double *x, double *coh, double *p, short *bb, int *ptoclus, double robust_nu);
 
 
 /* divide by singular values  Dpd[]/Sd[]  for Sd[]> eps */
@@ -1019,12 +1076,12 @@ cudakernel_diagmu(int ThreadsPerBlock, int BlocksPerGrid, int M, double *A, doub
 /* cuda driver for calculating f() */
 /* p: params (Mx1): for all chunks, x: data (Nx1), other data : coh, baseline->stat mapping, Nbase, Mclusters, Nstations  */
 extern void
-cudakernel_func(int ThreadsPerBlock, int BlocksPerGrid, double *p, double *x, int M, int N, double *coh, char *bbh, int Nbase, int Mclus, int Nstations);
+cudakernel_func(int ThreadsPerBlock, int BlocksPerGrid, double *p, double *x, int M, int N, double *coh, short *bbh, int Nbase, int Mclus, int Nstations);
 
 /* cuda driver for calculating jacf() */
 /* p: params (Mx1): for all chunks, jac: jacobian (NxM), other data : coh, baseline->stat mapping, Nbase, Mclusters, Nstations */
 extern void
-cudakernel_jacf(int ThreadsPerBlock_row, int  ThreadsPerBlock_col, double *p, double *jac, int M, int N, double *coh, char *bbh, int Nbase, int Mclus, int Nstations);
+cudakernel_jacf(int ThreadsPerBlock_row, int  ThreadsPerBlock_col, double *p, double *jac, int M, int N, double *coh, short *bbh, int Nbase, int Mclus, int Nstations);
 
 
 /****************************** mderiv_fl.cu ****************************/
@@ -1041,21 +1098,21 @@ cudakernel_diagmu_fl(int ThreadsPerBlock, int BlocksPerGrid, int M, float *A, fl
 /* cuda driver for calculating f() */
 /* p: params (Mx1), x: data (Nx1), other data : coh, baseline->stat mapping, Nbase, Mclusters, Nstations */
 extern void
-cudakernel_func_fl(int ThreadsPerBlock, int BlocksPerGrid, float *p, float *x, int M, int N, float *coh, char *bbh, int Nbase, int Mclus, int Nstations);
+cudakernel_func_fl(int ThreadsPerBlock, int BlocksPerGrid, float *p, float *x, int M, int N, float *coh, short *bbh, int Nbase, int Mclus, int Nstations);
 /* cuda driver for calculating jacf() */
 /* p: params (Mx1), jac: jacobian (NxM), other data : coh, baseline->stat mapping, Nbase, Mclusters, Nstations */
 extern void
-cudakernel_jacf_fl(int ThreadsPerBlock_row, int  ThreadsPerBlock_col, float *p, float *jac, int M, int N, float *coh, char *bbh, int Nbase, int Mclus, int Nstations);
+cudakernel_jacf_fl(int ThreadsPerBlock_row, int  ThreadsPerBlock_col, float *p, float *jac, int M, int N, float *coh, short *bbh, int Nbase, int Mclus, int Nstations);
 /****************************** robust.cu ****************************/
 /* cuda driver for calculating wt \odot f() */
 /* p: params (Mx1): for all chunks, x: data (Nx1), other data : coh, baseline->stat mapping, Nbase, Mclusters, Nstations  */
 extern void
-cudakernel_func_wt(int ThreadsPerBlock, int BlocksPerGrid, double *p, double *x, int M, int N, double *coh, char *bbh, double *wt, int Nbase, int Mclus, int Nstations);
+cudakernel_func_wt(int ThreadsPerBlock, int BlocksPerGrid, double *p, double *x, int M, int N, double *coh, short *bbh, double *wt, int Nbase, int Mclus, int Nstations);
 
 /* cuda driver for calculating wt \odot jacf() */
 /* p: params (Mx1): for all chunks, jac: jacobian (NxM), other data : coh, baseline->stat mapping, Nbase, Mclusters, Nstations */
 extern void
-cudakernel_jacf_wt(int ThreadsPerBlock_row, int  ThreadsPerBlock_col, double *p, double *jac, int M, int N, double *coh, char *bbh, double *wt, int Nbase, int Mclus, int Nstations);
+cudakernel_jacf_wt(int ThreadsPerBlock_row, int  ThreadsPerBlock_col, double *p, double *jac, int M, int N, double *coh, short *bbh, double *wt, int Nbase, int Mclus, int Nstations);
 
 
 /* set initial weights to 1 by a cuda kernel */
@@ -1095,18 +1152,18 @@ cudakernel_evaluatenu(int ThreadsPerBlock, int BlocksPerGrid, int Nd, double qsu
    grad: Nparamsx1 gradient values
 */
 extern void 
-cudakernel_lbfgs_robust(int ThreadsPerBlock, int BlocksPerGrid, int N, int tilesz, int M, int Ns, int Nparam, int goff, double robust_nu, double *x, double *coh, double *p, char *bb, int *ptoclus, double *grad);
+cudakernel_lbfgs_robust(int ThreadsPerBlock, int BlocksPerGrid, int N, int tilesz, int M, int Ns, int Nparam, int goff, double robust_nu, double *x, double *coh, double *p, short *bb, int *ptoclus, double *grad);
 
 /****************************** robust_fl.cu ****************************/
 /* cuda driver for calculating wt \odot f() */
 /* p: params (Mx1): for all chunks, x: data (Nx1), other data : coh, baseline->stat mapping, Nbase, Mclusters, Nstations  */
 extern void
-cudakernel_func_wt_fl(int ThreadsPerBlock, int BlocksPerGrid, float *p, float *x, int M, int N, float *coh, char *bbh, float *wt, int Nbase, int Mclus, int Nstations);
+cudakernel_func_wt_fl(int ThreadsPerBlock, int BlocksPerGrid, float *p, float *x, int M, int N, float *coh, short *bbh, float *wt, int Nbase, int Mclus, int Nstations);
 
 /* cuda driver for calculating wt \odot jacf() */
 /* p: params (Mx1): for all chunks, jac: jacobian (NxM), other data : coh, baseline->stat mapping, Nbase, Mclusters, Nstations */
 extern void
-cudakernel_jacf_wt_fl(int ThreadsPerBlock_row, int  ThreadsPerBlock_col, float *p, float *jac, int M, int N, float *coh, char *bbh, float *wt, int Nbase, int Mclus, int Nstations);
+cudakernel_jacf_wt_fl(int ThreadsPerBlock_row, int  ThreadsPerBlock_col, float *p, float *jac, int M, int N, float *coh, short *bbh, float *wt, int Nbase, int Mclus, int Nstations);
 
 
 /* set initial weights to 1 by a cuda kernel */
@@ -1196,26 +1253,26 @@ clevmar_der_single(
                       * info[9]= # linear systems solved, i.e. # attempts for reducing error
                       */
 
-  int card,   /* device 0, 1 */
+  int card,   /* GPU to use */
   int linsolv, /* 0 Cholesky, 1 QR, 2 SVD */
   void *adata); /* pointer to possibly additional data  */
 
 /* function to set up a GPU, should be called only once */
 extern void
-attach_gpu_to_thread(int card, cublasHandle_t *cbhandle);
+attach_gpu_to_thread(int card, cublasHandle_t *cbhandle, cusolverDnHandle_t *solver_handle);
 extern void
-attach_gpu_to_thread1(int card, cublasHandle_t *cbhandle, double **WORK, int64_t work_size);
+attach_gpu_to_thread1(int card, cublasHandle_t *cbhandle, cusolverDnHandle_t *solver_handle, double **WORK, int64_t work_size);
 extern void
-attach_gpu_to_thread2(int card,  cublasHandle_t *cbhandle,float **WORK, int64_t work_size, int usecula);
+attach_gpu_to_thread2(int card,  cublasHandle_t *cbhandle, cusolverDnHandle_t *solver_handle, float **WORK, int64_t work_size, int usecula);
 
 
 /* function to detach a GPU from a thread */
 extern void
-detach_gpu_from_thread(cublasHandle_t cbhandle);
+detach_gpu_from_thread(cublasHandle_t cbhandle, cusolverDnHandle_t solver_handle);
 extern void
-detach_gpu_from_thread1(int card, cublasHandle_t cbhandle, double *WORK);
+detach_gpu_from_thread1(cublasHandle_t cbhandle, cusolverDnHandle_t solver_handle, double *WORK);
 extern void
-detach_gpu_from_thread2(int card,cublasHandle_t cbhandle,float *WORK, int usecula);
+detach_gpu_from_thread2(cublasHandle_t cbhandle, cusolverDnHandle_t solver_handle, float *WORK, int usecula);
 /* function to set memory to zero */
 extern void
 reset_gpu_memory(double *WORK, int64_t work_size);
@@ -1253,6 +1310,7 @@ clevmar_der_single_cuda(
                       */
 
   cublasHandle_t cbhandle, /* device handle */
+  cusolverDnHandle_t solver_handle, /* solver handle */
   double *gWORK, /* GPU allocated memory */
   int linsolv, /* 0 Cholesky, 1 QR, 2 SVD */
   int tileoff, /* tile offset when solving for many chunks */
@@ -1276,6 +1334,7 @@ mlm_der_single_cuda(
                       /* O: information regarding the minimization. Set to NULL if don't care
                       */
   cublasHandle_t cbhandle, /* device handle */
+  cusolverDnHandle_t solver_handle, /* solver handle */
   double *gWORK, /* GPU allocated memory */
   int linsolv, /* 0 Cholesky, 1 QR, 2 SVD */
   int tileoff, /* tile offset when solving for many chunks */
@@ -1309,6 +1368,7 @@ rlevmar_der_single_cuda(
                       */
 
   cublasHandle_t cbhandle, /* device handle */
+  cusolverDnHandle_t solver_handle, /* solver handle */
   double *gWORK, /* GPU allocated memory */
   int linsolv, /* 0 Cholesky, 1 QR, 2 SVD */
   int tileoff, /* tile offset when solving for many chunks */
@@ -1335,6 +1395,7 @@ rlevmar_der_single_cuda_fl(
                       */
 
   cublasHandle_t cbhandle, /* device handle */
+  cusolverDnHandle_t solver_handle, /* solver handle */
   float *gWORK, /* GPU allocated memory */
   int linsolv, /* 0 Cholesky, 1 QR, 2 SVD */
   int tileoff, /* tile offset when solving for many chunks */
@@ -1361,13 +1422,13 @@ osrlevmar_der_single_cuda_fl(
                       */
 
   cublasHandle_t cbhandle, /* device handle */
+  cusolverDnHandle_t solver_handle, /* solver handle */
   float *gWORK, /* GPU allocated memory */
   int linsolv, /* 0 Cholesky, 1 QR, 2 SVD */
   int tileoff, /* tile offset when solving for many chunks */
   int ntiles, /* total tile (data) size being solved for */
   double robust_nulow, double robust_nuhigh, /* robust nu range */
   int randomize, /* if >0 randomize */
-  int whiten, /* if >0 whiten data 1: NCP, 2... */
   void *adata);
 #endif /* HAVE_CUDA */
 
@@ -1394,7 +1455,6 @@ rlevmar_der_single_nocuda(
   int linsolv, /* 0 Cholesky, 1 QR, 2 SVD */
   int Nt, /* no of threads */
   double robust_nulow, double robust_nuhigh, /* robust nu range */
-  int whiten, /* if >0 whiten data 1: NCP, 2... */
   void *adata);
 
 /* robust LM, OS acceleration */
@@ -1434,7 +1494,6 @@ osrlevmar_der_single_nocuda(
   int Nt, /* no of threads */
   double robust_nulow, double robust_nuhigh, /* robust nu range */
   int randomize, /* if >0 randomize */
-  int whiten, /* if >0 whiten data 1: NCP, 2... */
   void *adata);
 
 /****************************** updatenu.c ****************************/
@@ -1465,14 +1524,16 @@ __attribute__ ((target(MIC)))
 extern double
 update_w_and_nu(double nu0, double *w, double *ed, int N, int Nt,  double nulow, double nuhigh);
 
-/* update weights array wt by multiplying it with the inverse density function
+/* 
+  taper data by weighting based on uv distance (for short baselines)
+  for example: use weights as the inverse density function
   1/( 1+f(u,v) ) 
  as u,v->inf, f(u,v) -> 0 so long baselines are not affected 
- wt : Nbase*8 x 1
+ x: Nbase*8 x 1 (input,output) data
  u,v : Nbase x 1
  note: u = u/c, v=v/c here, so need freq to convert to wavelengths */
 extern void
-add_whitening_weights(int Nbase, double *wt, double *u, double *v, double freq0, int Nt);
+whiten_data(int Nbase, double *x, double *u, double *v, double freq0, int Nt);
 /****************************** clmfit_nocuda.c ****************************/
 /* LM with LAPACK */
 /** keep interface almost the same as in levmar **/
@@ -1592,6 +1653,7 @@ oslevmar_der_single_cuda(
                       */
 
   cublasHandle_t cbhandle, /* device handle */
+  cusolverDnHandle_t solver_handle, /* solver handle */
   double *gWORK, /* GPU allocated memory */
   int linsolv, /* 0 Cholesky, 1 QR, 2 SVD */
   int tileoff, /* tile offset when solving for many chunks */
@@ -1633,6 +1695,7 @@ clevmar_der_single_cuda_fl(
                       */
 
   cublasHandle_t cbhandle, /* device handle */
+  cusolverDnHandle_t solver_handle, /* solver handle */
   float *gWORK, /* GPU allocated memory */
   int linsolv, /* 0 Cholesky, 1 QR, 2 SVD */
   int tileoff, /* tile offset when solving for many chunks */
@@ -1667,6 +1730,7 @@ oslevmar_der_single_cuda_fl(
                       */
 
   cublasHandle_t cbhandle, /* device handle */
+  cusolverDnHandle_t solver_handle, /* solver handle */
   float *gWORK, /* GPU allocated memory */
   int linsolv, /* 0 Cholesky, 1 QR, 2 SVD */
   int tileoff, /* tile offset when solving for many chunks */
@@ -1820,31 +1884,31 @@ rtr_solve_nocuda_robust_admm(
 #ifdef HAVE_CUDA
 /****************************** manifold_fl.cu ****************************/
 extern float 
-cudakernel_fns_f(int ThreadsPerBlock, int BlocksPerGrid, int N, int M, cuFloatComplex *x, float *y, float *coh, char *bbh,float *gWORK);
+cudakernel_fns_f(int ThreadsPerBlock, int BlocksPerGrid, int N, int M, cuFloatComplex *x, float *y, float *coh, short *bbh);
 extern void
-cudakernel_fns_fgradflat(int ThreadsPerBlock, int BlocksPerGrid, int N, int M, cuFloatComplex *x, cuFloatComplex *eta, float *y, float *coh, char *bbh, float *gWORK);
+cudakernel_fns_fgradflat(int ThreadsPerBlock, int BlocksPerGrid, int N, int M, cuFloatComplex *x, cuFloatComplex *eta, float *y, float *coh, short *bbh);
 extern void
-cudakernel_fns_fhessflat(int ThreadsPerBlock, int BlocksPerGrid, int N, int M, cuFloatComplex *x, cuFloatComplex *eta, cuFloatComplex *fhess, float *y, float *coh, char *bbh, float *gWORK);
+cudakernel_fns_fhessflat(int ThreadsPerBlock, int BlocksPerGrid, int N, int M, cuFloatComplex *x, cuFloatComplex *eta, cuFloatComplex *fhess, float *y, float *coh, short *bbh);
 extern void
 cudakernel_fns_fscale(int N, cuFloatComplex *eta, float *iw);
 extern float 
-cudakernel_fns_f_robust(int ThreadsPerBlock, int BlocksPerGrid, int N, int M, cuFloatComplex *x, float *y, float *coh, char *bbh,  float *wtd, float *gWORK);
+cudakernel_fns_f_robust(int ThreadsPerBlock, int BlocksPerGrid, int N, int M, cuFloatComplex *x, float *y, float *coh, short *bbh,  float *wtd);
 extern void
-cudakernel_fns_fgradflat_robust(int ThreadsPerBlock, int BlocksPerGrid, int N, int M, cuFloatComplex *x, cuFloatComplex *eta, float *y, float *coh, char *bbh, float *wtd, cuFloatComplex *Ai, cublasHandle_t cbhandle, float *gWORK);
+cudakernel_fns_fgradflat_robust(int ThreadsPerBlock, int BlocksPerGrid, int N, int M, cuFloatComplex *x, cuFloatComplex *eta, float *y, float *coh, short *bbh, float *wtd, cuFloatComplex *Ai, cublasHandle_t cbhandle, cusolverDnHandle_t solver_handle);
 extern void
-cudakernel_fns_fgradflat_robust1(int ThreadsPerBlock, int BlocksPerGrid, int N, int M, cuFloatComplex *x, cuFloatComplex *eta, float *y, float *coh, char *bbh, float *wtd, float *gWORK);
+cudakernel_fns_fgradflat_robust1(int ThreadsPerBlock, int BlocksPerGrid, int N, int M, cuFloatComplex *x, cuFloatComplex *eta, float *y, float *coh, short *bbh, float *wtd);
 extern void
-cudakernel_fns_fgradflat_robust_admm(int ThreadsPerBlock, int BlocksPerGrid, int N, int M, cuFloatComplex *x, cuFloatComplex *eta, float *y, float *coh, char *bbh, float *wtd, cublasHandle_t cbhandle, float *gWORK);
+cudakernel_fns_fgradflat_robust_admm(int ThreadsPerBlock, int BlocksPerGrid, int N, int M, cuFloatComplex *x, cuFloatComplex *eta, float *y, float *coh, short *bbh, float *wtd, cublasHandle_t cbhandle, cusolverDnHandle_t solver_handle);
 extern void
-cudakernel_fns_fhessflat_robust1(int ThreadsPerBlock, int BlocksPerGrid, int N, int M, cuFloatComplex *x, cuFloatComplex *eta, cuFloatComplex *fhess, float *y, float *coh, char *bbh, float *wtd, float *gWORK);
+cudakernel_fns_fhessflat_robust1(int ThreadsPerBlock, int BlocksPerGrid, int N, int M, cuFloatComplex *x, cuFloatComplex *eta, cuFloatComplex *fhess, float *y, float *coh, short *bbh, float *wtd);
 extern void
-cudakernel_fns_fhessflat_robust(int ThreadsPerBlock, int BlocksPerGrid, int N, int M, cuFloatComplex *x, cuFloatComplex *eta, cuFloatComplex *fhess, float *y, float *coh, char *bbh, float *wtd, cuFloatComplex *Ai, cublasHandle_t cbhandle, float *gWORK);
+cudakernel_fns_fhessflat_robust(int ThreadsPerBlock, int BlocksPerGrid, int N, int M, cuFloatComplex *x, cuFloatComplex *eta, cuFloatComplex *fhess, float *y, float *coh, short *bbh, float *wtd, cuFloatComplex *Ai, cublasHandle_t cbhandle, cusolverDnHandle_t solver_handle);
 extern void
-cudakernel_fns_fhessflat_robust_admm(int ThreadsPerBlock, int BlocksPerGrid, int N, int M, cuFloatComplex *x, cuFloatComplex *eta, cuFloatComplex *fhess, float *y, float *coh, char *bbh, float *wtd, cublasHandle_t cbhandle, float *gWORK);
+cudakernel_fns_fhessflat_robust_admm(int ThreadsPerBlock, int BlocksPerGrid, int N, int M, cuFloatComplex *x, cuFloatComplex *eta, cuFloatComplex *fhess, float *y, float *coh, short *bbh, float *wtd, cublasHandle_t cbhandle, cusolverDnHandle_t solver_handle);
 extern void
-cudakernel_fns_fupdate_weights(int ThreadsPerBlock, int BlocksPerGrid, int N, int M, cuFloatComplex *x, float *y, float *coh, char *bbh, float *wtd, float nu0);
+cudakernel_fns_fupdate_weights(int ThreadsPerBlock, int BlocksPerGrid, int N, int M, cuFloatComplex *x, float *y, float *coh, short *bbh, float *wtd, float nu0);
 extern void
-cudakernel_fns_fupdate_weights_q(int ThreadsPerBlock, int BlocksPerGrid, int N, int M, cuFloatComplex *x, float *y, float *coh, char *bbh, float *wtd, float *qd, float nu0);
+cudakernel_fns_fupdate_weights_q(int ThreadsPerBlock, int BlocksPerGrid, int N, int M, cuFloatComplex *x, float *y, float *coh, short *bbh, float *wtd, float *qd, float nu0);
 /****************************** rtr_solve_cuda.c ****************************/
 extern int
 rtr_solve_cuda_fl(
@@ -1858,18 +1922,18 @@ rtr_solve_cuda_fl(
   double *info, /* initial and final residuals */
 
   cublasHandle_t cbhandle, /* device handle */
-  float *gWORK, /* GPU allocated memory */
+  cusolverDnHandle_t solver_handle, /* solver handle */
   int tileoff, /* tile offset when solving for many chunks */
   int ntiles, /* total tile (data) size being solved for */
   me_data_t *adata); /* pointer to possibly additional data  */
 
 
 extern void
-cudakernel_fns_R(int N, cuFloatComplex *x, cuFloatComplex *r, cuFloatComplex *rnew, cublasHandle_t cbhandle);
+cudakernel_fns_R(int N, cuFloatComplex *x, cuFloatComplex *r, cuFloatComplex *rnew, cublasHandle_t cbhandle, cusolverDnHandle_t solver_handle);
 extern float
-cudakernel_fns_g(int N,cuFloatComplex *x,cuFloatComplex *eta, cuFloatComplex *gamma,cublasHandle_t cbhandle);
+cudakernel_fns_g(int N,cuFloatComplex *x,cuFloatComplex *eta, cuFloatComplex *gamma,cublasHandle_t cbhandle, cusolverDnHandle_t solver_handle);
 extern void
-cudakernel_fns_proj(int N, cuFloatComplex *x, cuFloatComplex *z, cuFloatComplex *rnew, cublasHandle_t cbhandle);
+cudakernel_fns_proj(int N, cuFloatComplex *x, cuFloatComplex *z, cuFloatComplex *rnew, cublasHandle_t cbhandle, cusolverDnHandle_t solver_handle);
 /****************************** rtr_solve_robust_cuda.c ****************************/
 extern int
 rtr_solve_cuda_robust_fl(
@@ -1884,7 +1948,7 @@ rtr_solve_cuda_robust_fl(
   double *info, /* initial and final residuals */
 
   cublasHandle_t cbhandle, /* device handle */
-  float *gWORK, /* GPU allocated memory */
+  cusolverDnHandle_t solver_handle, /* solver handle */
   int tileoff, /* tile offset when solving for many chunks */
   int ntiles, /* total tile (data) size being solved for */
   me_data_t *adata);
@@ -1901,7 +1965,7 @@ nsd_solve_cuda_robust_fl(
   double robust_nulow, double robust_nuhigh, /* robust nu range */
   double *info, /* initial and final residuals */
   cublasHandle_t cbhandle, /* device handle */
-  float *gWORK, /* GPU allocated memory */
+  cusolverDnHandle_t solver_handle, /* solver handle */
   int tileoff, /* tile offset when solving for many chunks */
   int ntiles, /* total tile (data) size being solved for */
   me_data_t *adata);
@@ -1923,7 +1987,7 @@ rtr_solve_cuda_robust_admm_fl(
   double *info, /* initial and final residuals */
 
   cublasHandle_t cbhandle, /* device handle */
-  float *gWORK, /* GPU allocated memory */
+  cusolverDnHandle_t solver_handle, /* solver handle */
   int tileoff, /* tile offset when solving for many chunks */
   int ntiles, /* total tile (data) size being solved for */
   me_data_t *adata);
@@ -1943,7 +2007,7 @@ nsd_solve_cuda_robust_admm_fl(
   double robust_nulow, double robust_nuhigh, /* robust nu range */
   double *info, /* initial and final residuals */
   cublasHandle_t cbhandle, /* device handle */
-  float *gWORK, /* GPU allocated memory */
+  cusolverDnHandle_t solver_handle, /* solver handle */
   int tileoff, /* tile offset when solving for many chunks */
   int ntiles, /* total tile (data) size being solved for */
   me_data_t *adata);
@@ -2015,7 +2079,6 @@ random_permutation(int n, int weighted_iter, double *w);
   nulow,nuhigh: robust nu search range
   randomize: if >0, randomize cluster selection in SAGE and OS subset selection
 
-  whiten : if >0 whiten data 1: NCP, 2... 
   mean_nu: output mean value of nu
   res_0,res_1: initial and final residuals (output)
   return val=0 if final residual< initial residual
@@ -2026,7 +2089,7 @@ __attribute__ ((target(MIC)))
 #endif
 extern int
 sagefit_visibilities(double *u, double *v, double *w, double *x, int N, 
-   int Nbase, int tilesz,  baseline_t *barr, clus_source_t *carr, complex double *coh, int M, int Mt, double freq0, double fdelta, double *pp, double uvmin, int Nt,int max_emiter, int max_iter, int max_lbfgs, int lbfgs_m, int gpu_threads, int linsolv, int solver_mode, double nulow, double nuhigh, int randomize, int whiten, double *mean_nu, double *res_0, double *res_1); 
+   int Nbase, int tilesz,  baseline_t *barr, clus_source_t *carr, complex double *coh, int M, int Mt, double freq0, double fdelta, double *pp, double uvmin, int Nt,int max_emiter, int max_iter, int max_lbfgs, int lbfgs_m, int gpu_threads, int linsolv, int solver_mode, double nulow, double nuhigh, int randomize, double *mean_nu, double *res_0, double *res_1); 
 
 /* same as above, but uses 2 GPUS in the LM stage */
 extern int
@@ -2065,11 +2128,20 @@ extern int
 bfgsfit_visibilities_gpu(double *u, double *v, double *w, double *x, int N, 
    int Nbase, int tilesz,  baseline_t *barr,  clus_source_t *carr, complex double *coh, int M, int Mt, double freq0, double fdelta, double *pp, double uvmin, int Nt, int max_lbfgs, int lbfgs_m, int gpu_threads, int solver_mode,  double mean_nu, double *res_0, double *res_1); 
 
+
+
+/* struct to keep histoty of last used GPU */
+typedef struct taskhist_{
+  int prev; /* last used GPU (by any thread) */
+  pthread_mutex_t prev_mutex; /* mutex to lock changing prev value */
+  unsigned int rseed; /* random seed used in rand_r() */
+} taskhist;
+
 /* structs for thread pool (reusable), using a barrier */
 /* slave thread data struct */
 typedef struct slave_tdata_ {
   struct pipeline_ *pline; /* forward declaration */
-  int tid; /* 0,1 used as the GPU card */
+  int tid; /* 0,1 for 2 GPUs */
 } slave_tdata;
 
 /* pipeline struct */
@@ -2083,6 +2155,7 @@ typedef struct pipeline_ {
   th_barrier gate1;
   th_barrier gate2;
   pthread_attr_t attr;
+  taskhist *thst;
 } th_pipeline;
 
 /* pipeline state values */
@@ -2149,6 +2222,7 @@ typedef struct gb_data_ {
 
   /* GPU related info */
   cublasHandle_t cbhandle[2]; /* CUBLAS handles */
+  cusolverDnHandle_t solver_handle[2]; /* solver handle */
   double *gWORK[2]; /* GPU buffers */
   int64_t data_size; /* size of buffer (bytes) */
 
@@ -2175,6 +2249,7 @@ typedef struct gb_data_fl_ {
 
   /* GPU related info */
   cublasHandle_t cbhandle[2]; /* CUBLAS handles */
+  cusolverDnHandle_t solver_handle[2]; /* solver handle */
   float *gWORK[2]; /* GPU buffers */
   int64_t data_size; /* size of buffer (bytes) */
 
@@ -2204,6 +2279,7 @@ typedef struct gb_data_admm_fl_ {
 
   /* GPU related info */
   cublasHandle_t cbhandle[2]; /* CUBLAS handles */
+  cusolverDnHandle_t solver_handle[2]; /* solver handle */
   float *gWORK[2]; /* GPU buffers */
   int64_t data_size; /* size of buffer (bytes) */
 
@@ -2248,7 +2324,7 @@ calculate_diagnostics(double *u,double *v,double *w,double *p,double *x,int N,in
 /* p: params (Mx1), jac: jacobian (NxM), other data : coh, baseline->stat mapping, Nbase, Mclusters, Nstations */
 /* flags are always ignored */
 extern void
-cudakernel_jacf_fl2(float *p, float *jac, int M, int N, float *coh, char *bbh, int Nbase, int Mclus, int Nstations);
+cudakernel_jacf_fl2(float *p, float *jac, int M, int N, float *coh, short *bbh, int Nbase, int Mclus, int Nstations);
 
 /* invert sqrt(singular values)  Sd[]=1/sqrt(Sd[])  for Sd[]> eps */
 extern void
@@ -2299,6 +2375,13 @@ extern int
 project_procrustes_block(int N,complex double *J,complex double *J1);
 
 
+/* Extract only the phase of diagonal entries from solutions 
+   p: 8Nx1 solutions, orders as [(real,imag)vec(J1),(real,imag)vec(J2),...]
+   pout: 8Nx1 phases (exp(j*phase)) of solutions, after joint diagonalization of p
+   N: no. of 2x2 Jones matrices in p, having common unitary ambiguity
+   niter: no of iterations for Jacobi rotation */
+extern int
+extract_phases(double *p, double *pout, int N, int niter);
 /****************************** consensus_poly.c ****************************/
 /* build matrix with polynomial terms
   B : Npoly x Nf, each row is one basis function
@@ -2307,7 +2390,8 @@ project_procrustes_block(int N,complex double *J,complex double *J1);
   freqs: Nfx1 array freqs
   freq0: reference freq
   type : 0 for [1 ((f-fo)/fo) ((f-fo)/fo)^2 ...] basis functions
-  type : 1 : normalize each row such that norm is 1
+     1 : same as type 0, normalize each row such that norm is 1
+     2 : Bernstein poly \sum N_C_r x^r (1-x)^r where x in [0,1] : use min,max values of freq to normalize
 */
 extern int
 setup_polynomials(double *B, int Npoly, int Nf, double *freqs, double freq0, int type);
@@ -2317,9 +2401,11 @@ setup_polynomials(double *B, int Npoly, int Nf, double *freqs, double freq0, int
   Bi: Npoly x Npoly pseudo inverse of sum( B(:,col) x B(:,col)' )
   Npoly : total basis functions
   Nf: frequencies
+  fratio: Nfx1 array of weighing factors depending on the flagged data of each freq
+  Sum taken is a weighted sum, using weights in fratio
 */
 extern int
-find_prod_inverse(double *B, double *Bi, int Npoly, int Nf);
+find_prod_inverse(double *B, double *Bi, int Npoly, int Nf, double *fratio);
 
 /* update Z
    Z: 8NxNpoly x M double array (real and complex need to be updated separate)
@@ -2358,6 +2444,197 @@ sagefit_visibilities_admm_dual_pt_flt(double *u, double *v, double *w, double *x
    int Nbase, int tilesz,  baseline_t *barr,  clus_source_t *carr, complex double *coh, int M, int Mt, double freq0, double fdelta, double *pp, double *Y, double *BZ, double uvmin, int Nt, int max_emiter, int max_iter, int max_lbfgs, int lbfgs_m, int gpu_threads, int linsolv,int solver_mode,  double nulow, double nuhigh, int randomize, double *admm_rho, double *mean_nu, double *res_0, double *res_1);
 #endif
 
+
+/****************************** load_balance.c ****************************/
+/* select a GPU from 0,1..,max_gpu
+   in such a way to allow load balancing */
+/* also keep a global variableto ensure same GPU is 
+   not assigned to one process */
+#ifdef HAVE_CUDA
+extern void
+init_task_hist(taskhist *th);
+extern void
+destroy_task_hist(taskhist *th);
+
+extern int
+select_work_gpu(int max_gpu, taskhist *th);
+#endif
+/****************************** OpenBLAS ************************************/
+/* prototype declaration */
+extern void
+openblas_set_num_threads(int num_threads);
+
+/****************************** transforms.c ****************************/
+#ifndef ASEC2RAD
+#define ASEC2RAD 4.848136811095359935899141e-6
+#endif
+
+/* 
+ convert xyz ITRF 2000 coords (m) to
+ long,lat, (rad) height (m)
+ References:
+*/
+extern int
+xyz2llh(double *x, double *y, double *z, double *longitude, double *latitude, double *height, int N);
+
+/* convert ra,dec to az,el
+   ra,dec: radians
+   longitude,latitude: rad,rad 
+   time_jd: JD days
+
+   az,el: output  rad,rad
+
+References: Darin C. Koblick MATLAB code, based on
+  % Fundamentals of Astrodynamics and Applications 
+ % D. Vallado, Second Edition
+ % Example 3-5. Finding Local Siderial Time (pg. 192) 
+ % Algorithm 28: AzElToRaDec (pg. 259)
+*/
+extern int
+radec2azel(double ra, double dec, double longitude, double latitude, double time_jd, double *az, double *el);
+
+/* convert time to Greenwitch Mean Sideral Angle (deg)
+   time_jd : JD days
+   thetaGMST : GMST angle (deg)
+*/
+extern int
+jd2gmst(double time_jd, double *thetaGMST); 
+
+
+/* convert ra,dec to az,el
+   ra,dec: radians
+   longitude,latitude: rad,rad 
+   thetaGMST : GMST angle (deg)
+
+   az,el: output  rad,rad
+
+*/
+extern int
+radec2azel_gmst(double ra, double dec, double longitude, double latitude, double thetaGMST, double *az, double *el); 
+
+
+
+/* given the epoch jd_tdb2, 
+ calculate rotation matrix params needed to precess from J2000 
+   NOVAS (Naval Observatory Vector Astronomy Software)
+   PURPOSE:
+      Precesses equatorial rectangular coordinates from one epoch to
+      another.  One of the two epochs must be J2000.0.  The coordinates
+      are referred to the mean dynamical equator and equinox of the two
+      respective epochs.
+
+   REFERENCES:
+      Explanatory Supplement To The Astronomical Almanac, pp. 103-104.
+      Capitaine, N. et al. (2003), Astronomy And Astrophysics 412,
+         pp. 567-586.
+      Hilton, J. L. et al. (2006), IAU WG report, Celest. Mech., 94,
+         pp. 351-367.
+
+*/
+extern int
+get_precession_params(double jd_tdb2, double Tr[9]);
+/* precess  ra0,dec0 at J2000
+   to ra,dec at epoch given by transform Tr
+ using NOVAS library */
+extern int
+precession(double ra0, double dec0, double Tr[9], double *ra, double *dec);
+
+/****************************** stationbeam.c ****************************/
+/* 
+  ra,dec: source direction (rad)
+  ra0,dec0: beam center (rad)
+  f: frequency (Hz)
+  f0: beam forming frequency (Hz)
+  
+  longitude,latitude : Nx1 array of station positions (rad,rad)
+  time_jd: JD (day) time
+  Nelem : Nx1 array, no. of elements used in each station
+  x,y,z: Nx1 pointer arrays to station positions, each station has Nelem[]x1 arrays
+
+  beamgain: Nx1 array of station beam gain along the source direction
+*/ 
+extern int
+arraybeam(double ra, double dec, double ra0, double dec0, double f, double f0, int N, double *longitude, double *latitude, double time_jd, int *Nelem, double **x, double **y, double **z, double *beamgain);
+
+
+/****************************** predict_withbeam.c ****************************/
+/* precalculate cluster coherencies
+  u,v,w: u,v,w coordinates (wavelengths) size Nbase*tilesz x 1 
+  u,v,w are ordered with baselines, timeslots
+  x: coherencies size Nbase*4*Mx 1
+   ordered by XX(re,im),XY(re,im),YX(re,im), YY(re,im), baseline, timeslots
+  N: no of stations
+  Nbase: total no of baselines (including more than one tile or timeslot)
+  barr: baseline to station map, size Nbase*tilesz x 1
+  carr: sky model/cluster info size Mx1 of clusters
+  M: no of clusters
+  freq0: frequency
+  fdelta: bandwidth for freq smearing
+  tdelta: integration time for time smearing
+  dec0: declination for time smearing
+  uvmin: baseline length sqrt(u^2+v^2) below which not to include in solution
+  uvmax: baseline length higher than this not included in solution
+
+  Station beam specific parameters
+  ph_ra0,ph_dec0: beam pointing rad,rad
+  ph_freq0: beam reference freq
+  longitude,latitude: Nx1 arrays (rad,rad) station locations
+  time_utc: JD (day) : tilesz x 1 
+  tilesz: how many tiles: == unique time_utc
+  Nelem: Nx1 array, size of stations (elements)
+  xx,yy,zz: Nx1 arrays of station element locations arrays xx[],yy[],zz[]
+  Nt: no of threads
+
+  NOTE: prediction is done for all baselines, even flagged ones
+  and flags are set to 2 for baselines lower than uvcut
+*/
+
+extern int
+precalculate_coherencies_withbeam(double *u, double *v, double *w, complex double *x, int N,
+   int Nbase, baseline_t *barr,  clus_source_t *carr, int M, double freq0, double fdelta, double tdelta, double dec0, double uvmin, double uvmax, 
+ double ph_ra0, double ph_dec0, double ph_freq0, double *longitude, double *latitude, double *time_utc, int tileze, int *Nelem, double **xx, double **yy, double **zz, int Nt);
+
+
+extern int
+predict_visibilities_multifreq_withbeam(double *u,double *v,double *w,double *x,int N,int Nbase,int tilesz,baseline_t *barr, clus_source_t *carr, int M,double *freqs,int Nchan, double fdelta,double tdelta, double dec0,
+ double ph_ra0, double ph_dec0, double ph_freq0, double *longitude, double *latitude, double *time_utc,int *Nelem, double **xx, double **yy, double **zz, int Nt, int add_to_data);
+
+extern int
+calculate_residuals_multifreq_withbeam(double *u,double *v,double *w,double *p,double *x,int N,int Nbase,int tilesz,baseline_t *barr, clus_source_t *carr, int M,double *freqs,int Nchan, double fdelta,double tdelta,double dec0,
+double ph_ra0, double ph_dec0, double ph_freq0, double *longitude, double *latitude, double *time_utc,int *Nelem, double **xx, double **yy, double **zz, int Nt, int ccid, double rho, int phase_only);
+
+
+/* change epoch of soure ra,dec from J2000 to JAPP */
+/* also the beam pointing ra_beam,dec_beam */
+extern int
+precess_source_locations(double jd_tdb, clus_source_t *carr, int M, double *ra_beam, double *dec_beam, int Nt);
+
+/****************************** predict_withbeam_gpu.c ****************************/
+/* if dobeam==0, beam calculation is off */
+extern int
+precalculate_coherencies_withbeam_gpu(double *u, double *v, double *w, complex double *x, int N,
+   int Nbase, baseline_t *barr,  clus_source_t *carr, int M, double freq0, double fdelta, double tdelta, double dec0, double uvmin, double uvmax, 
+ double ph_ra0, double ph_dec0, double ph_freq0, double *longitude, double *latitude, double *time_utc, int tileze, int *Nelem, double **xx, double **yy, double **zz, int dobeam, int Nt);
+
+extern int
+predict_visibilities_multifreq_withbeam_gpu(double *u,double *v,double *w,double *x,int N,int Nbase,int tilesz,baseline_t *barr, clus_source_t *carr, int M,double *freqs,int Nchan, double fdelta,double tdelta, double dec0,
+ double ph_ra0, double ph_dec0, double ph_freq0, double *longitude, double *latitude, double *time_utc,int *Nelem, double **xx, double **yy, double **zz, int dobeam, int Nt, int add_to_data);
+
+
+
+/****************************** predict_model.cu ****************************/
+extern void
+cudakernel_array_beam(int N, int T, int K, int F, float *freqs, float *longitude, float *latitude,
+ double *time_utc, int *Nelem, float **xx, float **yy, float **zz, float *ra, float *dec, float ph_ra0, float  ph_dec0, float ph_freq0, float *beam);
+
+
+extern void
+cudakernel_coherencies(int B, int N, int T, int K, int F, float *u, float *v, float *w,baseline_t *barr, float *freqs, float *beam, float *ll, float *mm, float *nn, float *sI,
+  unsigned char *stype, float *sI0, float *f0, float *spec_idx, float *spec_idx1, float *spec_idx2, int **exs, float deltaf, float deltat, float dec0, float *coh,int dobeam);
+
+
+extern void
+cudakernel_convert_time(int T, double *time_utc);
 #ifdef __cplusplus
      } /* extern "C" */
 #endif

@@ -39,6 +39,10 @@
 #ifndef TAG_RHO
 #define TAG_RHO 105
 #endif
+#ifndef TAG_FRATIO
+#define TAG_FRATIO 106
+#endif
+
 
 
 /* control flags */
@@ -54,6 +58,10 @@
 #ifndef CTRL_RESET
 #define CTRL_RESET 93
 #endif
+#ifndef CTRL_SKIP
+#define CTRL_SKIP 94
+#endif
+
 
 
 /*** structure to store info in the master, similar to IOData */

@@ -31,36 +31,26 @@
 //#define DEBUG
 /* helper functions for diagnostics */
 static void
-checkStatus(culaStatus status, char *file, int line)
-{
-    char buf[80];
-    if(!status)
-        return;
-    culaGetErrorInfoString(status, culaGetErrorInfo(), buf, sizeof(buf));
-    fprintf(stderr,"GPU (CULA): %s %s %d\n", buf,file,line);
-    culaShutdown(); //FIXME: in order to avoid spurious errors in CULA, disable exit in MPI mode
-    exit(EXIT_FAILURE);
-}
-
-
-static void
 checkCudaError(cudaError_t err, char *file, int line)
 {
+#ifdef CUDA_DEBUG
     if(!err)
         return;
     fprintf(stderr,"GPU (CUDA): %s %s %d\n", cudaGetErrorString(err),file,line);
-    culaShutdown();
     exit(EXIT_FAILURE);
+#endif
 }
 
 
 static void
 checkCublasError(cublasStatus_t cbstatus, char *file, int line)
 {
+#ifdef CUDA_DEBUG
    if (cbstatus!=CUBLAS_STATUS_SUCCESS) {
     fprintf(stderr,"%s: %d: CUBLAS failure\n",file,line);
     exit(EXIT_FAILURE);  
    }
+#endif
 }
 
 
@@ -105,9 +95,9 @@ clevmar_der_single(
   /* general note: all device variables end with a 'd' */
   int stop=0;
   cudaError_t err;
-  culaStatus status;
   cublasStatus_t cbstatus;
   cublasHandle_t cbhandle;
+  cusolverDnHandle_t solver_handle;
 
   int nu=2,nu2;
   double p_L2, Dp_L2=DBL_MAX, dF, dL, p_eL2, jacTe_inf=0.0, pDp_eL2, init_p_eL2;
@@ -155,25 +145,12 @@ clevmar_der_single(
   }
 
   /* calculate no of cuda threads and blocks */
-  int ThreadsPerBlock=128;
+  int ThreadsPerBlock=DEFAULT_TH_PER_BK;
   int BlocksPerGrid=(M+ThreadsPerBlock-1)/ThreadsPerBlock;
 
-  status=culaSelectDevice(card);
-  checkStatus(status,__FILE__,__LINE__);
-  status=culaInitialize();
-  checkStatus(status,__FILE__,__LINE__);
-
-  int ncard;
-  status=culaGetExecutingDevice(&ncard);
-  if (ncard!=card) {
-    fprintf(stderr,"%s: %d: asked card %d and got %d\n",__FILE__,__LINE__,card,ncard);
-    exit(1);
-  }
-  checkStatus(status,__FILE__,__LINE__);
-
-/*  if ( cudaSetDevice(ncard) != cudaSuccess) {
-    fprintf(stderr,"%s: %d: cannot set CUDA device\n",__FILE__,__LINE__);
-  } */
+  err=cudaSetDevice(card);
+  checkCudaError(err,__FILE__,__LINE__);
+  cusolverDnCreate(&solver_handle);
 
   cbstatus=cublasCreate(&cbhandle);
   if (cbstatus!=CUBLAS_STATUS_SUCCESS) {
@@ -223,10 +200,22 @@ clevmar_der_single(
 
 
   /* memory allocation: different solvers */
+  int work_size=0;
+  int *devInfo; 
+  int devInfo_h=0;
+  err=cudaMalloc((void**)&devInfo, sizeof(int));
+  checkCudaError(err,__FILE__,__LINE__);
+  double *work;
+  double *rwork;
   if (solve_axb==0) {
-
+    cusolverDnDpotrf_bufferSize(solver_handle, CUBLAS_FILL_MODE_UPPER, M, jacTjacd, M, &work_size);  
+    err=cudaMalloc((void**)&work, work_size*sizeof(double));
+    checkCudaError(err,__FILE__,__LINE__);
   } else if (solve_axb==1) {
     err=cudaMalloc((void**)&taud, M*sizeof(double));
+    checkCudaError(err,__FILE__,__LINE__);
+    cusolverDnDgeqrf_bufferSize(solver_handle, M, M, jacTjacd, M, &work_size);
+    err=cudaMalloc((void**)&work, work_size*sizeof(double));
     checkCudaError(err,__FILE__,__LINE__);
   } else {
     err=cudaMalloc((void**)&Ud, M*M*sizeof(double));
@@ -234,6 +223,11 @@ clevmar_der_single(
     err=cudaMalloc((void**)&VTd, M*M*sizeof(double));
     checkCudaError(err,__FILE__,__LINE__);
     err=cudaMalloc((void**)&Sd, M*sizeof(double));
+    checkCudaError(err,__FILE__,__LINE__);
+    cusolverDnDgesvd_bufferSize(solver_handle, M, M, &work_size);
+    err=cudaMalloc((void**)&work, work_size*sizeof(double));
+    checkCudaError(err,__FILE__,__LINE__);
+    err=cudaMalloc((void**)&rwork, 5*M*sizeof(double));
     checkCudaError(err,__FILE__,__LINE__);
   }
 
@@ -289,16 +283,18 @@ clevmar_der_single(
      */
      /* since J is in ROW major order, assume it is transposed,
        so actually calculate A=J*J^T, where J is size MxN */
-     status=culaDeviceDgemm('N','T',M,M,N,1.0,jacd,M,jacd,M,0.0,jacTjacd,M);
-     checkStatus(status,__FILE__,__LINE__);
+     //status=culaDeviceDgemm('N','T',M,M,N,1.0,jacd,M,jacd,M,0.0,jacTjacd,M);
+     //checkStatus(status,__FILE__,__LINE__);
+     double cone=1.0; double czero=0.0;
+     cbstatus=cublasDgemm(cbhandle,CUBLAS_OP_N,CUBLAS_OP_T,M,M,N,&cone,jacd,M,jacd,M,&czero,jacTjacd,M);
      /* create backup */
      /* copy jacTjacd0<=jacTjacd */
      cbstatus=cublasDcopy(cbhandle, M*M, jacTjacd, 1, jacTjacd0, 1);
      /* J^T e */
      /* calculate b=J^T*e (actually compute b=J*e, where J in row major (size MxN) */
-     status=culaDeviceDgemv('N',M,N,1.0,jacd,M,ed,1,0.0,jacTed,1);
-     checkStatus(status,__FILE__,__LINE__);
-
+     //status=culaDeviceDgemv('N',M,N,1.0,jacd,M,ed,1,0.0,jacTed,1);
+     //checkStatus(status,__FILE__,__LINE__);
+     cbstatus=cublasDgemv(cbhandle,CUBLAS_OP_N,M,N,&cone,jacd,M,ed,1,&czero,jacTed,1);
 
      /* Compute ||J^T e||_inf and ||p||^2 */
      /* find infinity norm of J^T e, 1 based indexing*/
@@ -352,8 +348,10 @@ clevmar_der_single(
       if (solve_axb==0) {
         /* Cholesky solver **********************/
         /* lower triangle of Ad is destroyed */
-        status=culaDeviceDpotrf('U',M,jacTjacd,M);
-        if (!status) {
+        //status=culaDeviceDpotrf('U',M,jacTjacd,M);
+        cusolverDnDpotrf(solver_handle, CUBLAS_FILL_MODE_UPPER, M, jacTjacd, M, work, work_size, devInfo);
+        cudaMemcpy(&devInfo_h, devInfo, sizeof(int), cudaMemcpyDeviceToHost);
+        if (!devInfo_h) {
          issolved=1;
         } else {
          issolved=0;
@@ -367,8 +365,10 @@ clevmar_der_single(
 #ifdef DEBUG
          checkCublasError(cbstatus);
 #endif
-         status=culaDeviceDpotrs('U',M,1,jacTjacd,M,Dpd,M);
-         if (status) {
+         //status=culaDeviceDpotrs('U',M,1,jacTjacd,M,Dpd,M);
+         cusolverDnDpotrs(solver_handle, CUBLAS_FILL_MODE_UPPER,M,1,jacTjacd,M,Dpd,M,devInfo);
+         cudaMemcpy(&devInfo_h, devInfo, sizeof(int), cudaMemcpyDeviceToHost);
+         if (devInfo_h) {
            issolved=0;
 #ifdef DEBUG
            fprintf(stderr,"Singular matrix\n");
@@ -377,8 +377,11 @@ clevmar_der_single(
         }
       } else if (solve_axb==1) {
         /* QR solver ********************************/
-        status=culaDeviceDgeqrf(M,M,jacTjacd,M,taud);
-        if (!status) {
+        //status=culaDeviceDgeqrf(M,M,jacTjacd,M,taud);
+        cusolverDnDgeqrf(solver_handle, M, M, jacTjacd, M, taud, work, work_size, devInfo);
+        cudaDeviceSynchronize();
+        cudaMemcpy(&devInfo_h, devInfo, sizeof(int), cudaMemcpyDeviceToHost);
+        if (!devInfo_h) {
          issolved=1;
         } else {
          issolved=0;
@@ -390,24 +393,34 @@ clevmar_der_single(
         if (issolved) {
          /* copy Dpd<=jacTed */
          cbstatus=cublasDcopy(cbhandle, M, jacTed, 1, Dpd, 1);
-         status=culaDeviceDgeqrs(M,M,1,jacTjacd,M,taud,Dpd,M);
-         if (status) {
+         //status=culaDeviceDgeqrs(M,M,1,jacTjacd,M,taud,Dpd,M);
+         cusolverDnDormqr(solver_handle, CUBLAS_SIDE_LEFT, CUBLAS_OP_T, M, 1, M, jacTjacd, M, taud, Dpd, M, work, work_size, devInfo);
+         cudaDeviceSynchronize();
+         cudaMemcpy(&devInfo_h, devInfo, sizeof(int), cudaMemcpyDeviceToHost);
+         if (devInfo_h) {
            issolved=0;
 #ifdef DEBUG
            fprintf(stderr,"Singular matrix\n");
 #endif
+         } else {
+          cone=1.0;
+          cbstatus=cublasDtrsm(cbhandle,CUBLAS_SIDE_LEFT,CUBLAS_FILL_MODE_UPPER,CUBLAS_OP_N,CUBLAS_DIAG_NON_UNIT,M,1,&cone,jacTjacd,M,Dpd,M);
          }
         }
       } else {
         /* SVD solver *********************************/
         /* U S VT = A */
-        status=culaDeviceDgesvd('A','A',M,M,jacTjacd,M,Sd,Ud,M,VTd,M);
-        checkStatus(status,__FILE__,__LINE__);
+        //status=culaDeviceDgesvd('A','A',M,M,jacTjacd,M,Sd,Ud,M,VTd,M);
+        //checkStatus(status,__FILE__,__LINE__);
+        cusolverDnDgesvd(solver_handle,'A','A',M,M,jacTjacd,M,Sd,Ud,M,VTd,M,work,work_size,rwork,devInfo);
+        cudaDeviceSynchronize();
         /* copy Dpd<=jacTed */
         cbstatus=cublasDcopy(cbhandle, M, jacTed, 1, Dpd, 1);
         /* b<=U^T * b */
-        status=culaDeviceDgemv('T',M,M,1.0,Ud,M,Dpd,1,0.0,Dpd,1);
-        checkStatus(status,__FILE__,__LINE__);
+        //status=culaDeviceDgemv('T',M,M,1.0,Ud,M,Dpd,1,0.0,Dpd,1);
+        //checkStatus(status,__FILE__,__LINE__);
+        cone=1.0; czero=0.0;
+        cbstatus=cublasDgemv(cbhandle,CUBLAS_OP_T,M,M,&cone,Ud,M,Dpd,1,&czero,Dpd,1);
         /* get back the values  jTjdiag<=Sd, pnew<=Dpd*/
 //        err=cudaMemcpy(pnew,Dpd,M*sizeof(double),cudaMemcpyDeviceToHost);
 //        checkCudaError(err);
@@ -425,8 +438,9 @@ clevmar_der_single(
         cudakernel_diagdiv(ThreadsPerBlock, BlocksPerGrid, M, eps1, Dpd, Sd);
 
         /* b<=VT^T * b */
-        status=culaDeviceDgemv('T',M,M,1.0,VTd,M,Dpd,1,0.0,Dpd,1);
-        checkStatus(status,__FILE__,__LINE__);
+        //status=culaDeviceDgemv('T',M,M,1.0,VTd,M,Dpd,1,0.0,Dpd,1);
+        //checkStatus(status,__FILE__,__LINE__);
+        cbstatus=cublasDgemv(cbhandle,CUBLAS_OP_T,M,M,&cone,VTd,M,Dpd,1,&czero,Dpd,1);
 
         issolved=1;
       }
@@ -558,6 +572,8 @@ printf("norm ||dp|| =%lf, norm ||p||=%lf\n",Dp_L2,p_L2);
   cudaFree(pnewd);
   cudaFree(hxd);
   cudaFree(ed);
+  cudaFree(devInfo);
+  cudaFree(work);
   if (solve_axb==0) {
   } else if (solve_axb==1) {
    cudaFree(taud);
@@ -565,10 +581,10 @@ printf("norm ||dp|| =%lf, norm ||p||=%lf\n",Dp_L2,p_L2);
    cudaFree(Ud);
    cudaFree(VTd);
    cudaFree(Sd);
+   cudaFree(rwork);
   }
-  culaFreeBuffers();
-  culaShutdown();
   cublasDestroy(cbhandle);
+  cusolverDnDestroy(solver_handle);
   free(hx);
   free(jac);
   free(pnew);
@@ -624,6 +640,7 @@ clevmar_der_single_cuda(
                       */
 
   cublasHandle_t cbhandle, /* device handle */
+  cusolverDnHandle_t solver_handle, /* solver handle */
   double *gWORK, /* GPU allocated memory */
   int linsolv, /* 0 Cholesky, 1 QR, 2 SVD */
   int tileoff, /* tile offset when solving for many chunks */
@@ -636,7 +653,6 @@ clevmar_der_single_cuda(
   /* general note: all device variables end with a 'd' */
   int stop=0;
   cudaError_t err;
-  culaStatus status;
   cublasStatus_t cbstatus;
 
   int nu=2,nu2;
@@ -672,7 +688,7 @@ clevmar_der_single_cuda(
   /* coherency on device */
   double *cohd;
   /* baseline-station map on device/host */
-  char *bbd;
+  short *bbd;
 
   int solve_axb=linsolv;
 
@@ -692,7 +708,7 @@ clevmar_der_single_cuda(
   }
 
   /* calculate no of cuda threads and blocks */
-  int ThreadsPerBlock=128;
+  int ThreadsPerBlock=DEFAULT_TH_PER_BK;
   int BlocksPerGrid=(M+ThreadsPerBlock-1)/ThreadsPerBlock;
 
 
@@ -717,7 +733,7 @@ clevmar_der_single_cuda(
   err=cudaMalloc((void**)&pnewd, M*sizeof(double));
   checkCudaError(err,__FILE__,__LINE__);
   /* needed for calculating f()  and jac() */
-  err=cudaMalloc((void**) &bbd, Nbase*2*sizeof(char));
+  err=cudaMalloc((void**) &bbd, Nbase*2*sizeof(short));
   checkCudaError(err,__FILE__,__LINE__);
   /* we need coherencies for only this cluster */
   err=cudaMalloc((void**) &cohd, Nbase*8*sizeof(double)); 
@@ -775,9 +791,34 @@ clevmar_der_single_cuda(
      Sd=&gWORK[moff];
      moff+=M;
     }
-    bbd=(char*)&gWORK[moff];
-    moff+=(Nbase*2*sizeof(char))/sizeof(double);
+    bbd=(short*)&gWORK[moff];
+    moff+=(Nbase*2*sizeof(short))/sizeof(double);
   }
+
+  /* extra storage for cusolver */
+  int work_size=0;
+  int *devInfo;
+  int devInfo_h=0;
+  err=cudaMalloc((void**)&devInfo, sizeof(int));
+  checkCudaError(err,__FILE__,__LINE__);
+  double *work;
+  double *rwork;
+  if (solve_axb==0) {
+    cusolverDnDpotrf_bufferSize(solver_handle, CUBLAS_FILL_MODE_UPPER, M, jacTjacd, M, &work_size);
+    err=cudaMalloc((void**)&work, work_size*sizeof(double));
+    checkCudaError(err,__FILE__,__LINE__);
+  } else if (solve_axb==1) {
+    cusolverDnDgeqrf_bufferSize(solver_handle, M, M, jacTjacd, M, &work_size);
+    err=cudaMalloc((void**)&work, work_size*sizeof(double));
+    checkCudaError(err,__FILE__,__LINE__);
+  } else {
+    cusolverDnDgesvd_bufferSize(solver_handle, M, M, &work_size);
+    err=cudaMalloc((void**)&work, work_size*sizeof(double));
+    checkCudaError(err,__FILE__,__LINE__);
+    err=cudaMalloc((void**)&rwork, 5*M*sizeof(double));
+    checkCudaError(err,__FILE__,__LINE__);
+  }
+
 
   err=cudaMemcpyAsync(pd, p, M*sizeof(double), cudaMemcpyHostToDevice,0);
   checkCudaError(err,__FILE__,__LINE__);
@@ -786,7 +827,7 @@ clevmar_der_single_cuda(
   err=cudaMemcpyAsync(cohd, &(dp->ddcoh[(dp->Nbase)*(dp->tilesz)*(dp->clus)*8+(dp->Nbase)*tileoff*8]), Nbase*8*sizeof(double), cudaMemcpyHostToDevice,0);
   checkCudaError(err,__FILE__,__LINE__);
   /* correct offset for baselines */
-  err=cudaMemcpyAsync(bbd, &(dp->ddbase[2*(dp->Nbase)*(tileoff)]), Nbase*2*sizeof(char), cudaMemcpyHostToDevice,0);
+  err=cudaMemcpyAsync(bbd, &(dp->ddbase[2*(dp->Nbase)*(tileoff)]), Nbase*2*sizeof(short), cudaMemcpyHostToDevice,0);
   checkCudaError(err,__FILE__,__LINE__);
   cudaDeviceSynchronize();
   /* xd <=x */
@@ -836,15 +877,18 @@ clevmar_der_single_cuda(
      */
      /* since J is in ROW major order, assume it is transposed,
        so actually calculate A=J*J^T, where J is size MxN */
-     status=culaDeviceDgemm('N','T',M,M,N,1.0,jacd,M,jacd,M,0.0,jacTjacd,M);
-     checkStatus(status,__FILE__,__LINE__);
+     //status=culaDeviceDgemm('N','T',M,M,N,1.0,jacd,M,jacd,M,0.0,jacTjacd,M);
+     //checkStatus(status,__FILE__,__LINE__);
+     double cone=1.0; double czero=0.0;
+     cbstatus=cublasDgemm(cbhandle,CUBLAS_OP_N,CUBLAS_OP_T,M,M,N,&cone,jacd,M,jacd,M,&czero,jacTjacd,M);
      /* create backup */
      /* copy jacTjacd0<=jacTjacd */
      cbstatus=cublasDcopy(cbhandle, M*M, jacTjacd, 1, jacTjacd0, 1);
      /* J^T e */
      /* calculate b=J^T*e (actually compute b=J*e, where J in row major (size MxN) */
-     status=culaDeviceDgemv('N',M,N,1.0,jacd,M,ed,1,0.0,jacTed,1);
-     checkStatus(status,__FILE__,__LINE__);
+     //status=culaDeviceDgemv('N',M,N,1.0,jacd,M,ed,1,0.0,jacTed,1);
+     //checkStatus(status,__FILE__,__LINE__);
+     cbstatus=cublasDgemv(cbhandle,CUBLAS_OP_N,M,N,&cone,jacd,M,ed,1,&czero,jacTed,1);
 
 
      /* Compute ||J^T e||_inf and ||p||^2 */
@@ -900,8 +944,10 @@ clevmar_der_single_cuda(
       if (solve_axb==0) {
         /* Cholesky solver **********************/
         /* lower triangle of Ad is destroyed */
-        status=culaDeviceDpotrf('U',M,jacTjacd,M);
-        if (!status) {
+        //status=culaDeviceDpotrf('U',M,jacTjacd,M);
+        cusolverDnDpotrf(solver_handle, CUBLAS_FILL_MODE_UPPER, M, jacTjacd, M, work, work_size, devInfo);
+        cudaMemcpy(&devInfo_h, devInfo, sizeof(int), cudaMemcpyDeviceToHost);
+        if (!devInfo_h) {
          issolved=1;
         } else {
          issolved=0;
@@ -915,8 +961,10 @@ clevmar_der_single_cuda(
 #ifdef DEBUG
          checkCublasError(cbstatus);
 #endif
-         status=culaDeviceDpotrs('U',M,1,jacTjacd,M,Dpd,M);
-         if (status) {
+         //status=culaDeviceDpotrs('U',M,1,jacTjacd,M,Dpd,M);
+         cusolverDnDpotrs(solver_handle, CUBLAS_FILL_MODE_UPPER,M,1,jacTjacd,M,Dpd,M,devInfo);
+         cudaMemcpy(&devInfo_h, devInfo, sizeof(int), cudaMemcpyDeviceToHost);
+         if (devInfo_h) {
            issolved=0;
 #ifdef DEBUG
            fprintf(stderr,"Singular matrix\n");
@@ -925,8 +973,11 @@ clevmar_der_single_cuda(
         }
       } else if (solve_axb==1) {
         /* QR solver ********************************/
-        status=culaDeviceDgeqrf(M,M,jacTjacd,M,taud);
-        if (!status) {
+        //status=culaDeviceDgeqrf(M,M,jacTjacd,M,taud);
+        cusolverDnDgeqrf(solver_handle, M, M, jacTjacd, M, taud, work, work_size, devInfo);
+        cudaDeviceSynchronize();
+        cudaMemcpy(&devInfo_h, devInfo, sizeof(int), cudaMemcpyDeviceToHost);
+        if (!devInfo_h) {
          issolved=1;
         } else {
          issolved=0;
@@ -938,30 +989,42 @@ clevmar_der_single_cuda(
         if (issolved) {
          /* copy Dpd<=jacTed */
          cbstatus=cublasDcopy(cbhandle, M, jacTed, 1, Dpd, 1);
-         status=culaDeviceDgeqrs(M,M,1,jacTjacd,M,taud,Dpd,M);
-         if (status) {
+         //status=culaDeviceDgeqrs(M,M,1,jacTjacd,M,taud,Dpd,M);
+         cusolverDnDormqr(solver_handle, CUBLAS_SIDE_LEFT, CUBLAS_OP_T, M, 1, M, jacTjacd, M, taud, Dpd, M, work, work_size, devInfo);
+         cudaDeviceSynchronize();
+         cudaMemcpy(&devInfo_h, devInfo, sizeof(int), cudaMemcpyDeviceToHost);
+         if (devInfo_h) {
            issolved=0;
 #ifdef DEBUG
            fprintf(stderr,"Singular matrix\n");
 #endif
+         } else {
+          cone=1.0;
+          cbstatus=cublasDtrsm(cbhandle,CUBLAS_SIDE_LEFT,CUBLAS_FILL_MODE_UPPER,CUBLAS_OP_N,CUBLAS_DIAG_NON_UNIT,M,1,&cone,jacTjacd,M,Dpd,M);
          }
         }
       } else {
         /* SVD solver *********************************/
         /* U S VT = A */
-        status=culaDeviceDgesvd('A','A',M,M,jacTjacd,M,Sd,Ud,M,VTd,M);
-        checkStatus(status,__FILE__,__LINE__);
+        //status=culaDeviceDgesvd('A','A',M,M,jacTjacd,M,Sd,Ud,M,VTd,M);
+        //checkStatus(status,__FILE__,__LINE__);
+        cusolverDnDgesvd(solver_handle,'A','A',M,M,jacTjacd,M,Sd,Ud,M,VTd,M,work,work_size,rwork,devInfo);
+        cudaDeviceSynchronize();
         /* copy Dpd<=jacTed */
         cbstatus=cublasDcopy(cbhandle, M, jacTed, 1, Dpd, 1);
         /* b<=U^T * b */
-        status=culaDeviceDgemv('T',M,M,1.0,Ud,M,Dpd,1,0.0,Dpd,1);
+        //status=culaDeviceDgemv('T',M,M,1.0,Ud,M,Dpd,1,0.0,Dpd,1);
+        //checkStatus(status,__FILE__,__LINE__);
+        cone=1.0; czero=0.0;
+        cbstatus=cublasDgemv(cbhandle,CUBLAS_OP_T,M,M,&cone,Ud,M,Dpd,1,&czero,Dpd,1);
+ 
         /* divide by singular values  Dpd[]/Sd[]  for Sd[]> eps1 */
-        checkStatus(status,__FILE__,__LINE__);
         cudakernel_diagdiv(ThreadsPerBlock, BlocksPerGrid, M, eps1, Dpd, Sd);
 
         /* b<=VT^T * b */
-        status=culaDeviceDgemv('T',M,M,1.0,VTd,M,Dpd,1,0.0,Dpd,1);
-        checkStatus(status,__FILE__,__LINE__);
+        //status=culaDeviceDgemv('T',M,M,1.0,VTd,M,Dpd,1,0.0,Dpd,1);
+        //checkStatus(status,__FILE__,__LINE__);
+        cbstatus=cublasDgemv(cbhandle,CUBLAS_OP_T,M,M,&cone,VTd,M,Dpd,1,&czero,Dpd,1);
 
         issolved=1;
       }
@@ -1070,6 +1133,9 @@ printf("norm ||dp|| =%lf, norm ||p||=%lf\n",Dp_L2,p_L2);
   err=cudaMemcpyAsync(p,pd,M*sizeof(double),cudaMemcpyDeviceToHost,0);
   checkCudaError(err,__FILE__,__LINE__);
 
+  /* check once CUBLAS error */
+  checkCublasError(cbstatus,__FILE__,__LINE__);
+
   /* synchronize async operations */
   cudaDeviceSynchronize();
 
@@ -1096,6 +1162,12 @@ printf("norm ||dp|| =%lf, norm ||p||=%lf\n",Dp_L2,p_L2);
   cudaFree(bbd);
   }
 
+  cudaFree(devInfo);
+  cudaFree(work);
+  if (solve_axb==2) {
+    cudaFree(rwork);
+  }
+
 #ifdef DEBUG
   printf("stop=%d\n",stop);
 #endif
@@ -1117,88 +1189,43 @@ printf("norm ||dp|| =%lf, norm ||p||=%lf\n",Dp_L2,p_L2);
 
 /* function to set up a GPU, should be called only once */
 void
-attach_gpu_to_thread(int card,  cublasHandle_t *cbhandle) {
-
-  culaStatus status;
-  cublasStatus_t cbstatus;
-  status=culaSelectDevice(card);
-  checkStatus(status,__FILE__,__LINE__);
-  status=culaInitialize();
-  checkStatus(status,__FILE__,__LINE__);
-
-  int ncard;
-  status=culaGetExecutingDevice(&ncard);
-  if (ncard!=card) {
-    fprintf(stderr,"%s: %d: asked card %d and got %d\n",__FILE__,__LINE__,card,ncard);
-    exit(1);
-  }
-  checkStatus(status,__FILE__,__LINE__);
-
-  cbstatus=cublasCreate(cbhandle);
-  if (cbstatus!=CUBLAS_STATUS_SUCCESS) {
-    fprintf(stderr,"%s: %d: CUBLAS create fail\n",__FILE__,__LINE__);
-    exit(1);
-  }
-
-}
-void
-attach_gpu_to_thread1(int card,  cublasHandle_t *cbhandle,double **WORK, int64_t work_size) {
+attach_gpu_to_thread(int card,  cublasHandle_t *cbhandle, cusolverDnHandle_t *solver_handle) {
 
   cudaError_t err;
-  culaStatus status;
   cublasStatus_t cbstatus;
-  status=culaSelectDevice(card);
-  checkStatus(status,__FILE__,__LINE__);
-  status=culaInitialize();
-  checkStatus(status,__FILE__,__LINE__);
-
-  int ncard;
-  status=culaGetExecutingDevice(&ncard);
-  if (ncard!=card) {
-    fprintf(stderr,"%s: %d: asked card %d and got %d\n",__FILE__,__LINE__,card,ncard);
-    exit(1);
-  }
-  checkStatus(status,__FILE__,__LINE__);
-
-  cbstatus=cublasCreate(cbhandle);
-  if (cbstatus!=CUBLAS_STATUS_SUCCESS) {
-    fprintf(stderr,"%s: %d: CUBLAS create fail\n",__FILE__,__LINE__);
-    exit(1);
-  }
-
-  err=cudaMalloc((void**)WORK, (size_t)work_size);
+  cusolverStatus_t status;
+  err=cudaSetDevice(card);
   checkCudaError(err,__FILE__,__LINE__);
+  status=cusolverDnCreate(solver_handle);
+  if (status != CUSOLVER_STATUS_SUCCESS) {
+    fprintf(stderr,"%s: %d: CUSOLV create fail %d\n",__FILE__,__LINE__,status);
+    exit(1);
+  }
+
+  cbstatus=cublasCreate(cbhandle);
+  if (cbstatus!=CUBLAS_STATUS_SUCCESS) {
+    fprintf(stderr,"%s: %d: CUBLAS create fail\n",__FILE__,__LINE__);
+    exit(1);
+  }
 
 }
 void
-attach_gpu_to_thread2(int card,  cublasHandle_t *cbhandle,float **WORK, int64_t work_size, int usecula) {
+attach_gpu_to_thread1(int card,  cublasHandle_t *cbhandle, cusolverDnHandle_t *solver_handle, double **WORK, int64_t work_size) {
 
   cudaError_t err;
-  culaStatus status;
   cublasStatus_t cbstatus;
-  if (usecula) {
-   status=culaSelectDevice(card); /* Do not enable CULA if its not going to be used */
-   /* if first try failed, wait and retry */
-   if (status) {
-    fprintf(stderr,"%s: %d: CULA device select failure, retrying\n",__FILE__,__LINE__);
+  cusolverStatus_t status;
+  err=cudaSetDevice(card);
+  checkCudaError(err,__FILE__,__LINE__);
+  status=cusolverDnCreate(solver_handle);
+  if (status != CUSOLVER_STATUS_SUCCESS) {
+    fprintf(stderr,"%s: %d: CUSOLV create fail %d\n",__FILE__,__LINE__,status);
     sleep(10);
-    status=culaSelectDevice(card);
-   }
-   checkStatus(status,__FILE__,__LINE__);
-   status=culaInitialize();
-   checkStatus(status,__FILE__,__LINE__);
-  
-
-   int ncard;
-   status=culaGetExecutingDevice(&ncard);
-   if (ncard!=card) {
-     fprintf(stderr,"%s: %d: asked card %d and got %d\n",__FILE__,__LINE__,card,ncard);
+    status=cusolverDnCreate(solver_handle);
+    if (status != CUSOLVER_STATUS_SUCCESS) {
+     fprintf(stderr,"%s: %d: CUSOLV create fail %d\n",__FILE__,__LINE__,status);
      exit(1);
-   }
-   checkStatus(status,__FILE__,__LINE__);
-   cudaSetDevice(card); /* we need this */
-  } else { /* not using CULA */
-   cudaSetDevice(card);
+    }
   }
 
   cbstatus=cublasCreate(cbhandle);
@@ -1218,50 +1245,62 @@ attach_gpu_to_thread2(int card,  cublasHandle_t *cbhandle,float **WORK, int64_t 
 
 }
 void
-detach_gpu_from_thread(cublasHandle_t cbhandle) {
+attach_gpu_to_thread2(int card,  cublasHandle_t *cbhandle,  cusolverDnHandle_t *solver_handle, float **WORK, int64_t work_size, int usecula) {
+
+  cudaError_t err;
   cublasStatus_t cbstatus;
-
-  culaFreeBuffers();
-  culaShutdown();
-  cbstatus=cublasDestroy(cbhandle);
-  if (cbstatus!=CUBLAS_STATUS_SUCCESS) {
-    fprintf(stderr,"%s: %d: CUBLAS destroy fail\n",__FILE__,__LINE__);
-    exit(1);
-  }
-
-}
-void
-detach_gpu_from_thread1(int card,cublasHandle_t cbhandle,double *WORK) {
-  cublasStatus_t cbstatus;
-
-  cbstatus=cublasDestroy(cbhandle);
-  if (cbstatus!=CUBLAS_STATUS_SUCCESS) {
-    fprintf(stderr,"%s: %d: CUBLAS destroy fail\n",__FILE__,__LINE__);
-    exit(1);
-  }
-  culaFreeBuffers();
-  culaShutdown();
-  cudaFree(WORK);
-
-  cudaSetDevice(card);
-  cudaDeviceReset();
-}
-void
-detach_gpu_from_thread2(int card,cublasHandle_t cbhandle,float *WORK, int usecula) {
-  cublasStatus_t cbstatus;
-
-  cbstatus=cublasDestroy(cbhandle);
-  if (cbstatus!=CUBLAS_STATUS_SUCCESS) {
-    fprintf(stderr,"%s: %d: CUBLAS destroy fail\n",__FILE__,__LINE__);
-    exit(1);
-  }
+  cusolverStatus_t status;
+  err=cudaSetDevice(card); /* we need this */
+  checkCudaError(err,__FILE__,__LINE__);
   if (usecula) {
-   culaFreeBuffers();
-   culaShutdown();
+   status=cusolverDnCreate(solver_handle);
+   if (status != CUSOLVER_STATUS_SUCCESS) {
+    fprintf(stderr,"%s: %d: CUSOLV create fail %d\n",__FILE__,__LINE__,status);
+    sleep(10);
+    status=cusolverDnCreate(solver_handle);
+    if (status != CUSOLVER_STATUS_SUCCESS) {
+     fprintf(stderr,"%s: %d: CUSOLV create fail %d\n",__FILE__,__LINE__,status);
+     exit(1);
+    }
+   }
+  }
+
+  cbstatus=cublasCreate(cbhandle);
+  if (cbstatus!=CUBLAS_STATUS_SUCCESS) {
+    /* retry once more before exiting */
+    fprintf(stderr,"%s: %d: CUBLAS create failure, retrying\n",__FILE__,__LINE__);
+    sleep(10);
+    cbstatus=cublasCreate(cbhandle);
+    if (cbstatus!=CUBLAS_STATUS_SUCCESS) {
+     fprintf(stderr,"%s: %d: CUBLAS create fail\n",__FILE__,__LINE__);
+     exit(1);
+    }
+  }
+
+  err=cudaMalloc((void**)WORK, (size_t)work_size);
+  checkCudaError(err,__FILE__,__LINE__);
+
+}
+void
+detach_gpu_from_thread(cublasHandle_t cbhandle, cusolverDnHandle_t solver_handle) {
+  cublasDestroy(cbhandle);
+  cusolverDnDestroy(solver_handle);
+}
+void
+detach_gpu_from_thread1(cublasHandle_t cbhandle,cusolverDnHandle_t solver_handle,double *WORK) {
+
+  cublasDestroy(cbhandle);
+  cusolverDnDestroy(solver_handle);
+  cudaFree(WORK);
+}
+void
+detach_gpu_from_thread2(cublasHandle_t cbhandle,cusolverDnHandle_t solver_handle,float *WORK, int usecula) {
+
+  cublasDestroy(cbhandle);
+  if (usecula) {
+   cusolverDnDestroy(solver_handle);
   }
   cudaFree(WORK);
-
-  cudaDeviceReset();
 }
 void
 reset_gpu_memory(double *WORK, int64_t work_size) {
@@ -1291,6 +1330,7 @@ mlm_der_single_cuda(
                       */
 
   cublasHandle_t cbhandle, /* device handle */
+  cusolverDnHandle_t solver_handle, /* solver handle */
   double *gWORK, /* GPU allocated memory */
   int linsolv, /* 0 Cholesky, 1 QR, 2 SVD */
   int tileoff, /* tile offset when solving for many chunks */
@@ -1300,7 +1340,6 @@ mlm_der_single_cuda(
                       */
 {
   cudaError_t err;
-  culaStatus status;
   cublasStatus_t cbstatus;
 
   /* NOTE F()=func()-data */
@@ -1333,11 +1372,11 @@ mlm_der_single_cuda(
   /* coherency on device */
   double *cohd;
   /* baseline-station map on device/host */
-  char *bbd;
+  short *bbd;
 
 
   /* calculate no of cuda threads and blocks */
-  int ThreadsPerBlock=128;
+  int ThreadsPerBlock=DEFAULT_TH_PER_BK;
   int BlocksPerGrid=(M+ThreadsPerBlock-1)/ThreadsPerBlock;
 
 
@@ -1390,7 +1429,7 @@ mlm_der_single_cuda(
   err=cudaMalloc((void**)&pd, M*sizeof(double));
   checkCudaError(err,__FILE__,__LINE__);
   /* needed for calculating f()  and jac() */
-  err=cudaMalloc((void**) &bbd, Nbase*2*sizeof(char));
+  err=cudaMalloc((void**) &bbd, Nbase*2*sizeof(short));
   checkCudaError(err,__FILE__,__LINE__);
   /* we need coherencies for only this cluster */
   err=cudaMalloc((void**) &cohd, Nbase*8*sizeof(double));
@@ -1451,9 +1490,34 @@ mlm_der_single_cuda(
      Sd=&gWORK[moff];
      moff+=M;
     }
-    bbd=(char*)&gWORK[moff];
-    moff+=(Nbase*2*sizeof(char))/sizeof(double);
+    bbd=(short*)&gWORK[moff];
+    moff+=(Nbase*2*sizeof(short))/sizeof(double);
   }
+
+  /* extra storage for cusolver */
+  int work_size=0;
+  int *devInfo;
+  int devInfo_h=0;
+  err=cudaMalloc((void**)&devInfo, sizeof(int));
+  checkCudaError(err,__FILE__,__LINE__);
+  double *work;
+  double *rwork;
+  if (solve_axb==0) {
+    cusolverDnDpotrf_bufferSize(solver_handle, CUBLAS_FILL_MODE_UPPER, M, JkTJkd, M, &work_size);
+    err=cudaMalloc((void**)&work, work_size*sizeof(double));
+    checkCudaError(err,__FILE__,__LINE__);
+  } else if (solve_axb==1) {
+    cusolverDnDgeqrf_bufferSize(solver_handle, M, M, JkTJkd, M, &work_size);
+    err=cudaMalloc((void**)&work, work_size*sizeof(double));
+    checkCudaError(err,__FILE__,__LINE__);
+  } else {
+    cusolverDnDgesvd_bufferSize(solver_handle, M, M, &work_size);
+    err=cudaMalloc((void**)&work, work_size*sizeof(double));
+    checkCudaError(err,__FILE__,__LINE__);
+    err=cudaMalloc((void**)&rwork, 5*M*sizeof(double));
+    checkCudaError(err,__FILE__,__LINE__);
+  }
+
 
   err=cudaMemcpyAsync(pd, p, M*sizeof(double), cudaMemcpyHostToDevice,0);
   checkCudaError(err,__FILE__,__LINE__);
@@ -1462,7 +1526,7 @@ mlm_der_single_cuda(
   err=cudaMemcpyAsync(cohd, &(dp->ddcoh[(dp->Nbase)*(dp->tilesz)*(dp->clus)*8+(dp->Nbase)*tileoff*8]), Nbase*8*sizeof(double), cudaMemcpyHostToDevice,0);
   checkCudaError(err,__FILE__,__LINE__);
  /* correct offset for baselines */
-  err=cudaMemcpyAsync(bbd, &(dp->ddbase[2*(dp->Nbase)*(tileoff)]), Nbase*2*sizeof(char), cudaMemcpyHostToDevice,0);
+  err=cudaMemcpyAsync(bbd, &(dp->ddbase[2*(dp->Nbase)*(tileoff)]), Nbase*2*sizeof(short), cudaMemcpyHostToDevice,0);
   checkCudaError(err,__FILE__,__LINE__);
   cudaDeviceSynchronize();
   /* xd <=x */
@@ -1490,6 +1554,7 @@ mlm_der_single_cuda(
 #endif
 
 
+  double cone=1.0; double czero=0.0;
   while (niter<itmax) {
      if (delta>1) {
       lambda=mu*Fxknrm*Fxknrm;
@@ -1508,10 +1573,14 @@ mlm_der_single_cuda(
       //my_dgemm('N','T',M,M,N,1.0,Jk,M,Jk,M,0.0,JkTJk0,M);
       //my_dgemv('N',M,N,-1.0,Jk,M,Fxk,1,0.0,JkTe0,1);
 
-      status=culaDeviceDgemm('N','T',M,M,N,1.0,Jkd,M,Jkd,M,0.0,JkTJkd0,M);
-      checkStatus(status,__FILE__,__LINE__);
-      status=culaDeviceDgemv('N',M,N,-1.0,Jkd,M,Fxkd,1,0.0,JkTed0,1);
-      checkStatus(status,__FILE__,__LINE__);
+      //status=culaDeviceDgemm('N','T',M,M,N,1.0,Jkd,M,Jkd,M,0.0,JkTJkd0,M);
+      //checkStatus(status,__FILE__,__LINE__);
+      double cone=1.0; double czero=0.0;
+      cbstatus=cublasDgemm(cbhandle,CUBLAS_OP_N,CUBLAS_OP_T,M,M,N,&cone,Jkd,M,Jkd,M,&czero,JkTJkd0,M);
+      //status=culaDeviceDgemv('N',M,N,-1.0,Jkd,M,Fxkd,1,0.0,JkTed0,1);
+      //checkStatus(status,__FILE__,__LINE__);
+      cone=-1.0;
+      cbstatus=cublasDgemv(cbhandle,CUBLAS_OP_N,M,N,&cone,Jkd,M,Fxkd,1,&czero,JkTed0,1);
      }
      /* if || J_k^T F(x_k) || < epsilon, stop */
      //Fyknrm=my_dnrm2(M,JkTe0);
@@ -1536,11 +1605,12 @@ mlm_der_single_cuda(
 /********************************************************************/
      if (solve_axb==0) {
        /* Cholesky solver **********************/
-       //status=my_dpotrf('U',M,JkTJk,M);
-       status=culaDeviceDpotrf('U',M,JkTJkd,M);
-       checkStatus(status,__FILE__,__LINE__);
+       //status=culaDeviceDpotrf('U',M,JkTJkd,M);
+       //checkStatus(status,__FILE__,__LINE__);
+       cusolverDnDpotrf(solver_handle, CUBLAS_FILL_MODE_UPPER, M, JkTJkd, M, work, work_size, devInfo);
+       cudaMemcpy(&devInfo_h, devInfo, sizeof(int), cudaMemcpyDeviceToHost);
 
-       if (!status) {
+       if (!devInfo_h) {
          issolved=1;
        } else {
          issolved=0;
@@ -1550,12 +1620,12 @@ mlm_der_single_cuda(
        }
        if (issolved) {
          /* copy dk<=JkTe */
-         //memcpy(dk,JkTe,M*sizeof(double));
-         //status=my_dpotrs('U',M,1,JkTJk,M,dk,M);
          cbstatus=cublasDcopy(cbhandle, M, JkTed, 1, dkd, 1);
-         status=culaDeviceDpotrs('U',M,1,JkTJkd,M,dkd,M);
-         checkStatus(status,__FILE__,__LINE__);
-         if (status) {
+         //status=culaDeviceDpotrs('U',M,1,JkTJkd,M,dkd,M);
+         //checkStatus(status,__FILE__,__LINE__);
+         cusolverDnDpotrs(solver_handle, CUBLAS_FILL_MODE_UPPER,M,1,JkTJkd,M,dkd,M,devInfo);
+         cudaMemcpy(&devInfo_h, devInfo, sizeof(int), cudaMemcpyDeviceToHost);
+         if (devInfo_h) {
            issolved=0;
 #ifdef DEBUG
            fprintf(stderr,"Singular matrix info=%d\n",status);
@@ -1574,9 +1644,12 @@ mlm_der_single_cuda(
        //my_dgemv('T',M,M,1.0,JkTJk,M,JkTe,1,0.0,dk,1);
        /* solve R x = b */
        //status=my_dtrtrs('U','N','N',M,1,R,M,dk,M);
-       status=culaDeviceDgeqrf(M,M,JkTJkd,M,taud);
-       checkStatus(status,__FILE__,__LINE__);
-       if (!status) {
+       //status=culaDeviceDgeqrf(M,M,JkTJkd,M,taud);
+       //checkStatus(status,__FILE__,__LINE__);
+       cusolverDnDgeqrf(solver_handle, M, M, JkTJkd, M, taud, work, work_size, devInfo);
+       cudaDeviceSynchronize();
+       cudaMemcpy(&devInfo_h, devInfo, sizeof(int), cudaMemcpyDeviceToHost);
+       if (!devInfo_h) {
         issolved=1;
        } else {
         issolved=0;
@@ -1586,9 +1659,20 @@ mlm_der_single_cuda(
        }
        if (issolved) {
          cbstatus=cublasDcopy(cbhandle, M, JkTed, 1, dkd, 1);
-         status=culaDeviceDgeqrs(M,M,1,JkTJkd,M,taud,dkd,M);
+         //status=culaDeviceDgeqrs(M,M,1,JkTJkd,M,taud,dkd,M);
+         cusolverDnDormqr(solver_handle, CUBLAS_SIDE_LEFT, CUBLAS_OP_T, M, 1, M, JkTJkd, M, taud, dkd, M, work, work_size, devInfo);
+         cudaDeviceSynchronize();
+         cudaMemcpy(&devInfo_h, devInfo, sizeof(int), cudaMemcpyDeviceToHost);
+         if (devInfo_h) {
+           issolved=0;
+#ifdef DEBUG
+           fprintf(stderr,"Singular matrix\n");
+#endif
+         } else {
+          cone=1.0;
+          cbstatus=cublasDtrsm(cbhandle,CUBLAS_SIDE_LEFT,CUBLAS_FILL_MODE_UPPER,CUBLAS_OP_N,CUBLAS_DIAG_NON_UNIT,M,1,&cone,JkTJkd,M,dkd,M);
+         }
        }
-
      } else {
        /* SVD solver *********************************/
        /* U S VT = A */
@@ -1609,18 +1693,24 @@ mlm_der_single_cuda(
        //memcpy(yk,dk,M*sizeof(double));
        //my_dgemv('T',M,M,1.0,VTd,M,yk,1,0.0,dk,1);
         /* U S VT = A */
-        status=culaDeviceDgesvd('A','A',M,M,JkTJkd,M,Sd,Ud,M,VTd,M);
-        checkStatus(status,__FILE__,__LINE__);
+        //status=culaDeviceDgesvd('A','A',M,M,JkTJkd,M,Sd,Ud,M,VTd,M);
+        //checkStatus(status,__FILE__,__LINE__);
+        cusolverDnDgesvd(solver_handle,'A','A',M,M,JkTJkd,M,Sd,Ud,M,VTd,M,work,work_size,rwork,devInfo);
+        cudaDeviceSynchronize();
         /* b<=U^T * b */
-        status=culaDeviceDgemv('T',M,M,1.0,Ud,M,JkTed,1,0.0,dkd,1);
-        checkStatus(status,__FILE__,__LINE__);
+        //status=culaDeviceDgemv('T',M,M,1.0,Ud,M,JkTed,1,0.0,dkd,1);
+        //checkStatus(status,__FILE__,__LINE__);
+        cone=1.0; czero=0.0;
+        cbstatus=cublasDgemv(cbhandle,CUBLAS_OP_T,M,M,&cone,Ud,M,JkTed,1,&czero,dkd,1);
+ 
    /* divide by singular values  Dpd[]/Sd[]  for Sd[]> eps1 */
         cudakernel_diagdiv(ThreadsPerBlock, BlocksPerGrid, M, epsilon, dkd, Sd);
 
         /* b<=VT^T * b */
         cbstatus=cublasDcopy(cbhandle, M, dkd, 1, ykd, 1);
-        status=culaDeviceDgemv('T',M,M,1.0,VTd,M,ykd,1,0.0,dkd,1);
-        checkStatus(status,__FILE__,__LINE__);
+        //status=culaDeviceDgemv('T',M,M,1.0,VTd,M,ykd,1,0.0,dkd,1);
+        //checkStatus(status,__FILE__,__LINE__);
+        cbstatus=cublasDgemv(cbhandle,CUBLAS_OP_T,M,M,&cone,VTd,M,ykd,1,&czero,dkd,1);
  
         issolved=1;
      }
@@ -1650,8 +1740,11 @@ mlm_der_single_cuda(
 
      /* Compute -J_k^T F(y_k) */
      //my_dgemv('N',M,N,-1.0,Jk,M,Fyk,1,0.0,JkTe,1);
-     status=culaDeviceDgemv('N',M,N,1.0,Jkd,M,Fykd,1,0.0,JkTed,1);
-     checkStatus(status,__FILE__,__LINE__);
+     //status=culaDeviceDgemv('N',M,N,1.0,Jkd,M,Fykd,1,0.0,JkTed,1);
+     //checkStatus(status,__FILE__,__LINE__);
+     cone=1.0; czero=0.0;
+     cbstatus=cublasDgemv(cbhandle,CUBLAS_OP_N,M,N,&cone,Jkd,M,Fykd,1,&czero,JkTed,1);
+ 
   
 /********************************************************************/
      if (solve_axb==0) {
@@ -1660,9 +1753,10 @@ mlm_der_single_cuda(
        //  memcpy(dhatk,JkTe,M*sizeof(double));
        //  status=my_dpotrs('U',M,1,JkTJk,M,dhatk,M);
          cbstatus=cublasDcopy(cbhandle, M, JkTed, 1, dhatkd, 1);
-         status=culaDeviceDpotrs('U',M,1,JkTJkd,M,dhatkd,M);
-
-         if (status) {
+         //status=culaDeviceDpotrs('U',M,1,JkTJkd,M,dhatkd,M);
+         cusolverDnDpotrs(solver_handle, CUBLAS_FILL_MODE_UPPER,M,1,JkTJkd,M,dhatkd,M,devInfo);
+         cudaMemcpy(&devInfo_h, devInfo, sizeof(int), cudaMemcpyDeviceToHost);
+         if (devInfo_h) {
            issolved=0;
 #ifdef DEBUG
            fprintf(stderr,"Singular matrix info=%d\n",status);
@@ -1674,17 +1768,13 @@ mlm_der_single_cuda(
        //my_dgemv('T',M,M,1.0,JkTJk,M,JkTe,1,0.0,dhatk,1);
        /* solve R x = b */
        //status=my_dtrtrs('U','N','N',M,1,R,M,dhatk,M);
-       cbstatus=cublasDcopy(cbhandle, M, JkTed, 1, dhatkd, 1);
-       status=culaDeviceDgeqrs(M,M,1,JkTJkd,M,taud,dhatkd,M);
+        cbstatus=cublasDcopy(cbhandle, M, JkTed, 1, dhatkd, 1);
+       //status=culaDeviceDgeqrs(M,M,1,JkTJkd,M,taud,dhatkd,M);
+        cusolverDnDormqr(solver_handle, CUBLAS_SIDE_LEFT, CUBLAS_OP_T, M, 1, M, JkTJkd, M, taud, dhatkd, M, work, work_size, devInfo);
+        cudaDeviceSynchronize();
+        cbstatus=cublasDtrsm(cbhandle,CUBLAS_SIDE_LEFT,CUBLAS_FILL_MODE_UPPER,CUBLAS_OP_N,CUBLAS_DIAG_NON_UNIT,M,1,&cone,JkTJkd,M,dhatkd,M);
 
-       if (!status) {
-         issolved=1;
-       } else {
-         issolved=0;
-#ifdef DEBUG
-         fprintf(stderr,"Singular matrix info=%d\n",status);
-#endif
-       }
+        issolved=1;
      } else {
        /* SVD solver *********************************/
        /* dhatk <= U^T jacTed */
@@ -1701,15 +1791,19 @@ mlm_der_single_cuda(
        /* dk <= VT^T dk */
        //memcpy(yk,dhatk,M*sizeof(double));
        //my_dgemv('T',M,M,1.0,VTd,M,yk,1,0.0,dhatk,1);
-       status=culaDeviceDgemv('T',M,M,1.0,Ud,M,JkTed,1,0.0,dhatkd,1);
-       checkStatus(status,__FILE__,__LINE__);
+       //status=culaDeviceDgemv('T',M,M,1.0,Ud,M,JkTed,1,0.0,dhatkd,1);
+       //checkStatus(status,__FILE__,__LINE__);
+       cone=1.0; czero=0.0;
+       cbstatus=cublasDgemv(cbhandle,CUBLAS_OP_T,M,M,&cone,Ud,M,JkTed,1,&czero,dhatkd,1);
+ 
    /* divide by singular values  Dpd[]/Sd[]  for Sd[]> eps1 */
        cudakernel_diagdiv(ThreadsPerBlock, BlocksPerGrid, M, epsilon, dhatkd, Sd);
 
        /* b<=VT^T * b */
        cbstatus=cublasDcopy(cbhandle, M, dhatkd, 1, ykd, 1);
-       status=culaDeviceDgemv('T',M,M,1.0,VTd,M,ykd,1,0.0,dhatkd,1);
-       checkStatus(status,__FILE__,__LINE__);
+       //status=culaDeviceDgemv('T',M,M,1.0,VTd,M,ykd,1,0.0,dhatkd,1);
+       //checkStatus(status,__FILE__,__LINE__);
+       cbstatus=cublasDgemv(cbhandle,CUBLAS_OP_T,M,M,&cone,VTd,M,ykd,1,&czero,dhatkd,1);
 
        issolved=1;
 
@@ -1734,7 +1828,10 @@ mlm_der_single_cuda(
 
   /* || F(y_k) + J_k dhat_k || */
   //my_dgemv('T',M,N,1.0,Jk,M,dhatk,1,0.0,Jkdk,1);
-  status=culaDeviceDgemv('T',M,N,1.0,Jkd,M,dhatkd,1,0.0,Jkdkd,1);
+  //status=culaDeviceDgemv('T',M,N,1.0,Jkd,M,dhatkd,1,0.0,Jkdkd,1);
+  cone=1.0; czero=0.0;
+  cbstatus=cublasDgemv(cbhandle,CUBLAS_OP_T,M,N,&cone,Jkd,M,dhatkd,1,&czero,Jkdkd,1);
+ 
 
   /* Fyk <= Fyk+ J_k dhat_k */
 //  my_daxpy(N,Jkdk,1.0,Fyk);
@@ -1766,7 +1863,10 @@ mlm_der_single_cuda(
   /* || Fxk + J_k d_k || */
   /* J d_k : since J is row major, transpose */
 //  my_dgemv('T',M,N,1.0,Jk,M,dk,1,0.0,Jkdk,1);
-  status=culaDeviceDgemv('T',M,N,1.0,Jkd,M,dkd,1,0.0,Jkdkd,1);
+  //status=culaDeviceDgemv('T',M,N,1.0,Jkd,M,dkd,1,0.0,Jkdkd,1);
+  cone=1.0; czero=0.0;
+  cbstatus=cublasDgemv(cbhandle,CUBLAS_OP_T,M,N,&cone,Jkd,M,dkd,1,&czero,Jkdkd,1);
+ 
 
   /* Fxk <= Fxk+ J_k d_k or, J_k d_k <= Fxk+ J_k d_k */
   //my_daxpy(N,Fxk,1.0,Jkdk);
@@ -1831,6 +1931,8 @@ mlm_der_single_cuda(
   err=cudaMemcpyAsync(p,pd,M*sizeof(double),cudaMemcpyDeviceToHost,0);
   checkCudaError(err,__FILE__,__LINE__);
 
+  /* check once CUBLAS error */
+  checkCublasError(cbstatus,__FILE__,__LINE__);
 
 
   if (!gWORK) {
@@ -1858,6 +1960,12 @@ mlm_der_single_cuda(
 
   cudaFree(bbd);
   cudaFree(cohd);
+  }
+
+  cudaFree(devInfo);
+  cudaFree(work);
+  if (solve_axb==2) {
+   cudaFree(rwork);
   }
 
   if(info){

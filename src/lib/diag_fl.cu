@@ -64,7 +64,7 @@ kernel_jnorm_fl(int N, int M, const float *__restrict__ J, float *__restrict__ d
 }
 
 __global__ void 
-kernel_jacf_fl2(int Nbase, int M, float *__restrict__ jac, const float *__restrict__ coh, const float *__restrict__ p, const char *__restrict__ bb, int N){
+kernel_jacf_fl2(int Nbase, int M, float *__restrict__ jac, const float *__restrict__ coh, const float *__restrict__ p, const short *__restrict__ bb, int N){
   /* global thread index : equal to the baseline */
   unsigned int n = threadIdx.x + blockDim.x*blockIdx.x;
   /* which parameter:0...M */
@@ -169,7 +169,7 @@ extern "C"
 /* cuda driver for calculating jacf() */
 /* p: params (Mx1), jac: jacobian (NxM), other data : coh, baseline->stat mapping, Nbase, Mclusters, Nstations */
 void
-cudakernel_jacf_fl2(float *p, float *jac, int M, int N, float *coh, char *bbh, int Nbase, int Mclus, int Nstations) {
+cudakernel_jacf_fl2(float *p, float *jac, int M, int N, float *coh, short *bbh, int Nbase, int Mclus, int Nstations) {
 
 #ifdef CUDA_DBG
   cudaError_t error;

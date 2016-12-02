@@ -773,111 +773,17 @@ minimize_viz_full_pth(double *p, double *x, int m, int n, void *data) {
 }
 
 
-/* minimization function (multithreaded) */
-/* p: size mx1 parameters
-   x: size nx1 data calculated
-   data: extra info needed */
-#ifdef USE_MIC
-__attribute__ ((target(MIC)))
-#endif
-static void
-minimize_viz_full_pth00(double *p, double *x, int m, int n, void *data) {
-
-  me_data_t *dp=(me_data_t*)data;
-  /* u,v,w : size Nbase*tilesz x 1  x: size Nbase*8*tilesz x 1 */
-  /* barr: size Nbase*tilesz x 1 carr: size Mx1 */
-  /* pp: size 8*N*M x 1 */
-  /* pm: size Mx1 of double */
-
-  int ci;
-
- int cm,sta1,sta2;
- double *pm;
- complex double C[4],G1[4],G2[4],T1[4],T2[4];
- int M=(dp->M);
- int Ntilebase=(dp->Nbase)*(dp->tilesz);
- int px;
-
- for (ci=0; ci<Ntilebase; ci++) {
-   /* iterate over the sky model and calculate contribution */
-   /* for this x[8*ci:8*(ci+1)-1] */
-   memset(&(x[8*ci]),0,sizeof(double)*8);
-
-   /* if this baseline is flagged, we do not compute */
-   if (!dp->barr[ci].flag) {
-
-   /* stations for this baseline */
-   sta1=dp->barr[ci].sta1;
-   sta2=dp->barr[ci].sta2;
-   for (cm=0; cm<M; cm++) { /* clusters */
-     /* gains for this cluster, for sta1,sta2 */
-    /* depending on the baseline index, and cluster chunk size,
-        select proper parameter addres */
-    /* depending on the chunk size and the baseline index,
-        select right set of parameters 
-       data x=[0,........,Nbase*tilesz]
-       divided into nchunk chunks
-       p[0] -> x[0.....Nbase*tilesz/nchunk-1]
-       p[1] -> x[Nbase*tilesz/nchunk......2*Nbase*tilesz-1]
-       ....
-       p[last] -> x[(nchunk-1)*Nbase*tilesz/nchunk......Nbase*tilesz]
-
-       so given bindex,  right p[] is bindex/((Nbase*tilesz+nchunk-1)/nchunk)
-       */
-
-     px=(ci)/((Ntilebase+dp->carr[cm].nchunk-1)/dp->carr[cm].nchunk);
-     //pm=&(t->p[cm*8*N]);
-     pm=&(p[dp->carr[cm].p[px]]);
-     G1[0]=(pm[sta1*8])+_Complex_I*(pm[sta1*8+1]);
-     G1[1]=(pm[sta1*8+2])+_Complex_I*(pm[sta1*8+3]);
-     G1[2]=(pm[sta1*8+4])+_Complex_I*(pm[sta1*8+5]);
-     G1[3]=(pm[sta1*8+6])+_Complex_I*(pm[sta1*8+7]);
-     G2[0]=(pm[sta2*8])+_Complex_I*(pm[sta2*8+1]);
-     G2[1]=(pm[sta2*8+2])+_Complex_I*(pm[sta2*8+3]);
-     G2[2]=(pm[sta2*8+4])+_Complex_I*(pm[sta2*8+5]);
-     G2[3]=(pm[sta2*8+6])+_Complex_I*(pm[sta2*8+7]);
-
-
-      /* use pre calculated values */
-      C[0]=dp->coh[4*dp->M*ci+4*cm];
-      C[1]=dp->coh[4*dp->M*ci+4*cm+1];
-      C[2]=dp->coh[4*dp->M*ci+4*cm+2];
-      C[3]=dp->coh[4*dp->M*ci+4*cm+3];
-
-     /* form G1*C*G2' */
-     /* T1=G1*C  */
-     amb(G1,C,T1);
-     /* T2=T1*G2' */
-     ambt(T1,G2,T2);
-
-     /* add to baseline visibilities */
-     x[8*ci]+=creal(T2[0]);
-     x[8*ci+1]+=cimag(T2[0]);
-     x[8*ci+2]+=creal(T2[1]);
-     x[8*ci+3]+=cimag(T2[1]);
-     x[8*ci+4]+=creal(T2[2]);
-     x[8*ci+5]+=cimag(T2[2]);
-     x[8*ci+6]+=creal(T2[3]);
-     x[8*ci+7]+=cimag(T2[3]);
-   }
-  }
- }
-
-}
-
-
 /******************** end full minimization *****************************/
-
 int
 sagefit_visibilities(double *u, double *v, double *w, double *x, int N,   
-   int Nbase, int tilesz,  baseline_t *barr,  clus_source_t *carr, complex double *coh, int M, int Mt, double freq0, double fdelta, double *pp, double uvmin, int Nt, int max_emiter, int max_iter, int max_lbfgs, int lbfgs_m, int gpu_threads, int linsolv,int solver_mode,double nulow, double nuhigh,int randomize, int whiten, double *mean_nu, double *res_0, double *res_1) {
+   int Nbase, int tilesz,  baseline_t *barr,  clus_source_t *carr, complex double *coh, int M, int Mt, double freq0, double fdelta, double *pp, double uvmin, int Nt, int max_emiter, int max_iter, int max_lbfgs, int lbfgs_m, int gpu_threads, int linsolv,int solver_mode,double nulow, double nuhigh,int randomize,  double *mean_nu, double *res_0, double *res_1) {
   /* u,v,w : size Nbase*tilesz x 1  x: size Nbase*8*tilesz x 1 */
   /* barr: size Nbase*tilesz x 1 carr: size Mx1 */
   /* pp: size 8*N*M x 1 */
   /* pm: size Mx1 of double */
 
 
-  int  ci,cj,ck,ret,tcj;
+  int  ci,cj,ck,tcj;
   double *p; // parameters: m x 1
   int m, n;
   double opts[CLM_OPTS_SZ], info[CLM_INFO_SZ];
@@ -999,43 +905,43 @@ printf("\n\ncluster %d iter=%d\n",cj,this_itermax);
        lmdata.tileoff=tcj;
        if(solver_mode==SM_OSLM_LBFGS) {
          if (ci==max_emiter-1){
-           ret=clevmar_der_single_nocuda(mylm_fit_single_pth0, mylm_jac_single_pth, &p[carr[cj].p[ck]], &xdummy[8*tcj*Nbase], 8*N, 8*ntiles*Nbase, this_itermax, opts, info, linsolv, (void*)&lmdata);  
+           clevmar_der_single_nocuda(mylm_fit_single_pth0, mylm_jac_single_pth, &p[carr[cj].p[ck]], &xdummy[8*tcj*Nbase], 8*N, 8*ntiles*Nbase, this_itermax, opts, info, linsolv, (void*)&lmdata);  
          } else {
-           ret=oslevmar_der_single_nocuda(mylm_fit_single_pth0, mylm_jac_single_pth, &p[carr[cj].p[ck]], &xdummy[8*tcj*Nbase], 8*N, 8*ntiles*Nbase, this_itermax, opts, info, linsolv, randomize, (void*)&lmdata);  
+           oslevmar_der_single_nocuda(mylm_fit_single_pth0, mylm_jac_single_pth, &p[carr[cj].p[ck]], &xdummy[8*tcj*Nbase], 8*N, 8*ntiles*Nbase, this_itermax, opts, info, linsolv, randomize, (void*)&lmdata);  
          }
        } else if (solver_mode==SM_LM_LBFGS) {
-         ret=clevmar_der_single_nocuda(mylm_fit_single_pth0, mylm_jac_single_pth, &p[carr[cj].p[ck]], &xdummy[8*tcj*Nbase], 8*N, 8*ntiles*Nbase, this_itermax, opts, info, linsolv, (void*)&lmdata);  
+         clevmar_der_single_nocuda(mylm_fit_single_pth0, mylm_jac_single_pth, &p[carr[cj].p[ck]], &xdummy[8*tcj*Nbase], 8*N, 8*ntiles*Nbase, this_itermax, opts, info, linsolv, (void*)&lmdata);  
        } else if (solver_mode==SM_RLM_RLBFGS) {
          /* only the last EM iteration is robust */
          if (ci==max_emiter-1){
           lmdata.robust_nu=robust_nu0;
-          ret=rlevmar_der_single_nocuda(mylm_fit_single_pth0, mylm_jac_single_pth, &p[carr[cj].p[ck]], &xdummy[8*tcj*Nbase], 8*N, 8*ntiles*Nbase, this_itermax, NULL, info, linsolv, Nt, nulow, nuhigh, whiten, (void*)&lmdata);  
+          rlevmar_der_single_nocuda(mylm_fit_single_pth0, mylm_jac_single_pth, &p[carr[cj].p[ck]], &xdummy[8*tcj*Nbase], 8*N, 8*ntiles*Nbase, this_itermax, NULL, info, linsolv, Nt, nulow, nuhigh, (void*)&lmdata);  
           /* get updated value of robust_nu */
           robust_nuM[cj]+=lmdata.robust_nu;
           } else {
-           ret=oslevmar_der_single_nocuda(mylm_fit_single_pth0, mylm_jac_single_pth, &p[carr[cj].p[ck]], &xdummy[8*tcj*Nbase], 8*N, 8*ntiles*Nbase, this_itermax, opts, info, linsolv, randomize, (void*)&lmdata);  
+           oslevmar_der_single_nocuda(mylm_fit_single_pth0, mylm_jac_single_pth, &p[carr[cj].p[ck]], &xdummy[8*tcj*Nbase], 8*N, 8*ntiles*Nbase, this_itermax, opts, info, linsolv, randomize, (void*)&lmdata);  
          }
        } else if (solver_mode==SM_OSLM_OSRLM_RLBFGS) {
          /* only the last EM iteration is robust */
          if (ci==max_emiter-1){
           lmdata.robust_nu=robust_nu0;
-          ret=osrlevmar_der_single_nocuda(mylm_fit_single_pth0, mylm_jac_single_pth, &p[carr[cj].p[ck]], &xdummy[8*tcj*Nbase], 8*N, 8*ntiles*Nbase, this_itermax, NULL, info, linsolv, Nt,  nulow, nuhigh, randomize, whiten, (void*)&lmdata);  
+          osrlevmar_der_single_nocuda(mylm_fit_single_pth0, mylm_jac_single_pth, &p[carr[cj].p[ck]], &xdummy[8*tcj*Nbase], 8*N, 8*ntiles*Nbase, this_itermax, NULL, info, linsolv, Nt,  nulow, nuhigh, randomize,  (void*)&lmdata);  
           /* get updated value of robust_nu */
           robust_nuM[cj]+=lmdata.robust_nu;
           } else {
-           ret=oslevmar_der_single_nocuda(mylm_fit_single_pth0, mylm_jac_single_pth, &p[carr[cj].p[ck]], &xdummy[8*tcj*Nbase], 8*N, 8*ntiles*Nbase, this_itermax, opts, info, linsolv, randomize, (void*)&lmdata);  
+           oslevmar_der_single_nocuda(mylm_fit_single_pth0, mylm_jac_single_pth, &p[carr[cj].p[ck]], &xdummy[8*tcj*Nbase], 8*N, 8*ntiles*Nbase, this_itermax, opts, info, linsolv, randomize, (void*)&lmdata);  
          }
        } else if (solver_mode==SM_RTR_OSLM_LBFGS) { /* RTR */
             /* RSD+RTR */
            double Delta0=0.01; /* since previous timeslot used LM, use a very small TR radius because this solution will not be too far off */
-           ret=rtr_solve_nocuda(&p[carr[cj].p[ck]], &xdummy[8*tcj*Nbase], N, ntiles*Nbase, this_itermax+5, this_itermax+10, Delta0, Delta0*0.125, info, &lmdata);
+           rtr_solve_nocuda(&p[carr[cj].p[ck]], &xdummy[8*tcj*Nbase], N, ntiles*Nbase, this_itermax+5, this_itermax+10, Delta0, Delta0*0.125, info, &lmdata);
        } else if (solver_mode==SM_RTR_OSRLM_RLBFGS) { /* RTR + Robust */
             /* RSD+RTR */
            if (!ci){
             lmdata.robust_nu=robust_nu0;
            } 
            double Delta0=0.01; /* since previous timeslot used LM, use a very small TR radius because this solution will not be too far off */
-           ret=rtr_solve_nocuda_robust(&p[carr[cj].p[ck]], &xdummy[8*tcj*Nbase], N, ntiles*Nbase, this_itermax+5, this_itermax+10, Delta0, Delta0*0.125, nulow, nuhigh, info, &lmdata);
+           rtr_solve_nocuda_robust(&p[carr[cj].p[ck]], &xdummy[8*tcj*Nbase], N, ntiles*Nbase, this_itermax+5, this_itermax+10, Delta0, Delta0*0.125, nulow, nuhigh, info, &lmdata);
            if (ci==max_emiter-1){
             robust_nuM[cj]+=lmdata.robust_nu;
            }
@@ -1044,12 +950,11 @@ printf("\n\ncluster %d iter=%d\n",cj,this_itermax);
            if (!ci){
             lmdata.robust_nu=robust_nu0;
            } 
-           ret=nsd_solve_nocuda_robust(&p[carr[cj].p[ck]], &xdummy[8*tcj*Nbase], N, ntiles*Nbase, this_itermax+15, nulow, nuhigh, info, &lmdata);
+           nsd_solve_nocuda_robust(&p[carr[cj].p[ck]], &xdummy[8*tcj*Nbase], N, ntiles*Nbase, this_itermax+15, nulow, nuhigh, info, &lmdata);
            if (ci==max_emiter-1){
             robust_nuM[cj]+=lmdata.robust_nu;
            }
        } else { /* not used */
-         //ret=mlm_der_single(mylm_fit_single_pth0, mylm_jac_single_pth, &p[carr[cj].p[ck]], &xdummy[8*tcj*Nbase], 8*N, 8*ntiles*Nbase, this_itermax, NULL, info, linsolv, (void*)&lmdata);  
 #ifndef USE_MIC
         fprintf(stderr,"%s: %d: undefined solver mode\n",__FILE__,__LINE__);
 #endif
@@ -1118,10 +1023,9 @@ printf("residual init=%lf final=%lf\n\n",init_res,final_res);
   /* use LBFGS */
    if (solver_mode==SM_OSLM_OSRLM_RLBFGS || solver_mode==SM_RLM_RLBFGS ||  solver_mode==SM_RTR_OSRLM_RLBFGS || solver_mode==SM_NSD_RLBFGS) {
     lmdata.robust_nu=robust_nu0;
-    /* pre-whiten data when calculating residual */
-    ret=lbfgs_fit_robust(minimize_viz_full_pth, p, x, m, n, max_lbfgs, lbfgs_m, gpu_threads, whiten, (void*)&lmdata);
+    lbfgs_fit_robust(minimize_viz_full_pth, p, x, m, n, max_lbfgs, lbfgs_m, gpu_threads, (void*)&lmdata);
    } else {
-    ret=lbfgs_fit(minimize_viz_full_pth, p, x, m, n, max_lbfgs, lbfgs_m, gpu_threads, (void*)&lmdata);
+    lbfgs_fit(minimize_viz_full_pth, p, x, m, n, max_lbfgs, lbfgs_m, gpu_threads, (void*)&lmdata);
    }
 #ifdef USE_MIC
   lmdata.Nt=Nt; /* reset threads for MIC */
@@ -1219,7 +1123,6 @@ int
 bfgsfit_visibilities(double *u, double *v, double *w, double *x, int N,   
    int Nbase, int tilesz,  baseline_t *barr,  clus_source_t *carr, complex double *coh, int M, int Mt, double freq0, double fdelta, double *pp, double uvmin, int Nt, int max_lbfgs, int lbfgs_m, int gpu_threads, int solver_mode, double mean_nu, double *res_0, double *res_1) {
 
-  int  ret;
   double *p; // parameters: m x 1
   int m, n;
   me_data_t lmdata;
@@ -1278,9 +1181,9 @@ bfgsfit_visibilities(double *u, double *v, double *w, double *x, int N,
   /* use LBFGS */
    if (solver_mode==2 || solver_mode==3) {
     lmdata.robust_nu=mean_nu;
-    ret=lbfgs_fit_robust(minimize_viz_full_pth, p, x, m, n, max_lbfgs, lbfgs_m, gpu_threads, 0, (void*)&lmdata); /* 0 to disable whitening */
+    lbfgs_fit_robust(minimize_viz_full_pth, p, x, m, n, max_lbfgs, lbfgs_m, gpu_threads, (void*)&lmdata); 
    } else {
-    ret=lbfgs_fit(minimize_viz_full_pth, p, x, m, n, max_lbfgs, lbfgs_m, gpu_threads, (void*)&lmdata);
+    lbfgs_fit(minimize_viz_full_pth, p, x, m, n, max_lbfgs, lbfgs_m, gpu_threads, (void*)&lmdata);
    }
 #ifdef USE_MIC
   lmdata.Nt=Nt; /* reset threads for MIC */

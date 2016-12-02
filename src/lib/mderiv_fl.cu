@@ -45,7 +45,7 @@ __global__ void kernel_diagmu_fl(int M, float *A,float mu){
 }
 
 
-__global__ void kernel_func_fl(int Nbase, float *x, float *coh, float *p, char *bb, int N){
+__global__ void kernel_func_fl(int Nbase, float *x, float *coh, float *p, short *bb, int N){
   /* global thread index : equal to the baseline */
   unsigned int n = threadIdx.x + blockDim.x*blockIdx.x;
 
@@ -153,7 +153,7 @@ __global__ void kernel_func_fl(int Nbase, float *x, float *coh, float *p, char *
 
 }
 
-__global__ void kernel_jacf_fl(int Nbase, int M, float *jac, float *coh, float *p, char *bb, int N){
+__global__ void kernel_jacf_fl(int Nbase, int M, float *jac, float *coh, float *p, short *bb, int N){
   /* global thread index : equal to the baseline */
   unsigned int n = threadIdx.x + blockDim.x*blockIdx.x;
   /* which parameter:0...M */
@@ -325,7 +325,7 @@ cudakernel_diagmu_fl(int ThreadsPerBlock, int BlocksPerGrid, int M, float *A, fl
 /* cuda driver for calculating f() */
 /* p: params (Mx1), x: data (Nx1), other data : coh, baseline->stat mapping, Nbase, Mclusters, Nstations */
 void
-cudakernel_func_fl(int ThreadsPerBlock, int BlocksPerGrid, float *p, float *x, int M, int N, float *coh, char *bbh, int Nbase, int Mclus, int Nstations) {
+cudakernel_func_fl(int ThreadsPerBlock, int BlocksPerGrid, float *p, float *x, int M, int N, float *coh, short *bbh, int Nbase, int Mclus, int Nstations) {
 
 #ifdef CUDA_DBG
   cudaError_t error;
@@ -349,7 +349,7 @@ cudakernel_func_fl(int ThreadsPerBlock, int BlocksPerGrid, float *p, float *x, i
 /* cuda driver for calculating jacf() */
 /* p: params (Mx1), jac: jacobian (NxM), other data : coh, baseline->stat mapping, Nbase, Mclusters, Nstations */
 void
-cudakernel_jacf_fl(int ThreadsPerBlock_row, int  ThreadsPerBlock_col, float *p, float *jac, int M, int N, float *coh, char *bbh, int Nbase, int Mclus, int Nstations) {
+cudakernel_jacf_fl(int ThreadsPerBlock_row, int  ThreadsPerBlock_col, float *p, float *jac, int M, int N, float *coh, short *bbh, int Nbase, int Mclus, int Nstations) {
 
 #ifdef CUDA_DBG
   cudaError_t error;

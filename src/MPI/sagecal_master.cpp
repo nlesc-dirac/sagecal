@@ -40,6 +40,9 @@ sagecal_master(int argc, char **argv) {
       MPI_Finalize();
       exit(1);
     }
+
+    openblas_set_num_threads(1);//Data::Nt;
+
     MPIData iodata;
     MPI_Status status;
     iodata.tilesz=Data::TileSize;
@@ -170,6 +173,12 @@ cout<<"Reference frequency (MHz)="<<iodata.freq0*1.0e-6<<endl;
      fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
      exit(1);
     }
+    /* array to store flag ratio per each slave */
+    double *fratio;
+    if ((fratio=(double*)calloc((size_t)iodata.Nms,sizeof(double)))==0) {
+     fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
+     exit(1);
+    }
 
     /* if text file is given, read it and update rho array */
     if (Data::admm_rho_file) {
@@ -200,10 +209,9 @@ cout<<"Reference frequency (MHz)="<<iodata.freq0*1.0e-6<<endl;
     }
 #endif
 
-    /* each Npoly blocks is bases evaluated at one freq */
-    setup_polynomials(B, Npoly, iodata.Nms, iodata.freqs, iodata.freq0, 1);
-    /* find sum B(:,i)B(:,i)^T, and its pseudoinverse */
-    find_prod_inverse(B,Bi,Npoly,iodata.Nms);
+    /* each Npoly blocks is bases evaluated at one freq, catch if Npoly=1 */
+    setup_polynomials(B, Npoly, iodata.Nms, iodata.freqs, iodata.freq0,(Npoly==1?1:PolyType));
+
 
 #ifdef DEBUG
     fprintf(dfp,"B=[\n");
@@ -252,6 +260,14 @@ cout<<"Reference frequency (MHz)="<<iodata.freq0*1.0e-6<<endl;
       for(int cm=0; cm<iodata.Nms; cm++) {
         MPI_Send(&msgcode, 1, MPI_INT, cm+1,TAG_CTRL, MPI_COMM_WORLD);
       }
+
+      /* receive flag ratio (0 means all flagged) from each slave */
+      for(int cm=0; cm<iodata.Nms; cm++) {
+          MPI_Recv(&fratio[cm], 1, MPI_DOUBLE, cm+1,TAG_FRATIO, MPI_COMM_WORLD, &status);
+      }
+
+      /* find sum fratio[i] * B(:,i)B(:,i)^T, and its pseudoinverse */
+      find_prod_inverse(B,Bi,Npoly,iodata.Nms,fratio);
 
       for (int admm=0; admm<Nadmm; admm++) {
          /* get Y_i+rho J_i from each slave */
@@ -341,7 +357,11 @@ cout<<"Reference frequency (MHz)="<<iodata.freq0*1.0e-6<<endl;
          /* find dual error ||Zold-Znew|| */
          my_daxpy(iodata.N*8*Npoly*iodata.M,Z,-1.0,Zold);
          /* dual residual per one real parameter */
-         cout<<"ADMM : "<<admm<<" dual residual="<<my_dnrm2(iodata.N*8*Npoly*iodata.M,Zold)/sqrt((double)8*iodata.N*Npoly*iodata.M)<<endl;
+         if (Data::verbose) {
+          cout<<"ADMM : "<<admm<<" dual residual="<<my_dnrm2(iodata.N*8*Npoly*iodata.M,Zold)/sqrt((double)8*iodata.N*Npoly*iodata.M)<<endl;
+         } else {
+          cout<<"Timeslot:"<<ct<<" ADMM:"<<admm<<endl;
+         }
 
  #ifdef DEBUG
          fprintf(dfp,"%%%%%%%%%%%%%% time=%d admm=%d\n",ct,admm);
@@ -403,6 +423,12 @@ cout<<"Reference frequency (MHz)="<<iodata.freq0*1.0e-6<<endl;
        fprintf(sfp,"\n");
       }
      }
+     if (resetcount>iodata.Nms/2) {
+       /* if most slaves have reset, print a warning only */
+       //memset(Z,0,sizeof(double)*(size_t)iodata.N*8*Npoly*iodata.M);
+       cout<<"Resetting Global Solution"<<endl;
+     }
+
 
     }
 
@@ -431,6 +457,7 @@ cout<<"Reference frequency (MHz)="<<iodata.freq0*1.0e-6<<endl;
    free(B);
    free(Bi);
    free(arho);
+   free(fratio);
   /**********************************************************/
 
    cout<<"Done."<<endl;    

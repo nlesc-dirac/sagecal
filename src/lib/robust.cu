@@ -24,7 +24,7 @@
 /* enable this for kernel failure detection */
 //#define CUDA_DBG
 
-__global__ void kernel_deriv_robust(int Nbase, int tilesz, int M, int Ns, int Nparam, int goff, double robust_nu, double *x, double *coh, double *p, char *bb, int *ptoclus, double *grad){
+__global__ void kernel_deriv_robust(int Nbase, int tilesz, int M, int Ns, int Nparam, int goff, double robust_nu, double *x, double *coh, double *p, short *bb, int *ptoclus, double *grad){
   /* global thread index */
   unsigned int n = threadIdx.x + blockDim.x*blockIdx.x;
   /* parameter number of this thread */
@@ -225,7 +225,7 @@ __global__ void kernel_deriv_robust(int Nbase, int tilesz, int M, int Ns, int Np
 }
 
 
-__global__ void kernel_func_wt(int Nbase, double *x, double *coh, double *p, char *bb, double *wt, int N){
+__global__ void kernel_func_wt(int Nbase, double *x, double *coh, double *p, short *bb, double *wt, int N){
   /* global thread index : equal to the baseline */
   unsigned int n = threadIdx.x + blockDim.x*blockIdx.x;
 
@@ -333,7 +333,7 @@ __global__ void kernel_func_wt(int Nbase, double *x, double *coh, double *p, cha
 
 }
 
-__global__ void kernel_jacf_wt(int Nbase, int M, double *jac, double *coh, double *p, char *bb, double *wt, int N){
+__global__ void kernel_jacf_wt(int Nbase, int M, double *jac, double *coh, double *p, short *bb, double *wt, int N){
   /* global thread index : equal to the baseline */
   unsigned int n = threadIdx.x + blockDim.x*blockIdx.x;
   /* which parameter:0...M */
@@ -629,7 +629,7 @@ cudakernel_evaluatenu(int ThreadsPerBlock, int BlocksPerGrid, int Nd, double qsu
 /* cuda driver for calculating wt \odot f() */
 /* p: params (Mx1), x: data (Nx1), other data : coh, baseline->stat mapping, Nbase, Mclusters, Nstations */
 void
-cudakernel_func_wt(int ThreadsPerBlock, int BlocksPerGrid, double *p, double *x, int M, int N, double *coh, char *bbh, double *wt, int Nbase, int Mclus, int Nstations) {
+cudakernel_func_wt(int ThreadsPerBlock, int BlocksPerGrid, double *p, double *x, int M, int N, double *coh, short *bbh, double *wt, int Nbase, int Mclus, int Nstations) {
 
 #ifdef CUDA_DBG
   cudaError_t error;
@@ -653,7 +653,7 @@ cudakernel_func_wt(int ThreadsPerBlock, int BlocksPerGrid, double *p, double *x,
 /* cuda driver for calculating wt \odot jacf() */
 /* p: params (Mx1), jac: jacobian (NxM), other data : coh, baseline->stat mapping, Nbase, Mclusters, Nstations */
 void
-cudakernel_jacf_wt(int ThreadsPerBlock_row, int  ThreadsPerBlock_col, double *p, double *jac, int M, int N, double *coh, char *bbh, double *wt, int Nbase, int Mclus, int Nstations, int clus) {
+cudakernel_jacf_wt(int ThreadsPerBlock_row, int  ThreadsPerBlock_col, double *p, double *jac, int M, int N, double *coh, short *bbh, double *wt, int Nbase, int Mclus, int Nstations, int clus) {
 
 #ifdef CUDA_DBG
   cudaError_t error;
@@ -682,7 +682,7 @@ cudakernel_jacf_wt(int ThreadsPerBlock_row, int  ThreadsPerBlock_col, double *p,
 }
 
 /* cuda driver for kernel */
-/* ThreadsPerBlock: keep <= 128
+/* ThreadsPerBlock: keep <= 128 ???
    BlocksPerGrid: depends on the threads/baselines> Threads*Blocks approx baselines
    Nbase: no of baselines (total, including tilesz >1)
    tilesz: tile size
@@ -698,7 +698,7 @@ cudakernel_jacf_wt(int ThreadsPerBlock_row, int  ThreadsPerBlock_col, double *p,
 
    grad: Nparamsx1 gradient values
 */
-void cudakernel_lbfgs_robust(int ThreadsPerBlock, int BlocksPerGrid, int Nbase, int tilesz, int M, int Ns, int Nparam, int goff, double robust_nu, double *x, double *coh, double *p, char *bb, int *ptoclus, double *grad){
+void cudakernel_lbfgs_robust(int ThreadsPerBlock, int BlocksPerGrid, int Nbase, int tilesz, int M, int Ns, int Nparam, int goff, double robust_nu, double *x, double *coh, double *p, short *bb, int *ptoclus, double *grad){
 
 #ifdef CUDA_DBG
   cudaError_t error;

@@ -2,7 +2,7 @@ OUTPUT=
 CXX=g++
 CXXFLAGS=-O3 -Wall -g #-pg #-fnostack-protector
 CASA_LIBDIR=/opt/casacore/lib
-CASA_INCDIR=/opt/casacore/include/casacore
+CASA_INCDIR=-I/opt/casacore/include/ -I/opt/casacore/include/casacore
 CASA_LIBS=-lcasa_casa -lcasa_tables -lcasa_measures -lcasa_ms -lcfitsio
 #LAPACK=-llapack -lblas
 LAPACK=-lopenblas -lgfortran -lpthread
@@ -14,7 +14,7 @@ LDFLAGS=-Wl,--rpath,/usr/local/OpenBLAS/lib/
 # -Wl,--hash-style=both
 
 MY_LIBS=-lm -lsagecal
-INCLUDES=-I. -I./lib -I$(CASA_INCDIR) -I/usr/include
+INCLUDES=-I. -I./lib $(CASA_INCDIR) -I/usr/include
 LIBPATH=-L$(LAPACK_DIR) -L$(CASA_LIBDIR)  -L./lib
 
 #### glib

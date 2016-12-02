@@ -432,3 +432,31 @@ __attribute__ ((target(MIC)))
    scopy_(&N,x,&Nx,y,&Ny);
   }
 }
+
+
+/* LAPACK eigen value expert routine, real symmetric  matrix */
+int 
+my_dsyevx(char jobz, char range, char uplo, int N, double *A, int lda,
+  double vl, double vu, int il, int iu, double abstol, int M, double  *W,
+  double *Z, int ldz, double *WORK, int lwork, int *iwork, int *ifail) {
+
+  extern void dsyevx_(char *JOBZ, char *RANGE, char *UPLO, int *N, double *A, int *LDA,
+   double  *VL, double *VU, int *IL, int *IU, double *ABSTOL, int *M, double *W, double *Z, 
+   int *LDZ, double *WORK, int *LWORK, int *IWORK, int *IFAIL, int *INFO);
+  int info;
+  dsyevx_(&jobz,&range,&uplo,&N,A,&lda,&vl,&vu,&il,&iu,&abstol,&M,W,Z,&ldz,WORK,&lwork,iwork,ifail,&info);
+  return info;
+} 
+
+
+
+/* BLAS vector outer product
+   A= alpha x x^H + A
+*/
+void
+my_zher(char uplo, int N, double alpha, complex double *x, int incx, complex double *A, int lda) {
+
+  extern void zher_(char *UPLO, int *N, double *ALPHA, complex double *X, int *INCX, complex double *A, int *LDA);
+  
+  zher_(&uplo,&N,&alpha,x,&incx,A,&lda);
+}

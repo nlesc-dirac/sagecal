@@ -1,4 +1,4 @@
-Wed Nov  4 21:14:51 CET 2015
+vr  2 dec 2016 23:07:19 CET
 SAGECal Installation
 ====================
 0) Prerequsites:
@@ -9,8 +9,8 @@ SAGECal Installation
    Also, to avoid any linking issues (and to get best performance), build OpenBLAS from source and link SAGECal with the static library (libopenblas***.a) and NOT libopenblas***.so
  - Compilers gcc/g++ or Intel icc/icpc 
  - If you have NVIDIA GPUs, 
-  -- CUDA/CUBLAS and nvcc
-  -- CULATOOLS http://www.culatools.com/
+  -- CUDA/CUBLAS/CUSOLVER and nvcc
+  -- NVML Nvidia management library
  - If you are using Intel Xeon Phi MICs.
   -- Intel MKL and other libraries
  - Get the source for SAGECal : git clone git://git.code.sf.net/p/sagecal/code sagecal-code
@@ -26,15 +26,15 @@ SAGECal Installation
  - CASA_LIBDIR/CASA_INCDIR/CASA_LIBS : casacore include/library location and files:
   Note with new CASACORE might need two include paths, e.g.
     -I/opt/casacore/include/ -I/opt/casacore/include/casacore
- - CUDAINC/CUDALIB : where CUDA/CUBLAS is installed
+ - CUDAINC/CUDALIB : where CUDA/CUBLAS/CUSOLVER is installed
+ - NVML_INC/NVML_LIB : NVML include/lib path
  - NVCFLAGS : flags to pass to nvcc, especially -arch option to match your GPU  
- - CULA* : where CULATOOLS are installed
  - MKLROOT : for Intel MKL
 
  Example makefiles: 
    Makefile : plain build
-   Makefile.oneGPU : with One GPU support
-   Makefile.twoGPU : with two GPUs supported
+   Makefile.gpu: with GPU support
+   Note: Edit sagecal.h MAX_GPU_ID to match the number of available GPUs
    Makefile.MIC : with Intel Xeon Phi support
 
 
@@ -43,11 +43,11 @@ SAGECAL-MPI Installation
 ========================
 0) Prerequsites:
  - Same as above 
- - MPI (OpenMPI)
+ - MPI (e.g. OpenMPI)
 
-1) Build ./src/lib as above
+1) Build ./src/lib as above (using mpicc -DMPI_BUILD)
 
-2) Build ./src/MPI using mpicc
+2) Build ./src/MPI using mpicc++
 
 
 

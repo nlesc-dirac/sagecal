@@ -64,31 +64,60 @@ namespace Data
        double freq0; /* averaged freq */
        double *flag; /* double for conforming with old routines size Nbase*tilesz x 1 */
        double deltaf; /* total bandwidth for freq. smearing */
+
+       double fratio; /* flagged data ratio = flagged/total, not counting data excluded from uv cut */
+                      /* if 1, all usable data are flagged */
     };
+
+    /* Station beam info */
+    struct LBeam {
+      double *time_utc; /* time coord UTC (s), size tileszx1, 
+                         convert from MJD (s) to JD (days) */
+      int *Nelem; /* no of elements in each station, size Nx1 */
+      /* position (ITRF) of stations (m)
+       later changed to logitude,latitude,height (rad,rad,m) */
+      double *sx; /* x: size Nx1 */
+      double *sy; /* y: ... */
+      double *sz; /* z: ... */
+      /* x,y,z coords of elements, projected, converted to ITRF (m) */
+      double **xx; /* x coord pointer, size Nx1, each *x: x coord of station, size Nelem[]x1 */
+      double **yy; /* y ... */
+      double **zz; /* z ... */
+      /* pointing center of beams (only one) (could be different from phase center) */
+      double p_ra0;
+      double p_dec0;
+    };
+
 
     /* read Auxilliary info and setup memory */
     void readAuxData(const char *fname, IOData *data);
+    void readAuxData(const char *fname, IOData *data, LBeam *binfo);
+
     void readAuxDataList(vector<string> msnames, IOData *data);
 
     void readMSlist(char *fname, vector<string> *msnames);
     /* load data using MS Iterator */
-    void loadData(Table t, IOData iodata);
-    void loadDataList(vector<MSIter*> msitr, Data::IOData iodata);
+    void loadData(Table t, IOData iodata, double *fratio);
+    void loadData(Table t, IOData iodata, LBeam binfo, double *fratio);
+
+    void loadDataList(vector<MSIter*> msitr, Data::IOData iodata, double *fratio);
     /* write back data using MS Iterator */
     void writeData(Table t, IOData iodata);
     void writeDataList(vector<MSIter*> msitr, IOData iodata);
     void freeData(IOData data);
+    void freeData(IOData data, LBeam binfo);
 
     extern int numChannels; 
     extern unsigned long int numRows;
 
-   struct float2 {
-     float x,y;
-   };
+    struct float2 {
+      float x,y;
+    };
 
 
     extern char *TableName; /* MS name */
     extern char *MSlist; /* text file with MS names */
+    extern char *MSpattern; /* pattern to match all MS names used in calibration */
     extern float min_uvcut;
     extern float max_uvcut;
     extern float max_uvtaper;
@@ -117,14 +146,20 @@ namespace Data
     extern int whiten;
     extern int DoSim; /* if 1, simulation mode */
     extern int doChan; /* if 1, solve for each channel in multi channel data */
+    extern int doBeam; /* if 1, predict (LOFAR) beam array factor */
     extern int DoDiag; /* if >0, enables diagnostics (Leverage) 1: write leverage as output (no residual), 2: only calculate fractions of leverage/noise */
+    extern int phaseOnly; /* if >0, and if any correction is done, extract phase and do phase only correction */
 
     /* distributed sagecal parameters */
     extern int Nadmm; /* ADMM iterations >=1 */
     extern int Npoly; /* polynomial order >=1 */
+    extern int PolyType; /* what kind on polynomials to use 0,1,2,3 */
     extern double admm_rho; /* regularization */
     extern char *admm_rho_file; /* text file for regularization of each cluster */
     /* for debugging, upper limit on time slots */
     extern int Nmaxtime;
+    /* skipping initial timeslots */
+    extern int Nskip;
+    extern int verbose; /* if >0, enable verbose output */
 }
 #endif //__DATA_H__

@@ -30,36 +30,26 @@
 #include <cuda_runtime.h>
 /* helper functions for diagnostics */
 static void
-checkStatus(culaStatus status, char *file, int line)
-{
-    char buf[80];
-    if(!status)
-        return;
-    culaGetErrorInfoString(status, culaGetErrorInfo(), buf, sizeof(buf));
-    printf("GPU (CULA): %s %s %d\n", buf,file,line);
-    culaShutdown();
-    exit(EXIT_FAILURE);
-}
-
-
-static void
 checkCudaError(cudaError_t err, char *file, int line)
 {
+#ifdef CUDA_DEBUG
     if(!err)
         return;
     printf("GPU (CUDA): %s %s %d\n", cudaGetErrorString(err),file,line);
-    culaShutdown();
     exit(EXIT_FAILURE);
+#endif
 }
 
 
 static void
 checkCublasError(cublasStatus_t cbstatus, char *file, int line)
 {
+#ifdef CUDA_DEBUG
    if (cbstatus!=CUBLAS_STATUS_SUCCESS) {
     printf("%s: %d: CUBLAS failure\n",file,line);
     exit(EXIT_FAILURE);  
    }
+#endif
 }
 
 
@@ -85,6 +75,7 @@ rlevmar_der_single_cuda(
                       */
 
   cublasHandle_t cbhandle, /* device handle */
+  cusolverDnHandle_t solver_handle, /* solver handle */
   double *gWORK, /* GPU allocated memory */
   int linsolv, /* 0 Cholesky, 1 QR, 2 SVD */
   int tileoff, /* tile offset when solving for many chunks */
@@ -98,7 +89,6 @@ rlevmar_der_single_cuda(
   /* general note: all device variables end with a 'd' */
   int stop=0;
   cudaError_t err;
-  culaStatus status;
   cublasStatus_t cbstatus;
 
   int nu=2,nu2;
@@ -145,7 +135,7 @@ rlevmar_der_single_cuda(
   /* coherency on device */
   double *cohd;
   /* baseline-station map on device/host */
-  char *bbd;
+  short *bbd;
 
   int solve_axb=linsolv;
   double alpha;
@@ -166,8 +156,8 @@ rlevmar_der_single_cuda(
   }
 
   /* calculate no of cuda threads and blocks */
-  int ThreadsPerBlock=128;
-  int ThreadsPerBlock1=128; /* 128/8 for accessing each element of a baseline */
+  int ThreadsPerBlock=DEFAULT_TH_PER_BK;
+  int ThreadsPerBlock1=DEFAULT_TH_PER_BK; /* DEFAULT_TH_PER_BK/8 for accessing each element of a baseline */
   int ThreadsPerBlock2=Nd/2; /* for evaluating nu */
   int BlocksPerGrid=(M+ThreadsPerBlock-1)/ThreadsPerBlock;
 
@@ -193,7 +183,7 @@ rlevmar_der_single_cuda(
   err=cudaMalloc((void**)&pnewd, M*sizeof(double));
   checkCudaError(err,__FILE__,__LINE__);
   /* needed for calculating f()  and jac() */
-  err=cudaMalloc((void**) &bbd, Nbase*2*sizeof(char));
+  err=cudaMalloc((void**) &bbd, Nbase*2*sizeof(short));
   checkCudaError(err,__FILE__,__LINE__);
   /* we need coherencies for only this cluster */
   err=cudaMalloc((void**) &cohd, Nbase*8*sizeof(double)); 
@@ -259,22 +249,46 @@ rlevmar_der_single_cuda(
      Sd=&gWORK[moff];
      moff+=M;
     }
-    bbd=(char*)&gWORK[moff];
-    moff+=(Nbase*2*sizeof(char))/sizeof(double);
+    bbd=(short*)&gWORK[moff];
+    moff+=(Nbase*2*sizeof(short))/sizeof(double);
   }
 
-  err=cudaMemcpyAsync(pd, p, M*sizeof(double), cudaMemcpyHostToDevice,0);
+  /* extra storage for cusolver */
+  int work_size=0;
+  int *devInfo;
+  int devInfo_h=0;
+  err=cudaMalloc((void**)&devInfo, sizeof(int));
+  checkCudaError(err,__FILE__,__LINE__);
+  double *work;
+  double *rwork;
+  if (solve_axb==0) {
+    cusolverDnDpotrf_bufferSize(solver_handle, CUBLAS_FILL_MODE_UPPER, M, jacTjacd, M, &work_size);
+    err=cudaMalloc((void**)&work, work_size*sizeof(double));
+    checkCudaError(err,__FILE__,__LINE__);
+  } else if (solve_axb==1) {
+    cusolverDnDgeqrf_bufferSize(solver_handle, M, M, jacTjacd, M, &work_size);
+    err=cudaMalloc((void**)&work, work_size*sizeof(double));
+    checkCudaError(err,__FILE__,__LINE__);
+  } else {
+    cusolverDnDgesvd_bufferSize(solver_handle, M, M, &work_size);
+    err=cudaMalloc((void**)&work, work_size*sizeof(double));
+    checkCudaError(err,__FILE__,__LINE__);
+    err=cudaMalloc((void**)&rwork, 5*M*sizeof(double));
+    checkCudaError(err,__FILE__,__LINE__);
+  }
+
+  err=cudaMemcpy(pd, p, M*sizeof(double), cudaMemcpyHostToDevice);
   checkCudaError(err,__FILE__,__LINE__);
   /* need to give right offset for coherencies */
   /* offset: cluster offset+time offset */
-  err=cudaMemcpyAsync(cohd, &(dp->ddcoh[(dp->Nbase)*(dp->tilesz)*(dp->clus)*8+(dp->Nbase)*tileoff*8]), Nbase*8*sizeof(double), cudaMemcpyHostToDevice,0);
+  err=cudaMemcpy(cohd, &(dp->ddcoh[(dp->Nbase)*(dp->tilesz)*(dp->clus)*8+(dp->Nbase)*tileoff*8]), Nbase*8*sizeof(double), cudaMemcpyHostToDevice);
   checkCudaError(err,__FILE__,__LINE__);
   /* correct offset for baselines */
-  err=cudaMemcpyAsync(bbd, &(dp->ddbase[2*(dp->Nbase)*(tileoff)]), Nbase*2*sizeof(char), cudaMemcpyHostToDevice,0);
+  err=cudaMemcpy(bbd, &(dp->ddbase[2*(dp->Nbase)*(tileoff)]), Nbase*2*sizeof(short), cudaMemcpyHostToDevice);
   checkCudaError(err,__FILE__,__LINE__);
   cudaDeviceSynchronize();
   /* xd <=x */
-  err=cudaMemcpyAsync(xd, x, N*sizeof(double), cudaMemcpyHostToDevice,0);
+  err=cudaMemcpy(xd, x, N*sizeof(double), cudaMemcpyHostToDevice);
   checkCudaError(err,__FILE__,__LINE__);
 
   /* set initial weights to 1 by a cuda kernel */
@@ -327,15 +341,19 @@ rlevmar_der_single_cuda(
      */
      /* since J is in ROW major order, assume it is transposed,
        so actually calculate A=J*J^T, where J is size MxN */
-     status=culaDeviceDgemm('N','T',M,M,N,1.0,jacd,M,jacd,M,0.0,jacTjacd,M);
-     checkStatus(status,__FILE__,__LINE__);
+     //status=culaDeviceDgemm('N','T',M,M,N,1.0,jacd,M,jacd,M,0.0,jacTjacd,M);
+     //checkStatus(status,__FILE__,__LINE__);
+     double cone=1.0; double czero=0.0;
+     cbstatus=cublasDgemm(cbhandle,CUBLAS_OP_N,CUBLAS_OP_T,M,M,N,&cone,jacd,M,jacd,M,&czero,jacTjacd,M);
+
      /* create backup */
      /* copy jacTjacd0<=jacTjacd */
      cbstatus=cublasDcopy(cbhandle, M*M, jacTjacd, 1, jacTjacd0, 1);
      /* J^T e */
      /* calculate b=J^T*e (actually compute b=J*e, where J in row major (size MxN) */
-     status=culaDeviceDgemv('N',M,N,1.0,jacd,M,ed,1,0.0,jacTed,1);
-     checkStatus(status,__FILE__,__LINE__);
+     //status=culaDeviceDgemv('N',M,N,1.0,jacd,M,ed,1,0.0,jacTed,1);
+     //checkStatus(status,__FILE__,__LINE__);
+     cbstatus=cublasDgemv(cbhandle,CUBLAS_OP_N,M,N,&cone,jacd,M,ed,1,&czero,jacTed,1);
 
 
      /* Compute ||J^T e||_inf and ||p||^2 */
@@ -391,8 +409,10 @@ rlevmar_der_single_cuda(
       if (solve_axb==0) {
         /* Cholesky solver **********************/
         /* lower triangle of Ad is destroyed */
-        status=culaDeviceDpotrf('U',M,jacTjacd,M);
-        if (!status) {
+        //status=culaDeviceDpotrf('U',M,jacTjacd,M);
+        cusolverDnDpotrf(solver_handle, CUBLAS_FILL_MODE_UPPER, M, jacTjacd, M, work, work_size, devInfo);
+        cudaMemcpy(&devInfo_h, devInfo, sizeof(int), cudaMemcpyDeviceToHost);
+        if (!devInfo_h) {
          issolved=1;
         } else {
          issolved=0;
@@ -406,8 +426,10 @@ rlevmar_der_single_cuda(
 #ifdef DEBUG
          checkCublasError(cbstatus,__FILE__,__LINE__);
 #endif
-         status=culaDeviceDpotrs('U',M,1,jacTjacd,M,Dpd,M);
-         if (status) {
+         //status=culaDeviceDpotrs('U',M,1,jacTjacd,M,Dpd,M);
+         cusolverDnDpotrs(solver_handle, CUBLAS_FILL_MODE_UPPER,M,1,jacTjacd,M,Dpd,M,devInfo);
+         cudaMemcpy(&devInfo_h, devInfo, sizeof(int), cudaMemcpyDeviceToHost);
+         if (devInfo_h) {
            issolved=0;
 #ifdef DEBUG
            printf("Singular matrix\n");
@@ -416,8 +438,11 @@ rlevmar_der_single_cuda(
         }
       } else if (solve_axb==1) {
         /* QR solver ********************************/
-        status=culaDeviceDgeqrf(M,M,jacTjacd,M,taud);
-        if (!status) {
+        //status=culaDeviceDgeqrf(M,M,jacTjacd,M,taud);
+        cusolverDnDgeqrf(solver_handle, M, M, jacTjacd, M, taud, work, work_size, devInfo);
+        cudaDeviceSynchronize();
+        cudaMemcpy(&devInfo_h, devInfo, sizeof(int), cudaMemcpyDeviceToHost);
+        if (!devInfo_h) {
          issolved=1;
         } else {
          issolved=0;
@@ -429,30 +454,40 @@ rlevmar_der_single_cuda(
         if (issolved) {
          /* copy Dpd<=jacTed */
          cbstatus=cublasDcopy(cbhandle, M, jacTed, 1, Dpd, 1);
-         status=culaDeviceDgeqrs(M,M,1,jacTjacd,M,taud,Dpd,M);
-         if (status) {
+         //status=culaDeviceDgeqrs(M,M,1,jacTjacd,M,taud,Dpd,M);
+         cusolverDnDormqr(solver_handle, CUBLAS_SIDE_LEFT, CUBLAS_OP_T, M, 1, M, jacTjacd, M, taud, Dpd, M, work, work_size, devInfo);
+         cudaDeviceSynchronize();
+         cudaMemcpy(&devInfo_h, devInfo, sizeof(int), cudaMemcpyDeviceToHost);
+         if (devInfo_h) {
            issolved=0;
 #ifdef DEBUG
            printf("Singular matrix\n");
 #endif
+         } else {
+          cone=1.0;
+          cbstatus=cublasDtrsm(cbhandle,CUBLAS_SIDE_LEFT,CUBLAS_FILL_MODE_UPPER,CUBLAS_OP_N,CUBLAS_DIAG_NON_UNIT,M,1,&cone,jacTjacd,M,Dpd,M);
          }
         }
       } else {
         /* SVD solver *********************************/
         /* U S VT = A */
-        status=culaDeviceDgesvd('A','A',M,M,jacTjacd,M,Sd,Ud,M,VTd,M);
-        checkStatus(status,__FILE__,__LINE__);
+        //status=culaDeviceDgesvd('A','A',M,M,jacTjacd,M,Sd,Ud,M,VTd,M);
+        //checkStatus(status,__FILE__,__LINE__);
+        cusolverDnDgesvd(solver_handle,'A','A',M,M,jacTjacd,M,Sd,Ud,M,VTd,M,work,work_size,rwork,devInfo);
+        cudaDeviceSynchronize();
         /* copy Dpd<=jacTed */
         cbstatus=cublasDcopy(cbhandle, M, jacTed, 1, Dpd, 1);
         /* b<=U^T * b */
-        status=culaDeviceDgemv('T',M,M,1.0,Ud,M,Dpd,1,0.0,Dpd,1);
+        //status=culaDeviceDgemv('T',M,M,1.0,Ud,M,Dpd,1,0.0,Dpd,1);
+        cone=1.0; czero=0.0;
+        cbstatus=cublasDgemv(cbhandle,CUBLAS_OP_T,M,M,&cone,Ud,M,Dpd,1,&czero,Dpd,1);
         /* divide by singular values  Dpd[]/Sd[]  for Sd[]> eps1 */
-        checkStatus(status,__FILE__,__LINE__);
         cudakernel_diagdiv(ThreadsPerBlock, BlocksPerGrid, M, eps1, Dpd, Sd);
 
         /* b<=VT^T * b */
-        status=culaDeviceDgemv('T',M,M,1.0,VTd,M,Dpd,1,0.0,Dpd,1);
-        checkStatus(status,__FILE__,__LINE__);
+        //status=culaDeviceDgemv('T',M,M,1.0,VTd,M,Dpd,1,0.0,Dpd,1);
+        //checkStatus(status,__FILE__,__LINE__);
+        cbstatus=cublasDgemv(cbhandle,CUBLAS_OP_T,M,M,&cone,VTd,M,Dpd,1,&czero,Dpd,1);
 
         issolved=1;
       }
@@ -610,6 +645,8 @@ printf("norm ||dp|| =%lf, norm ||p||=%lf\n",Dp_L2,p_L2);
   err=cudaMemcpyAsync(p,pd,M*sizeof(double),cudaMemcpyDeviceToHost,0);
   checkCudaError(err,__FILE__,__LINE__);
 
+  checkCublasError(cbstatus,__FILE__,__LINE__);
+
   /* synchronize async operations */
   cudaDeviceSynchronize();
 
@@ -637,6 +674,13 @@ printf("norm ||dp|| =%lf, norm ||p||=%lf\n",Dp_L2,p_L2);
   cudaFree(cohd);
   cudaFree(bbd);
   }
+
+  cudaFree(devInfo);
+  cudaFree(work);
+  if (solve_axb==2) {
+    cudaFree(rwork);
+  }
+
 
 #ifdef DEBUG
   printf("stop=%d\n",stop);
@@ -676,6 +720,7 @@ rlevmar_der_single_cuda_fl(
                       */
 
   cublasHandle_t cbhandle, /* device handle */
+  cusolverDnHandle_t solver_handle, /* solver handle */
   float *gWORK, /* GPU allocated memory */
   int linsolv, /* 0 Cholesky, 1 QR, 2 SVD */
   int tileoff, /* tile offset when solving for many chunks */
@@ -689,7 +734,6 @@ rlevmar_der_single_cuda_fl(
   /* general note: all device variables end with a 'd' */
   int stop=0;
   cudaError_t err;
-  culaStatus status;
   cublasStatus_t cbstatus;
 
   int nu=2,nu2;
@@ -736,7 +780,7 @@ rlevmar_der_single_cuda_fl(
   /* coherency on device */
   float *cohd;
   /* baseline-station map on device/host */
-  char *bbd;
+  short *bbd;
 
   int solve_axb=linsolv;
   float alpha;
@@ -757,9 +801,9 @@ rlevmar_der_single_cuda_fl(
   }
 
   /* calculate no of cuda threads and blocks */
-  int ThreadsPerBlock=128;
+  int ThreadsPerBlock=DEFAULT_TH_PER_BK;
   /* FIXME: might need a large value for large no of baselines */
-  int ThreadsPerBlock1=128; /* for accessing each element of a baseline */
+  int ThreadsPerBlock1=DEFAULT_TH_PER_BK; /* for accessing each element of a baseline */
   int ThreadsPerBlock2=Nd/2; /* for evaluating nu */
   int BlocksPerGrid=(M+ThreadsPerBlock-1)/ThreadsPerBlock;
 
@@ -805,8 +849,33 @@ rlevmar_der_single_cuda_fl(
      Sd=&gWORK[moff];
      moff+=M;
     }
-    bbd=(char*)&gWORK[moff];
-    moff+=(Nbase*2*sizeof(char))/sizeof(float);
+    bbd=(short*)&gWORK[moff];
+    moff+=(Nbase*2*sizeof(short))/sizeof(float);
+
+  /* extra storage for cusolver */
+  int work_size=0;
+  int *devInfo;
+  int devInfo_h=0;
+  err=cudaMalloc((void**)&devInfo, sizeof(int));
+  checkCudaError(err,__FILE__,__LINE__);
+  float *work;
+  float *rwork;
+  if (solve_axb==0) {
+    cusolverDnSpotrf_bufferSize(solver_handle, CUBLAS_FILL_MODE_UPPER, M, jacTjacd, M, &work_size);
+    err=cudaMalloc((void**)&work, work_size*sizeof(float));
+    checkCudaError(err,__FILE__,__LINE__);
+  } else if (solve_axb==1) {
+    cusolverDnSgeqrf_bufferSize(solver_handle, M, M, jacTjacd, M, &work_size);
+    err=cudaMalloc((void**)&work, work_size*sizeof(float));
+    checkCudaError(err,__FILE__,__LINE__);
+  } else {
+    cusolverDnSgesvd_bufferSize(solver_handle, M, M, &work_size);
+    err=cudaMalloc((void**)&work, work_size*sizeof(float));
+    checkCudaError(err,__FILE__,__LINE__);
+    err=cudaMalloc((void**)&rwork, 5*M*sizeof(float));
+    checkCudaError(err,__FILE__,__LINE__);
+  }
+
 
   err=cudaMemcpyAsync(pd, p, M*sizeof(float), cudaMemcpyHostToDevice,0);
   checkCudaError(err,__FILE__,__LINE__);
@@ -815,7 +884,7 @@ rlevmar_der_single_cuda_fl(
   err=cudaMemcpyAsync(cohd, &(dp->ddcohf[(dp->Nbase)*(dp->tilesz)*(dp->clus)*8+(dp->Nbase)*tileoff*8]), Nbase*8*sizeof(float), cudaMemcpyHostToDevice,0);
   checkCudaError(err,__FILE__,__LINE__);
   /* correct offset for baselines */
-  err=cudaMemcpyAsync(bbd, &(dp->ddbase[2*(dp->Nbase)*(tileoff)]), Nbase*2*sizeof(char), cudaMemcpyHostToDevice,0);
+  err=cudaMemcpyAsync(bbd, &(dp->ddbase[2*(dp->Nbase)*(tileoff)]), Nbase*2*sizeof(short), cudaMemcpyHostToDevice,0);
   checkCudaError(err,__FILE__,__LINE__);
   cudaDeviceSynchronize();
   /* xd <=x */
@@ -872,15 +941,19 @@ rlevmar_der_single_cuda_fl(
      */
      /* since J is in ROW major order, assume it is transposed,
        so actually calculate A=J*J^T, where J is size MxN */
-     status=culaDeviceSgemm('N','T',M,M,N,1.0f,jacd,M,jacd,M,0.0f,jacTjacd,M);
-     checkStatus(status,__FILE__,__LINE__);
+     //status=culaDeviceSgemm('N','T',M,M,N,1.0f,jacd,M,jacd,M,0.0f,jacTjacd,M);
+     //checkStatus(status,__FILE__,__LINE__);
+     float cone=1.0f; float czero=0.0f;
+     cbstatus=cublasSgemm(cbhandle,CUBLAS_OP_N,CUBLAS_OP_T,M,M,N,&cone,jacd,M,jacd,M,&czero,jacTjacd,M);
+
      /* create backup */
      /* copy jacTjacd0<=jacTjacd */
      cbstatus=cublasScopy(cbhandle, M*M, jacTjacd, 1, jacTjacd0, 1);
      /* J^T e */
      /* calculate b=J^T*e (actually compute b=J*e, where J in row major (size MxN) */
-     status=culaDeviceSgemv('N',M,N,1.0f,jacd,M,ed,1,0.0f,jacTed,1);
-     checkStatus(status,__FILE__,__LINE__);
+     //status=culaDeviceSgemv('N',M,N,1.0f,jacd,M,ed,1,0.0f,jacTed,1);
+     //checkStatus(status,__FILE__,__LINE__);
+     cbstatus=cublasSgemv(cbhandle,CUBLAS_OP_N,M,N,&cone,jacd,M,ed,1,&czero,jacTed,1);
 
 
      /* Compute ||J^T e||_inf and ||p||^2 */
@@ -936,8 +1009,10 @@ rlevmar_der_single_cuda_fl(
       if (solve_axb==0) {
         /* Cholesky solver **********************/
         /* lower triangle of Ad is destroyed */
-        status=culaDeviceSpotrf('U',M,jacTjacd,M);
-        if (!status) {
+        //status=culaDeviceSpotrf('U',M,jacTjacd,M);
+        cusolverDnSpotrf(solver_handle, CUBLAS_FILL_MODE_UPPER, M, jacTjacd, M, work, work_size, devInfo);
+        cudaMemcpy(&devInfo_h, devInfo, sizeof(int), cudaMemcpyDeviceToHost);
+        if (!devInfo_h) {
          issolved=1;
         } else {
          issolved=0;
@@ -951,8 +1026,10 @@ rlevmar_der_single_cuda_fl(
 #ifdef DEBUG
          checkCublasError(cbstatus,__FILE__,__LINE__);
 #endif
-         status=culaDeviceSpotrs('U',M,1,jacTjacd,M,Dpd,M);
-         if (status) {
+         //status=culaDeviceSpotrs('U',M,1,jacTjacd,M,Dpd,M);
+         cusolverDnSpotrs(solver_handle, CUBLAS_FILL_MODE_UPPER,M,1,jacTjacd,M,Dpd,M,devInfo);
+         cudaMemcpy(&devInfo_h, devInfo, sizeof(int), cudaMemcpyDeviceToHost);
+         if (devInfo_h) {
            issolved=0;
 #ifdef DEBUG
            printf("Singular matrix\n");
@@ -961,8 +1038,11 @@ rlevmar_der_single_cuda_fl(
         }
       } else if (solve_axb==1) {
         /* QR solver ********************************/
-        status=culaDeviceSgeqrf(M,M,jacTjacd,M,taud);
-        if (!status) {
+        //status=culaDeviceSgeqrf(M,M,jacTjacd,M,taud);
+        cusolverDnSgeqrf(solver_handle, M, M, jacTjacd, M, taud, work, work_size, devInfo);
+        cudaDeviceSynchronize();
+        cudaMemcpy(&devInfo_h, devInfo, sizeof(int), cudaMemcpyDeviceToHost);
+        if (!devInfo_h) {
          issolved=1;
         } else {
          issolved=0;
@@ -974,30 +1054,41 @@ rlevmar_der_single_cuda_fl(
         if (issolved) {
          /* copy Dpd<=jacTed */
          cbstatus=cublasScopy(cbhandle, M, jacTed, 1, Dpd, 1);
-         status=culaDeviceSgeqrs(M,M,1,jacTjacd,M,taud,Dpd,M);
-         if (status) {
+         //status=culaDeviceSgeqrs(M,M,1,jacTjacd,M,taud,Dpd,M);
+         cusolverDnSormqr(solver_handle, CUBLAS_SIDE_LEFT, CUBLAS_OP_T, M, 1, M, jacTjacd, M, taud, Dpd, M, work, work_size, devInfo);
+         cudaDeviceSynchronize();
+         cudaMemcpy(&devInfo_h, devInfo, sizeof(int), cudaMemcpyDeviceToHost);
+         if (devInfo_h) {
            issolved=0;
 #ifdef DEBUG
            printf("Singular matrix\n");
 #endif
+         } else {
+          cone=1.0f;
+          cbstatus=cublasStrsm(cbhandle,CUBLAS_SIDE_LEFT,CUBLAS_FILL_MODE_UPPER,CUBLAS_OP_N,CUBLAS_DIAG_NON_UNIT,M,1,&cone,jacTjacd,M,Dpd,M);
          }
         }
       } else {
         /* SVD solver *********************************/
         /* U S VT = A */
-        status=culaDeviceSgesvd('A','A',M,M,jacTjacd,M,Sd,Ud,M,VTd,M);
-        checkStatus(status,__FILE__,__LINE__);
+        //status=culaDeviceSgesvd('A','A',M,M,jacTjacd,M,Sd,Ud,M,VTd,M);
+        //checkStatus(status,__FILE__,__LINE__);
+        cusolverDnSgesvd(solver_handle,'A','A',M,M,jacTjacd,M,Sd,Ud,M,VTd,M,work,work_size,rwork,devInfo);
+        cudaDeviceSynchronize();
         /* copy Dpd<=jacTed */
         cbstatus=cublasScopy(cbhandle, M, jacTed, 1, Dpd, 1);
         /* b<=U^T * b */
-        status=culaDeviceSgemv('T',M,M,1.0f,Ud,M,Dpd,1,0.0f,Dpd,1);
+        //status=culaDeviceSgemv('T',M,M,1.0f,Ud,M,Dpd,1,0.0f,Dpd,1);
+        //checkStatus(status,__FILE__,__LINE__);
+        cone=1.0f; czero=0.0f;
+        cbstatus=cublasSgemv(cbhandle,CUBLAS_OP_T,M,M,&cone,Ud,M,Dpd,1,&czero,Dpd,1);
         /* divide by singular values  Dpd[]/Sd[]  for Sd[]> eps1 */
-        checkStatus(status,__FILE__,__LINE__);
         cudakernel_diagdiv_fl(ThreadsPerBlock, BlocksPerGrid, M, eps1, Dpd, Sd);
 
         /* b<=VT^T * b */
-        status=culaDeviceSgemv('T',M,M,1.0f,VTd,M,Dpd,1,0.0f,Dpd,1);
-        checkStatus(status,__FILE__,__LINE__);
+        //status=culaDeviceSgemv('T',M,M,1.0f,VTd,M,Dpd,1,0.0f,Dpd,1);
+        //checkStatus(status,__FILE__,__LINE__);
+        cbstatus=cublasSgemv(cbhandle,CUBLAS_OP_T,M,M,&cone,VTd,M,Dpd,1,&czero,Dpd,1);
 
         issolved=1;
       }
@@ -1157,8 +1248,15 @@ printf("norm ||dp|| =%f, norm ||p||=%f\n",Dp_L2,p_L2);
   err=cudaMemcpyAsync(p,pd,M*sizeof(float),cudaMemcpyDeviceToHost,0);
   checkCudaError(err,__FILE__,__LINE__);
 
+  checkCublasError(cbstatus,__FILE__,__LINE__);
   /* synchronize async operations */
   cudaDeviceSynchronize();
+
+  cudaFree(devInfo);
+  cudaFree(work);
+  if (solve_axb==2) {
+    cudaFree(rwork);
+  }
 
 #ifdef DEBUG
   printf("stop=%d\n",stop);
@@ -1198,13 +1296,13 @@ osrlevmar_der_single_cuda_fl(
                       */
 
   cublasHandle_t cbhandle, /* device handle */
+  cusolverDnHandle_t solver_handle, /* solver handle */
   float *gWORK, /* GPU allocated memory */
   int linsolv, /* 0 Cholesky, 1 QR, 2 SVD */
   int tileoff, /* tile offset when solving for many chunks */
   int ntiles, /* total tile (data) size being solved for */
   double robust_nulow, double robust_nuhigh, /* robust nu range */
   int randomize, /* if >0 randomize */
-  int whiten, /* if >0 whiten data 1: NCP, 2... */
   void *adata)       /* pointer to possibly additional data, passed uninterpreted to func & jacf.
                       * Set to NULL if not needed
                       */
@@ -1213,7 +1311,6 @@ osrlevmar_der_single_cuda_fl(
   /* general note: all device variables end with a 'd' */
   int stop=0;
   cudaError_t err;
-  culaStatus status;
   cublasStatus_t cbstatus;
 
   int nu=2,nu2;
@@ -1260,7 +1357,7 @@ osrlevmar_der_single_cuda_fl(
   /* coherency on device */
   float *cohd;
   /* baseline-station map on device/host */
-  char *bbd;
+  short *bbd;
 
   int solve_axb=linsolv;
   float alpha;
@@ -1281,9 +1378,9 @@ osrlevmar_der_single_cuda_fl(
   }
 
   /* calculate no of cuda threads and blocks */
-  int ThreadsPerBlock=128;
+  int ThreadsPerBlock=DEFAULT_TH_PER_BK;
   /* FIXME: might need a large value for large no of baselines */
-  int ThreadsPerBlock1=128; /* for accessing each element of a baseline */
+  int ThreadsPerBlock1=DEFAULT_TH_PER_BK; /* for accessing each element of a baseline */
   int ThreadsPerBlock2=Nd/2; /* for evaluating nu */
   int BlocksPerGrid=(M+ThreadsPerBlock-1)/ThreadsPerBlock;
 
@@ -1329,8 +1426,33 @@ osrlevmar_der_single_cuda_fl(
      Sd=&gWORK[moff];
      moff+=M;
     }
-    bbd=(char*)&gWORK[moff];
-    moff+=(Nbase*2*sizeof(char))/sizeof(float);
+    bbd=(short*)&gWORK[moff];
+    moff+=(Nbase*2*sizeof(short))/sizeof(float);
+
+  /* extra storage for cusolver */
+  int work_size=0;
+  int *devInfo;
+  int devInfo_h=0;
+  err=cudaMalloc((void**)&devInfo, sizeof(int));
+  checkCudaError(err,__FILE__,__LINE__);
+  float *work;
+  float *rwork;
+  if (solve_axb==0) {
+    cusolverDnSpotrf_bufferSize(solver_handle, CUBLAS_FILL_MODE_UPPER, M, jacTjacd, M, &work_size);
+    err=cudaMalloc((void**)&work, work_size*sizeof(float));
+    checkCudaError(err,__FILE__,__LINE__);
+  } else if (solve_axb==1) {
+    cusolverDnSgeqrf_bufferSize(solver_handle, M, M, jacTjacd, M, &work_size);
+    err=cudaMalloc((void**)&work, work_size*sizeof(float));
+    checkCudaError(err,__FILE__,__LINE__);
+  } else {
+    cusolverDnSgesvd_bufferSize(solver_handle, M, M, &work_size);
+    err=cudaMalloc((void**)&work, work_size*sizeof(float));
+    checkCudaError(err,__FILE__,__LINE__);
+    err=cudaMalloc((void**)&rwork, 5*M*sizeof(float));
+    checkCudaError(err,__FILE__,__LINE__);
+  }
+
 
   err=cudaMemcpyAsync(pd, p, M*sizeof(float), cudaMemcpyHostToDevice,0);
   checkCudaError(err,__FILE__,__LINE__);
@@ -1339,7 +1461,7 @@ osrlevmar_der_single_cuda_fl(
   err=cudaMemcpyAsync(cohd, &(dp->ddcohf[(dp->Nbase)*(dp->tilesz)*(dp->clus)*8+(dp->Nbase)*tileoff*8]), Nbase*8*sizeof(float), cudaMemcpyHostToDevice,0);
   checkCudaError(err,__FILE__,__LINE__);
   /* correct offset for baselines */
-  err=cudaMemcpyAsync(bbd, &(dp->ddbase[2*(dp->Nbase)*(tileoff)]), Nbase*2*sizeof(char), cudaMemcpyHostToDevice,0);
+  err=cudaMemcpyAsync(bbd, &(dp->ddbase[2*(dp->Nbase)*(tileoff)]), Nbase*2*sizeof(short), cudaMemcpyHostToDevice,0);
   checkCudaError(err,__FILE__,__LINE__);
   cudaDeviceSynchronize();
   /* xd <=x */
@@ -1455,15 +1577,19 @@ osrlevmar_der_single_cuda_fl(
      */
      /* since J is in ROW major order, assume it is transposed,
        so actually calculate A=J*J^T, where J is size MxN */
-     status=culaDeviceSgemm('N','T',M,M,Nos[l],1.0f,jacd,M,jacd,M,0.0f,jacTjacd,M);
-     checkStatus(status,__FILE__,__LINE__);
+     //status=culaDeviceSgemm('N','T',M,M,Nos[l],1.0f,jacd,M,jacd,M,0.0f,jacTjacd,M);
+     //checkStatus(status,__FILE__,__LINE__);
+     float cone=1.0f; float czero=0.0f;
+     cbstatus=cublasSgemm(cbhandle,CUBLAS_OP_N,CUBLAS_OP_T,M,M,Nos[l],&cone,jacd,M,jacd,M,&czero,jacTjacd,M);
+
      /* create backup */
      /* copy jacTjacd0<=jacTjacd */
      cbstatus=cublasScopy(cbhandle, M*M, jacTjacd, 1, jacTjacd0, 1);
      /* J^T e */
      /* calculate b=J^T*e (actually compute b=J*e, where J in row major (size MxN) */
-     status=culaDeviceSgemv('N',M,Nos[l],1.0f,jacd,M,&ed[edI[l]],1,0.0f,jacTed,1);
-     checkStatus(status,__FILE__,__LINE__);
+     //status=culaDeviceSgemv('N',M,Nos[l],1.0f,jacd,M,&ed[edI[l]],1,0.0f,jacTed,1);
+     //checkStatus(status,__FILE__,__LINE__);
+     cbstatus=cublasSgemv(cbhandle,CUBLAS_OP_N,M,Nos[l],&cone,jacd,M,&ed[edI[l]],1,&czero,jacTed,1);
 
 
      /* Compute ||J^T e||_inf and ||p||^2 */
@@ -1519,8 +1645,10 @@ osrlevmar_der_single_cuda_fl(
       if (solve_axb==0) {
         /* Cholesky solver **********************/
         /* lower triangle of Ad is destroyed */
-        status=culaDeviceSpotrf('U',M,jacTjacd,M);
-        if (!status) {
+        //status=culaDeviceSpotrf('U',M,jacTjacd,M);
+        cusolverDnSpotrf(solver_handle, CUBLAS_FILL_MODE_UPPER, M, jacTjacd, M, work, work_size, devInfo);
+        cudaMemcpy(&devInfo_h, devInfo, sizeof(int), cudaMemcpyDeviceToHost);
+        if (!devInfo_h) {
          issolved=1;
         } else {
          issolved=0;
@@ -1534,8 +1662,10 @@ osrlevmar_der_single_cuda_fl(
 #ifdef DEBUG
          checkCublasError(cbstatus,__FILE__,__LINE__);
 #endif
-         status=culaDeviceSpotrs('U',M,1,jacTjacd,M,Dpd,M);
-         if (status) {
+         //status=culaDeviceSpotrs('U',M,1,jacTjacd,M,Dpd,M);
+         cusolverDnSpotrs(solver_handle, CUBLAS_FILL_MODE_UPPER,M,1,jacTjacd,M,Dpd,M,devInfo);
+         cudaMemcpy(&devInfo_h, devInfo, sizeof(int), cudaMemcpyDeviceToHost);
+         if (devInfo_h) {
            issolved=0;
 #ifdef DEBUG
            printf("Singular matrix\n");
@@ -1544,8 +1674,11 @@ osrlevmar_der_single_cuda_fl(
         }
       } else if (solve_axb==1) {
         /* QR solver ********************************/
-        status=culaDeviceSgeqrf(M,M,jacTjacd,M,taud);
-        if (!status) {
+        //status=culaDeviceSgeqrf(M,M,jacTjacd,M,taud);
+        cusolverDnSgeqrf(solver_handle, M, M, jacTjacd, M, taud, work, work_size, devInfo);
+        cudaDeviceSynchronize();
+        cudaMemcpy(&devInfo_h, devInfo, sizeof(int), cudaMemcpyDeviceToHost);
+        if (!devInfo_h) {
          issolved=1;
         } else {
          issolved=0;
@@ -1557,30 +1690,42 @@ osrlevmar_der_single_cuda_fl(
         if (issolved) {
          /* copy Dpd<=jacTed */
          cbstatus=cublasScopy(cbhandle, M, jacTed, 1, Dpd, 1);
-         status=culaDeviceSgeqrs(M,M,1,jacTjacd,M,taud,Dpd,M);
-         if (status) {
+         //status=culaDeviceSgeqrs(M,M,1,jacTjacd,M,taud,Dpd,M);
+         cusolverDnSormqr(solver_handle, CUBLAS_SIDE_LEFT, CUBLAS_OP_T, M, 1, M, jacTjacd, M, taud, Dpd, M, work, work_size, devInfo);
+         cudaDeviceSynchronize();
+         cudaMemcpy(&devInfo_h, devInfo, sizeof(int), cudaMemcpyDeviceToHost);
+         if (devInfo_h) {
            issolved=0;
 #ifdef DEBUG
            printf("Singular matrix\n");
 #endif
+         } else {
+          cone=1.0f;
+          cbstatus=cublasStrsm(cbhandle,CUBLAS_SIDE_LEFT,CUBLAS_FILL_MODE_UPPER,CUBLAS_OP_N,CUBLAS_DIAG_NON_UNIT,M,1,&cone,jacTjacd,M,Dpd,M);
          }
         }
       } else {
         /* SVD solver *********************************/
         /* U S VT = A */
-        status=culaDeviceSgesvd('A','A',M,M,jacTjacd,M,Sd,Ud,M,VTd,M);
-        checkStatus(status,__FILE__,__LINE__);
+        //status=culaDeviceSgesvd('A','A',M,M,jacTjacd,M,Sd,Ud,M,VTd,M);
+        //checkStatus(status,__FILE__,__LINE__);
+        cusolverDnSgesvd(solver_handle,'A','A',M,M,jacTjacd,M,Sd,Ud,M,VTd,M,work,work_size,rwork,devInfo);
+        cudaDeviceSynchronize();
         /* copy Dpd<=jacTed */
         cbstatus=cublasScopy(cbhandle, M, jacTed, 1, Dpd, 1);
         /* b<=U^T * b */
-        status=culaDeviceSgemv('T',M,M,1.0f,Ud,M,Dpd,1,0.0f,Dpd,1);
+        //status=culaDeviceSgemv('T',M,M,1.0f,Ud,M,Dpd,1,0.0f,Dpd,1);
+        //checkStatus(status,__FILE__,__LINE__);
+        cone=1.0f; czero=0.0f;
+        cbstatus=cublasSgemv(cbhandle,CUBLAS_OP_T,M,M,&cone,Ud,M,Dpd,1,&czero,Dpd,1);
+
         /* divide by singular values  Dpd[]/Sd[]  for Sd[]> eps1 */
-        checkStatus(status,__FILE__,__LINE__);
         cudakernel_diagdiv_fl(ThreadsPerBlock, BlocksPerGrid, M, eps1, Dpd, Sd);
 
         /* b<=VT^T * b */
-        status=culaDeviceSgemv('T',M,M,1.0f,VTd,M,Dpd,1,0.0f,Dpd,1);
-        checkStatus(status,__FILE__,__LINE__);
+        //status=culaDeviceSgemv('T',M,M,1.0f,VTd,M,Dpd,1,0.0f,Dpd,1);
+        //checkStatus(status,__FILE__,__LINE__);
+        cbstatus=cublasSgemv(cbhandle,CUBLAS_OP_T,M,M,&cone,VTd,M,Dpd,1,&czero,Dpd,1);
 
         issolved=1;
       }
@@ -1749,9 +1894,16 @@ printf("norm ||dp|| =%f, norm ||p||=%f\n",Dp_L2,p_L2);
   /* copy back current solution */
   err=cudaMemcpyAsync(p,pd,M*sizeof(float),cudaMemcpyDeviceToHost,0);
   checkCudaError(err,__FILE__,__LINE__);
+  checkCublasError(cbstatus,__FILE__,__LINE__);
 
   /* synchronize async operations */
   cudaDeviceSynchronize();
+
+  cudaFree(devInfo);
+  cudaFree(work);
+  if (solve_axb==2) {
+    cudaFree(rwork);
+  }
 
 #ifdef DEBUG
   printf("stop=%d\n",stop);
@@ -1884,7 +2036,6 @@ rlevmar_der_single_nocuda(
   int linsolv, /* 0 Cholesky, 1 QR, 2 SVD */
   int Nt, /* no of threads */
   double robust_nulow, double robust_nuhigh, /* robust nu range */
-  int whiten, /* if >0 whiten data 1: NCP, 2... */
   void *adata)       /* pointer to possibly additional data, passed uninterpreted to func & jacf.
                       * Set to NULL if not needed
                       */
@@ -2029,12 +2180,6 @@ rlevmar_der_single_nocuda(
   setweights(M,aones,1.0,lmdata->Nt);
   /*W set initial weights to 1 */
   setweights(N,wtd,1.0,lmdata->Nt);
-  /* modify weights with whitening weights */
-  if (whiten) {
-   /* use correct offset for u,v based on tile offset */
-   add_whitening_weights(N/8, wtd, &lmdata->u[lmdata->tileoff*lmdata->Nbase], &lmdata->v[lmdata->tileoff*lmdata->Nbase], *(lmdata->freq0), lmdata->Nt);
-  }
-
   /* memory allocation: different solvers */
   if (solve_axb==0) {
 
@@ -2403,10 +2548,6 @@ printf("norm ||dp|| =%lf, norm ||p||=%lf\n",Dp_L2,p_L2);
    printf("nu updated from %lf in [%lf,%lf] to %lf\n",robust_nu,robust_nulow, robust_nuhigh,robust_nu1);
 #endif
    robust_nu=robust_nu1;
-   if (whiten) {
-    /* use correct offset for u,v based on tile offset */
-    add_whitening_weights(N/8, wtd, &lmdata->u[lmdata->tileoff*lmdata->Nbase], &lmdata->v[lmdata->tileoff*lmdata->Nbase], *(lmdata->freq0), lmdata->Nt);
-   }
 
    /* normalize weights */
    wt_sum=lambda/(double)N;
@@ -2495,7 +2636,6 @@ osrlevmar_der_single_nocuda(
   int Nt, /* no of threads */
   double robust_nulow, double robust_nuhigh, /* robust nu range */
   int randomize, /* if >0 randomize */
-  int whiten, /* if >0 whiten data 1: NCP, 2... */
   void *adata)       /* pointer to possibly additional data, passed uninterpreted to func & jacf.
                       * Set to NULL if not needed
                       */
@@ -2625,10 +2765,6 @@ osrlevmar_der_single_nocuda(
   setweights(M,aones,1.0,lmdata0->Nt);
   /*W set initial weights to 1 */
   setweights(N,wtd,1.0,lmdata0->Nt);
-  /* modify weights with whitening weights */
-  if (whiten) {
-   add_whitening_weights(N/8, wtd, &lmdata0->u[lmdata0->tileoff*lmdata0->Nbase], &lmdata0->v[lmdata0->tileoff*lmdata0->Nbase], *(lmdata0->freq0), lmdata0->Nt);
-  }
 
   /* memory allocation: different solvers */
   if (solve_axb==0) {
@@ -3056,9 +3192,6 @@ printf("norm ||dp|| =%lf, norm ||p||=%lf\n",Dp_L2,p_L2);
    printf("nu updated from %lf in [%lf,%lf] to %lf\n",robust_nu,robust_nulow, robust_nuhigh,robust_nu1);
 #endif
    robust_nu=robust_nu1;
-   if (whiten) {
-    add_whitening_weights(N/8, wtd, &lmdata0->u[lmdata0->tileoff*lmdata0->Nbase], &lmdata0->v[lmdata0->tileoff*lmdata0->Nbase], *(lmdata0->freq0), lmdata0->Nt);
-   }
 
    /* normalize weights */
    wt_sum=lambda/(double)N;

@@ -378,3 +378,250 @@ project_procrustes_block(int N,complex double *X,complex double *Y) {
  free(Jlocal);
  return 0;
 }
+
+
+
+
+//#define DEBUG
+/* Extract only the phase of diagonal entries from solutions 
+   p: 8Nx1 solutions, orders as [(real,imag)vec(J1),(real,imag)vec(J2),...]
+   pout: 8Nx1 phases (exp(j*phase)) of solutions, after joint diagonalization of p
+   N: no. of 2x2 Jones matrices in p, having common unitary ambiguity
+   niter: no of iterations for Jacobi rotation */
+int
+extract_phases(double *p, double *pout, int N, int niter) {
+
+  /* local storage */
+  complex double *J,*Jcopy;
+  /* local storage, change ordering of solutions [J_1^T,J_2^T,...]^T  */
+  if ((J=(complex double*)malloc((size_t)N*4*sizeof(complex double)))==0) {
+   fprintf(stderr,"%s: %d: No free memory\n",__FILE__,__LINE__);
+   exit(1);
+  }
+  if ((Jcopy=(complex double*)malloc((size_t)N*4*sizeof(complex double)))==0) {
+   fprintf(stderr,"%s: %d: No free memory\n",__FILE__,__LINE__);
+   exit(1);
+  }
+
+  double *Jx=(double *)J;
+  /* copy to get correct format */
+  my_dcopy(N, &p[0], 8, &Jx[0], 4);
+  my_dcopy(N, &p[0+1], 8, &Jx[1], 4);
+  my_dcopy(N, &p[0+4], 8, &Jx[2], 4);
+  my_dcopy(N, &p[0+5], 8, &Jx[3], 4);
+  my_dcopy(N, &p[0+2], 8, &Jx[4*N], 4);
+  my_dcopy(N, &p[0+3], 8, &Jx[4*N+1], 4);
+  my_dcopy(N, &p[0+6], 8, &Jx[4*N+2], 4);
+  my_dcopy(N, &p[0+7], 8, &Jx[4*N+3], 4);
+
+  complex double h[3],Hc[9];
+  double H[9]; 
+  double W[3],Z[3];
+  double w[1],*WORK;
+  int IWORK[15],IFAIL[3],info;
+  int ni,ci;
+  complex double c,s,G[4];
+  
+#ifdef DEBUG
+  printf("J=[\n");
+  for (ci=0; ci<N; ci++) {
+   printf("%lf+j*(%lf), %lf+j*(%lf)\n",p[8*ci],p[8*ci+1],p[8*ci+2],p[8*ci+3]);
+   printf("%lf+j*(%lf), %lf+j*(%lf)\n",p[8*ci+4],p[8*ci+5],p[8*ci+6],p[8*ci+7]);
+  }
+  printf("];\n");
+#endif
+  /* setup workspace for eigenvalue decomposition */
+  info=my_dsyevx('V','I','L',3,H,3,0.0,0.0,3,3,dlamch('S'),1,W,Z,3,w,-1,IWORK,IFAIL);
+  if (info) {
+   fprintf(stderr,"%s: %d: LAPACK error %d\n",__FILE__,__LINE__,info);
+   exit(1);
+  }
+  /* get work size */
+  int lwork=(int)w[0];
+  /* allocate memory */
+  if ((WORK=(double*)malloc((size_t)lwork*sizeof(double)))==0) {
+   fprintf(stderr,"%s: %d: No free memory\n",__FILE__,__LINE__);
+   exit(1);
+  } 
+  /* iteration loop */
+  for (ni=0; ni<niter; ni++) {
+  
+    /************** for element (1,2) **********************/
+    /* accumulate h*h^H product */
+    memset(Hc,0,9*sizeof(complex double));
+    for (ci=0; ci<N; ci++) {
+       /* [a_ii-a_jj,a_ij+a_ji,I*(a_ji-a_ij)] */
+       h[0]=conj(J[2*ci]-J[2*ci+2*N+1]);
+       h[1]=conj(J[2*ci+2*N]+J[2*ci+1]);
+       h[2]=conj(_Complex_I*(J[2*ci+1]-J[2*ci+2*N]));
+       /* store results onto lower triangle */
+       my_zher('L',3,1.0,h,1,Hc,3);
+    }
+    /* get real part, copy it to lower triangle */
+    H[0]=creal(Hc[0]);
+    H[1]=creal(Hc[1]);
+    H[2]=creal(Hc[2]);
+    H[4]=creal(Hc[4]);
+    H[5]=creal(Hc[5]);
+    H[8]=creal(Hc[8]);
+#ifdef DEBUG
+    printf("H=[\n");
+    printf("%e %e %e\n",H[0],H[1],H[2]);
+    printf("%e %e %e\n",H[1],H[4],H[5]);
+    printf("%e %e %e\n",H[2],H[5],H[8]);
+    printf("];\n");
+#endif
+    info=my_dsyevx('V','I','L',3,H,3,0.0,0.0,3,3,dlamch('S'),1,W,Z,3,WORK,lwork,IWORK,IFAIL);
+    if (info<0) {
+     fprintf(stderr,"%s: %d: LAPACK error %d\n",__FILE__,__LINE__,info);
+     exit(1);
+    }
+#ifdef DEBUG
+    printf("max eigenvalue=%e\n",W[0]);
+    printf("ev=[\n");
+    printf("%e\n",Z[0]);
+    printf("%e\n",Z[1]);
+    printf("%e\n",Z[2]);
+    printf("];\n");
+#endif
+
+   /* form sin,cos values */
+   if (Z[0]>=0.0) {
+    c=sqrt(0.5+Z[0]*0.5)+_Complex_I*0.0;
+    s=0.5*(Z[1]-_Complex_I*Z[2])/c;
+   } else {
+    /* flip sign of eigenvector */
+    c=sqrt(0.5-Z[0]*0.5)+_Complex_I*0.0;
+    s=0.5*(-Z[1]+_Complex_I*Z[2])/c;
+   }
+   /* form Givens rotation matrix */
+   G[0]=c;
+   G[1]=-s;
+   G[2]=conj(s);
+   G[3]=conj(c);
+#ifdef DEBUG
+   printf("G=[\n");
+   printf("%lf+j*(%lf), %lf+j*(%lf)\n",creal(G[0]),cimag(G[0]),creal(G[2]),cimag(G[2]));
+   printf("%lf+j*(%lf), %lf+j*(%lf)\n",creal(G[1]),cimag(G[1]),creal(G[3]),cimag(G[3]));
+   printf("];\n");
+#endif
+   /* rotate J <= J * G^H: Jcopy = 1 x J x G^H  + 0 x Jcopy */
+   my_zgemm('N','C',2*N,2,2,1.0+_Complex_I*0.0,J,2*N,G,2,0.0+_Complex_I*0.0,Jcopy,2*N);
+   memcpy(J,Jcopy,(size_t)4*N*sizeof(complex double));
+#ifdef DEBUG
+   printf("JGH=[\n");
+   for (ci=0; ci<N; ci++) {
+    printf("%lf+j*(%lf), %lf+j*(%lf)\n",creal(J[2*ci]),cimag(J[2*ci]),creal(J[2*N+2*ci]),cimag(J[2*N+2*ci]));
+    printf("%lf+j*(%lf), %lf+j*(%lf)\n",creal(J[2*ci+1]),cimag(J[2*ci+1]),creal(J[2*N+2*ci+1]),cimag(J[2*N+2*ci+1]));
+   }
+   printf("];\n");
+#endif
+
+    /************** for element (2,1) **********************/
+    /* accumulate h*h^H product */
+    memset(Hc,0,9*sizeof(complex double));
+    for (ci=0; ci<N; ci++) {
+       /* [a_ii-a_jj,a_ij+a_ji,I*(a_ji-a_ij)] */
+       h[0]=conj(J[2*ci+2*N+1]-J[2*ci]);
+       h[1]=conj(J[2*ci+1]+J[2*ci+2*N]);
+       h[2]=conj(_Complex_I*(J[2*ci+2*N]-J[2*ci+1]));
+       /* store results onto lower triangle */
+       my_zher('L',3,1.0,h,1,Hc,3);
+    }
+    /* get real part, copy it to lower triangle */
+    H[0]=creal(Hc[0]);
+    H[1]=creal(Hc[1]);
+    H[2]=creal(Hc[2]);
+    H[4]=creal(Hc[4]);
+    H[5]=creal(Hc[5]);
+    H[8]=creal(Hc[8]);
+#ifdef DEBUG
+    printf("H=[\n");
+    printf("%e %e %e\n",H[0],H[1],H[2]);
+    printf("%e %e %e\n",H[1],H[4],H[5]);
+    printf("%e %e %e\n",H[2],H[5],H[8]);
+    printf("];\n");
+#endif
+    info=my_dsyevx('V','I','L',3,H,3,0.0,0.0,3,3,dlamch('S'),1,W,Z,3,WORK,lwork,IWORK,IFAIL);
+    if (info<0) {
+     fprintf(stderr,"%s: %d: LAPACK error %d\n",__FILE__,__LINE__,info);
+     exit(1);
+    }
+#ifdef DEBUG
+    printf("max eigenvalue=%e\n",W[0]);
+    printf("ev=[\n");
+    printf("%e\n",Z[0]);
+    printf("%e\n",Z[1]);
+    printf("%e\n",Z[2]);
+    printf("];\n");
+#endif
+
+   /* form sin,cos values */
+   if (Z[0]>=0.0) {
+    c=sqrt(0.5+Z[0]*0.5)+_Complex_I*0.0;
+    s=0.5*(Z[1]-_Complex_I*Z[2])/c;
+   } else {
+    /* flip sign of eigenvector */
+    c=sqrt(0.5-Z[0]*0.5)+_Complex_I*0.0;
+    s=0.5*(-Z[1]+_Complex_I*Z[2])/c;
+   }
+   /* form Givens rotation matrix */
+   G[0]=c;
+   G[1]=-s;
+   G[2]=conj(s);
+   G[3]=conj(c);
+#ifdef DEBUG
+   printf("G=[\n");
+   printf("%lf+j*(%lf), %lf+j*(%lf)\n",creal(G[0]),cimag(G[0]),creal(G[2]),cimag(G[2]));
+   printf("%lf+j*(%lf), %lf+j*(%lf)\n",creal(G[1]),cimag(G[1]),creal(G[3]),cimag(G[3]));
+   printf("];\n");
+#endif
+   /* rotate J <= J * G^H: Jcopy = 1 x J x G^H  + 0 x Jcopy */
+   my_zgemm('N','C',2*N,2,2,1.0+_Complex_I*0.0,J,2*N,G,2,0.0+_Complex_I*0.0,Jcopy,2*N);
+   /* before copying updated result, find residual norm */
+   /* J = -Jcopy + J */
+   my_caxpy(4*N,Jcopy,-1.0+_Complex_I*0.0,J); 
+#ifdef DEBUG
+   printf("Iter %d residual=%lf\n",ni,my_cnrm2(4*N,J));
+#endif
+   memcpy(J,Jcopy,(size_t)4*N*sizeof(complex double));
+#ifdef DEBUG
+   printf("JGH=[\n");
+   for (ci=0; ci<N; ci++) {
+    printf("%lf+j*(%lf), %lf+j*(%lf)\n",creal(J[2*ci]),cimag(J[2*ci]),creal(J[2*N+2*ci]),cimag(J[2*N+2*ci]));
+    printf("%lf+j*(%lf), %lf+j*(%lf)\n",creal(J[2*ci+1]),cimag(J[2*ci+1]),creal(J[2*N+2*ci+1]),cimag(J[2*N+2*ci+1]));
+   }
+   printf("];\n");
+#endif
+
+   
+  }
+  free(WORK);
+
+#ifdef DEBUG
+  printf("Jfinal=[\n");
+  for (ci=0; ci<N; ci++) {
+    printf("%lf+j*(%lf), %lf+j*(%lf)\n",creal(J[2*ci]),cimag(J[2*ci]),creal(J[2*N+2*ci]),cimag(J[2*N+2*ci]));
+    printf("%lf+j*(%lf), %lf+j*(%lf)\n",creal(J[2*ci+1]),cimag(J[2*ci+1]),creal(J[2*N+2*ci+1]),cimag(J[2*N+2*ci+1]));
+  }
+  printf("];\n");
+#endif
+
+
+  /* extract phase only from diagonal elements */
+  for (ci=0; ci<N; ci++) {
+    J[2*ci]=J[2*ci]/cabs(J[2*ci]);
+    J[2*ci+2*N+1]=J[2*ci+2*N+1]/cabs(J[2*ci+2*N+1]);
+  }
+
+  /* copy back to output (only the diagonal values) */
+  memset(pout,0,sizeof(double)*8*N);
+  my_dcopy(N, &Jx[0], 4, &pout[0], 8);
+  my_dcopy(N, &Jx[1], 4, &pout[0+1], 8);
+  my_dcopy(N, &Jx[4*N+2], 4, &pout[0+6], 8);
+  my_dcopy(N, &Jx[4*N+3], 4, &pout[0+7], 8);
+
+  free(J);
+  free(Jcopy);
+  return 0;
+}

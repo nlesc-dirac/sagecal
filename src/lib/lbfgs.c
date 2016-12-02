@@ -29,11 +29,12 @@
 static void
 checkCudaError(cudaError_t err, char *file, int line)
 {
+#ifdef CUDA_DEBUG
     if(!err)
         return;
     fprintf(stderr,"GPU (CUDA): %s %s %d\n", cudaGetErrorString(err),file,line);
-    culaShutdown();
     exit(EXIT_FAILURE);
+#endif
 }
 /************************ pipeline **************************/
 /* data struct shared by all threads */
@@ -47,6 +48,7 @@ typedef struct gb_data_b_ {
 
   /* GPU related info */
   cublasHandle_t cbhandle[2]; /* CUBLAS handles */
+  cusolverDnHandle_t solver_handle[2]; /* solver handles */
   double *gWORK[2]; /* GPU buffers */
   int64_t data_size[2]; /* size of buffer (bytes), size gradient vector has different lengths, will be different for each thread */
   /* different pointers to GPU data */
@@ -54,7 +56,7 @@ typedef struct gb_data_b_ {
   double *ccoh[2]; /* coherency vector */
   double  *cpp[2]; /* parameter vector */
   double *cgrad[2]; /* gradient vector */
-  char *cbb[2]; /* baseline map */
+  short *cbb[2]; /* baseline map */
   int *cptoclus[2]; /* param to cluster map */
 
   /* for cost calculation */
@@ -111,42 +113,7 @@ pipeline_slave_code_b(void *data)
     dp->fcost[tid]=cudakernel_lbfgs_cost_robust(dp->lmdata[tid]->ThreadsPerBlock, BlocksPerGrid, dp->Nbase[tid], boff, M, N, Nbase, &dp->cxo[tid][8*boff], &dp->ccoh[tid][boff*8*M], dp->cpp[tid], &dp->cbb[tid][boff*2], dp->cptoclus[tid], dp->lmdata[tid]->robust_nu);
    }
   } else if (dp->status[tid]==PT_DO_AGPU) {
-    attach_gpu_to_thread1(tid,&dp->cbhandle[tid],&dp->gWORK[tid],dp->data_size[tid]);
-    /****************** old code *****************************************/
-    /* set GPU pointers, mutiples of 4 */
-//    unsigned long int moff=0;
-//    dp->cxo[tid]=&(dp->gWORK[tid][moff]);
-//    moff+=dp->lmdata[tid]->n; /* n is already a multiple of 4 */
-//    dp->ccoh[tid]=&(dp->gWORK[tid][moff]);
-//    moff+=Nbase*8*M;
-//    dp->cpp[tid]=&(dp->gWORK[tid][moff]);
-//    moff+=m; /* already a multiple of 4 */
-//    dp->cgrad[tid]=&(dp->gWORK[tid][moff]);
-//    moff+=Nparam; /* already a multiple of 4 */
-//    dp->cbb[tid]=(char*)&(dp->gWORK[tid][moff]);
-//    int istor=(Nbase*2*sizeof(char))/sizeof(double);
-//    if (!istor || istor%4) {
-//     moff+=(istor/4+1)*4;/* NOTE +1 added to align memory */
-//    } else {
-//     moff+=istor;
-//    }
-//    dp->cptoclus[tid]=(int*)&(dp->gWORK[tid][moff]);
-//    istor=(2*M*sizeof(int))/sizeof(double);
-//    if (istor%4) {
-//     moff+=(istor/4+1)*4;/* NOTE +1 added to align memory */
-//    } else {
-//     moff+=istor;
-//    }
-//    /* copy fixed memory do device */
-//    err=cudaMemcpy(dp->cxo[tid], dp->lmdata[tid]->xo, dp->lmdata[tid]->n*sizeof(double), cudaMemcpyHostToDevice);
-//    checkCudaError(err,__FILE__,__LINE__);
-//    err=cudaMemcpy(dp->ccoh[tid], dp->lmdata[tid]->coh, Nbase*8*M*sizeof(double), cudaMemcpyHostToDevice);
-//    checkCudaError(err,__FILE__,__LINE__);
-//    err=cudaMemcpy(dp->cptoclus[tid], dp->lmdata[tid]->ptoclus, M*2*sizeof(int), cudaMemcpyHostToDevice);
-//    checkCudaError(err,__FILE__,__LINE__);
-//    err=cudaMemcpy(dp->cbb[tid], dp->lmdata[tid]->hbb, Nbase*2*sizeof(char), cudaMemcpyHostToDevice);
-//    checkCudaError(err,__FILE__,__LINE__);
-    /****************** end old code *************************************/
+    attach_gpu_to_thread1(select_work_gpu(MAX_GPU_ID,td->pline->thst),&dp->cbhandle[tid],&dp->solver_handle[tid],&dp->gWORK[tid],dp->data_size[tid]);
     err=cudaMalloc((void**)&(dp->cxo[tid]),dp->lmdata[tid]->n*sizeof(double));
     checkCudaError(err,__FILE__,__LINE__);
     err=cudaMalloc((void**)&(dp->ccoh[tid]),Nbase*8*M*sizeof(double));
@@ -157,60 +124,17 @@ pipeline_slave_code_b(void *data)
     checkCudaError(err,__FILE__,__LINE__);
     err=cudaMalloc((void**)&(dp->cptoclus[tid]),M*2*sizeof(int));
     checkCudaError(err,__FILE__,__LINE__);
-    err=cudaMalloc((void**)&(dp->cbb[tid]),Nbase*2*sizeof(char));
+    err=cudaMalloc((void**)&(dp->cbb[tid]),Nbase*2*sizeof(short));
+    checkCudaError(err,__FILE__,__LINE__);
+    err=cudaMemcpy(dp->cxo[tid], dp->lmdata[tid]->xo, dp->lmdata[tid]->n*sizeof(double), cudaMemcpyHostToDevice);
+    checkCudaError(err,__FILE__,__LINE__);
+    err=cudaMemcpy(dp->ccoh[tid], dp->lmdata[tid]->coh, Nbase*8*M*sizeof(double), cudaMemcpyHostToDevice);
+    checkCudaError(err,__FILE__,__LINE__);
+    err=cudaMemcpy(dp->cptoclus[tid], dp->lmdata[tid]->ptoclus, M*2*sizeof(int), cudaMemcpyHostToDevice);
+    checkCudaError(err,__FILE__,__LINE__);
+    err=cudaMemcpy(dp->cbb[tid], dp->lmdata[tid]->hbb, Nbase*2*sizeof(short), cudaMemcpyHostToDevice);
     checkCudaError(err,__FILE__,__LINE__);
 
-    /* copy fixed memory do device */
-    /* first copy to host pinned memory and then copy to device */
-    double *hp1;
-    cudaStream_t ms1;
-    double *hp2;
-    cudaStream_t ms2;
-    int *hp3;
-    cudaStream_t ms3;
-    char *hp4;
-    cudaStream_t ms4;
-
-    err=cudaStreamCreate(&ms1);
-    err=cudaStreamCreate(&ms2);
-    err=cudaStreamCreate(&ms3);
-    err=cudaStreamCreate(&ms4);
-
-    err=cudaHostAlloc((void**)&hp1,dp->lmdata[tid]->n*sizeof(double),cudaHostAllocDefault);
-    checkCudaError(err,__FILE__,__LINE__);
-    err=cudaMemcpy(hp1, dp->lmdata[tid]->xo, dp->lmdata[tid]->n*sizeof(double), cudaMemcpyHostToHost);
-    checkCudaError(err,__FILE__,__LINE__);
-    err=cudaMemcpyAsync(dp->cxo[tid], hp1, dp->lmdata[tid]->n*sizeof(double), cudaMemcpyHostToDevice,ms1);
-    checkCudaError(err,__FILE__,__LINE__);
-
-    err=cudaHostAlloc((void**)&hp2,Nbase*8*M*sizeof(double),cudaHostAllocDefault);
-    checkCudaError(err,__FILE__,__LINE__);
-    err=cudaMemcpy(hp2, dp->lmdata[tid]->coh, Nbase*8*M*sizeof(double), cudaMemcpyHostToHost);
-    err=cudaMemcpyAsync(dp->ccoh[tid], hp2, Nbase*8*M*sizeof(double), cudaMemcpyHostToDevice,ms2);
-    checkCudaError(err,__FILE__,__LINE__);
-
-
-    err=cudaHostAlloc((void**)&hp3,M*2*sizeof(int),cudaHostAllocDefault);
-    checkCudaError(err,__FILE__,__LINE__);
-    err=cudaMemcpy(hp3, dp->lmdata[tid]->ptoclus, M*2*sizeof(int), cudaMemcpyHostToHost);
-    err=cudaMemcpyAsync(dp->cptoclus[tid], hp3, M*2*sizeof(int), cudaMemcpyHostToDevice,ms3);
-    checkCudaError(err,__FILE__,__LINE__);
-
-    err=cudaHostAlloc((void**)&hp4,Nbase*2*sizeof(char),cudaHostAllocDefault);
-    checkCudaError(err,__FILE__,__LINE__);
-    err=cudaMemcpy(hp4, dp->lmdata[tid]->hbb, Nbase*2*sizeof(char), cudaMemcpyHostToHost);
-    err=cudaMemcpyAsync(dp->cbb[tid], hp4, Nbase*2*sizeof(char), cudaMemcpyHostToDevice,ms4);
-    checkCudaError(err,__FILE__,__LINE__);
-
-    err=cudaStreamDestroy(ms1);
-    cudaFreeHost(hp1);
-    err=cudaStreamDestroy(ms2);
-    cudaFreeHost(hp2);
-    err=cudaStreamDestroy(ms3);
-    cudaFreeHost(hp3);
-    err=cudaStreamDestroy(ms4);
-    cudaFreeHost(hp4);
-    checkCudaError(err,__FILE__,__LINE__);
   } else if (dp->status[tid]==PT_DO_DGPU) {
     cudaFree(dp->cxo[tid]);
     cudaFree(dp->ccoh[tid]);
@@ -219,7 +143,7 @@ pipeline_slave_code_b(void *data)
     cudaFree(dp->cpp[tid]);
     cudaFree(dp->cgrad[tid]);
 
-    detach_gpu_from_thread1(tid,dp->cbhandle[tid],dp->gWORK[tid]);
+    detach_gpu_from_thread1(dp->cbhandle[tid],dp->solver_handle[tid],dp->gWORK[tid]);
   }
 
  }
@@ -249,8 +173,12 @@ init_pipeline_b(th_pipeline *pline,
     fprintf(stderr,"no free memory\n");
     exit(1);
  }
+ if ((pline->thst=(taskhist*)malloc(sizeof(taskhist)))==0) {
+    fprintf(stderr,"no free memory\n");
+    exit(1);
+ }
 
-
+ init_task_hist(pline->thst);
  t0->pline=t1->pline=pline;
  t0->tid=0;
  t1->tid=1; /* link back t1, t2 to data so they could be freed */
@@ -273,6 +201,8 @@ destroy_pipeline_b(th_pipeline *pline)
  destroy_th_barrier(&(pline->gate1));
  destroy_th_barrier(&(pline->gate2));
  pthread_attr_destroy(&(pline->attr));
+ destroy_task_hist(pline->thst);
+ free(pline->thst);
  free(pline->sd0);
  free(pline->sd1);
  pline->data=NULL;
@@ -902,7 +832,7 @@ lbfgs_fit_common(
   
 
   me_data_t *dp=(me_data_t*)adata;
-  char *hbb;
+  short *hbb;
   int *ptoclus;
   int Nbase1=dp->Nbase*dp->tilesz;
 
@@ -943,7 +873,7 @@ lbfgs_fit_common(
 
 /*********** following are not part of LBFGS, but done here only for GPU use */
   /* auxilliary arrays for GPU */
-  if ((hbb=(char*)calloc((size_t)(Nbase1*2),sizeof(char)))==0) {
+  if ((hbb=(short*)calloc((size_t)(Nbase1*2),sizeof(short)))==0) {
      fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
      exit(1);
   }

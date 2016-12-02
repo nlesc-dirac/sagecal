@@ -20,13 +20,14 @@
 #include "cuda.h"
 #include <cuComplex.h>
 #include <stdio.h>
+#include "sagecal.h"
 
 /* enable this for checking for kernel failure */
 //#define CUDA_DBG
 
 
 __global__ void 
-kernel_deriv(int Nbase, int tilesz, int M, int Ns, int Nparam, int goff, double *x, double *coh, double *p, char *bb, int *ptoclus, double *grad){
+kernel_deriv(int Nbase, int tilesz, int M, int Ns, int Nparam, int goff, const double *__restrict__ x, const double *__restrict__ coh, const double *__restrict__ p, const short *__restrict__ bb, const int *__restrict__ ptoclus, double *__restrict__ grad){
   /* global thread index */
   unsigned int n = threadIdx.x + blockDim.x*blockIdx.x;
   /* parameter number of this thread */
@@ -217,7 +218,7 @@ kernel_deriv(int Nbase, int tilesz, int M, int Ns, int Nparam, int goff, double 
 
 /* note x is residual, not data */
 __global__ void 
-kernel_deriv_r_robust(int Nbase, int tilesz, int M, int Ns, int Nparam, int goff, double *x, double *coh, double *p, char *bb, int *ptoclus, double *grad, double robust_nu){
+kernel_deriv_r_robust(int Nbase, int tilesz, int M, int Ns, int Nparam, int goff, const double *__restrict__ x, const double *__restrict__ coh, const double *__restrict__ p, const short *__restrict__ bb, const int *__restrict__ ptoclus, double *__restrict__ grad, double robust_nu){
   /* global thread index */
   unsigned int n = threadIdx.x + blockDim.x*blockIdx.x;
   /* parameter number of this thread */
@@ -413,7 +414,7 @@ kernel_deriv_r_robust(int Nbase, int tilesz, int M, int Ns, int Nparam, int goff
 
 /* note x is residual, not data */
 __global__ void 
-kernel_deriv_r(int Nbase, int tilesz, int M, int Ns, int Nparam, int goff, double *x, double *coh, double *p, char *bb, int *ptoclus, double *grad){
+kernel_deriv_r(int Nbase, int tilesz, int M, int Ns, int Nparam, int goff, const double *__restrict__ x, const double *__restrict__ coh, const double *__restrict__ p, const short *__restrict__ bb, const int *__restrict__ ptoclus, double *__restrict__ grad){
   /* global thread index */
   unsigned int n = threadIdx.x + blockDim.x*blockIdx.x;
   /* parameter number of this thread */
@@ -603,7 +604,7 @@ kernel_deriv_r(int Nbase, int tilesz, int M, int Ns, int Nparam, int goff, doubl
 
 
 __global__ void 
-kernel_residual(int Nbase, int M, int Ns, double *x, double *coh, double *p, char *bb, int *ptoclus, double *ed){
+kernel_residual(int Nbase, int M, int Ns, const double *__restrict__ x, const double *__restrict__ coh, const double *__restrict__ p, const short *__restrict__ bb, const int *__restrict__ ptoclus, double *__restrict__ ed){
 
   /* global thread index */
   unsigned int n = threadIdx.x + blockDim.x*blockIdx.x;
@@ -703,7 +704,7 @@ kernel_residual(int Nbase, int M, int Ns, double *x, double *coh, double *p, cha
 
 
 __global__ void 
-kernel_fcost_robust(int Nbase, int boff, int M, int Ns, int Nbasetotal, double *x, double *coh, double *p, char *bb, int *ptoclus, double *ed, double inv_robust_nu){
+kernel_fcost_robust(int Nbase, int boff, int M, int Ns, int Nbasetotal, const double *__restrict__ x, const double *__restrict__ coh, const double *__restrict__ p, const short *__restrict__ bb, const int *__restrict__ ptoclus, double *__restrict__ ed, double inv_robust_nu){
   /* shared memory */
   extern __shared__ double ek[];
 
@@ -818,7 +819,7 @@ kernel_fcost_robust(int Nbase, int boff, int M, int Ns, int Nbasetotal, double *
 
 
 __global__ void 
-kernel_fcost(int Nbase, int boff, int M, int Ns, int Nbasetotal, double *x, double *coh, double *p, char *bb, int *ptoclus, double *ed){
+kernel_fcost(int Nbase, int boff, int M, int Ns, int Nbasetotal, const double *__restrict__ x, const double *__restrict__ coh, const double *__restrict__ p, const short *__restrict__ bb, const int *__restrict__ ptoclus, double *__restrict__ ed){
   /* shared memory */
   extern __shared__ double ek[];
 
@@ -933,7 +934,7 @@ kernel_fcost(int Nbase, int boff, int M, int Ns, int Nbasetotal, double *x, doub
 
 
 __global__ void 
-kernel_diagdiv(int M, double eps, double *y,double *x){
+kernel_diagdiv(int M, double eps, double *__restrict__ y,const double *__restrict__ x){
   unsigned int tid = blockIdx.x*blockDim.x + threadIdx.x;
   /* make sure to use only M threads */
   if (tid<M) {
@@ -946,7 +947,7 @@ kernel_diagdiv(int M, double eps, double *y,double *x){
 }
 
 __global__ void 
-kernel_diagmu(int M, double *A,double mu){
+kernel_diagmu(int M, double *__restrict__ A,double mu){
   unsigned int tid = blockIdx.x*blockDim.x + threadIdx.x;
   /* make sure to use only M threads */
   if (tid<M) {
@@ -956,7 +957,7 @@ kernel_diagmu(int M, double *A,double mu){
 
 
 __global__ void 
-kernel_func(int Nbase, double *x, double *coh, double *p, char *bb, int N){
+kernel_func(int Nbase, double *__restrict__ x, const double *__restrict__ coh, const double *__restrict__ p, const short *__restrict__ bb, int N){
   /* global thread index : equal to the baseline */
   unsigned int n = threadIdx.x + blockDim.x*blockIdx.x;
 
@@ -1064,7 +1065,8 @@ kernel_func(int Nbase, double *x, double *coh, double *p, char *bb, int N){
 
 }
 
-__global__ void kernel_jacf(int Nbase, int M, double *jac, double *coh, double *p, char *bb, int N){
+__global__ void 
+kernel_jacf(int Nbase, int M, double *__restrict__ jac, const double *__restrict__ coh, const double *__restrict__ p, const short *__restrict__ bb, int N){
   /* global thread index : equal to the baseline */
   unsigned int n = threadIdx.x + blockDim.x*blockIdx.x;
   /* which parameter:0...M */
@@ -1186,7 +1188,7 @@ __global__ void kernel_jacf(int Nbase, int M, double *jac, double *coh, double *
 /* sum up all N elements of vector input 
  and save (per block) in output (size > number of blocks) */
 __global__ void
-plus_reduce_multi(double *input, int N, int blockDim_2, double *output) {
+plus_reduce_multi(const double *__restrict__ input, int N, int blockDim_2, double *__restrict__ output) {
  // Each block loads its elements into shared memory
  extern __shared__ double x[];
  int tid = threadIdx.x;
@@ -1216,7 +1218,7 @@ plus_reduce_multi(double *input, int N, int blockDim_2, double *output) {
 /* sum up all N elements of vector input 
  NOTE: only 1 block should be used */
 __global__ void
-plus_reduce(double *input, int N, int blockDim_2, double *total) {
+plus_reduce(const double *__restrict__ input, int N, int blockDim_2, double *total) {
  // Each block loads its elements into shared memory
  extern __shared__ double x[];
  int tid = threadIdx.x;
@@ -1248,13 +1250,17 @@ plus_reduce(double *input, int N, int blockDim_2, double *total) {
 extern "C"
 {
 
+
 static void
 checkCudaError(cudaError_t err, const char *file, int line)
 {
+
+#ifdef CUDA_DEBUG
     if(!err)
         return;
     fprintf(stderr,"GPU (CUDA): %s %s %d\n", cudaGetErrorString(err),file,line);
     exit(EXIT_FAILURE);
+#endif
 }
 
 /* need power of 2 for tree reduction to work */
@@ -1271,7 +1277,7 @@ NearestPowerOf2 (int n){
 
 
 /* cuda driver for kernel */
-/* ThreadsPerBlock: keep <= 128
+/* ThreadsPerBlock: keep <= 128 ???
    BlocksPerGrid: depends on the threads/baselines> Threads*Blocks approx baselines
    Nbase: no of baselines (total, including tilesz >1)
    tilesz: tile size
@@ -1288,7 +1294,7 @@ NearestPowerOf2 (int n){
    grad: Nparamsx1 gradient values
 */
 void 
-cudakernel_lbfgs(int ThreadsPerBlock, int BlocksPerGrid, int Nbase, int tilesz, int M, int Ns, int Nparam, int goff, double *x, double *coh, double *p, char *bb, int *ptoclus, double *grad){
+cudakernel_lbfgs(int ThreadsPerBlock, int BlocksPerGrid, int Nbase, int tilesz, int M, int Ns, int Nparam, int goff, double *x, double *coh, double *p, short *bb, int *ptoclus, double *grad){
  
 #ifdef CUDA_DBG
   cudaError_t error;
@@ -1308,7 +1314,7 @@ cudakernel_lbfgs(int ThreadsPerBlock, int BlocksPerGrid, int Nbase, int tilesz, 
 }
 
 void 
-cudakernel_lbfgs_r_robust(int ThreadsPerBlock, int BlocksPerGrid, int Nbase, int tilesz, int M, int Ns, int Nparam, int goff, double *x, double *coh, double *p, char *bb, int *ptoclus, double *grad, double robust_nu){
+cudakernel_lbfgs_r_robust(int ThreadsPerBlock, int BlocksPerGrid, int Nbase, int tilesz, int M, int Ns, int Nparam, int goff, double *x, double *coh, double *p, short *bb, int *ptoclus, double *grad, double robust_nu){
  
   cudaError_t error;
   /* invoke kernel to calculate residuals first */
@@ -1326,7 +1332,6 @@ cudakernel_lbfgs_r_robust(int ThreadsPerBlock, int BlocksPerGrid, int Nbase, int
 #endif
 
   kernel_residual<<< L, ThreadsPerBlock >>> (Nbase, M, Ns, x, coh, p, bb, ptoclus, eo);
-  cudaDeviceSynchronize();
 #ifdef CUDA_DBG
   error = cudaGetLastError();
   if(error != cudaSuccess) {
@@ -1338,7 +1343,6 @@ cudakernel_lbfgs_r_robust(int ThreadsPerBlock, int BlocksPerGrid, int Nbase, int
 
   /* invoke device on this block/thread grid (last argument is buffer size in bytes) */
   kernel_deriv_r_robust<<< BlocksPerGrid, ThreadsPerBlock >>> (Nbase, tilesz, M, Ns, Nparam, goff, eo, coh, p, bb, ptoclus, grad, robust_nu);
-  cudaDeviceSynchronize();
 #ifdef CUDA_DBG
   error = cudaGetLastError();
   if(error != cudaSuccess) {
@@ -1352,7 +1356,7 @@ cudakernel_lbfgs_r_robust(int ThreadsPerBlock, int BlocksPerGrid, int Nbase, int
 }
 
 void 
-cudakernel_lbfgs_r(int ThreadsPerBlock, int BlocksPerGrid, int Nbase, int tilesz, int M, int Ns, int Nparam, int goff, double *x, double *coh, double *p, char *bb, int *ptoclus, double *grad){
+cudakernel_lbfgs_r(int ThreadsPerBlock, int BlocksPerGrid, int Nbase, int tilesz, int M, int Ns, int Nparam, int goff, double *x, double *coh, double *p, short *bb, int *ptoclus, double *grad){
  
   cudaError_t error;
   /* invoke kernel to calculate residuals first */
@@ -1370,7 +1374,6 @@ cudakernel_lbfgs_r(int ThreadsPerBlock, int BlocksPerGrid, int Nbase, int tilesz
 #endif
 
   kernel_residual<<< L, ThreadsPerBlock >>> (Nbase, M, Ns, x, coh, p, bb, ptoclus, eo);
-  cudaDeviceSynchronize();
 #ifdef CUDA_DBG
   error = cudaGetLastError();
   if(error != cudaSuccess) {
@@ -1382,7 +1385,6 @@ cudakernel_lbfgs_r(int ThreadsPerBlock, int BlocksPerGrid, int Nbase, int tilesz
 
   /* invoke device on this block/thread grid (last argument is buffer size in bytes) */
   kernel_deriv_r<<< BlocksPerGrid, ThreadsPerBlock >>> (Nbase, tilesz, M, Ns, Nparam, goff, eo, coh, p, bb, ptoclus, grad);
-  cudaDeviceSynchronize();
 #ifdef CUDA_DBG
   error = cudaGetLastError();
   if(error != cudaSuccess) {
@@ -1397,7 +1399,7 @@ cudakernel_lbfgs_r(int ThreadsPerBlock, int BlocksPerGrid, int Nbase, int tilesz
 
 /* note x,coh and bb are with the right offset */
 double 
-cudakernel_lbfgs_cost_robust(int ThreadsPerBlock, int BlocksPerGrid, int Nbase, int boff, int M, int Ns, int Nbasetotal, double *x, double *coh, double *p, char *bb, int *ptoclus, double robust_nu){
+cudakernel_lbfgs_cost_robust(int ThreadsPerBlock, int BlocksPerGrid, int Nbase, int boff, int M, int Ns, int Nbasetotal, double *x, double *coh, double *p, short *bb, int *ptoclus, double robust_nu){
  
   double *ed;
   cudaError_t error;
@@ -1408,14 +1410,13 @@ cudakernel_lbfgs_cost_robust(int ThreadsPerBlock, int BlocksPerGrid, int Nbase, 
 
   cudaMemset(ed, 0, sizeof(double)*BlocksPerGrid);
   kernel_fcost_robust<<< BlocksPerGrid, ThreadsPerBlock, ThreadsPerBlock*sizeof(double) >>> (Nbase, boff, M, Ns, Nbasetotal, x, coh, p, bb, ptoclus, ed, 1.0/robust_nu);
-  cudaDeviceSynchronize();
 
 #ifdef CUDA_DBG
   error = cudaGetLastError();
   checkCudaError(error,__FILE__,__LINE__);
 #endif
 
-  int T=128; 
+  int T=DEFAULT_TH_PER_BK; 
   double *totald,total;
   if((error=cudaMalloc((void**)&totald, sizeof(double)))!=cudaSuccess) {
      fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
@@ -1428,7 +1429,6 @@ cudakernel_lbfgs_cost_robust(int ThreadsPerBlock, int BlocksPerGrid, int Nbase, 
   if (T>BlocksPerGrid) {
     /* one kernel launch is enough */
     plus_reduce<<< 1, BlocksPerGrid, sizeof(double)*BlocksPerGrid>>>(ed, BlocksPerGrid, NearestPowerOf2(BlocksPerGrid), totald);
-    cudaDeviceSynchronize();
 #ifdef CUDA_DBG
     error = cudaGetLastError();
     checkCudaError(error,__FILE__,__LINE__);
@@ -1442,14 +1442,12 @@ cudakernel_lbfgs_cost_robust(int ThreadsPerBlock, int BlocksPerGrid, int Nbase, 
      exit(1);
     }
     plus_reduce_multi<<< L, T, sizeof(double)*T>>>(ed, BlocksPerGrid, NearestPowerOf2(T), eo);
-    cudaDeviceSynchronize();
 
 #ifdef CUDA_DBG
     error = cudaGetLastError();
     checkCudaError(error,__FILE__,__LINE__);
 #endif
     plus_reduce<<< 1, L, sizeof(double)*L>>>(eo, L, NearestPowerOf2(L), totald);
-    cudaDeviceSynchronize();
 #ifdef CUDA_DBG
     error = cudaGetLastError();
     checkCudaError(error,__FILE__,__LINE__);
@@ -1457,7 +1455,6 @@ cudakernel_lbfgs_cost_robust(int ThreadsPerBlock, int BlocksPerGrid, int Nbase, 
     cudaFree(eo);
   }
   cudaMemcpy(&total,totald,sizeof(double),cudaMemcpyDeviceToHost);
-  cudaDeviceSynchronize();
   cudaFree(totald);
   cudaFree(ed);
 
@@ -1465,7 +1462,7 @@ cudakernel_lbfgs_cost_robust(int ThreadsPerBlock, int BlocksPerGrid, int Nbase, 
 }
 
 double 
-cudakernel_lbfgs_cost(int ThreadsPerBlock, int BlocksPerGrid, int Nbase, int boff, int M, int Ns, int Nbasetotal, double *x, double *coh, double *p, char *bb, int *ptoclus){
+cudakernel_lbfgs_cost(int ThreadsPerBlock, int BlocksPerGrid, int Nbase, int boff, int M, int Ns, int Nbasetotal, double *x, double *coh, double *p, short *bb, int *ptoclus){
   double *ed;
   cudaError_t error;
   if((error=cudaMalloc((void**)&ed, sizeof(double)*BlocksPerGrid))!=cudaSuccess) {
@@ -1474,13 +1471,12 @@ cudakernel_lbfgs_cost(int ThreadsPerBlock, int BlocksPerGrid, int Nbase, int bof
   }
   cudaMemset(ed, 0, sizeof(double)*BlocksPerGrid);
   kernel_fcost<<< BlocksPerGrid, ThreadsPerBlock, ThreadsPerBlock*sizeof(double) >>> (Nbase, boff, M, Ns, Nbasetotal, x, coh, p, bb, ptoclus, ed);
-  cudaDeviceSynchronize();
 #ifdef CUDA_DBG
   error = cudaGetLastError();
   checkCudaError(error,__FILE__,__LINE__);
 #endif
 
-  int T=128; 
+  int T=DEFAULT_TH_PER_BK; 
   double *totald,total;
   if((error=cudaMalloc((void**)&totald, sizeof(double)))!=cudaSuccess) {
      fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
@@ -1493,7 +1489,6 @@ cudakernel_lbfgs_cost(int ThreadsPerBlock, int BlocksPerGrid, int Nbase, int bof
   if (T>BlocksPerGrid) {
     /* one kernel launch is enough */
     plus_reduce<<< 1, BlocksPerGrid, sizeof(double)*BlocksPerGrid>>>(ed, BlocksPerGrid, NearestPowerOf2(BlocksPerGrid), totald);
-    cudaDeviceSynchronize();
 
 #ifdef CUDA_DBG
     error = cudaGetLastError();
@@ -1508,13 +1503,11 @@ cudakernel_lbfgs_cost(int ThreadsPerBlock, int BlocksPerGrid, int Nbase, int bof
      exit(1);
     }
     plus_reduce_multi<<< L, T, sizeof(double)*T>>>(ed, BlocksPerGrid, NearestPowerOf2(T), eo);
-    cudaDeviceSynchronize();
 #ifdef CUDA_DBG
     error = cudaGetLastError();
     checkCudaError(error,__FILE__,__LINE__);
 #endif
     plus_reduce<<< 1, L, sizeof(double)*L>>>(eo, L, NearestPowerOf2(L), totald);
-    cudaDeviceSynchronize();
 #ifdef CUDA_DBG
     error = cudaGetLastError();
     checkCudaError(error,__FILE__,__LINE__);
@@ -1522,7 +1515,6 @@ cudakernel_lbfgs_cost(int ThreadsPerBlock, int BlocksPerGrid, int Nbase, int bof
     cudaFree(eo);
   }
   cudaMemcpy(&total,totald,sizeof(double),cudaMemcpyDeviceToHost);
-  cudaDeviceSynchronize();
   cudaFree(totald);
   cudaFree(ed);
 
@@ -1532,7 +1524,8 @@ cudakernel_lbfgs_cost(int ThreadsPerBlock, int BlocksPerGrid, int Nbase, int bof
 
 
 /* divide by singular values  Dpd[]/Sd[]  for Sd[]> eps */
-void cudakernel_diagdiv(int ThreadsPerBlock, int BlocksPerGrid, int M, double eps, double *Dpd, double *Sd) {
+void 
+cudakernel_diagdiv(int ThreadsPerBlock, int BlocksPerGrid, int M, double eps, double *Dpd, double *Sd) {
 
 #ifdef CUDA_DBG
   cudaError_t error;
@@ -1578,7 +1571,7 @@ cudakernel_diagmu(int ThreadsPerBlock, int BlocksPerGrid, int M, double *A, doub
 /* cuda driver for calculating f() */
 /* p: params (Mx1), x: data (Nx1), other data : coh, baseline->stat mapping, Nbase, Mclusters, Nstations */
 void
-cudakernel_func(int ThreadsPerBlock, int BlocksPerGrid, double *p, double *x, int M, int N, double *coh, char *bbh, int Nbase, int Mclus, int Nstations) {
+cudakernel_func(int ThreadsPerBlock, int BlocksPerGrid, double *p, double *x, int M, int N, double *coh, short *bbh, int Nbase, int Mclus, int Nstations) {
 
 #ifdef CUDA_DBG
   cudaError_t error;
@@ -1602,7 +1595,7 @@ cudakernel_func(int ThreadsPerBlock, int BlocksPerGrid, double *p, double *x, in
 /* cuda driver for calculating jacf() */
 /* p: params (Mx1), jac: jacobian (NxM), other data : coh, baseline->stat mapping, Nbase, Mclusters, Nstations */
 void
-cudakernel_jacf(int ThreadsPerBlock_row, int  ThreadsPerBlock_col, double *p, double *jac, int M, int N, double *coh, char *bbh, int Nbase, int Mclus, int Nstations) {
+cudakernel_jacf(int ThreadsPerBlock_row, int  ThreadsPerBlock_col, double *p, double *jac, int M, int N, double *coh, short *bbh, int Nbase, int Mclus, int Nstations) {
 
 #ifdef CUDA_DBG
   cudaError_t error;

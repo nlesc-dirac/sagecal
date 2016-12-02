@@ -168,8 +168,13 @@ read_shapelet_modes(char *buff,int *n0,double *beta,double **modes) {
     fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
     exit(1);
   }
+  int retval;
   for (ci=0; ci<M; ci++) {
-   fscanf(cfp,"%d %lf",&c,&(*modes)[ci]);
+   retval=fscanf(cfp,"%d %lf",&c,&(*modes)[ci]);
+   if (retval==EOF) {
+      fprintf(stderr,"%s: %d: read error %s\n",__FILE__,__LINE__,input_modes);
+      exit(1);
+   }
   }
 
   free(input_modes);
@@ -208,7 +213,7 @@ read_sky_cluster(const char *skymodel, const char *clusterfile, clus_source_t **
   /* first read the cluster file, construct a list of clusters*/
   /* each element of list is a list of source names */
   if ((cfp=fopen(clusterfile,"r"))==0) {
-      fprintf(stderr,"%s: %d: no file\n",__FILE__,__LINE__);
+      fprintf(stderr,"%s: %d: no file %s\n",__FILE__,__LINE__,clusterfile);
       exit(1);
   }
   /* allocate memory for buffer */
@@ -276,7 +281,7 @@ read_sky_cluster(const char *skymodel, const char *clusterfile, clus_source_t **
       else: point
   */
   if ((cfp=fopen(skymodel,"r"))==0) {
-      fprintf(stderr,"%s: %d: no file\n",__FILE__,__LINE__);
+      fprintf(stderr,"%s: %d: no file %s\n",__FILE__,__LINE__,skymodel);
       exit(1);
   }
 
@@ -321,23 +326,46 @@ read_sky_cluster(const char *skymodel, const char *clusterfile, clus_source_t **
       /* convert to l,m: NOTE we use -l here */
       source->ll=cos(mydec)*sin(myra-ra0);
       source->mm=sin(mydec)*cos(dec0)-cos(mydec)*sin(dec0)*cos(myra-ra0);
+      source->ra=myra;
+      source->dec=mydec;
       
-      /* use spetral index, if != 0 */
+      /* use spetral index, if != 0, to update sI to match data freq */
       if (spec_idx!=0.0) {
-       //source->sI=sI*pow(freq0/f0,spec_idx);
        fratio=log(freq0/f0);
        fratio1=fratio*fratio;
        fratio2=fratio1*fratio;
        /* catch -ve and 0 sI */
        if (sI>0.0) {
-        source->sI=exp(log(sI)+spec_idx*fratio+spec_idx1*fratio1+spec_idx2*fratio2);
+        source->sI[0]=exp(log(sI)+spec_idx*fratio+spec_idx1*fratio1+spec_idx2*fratio2);
        } else {
-        source->sI=(sI==0.0?0.0:-exp(log(-sI)+spec_idx*fratio+spec_idx1*fratio1+spec_idx2*fratio2));
+        source->sI[0]=(sI==0.0?0.0:-exp(log(-sI)+spec_idx*fratio+spec_idx1*fratio1+spec_idx2*fratio2));
        }
+       if (sQ>0.0) {
+        source->sI[1]=exp(log(sQ)+spec_idx*fratio+spec_idx1*fratio1+spec_idx2*fratio2);
+       } else {
+        source->sI[1]=(sQ==0.0?0.0:-exp(log(-sQ)+spec_idx*fratio+spec_idx1*fratio1+spec_idx2*fratio2));
+       }
+       if (sU>0.0) {
+        source->sI[2]=exp(log(sU)+spec_idx*fratio+spec_idx1*fratio1+spec_idx2*fratio2);
+       } else {
+        source->sI[2]=(sU==0.0?0.0:-exp(log(-sU)+spec_idx*fratio+spec_idx1*fratio1+spec_idx2*fratio2));
+       }
+       if (sV>0.0) {
+        source->sI[3]=exp(log(sV)+spec_idx*fratio+spec_idx1*fratio1+spec_idx2*fratio2);
+       } else {
+        source->sI[3]=(sV==0.0?0.0:-exp(log(-sV)+spec_idx*fratio+spec_idx1*fratio1+spec_idx2*fratio2));
+       }
+
       } else {
-       source->sI=sI;
+       source->sI[0]=sI;
+       source->sI[1]=sQ;
+       source->sI[2]=sU;
+       source->sI[3]=sV;
       }
-      source->sI0=sI;
+      source->sI0[0]=sI; /* original sI */
+      source->sI0[1]=sQ; /* original sQ */
+      source->sI0[2]=sU; /* original sU */
+      source->sI0[3]=sV; /* original sV */
       source->f0=f0;
       source->spec_idx=spec_idx;
       source->spec_idx1=spec_idx1;
@@ -375,7 +403,7 @@ read_sky_cluster(const char *skymodel, const char *clusterfile, clus_source_t **
        exg->sxi=sin(-xi);
        exg->cphi=cos(phi);
        exg->sphi=sin(-phi);
-       if (nn<0.998) {
+       if (nn<PROJ_CUT) {
          /* only then consider projection */
          exg->use_projection=1;
        } else {
@@ -395,7 +423,7 @@ read_sky_cluster(const char *skymodel, const char *clusterfile, clus_source_t **
        exd->sxi=sin(-xi);
        exd->cphi=cos(phi);
        exd->sphi=sin(-phi);
-       if (nn<0.998) {
+       if (nn<PROJ_CUT) {
          /* only then consider projection */
          exd->use_projection=1;
        } else {
@@ -415,7 +443,7 @@ read_sky_cluster(const char *skymodel, const char *clusterfile, clus_source_t **
        exr->sxi=sin(-xi);
        exr->cphi=cos(phi);
        exr->sphi=sin(-phi);
-       if (nn<0.998) {
+       if (nn<PROJ_CUT) {
          /* only then consider projection */
          exr->use_projection=1;
        } else {
@@ -434,11 +462,11 @@ read_sky_cluster(const char *skymodel, const char *clusterfile, clus_source_t **
        /* sanity check if eX !=0 and eY !=0 */
        if (!exs->eX) {
          exs->eX=1.0;
-         fprintf(stderr,"Warning: shapelet eX is zero. resetting to 1\n");
+         fprintf(stderr,"Warning: shapelet %s eX is zero. resetting to 1\n",buff);
        }
        if (!exs->eY) {
          exs->eY=1.0;
-         fprintf(stderr,"Warning: shapelet eY is zero. resetting to 1\n");
+         fprintf(stderr,"Warning: shapelet %s eY is zero. resetting to 1\n",buff);
        }
        exs->eP=eP;
        /* open mode file and build up info */
@@ -449,7 +477,7 @@ read_sky_cluster(const char *skymodel, const char *clusterfile, clus_source_t **
        exs->sxi=sin(-xi);
        exs->cphi=cos(phi);
        exs->sphi=sin(-phi);
-       if (nn<0.998) {
+       if (nn<PROJ_CUT) {
          /* only then consider projection */
          exs->use_projection=1;
        } else {
@@ -505,6 +533,18 @@ read_sky_cluster(const char *skymodel, const char *clusterfile, clus_source_t **
      fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
      exit(1);
     }
+    if (((*carr)[ci].sQ=(double*)malloc((size_t)((*carr)[ci].N)*sizeof(double)))==0) {
+     fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
+     exit(1);
+    }
+    if (((*carr)[ci].sU=(double*)malloc((size_t)((*carr)[ci].N)*sizeof(double)))==0) {
+     fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
+     exit(1);
+    }
+    if (((*carr)[ci].sV=(double*)malloc((size_t)((*carr)[ci].N)*sizeof(double)))==0) {
+     fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
+     exit(1);
+    }
     if (((*carr)[ci].stype=(unsigned char*)malloc((size_t)((*carr)[ci].N)*sizeof(unsigned char)))==0) {
      fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
      exit(1);
@@ -515,6 +555,18 @@ read_sky_cluster(const char *skymodel, const char *clusterfile, clus_source_t **
     }
     /* for handling multi channel data */
     if (((*carr)[ci].sI0=(double*)malloc((size_t)((*carr)[ci].N)*sizeof(double)))==0) {
+     fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
+     exit(1);
+    }
+    if (((*carr)[ci].sQ0=(double*)malloc((size_t)((*carr)[ci].N)*sizeof(double)))==0) {
+     fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
+     exit(1);
+    }
+    if (((*carr)[ci].sU0=(double*)malloc((size_t)((*carr)[ci].N)*sizeof(double)))==0) {
+     fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
+     exit(1);
+    }
+    if (((*carr)[ci].sV0=(double*)malloc((size_t)((*carr)[ci].N)*sizeof(double)))==0) {
      fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
      exit(1);
     }
@@ -534,8 +586,14 @@ read_sky_cluster(const char *skymodel, const char *clusterfile, clus_source_t **
      fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
      exit(1);
     }
-
-
+    if (((*carr)[ci].ra=(double*)malloc((size_t)((*carr)[ci].N)*sizeof(double)))==0) {
+     fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
+     exit(1);
+    }
+    if (((*carr)[ci].dec=(double*)malloc((size_t)((*carr)[ci].N)*sizeof(double)))==0) {
+     fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
+     exit(1);
+    }
 
 
     cj=0;
@@ -551,15 +609,23 @@ read_sky_cluster(const char *skymodel, const char *clusterfile, clus_source_t **
       (*carr)[ci].ll[cj]=source->ll;
       (*carr)[ci].mm[cj]=source->mm;
       (*carr)[ci].nn[cj]=sqrt(1.0-source->ll*source->ll-source->mm*source->mm)-1.0;
-      (*carr)[ci].sI[cj]=source->sI;
+      (*carr)[ci].sI[cj]=source->sI[0];
+      (*carr)[ci].sQ[cj]=source->sI[1];
+      (*carr)[ci].sU[cj]=source->sI[2];
+      (*carr)[ci].sV[cj]=source->sI[3];
       (*carr)[ci].stype[cj]=source->stype;
 #ifdef DEBUG
-      printf(" (%lf,%lf,%lf,%lf)",source->ll,source->mm,(*carr)[ci].nn[cj],source->sI);
+      printf(" (%lf,%lf,%lf,%lf,%lf,%lf,%lf,%lf,%lf)",source->ll,source->mm,source->ra,source->dec,(*carr)[ci].nn[cj],source->sI[0],source->sI[1],source->sI[2],source->sI[3]);
 #endif
-      (*carr)[ci].ex[cj]=source->exdata;
+      (*carr)[ci].ex[cj]=source->exdata; /* FIXME: duplicate sources could create double free error */
+      (*carr)[ci].ra[cj]=source->ra;
+      (*carr)[ci].dec[cj]=source->dec;
       
       /* for multi channel data */
-      (*carr)[ci].sI0[cj]=source->sI0;
+      (*carr)[ci].sI0[cj]=source->sI0[0];
+      (*carr)[ci].sQ0[cj]=source->sI0[1];
+      (*carr)[ci].sU0[cj]=source->sI0[2];
+      (*carr)[ci].sV0[cj]=source->sI0[3];
       (*carr)[ci].f0[cj]=source->f0;
       (*carr)[ci].spec_idx[cj]=source->spec_idx;
       (*carr)[ci].spec_idx1[cj]=source->spec_idx1;
@@ -686,7 +752,7 @@ update_ignorelist(const char *ignfile, int *ignlist, int M, clus_source_t *carr)
     } while (c>= 0);
 
     fclose(cfp);
-    printf("Total %d clustes ignored in simulation.\n",cn);
+    printf("Total %d clusters ignored in simulation.\n",cn);
     return 0;
 }
 

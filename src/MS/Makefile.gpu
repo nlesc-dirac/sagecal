@@ -1,6 +1,6 @@
 OUTPUT=
-CXX=mpic++
-CXXFLAGS=-O3 -Wall -g #-pg #-fnostack-protector
+CXX=g++
+CXXFLAGS=-O3 -Wall -g -DHAVE_CUDA -DONE_GPU
 CASA_LIBDIR=/opt/casacore/lib
 CASA_INCDIR=-I/opt/casacore/include/ -I/opt/casacore/include/casacore
 CASA_LIBS=-lcasa_casa -lcasa_tables -lcasa_measures -lcasa_ms -lcfitsio
@@ -9,12 +9,22 @@ LAPACK=-lopenblas -lgfortran -lpthread
 LAPACK_DIR=/usr/local/OpenBLAS/lib/
 #LAPACK_DIR=/usr/lib/atlas/sse/
 
+CUDAINC=-I/usr/local/cuda/include
+CUDALIB=-L/usr/local/cuda/lib64 -lcuda -lcudart
+
+CULALIB=-lcublas -lcusolver
+# NVML
+NVML_INC=/usr/include/nvidia/gdk/
+NVML_LIB=-lnvidia-ml -L/usr/lib64/nvidia/
+
+
 LDFLAGS=-Wl,--rpath,/usr/local/OpenBLAS/lib/
 #LDFLAGS=-Wl,-t,--rpath,/software/users/lofareor/SW/lib64
 # -Wl,--hash-style=both
 
+# with multithread FFTW
 MY_LIBS=-lm -lsagecal
-INCLUDES=-I. -I./lib $(CASA_INCDIR) -I/usr/include
+INCLUDES=-I. -I./lib $(CASA_INCDIR) -I/usr/include $(CUDAINC) -I$(NVML_INC)
 LIBPATH=-L$(LAPACK_DIR) -L$(CASA_LIBDIR)  -L./lib
 
 #### glib
@@ -22,17 +32,13 @@ GLIBI=-I/usr/include/glib-2.0 -I/usr/lib/glib-2.0/include -I/usr/lib/x86_64-linu
 GLIBL=-lglib-2.0
 
 
-OBJECTS=main.o data.o sagecal_master.o sagecal_slave.o
-default:sagecal-mpi
-main.o:main.cpp proto.h
+OBJECTS=main.o data.o
+default:sagecal
+main.o:main.cpp
 	$(CXX) $(CXXFLAGS) $(INCLUDES) $(GLIBI) -c $<
 data.o:data.cpp data.h
 	$(CXX) $(CXXFLAGS) $(INCLUDES) $(GLIBI) -c $<
-sagecal_master.o:sagecal_master.cpp proto.h
-	$(CXX) $(CXXFLAGS) $(INCLUDES) $(GLIBI) -c $<
-sagecal_slave.o:sagecal_slave.cpp proto.h
-	$(CXX) $(CXXFLAGS) $(INCLUDES) $(GLIBI) -c $<
-sagecal-mpi:$(OBJECTS) ./lib/libsagecal.a
-	$(CXX) $(CXXFLAGS) $(LDFLAGS) $(INCLUDES) $(GLIBI) $(LIBPATH)  -o $@  $(OBJECTS) $(MY_LIBS) $(LAPACK) $(CASA_LIBS)  $(GLIBL)
+sagecal:$(OBJECTS) ./lib/libsagecal.a
+	$(CXX) $(CXXFLAGS) $(LDFLAGS) $(INCLUDES) $(GLIBI) $(LIBPATH)  -o $@  $(OBJECTS) $(MY_LIBS) $(CASA_LIBS)  $(GLIBL) $(LAPACK)  $(CUDALIB) $(CULALIB) $(NVML_LIB)
 clean:
 	rm *.o *.tmp *.fits

@@ -25,7 +25,7 @@
 //#define CUDA_DBG
 
 __global__ void 
-kernel_func_wt_fl(int Nbase, float *x, float *coh, float *p, char *bb, float *wt, int N){
+kernel_func_wt_fl(int Nbase, float *x, float *coh, float *p, short *bb, float *wt, int N){
   /* global thread index : equal to the baseline */
   unsigned int n = threadIdx.x + blockDim.x*blockIdx.x;
 
@@ -134,7 +134,7 @@ kernel_func_wt_fl(int Nbase, float *x, float *coh, float *p, char *bb, float *wt
 }
 
 __global__ void 
-kernel_jacf_wt_fl(int Nbase, int M, float *jac, float *coh, float *p, char *bb, float *wt, int N){
+kernel_jacf_wt_fl(int Nbase, int M, float *jac, float *coh, float *p, short *bb, float *wt, int N){
   /* global thread index : equal to the baseline */
   unsigned int n = threadIdx.x + blockDim.x*blockIdx.x;
   /* which parameter:0...M */
@@ -480,7 +480,7 @@ cudakernel_evaluatenu_fl_eight(int ThreadsPerBlock, int BlocksPerGrid, int Nd, f
 /* cuda driver for calculating wt \odot f() */
 /* p: params (Mx1), x: data (Nx1), other data : coh, baseline->stat mapping, Nbase, Mclusters, Nstations */
 void
-cudakernel_func_wt_fl(int ThreadsPerBlock, int BlocksPerGrid, float *p, float *x, int M, int N, float *coh, char *bbh, float *wt, int Nbase, int Mclus, int Nstations) {
+cudakernel_func_wt_fl(int ThreadsPerBlock, int BlocksPerGrid, float *p, float *x, int M, int N, float *coh, short *bbh, float *wt, int Nbase, int Mclus, int Nstations) {
 
 #ifdef CUDA_DBG
   cudaError_t error;
@@ -504,7 +504,7 @@ cudakernel_func_wt_fl(int ThreadsPerBlock, int BlocksPerGrid, float *p, float *x
 /* cuda driver for calculating wt \odot jacf() */
 /* p: params (Mx1), jac: jacobian (NxM), other data : coh, baseline->stat mapping, Nbase, Mclusters, Nstations */
 void
-cudakernel_jacf_wt_fl(int ThreadsPerBlock_row, int  ThreadsPerBlock_col, float *p, float *jac, int M, int N, float *coh, char *bbh, float *wt, int Nbase, int Mclus, int Nstations, int clus) {
+cudakernel_jacf_wt_fl(int ThreadsPerBlock_row, int  ThreadsPerBlock_col, float *p, float *jac, int M, int N, float *coh, short *bbh, float *wt, int Nbase, int Mclus, int Nstations, int clus) {
 
 #ifdef CUDA_DBG
   cudaError_t error;

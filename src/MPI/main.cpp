@@ -33,7 +33,7 @@ using namespace Data;
 
 void
 print_copyright(void) {
-  cout<<"SAGECal-MPI 0.3.9 (C) 2011-2015 Sarod Yatawatta"<<endl;
+  cout<<"SAGECal-MPI 0.4.5 (C) 2011-2016 Sarod Yatawatta"<<endl;
 }
 
 
@@ -54,20 +54,25 @@ print_help(void) {
    cout << "-m LBFGS memory size : default " <<Data::lbfgs_m<< endl;
    cout << "-n no of worker threads : default "<<Data::Nt << endl;
    cout << "-t tile size : default " <<Data::TileSize<< endl;
+   cout << "-B 0,1 : if 1, predict array beam: default " <<Data::doBeam<< endl;
    cout << "-A ADMM iterations: default " <<Data::Nadmm<< endl;
-   cout << "-P consensus polynomial order: default " <<Data::Npoly<< endl;
+   cout << "-P consensus polynomial terms: default " <<Data::Npoly<< endl;
+   cout << "-Q consensus polynomial type (0,1,2,3): default " <<Data::PolyType<< endl;
    cout << "-r regularization factor: default " <<Data::admm_rho<< endl;
-   cout << "-G regularization factor of each cluster (text file instead of -r): default : None" << endl;
+   cout << "-G regularization factor of each cluster (text file instead of -r, has to match exactly the cluster file first 2 columns): default : None" << endl;
    cout << "-x exclude baselines length (lambda) lower than this in calibration : default "<<Data::min_uvcut << endl;
    cout << "-y exclude baselines length (lambda) higher than this in calibration : default "<<Data::max_uvcut << endl;
    cout <<endl<<"Advanced options:"<<endl;
    cout << "-k cluster_id : correct residuals with solution of this cluster : default "<<Data::ccid<< endl;
    cout << "-o robust rho, robust matrix inversion during correction: default "<<Data::rho<< endl;
+   cout << "-J 0,1 : if >0, use phase only correction: default "<<Data::phaseOnly<< endl;
    cout << "-j 0,1,2... 0 : OSaccel, 1 no OSaccel, 2: OSRLM, 3: RLM, 4: RTR, 5: RRTR: 6: NSD, default "<<Data::solver_mode<< endl;
    cout << "-L robust nu, lower bound: default "<<Data::nulow<< endl;
    cout << "-H robust nu, upper bound: default "<<Data::nuhigh<< endl;
+   cout << "-W pre-whiten data: default "<<Data::whiten<< endl;
    cout << "-R randomize iterations: default "<<Data::randomize<< endl;
    cout << "-T stop after this number of solutions (0 means no limit): default "<<Data::Nmaxtime<< endl;
+   cout << "-V if given, enable verbose output: default "<<Data::verbose<<endl;
    cout <<"Report bugs to <sarod@users.sf.net>"<<endl;
 }
 
@@ -75,7 +80,7 @@ print_help(void) {
 void 
 ParseCmdLine(int ac, char **av) {
     char c;
-    while((c=getopt(ac, av, "c:e:f:g:j:k:l:m:n:o:p:r:s:t:x:y:A:F:I:L:O:P:G:H:R:T:h"))!= -1)
+    while((c=getopt(ac, av, "c:e:f:g:j:k:l:m:n:o:p:r:s:t:x:y:A:B:F:I:J:L:O:P:Q:G:H:R:T:W:Vh"))!= -1)
     {
         switch(c)
         {
@@ -102,6 +107,10 @@ ParseCmdLine(int ac, char **av) {
                 format= atoi(optarg);
                 if (format>1) { format=1; }
                 break;
+            case 'B':
+                doBeam= atoi(optarg);
+                if (doBeam>1) { doBeam=1; }
+                break;
             case 'e':
                 max_emiter= atoi(optarg);
                 break;
@@ -125,6 +134,12 @@ ParseCmdLine(int ac, char **av) {
                 break;
             case 'P': 
                 Npoly= atoi(optarg);
+                break;
+            case 'Q': 
+                PolyType= atoi(optarg);
+                break;
+            case 'J': 
+                phaseOnly= atoi(optarg);
                 break;
             case 'n': 
                 Nt= atoi(optarg);
@@ -159,6 +174,12 @@ ParseCmdLine(int ac, char **av) {
             case 'y': 
                 Data::max_uvcut= atof(optarg);
                 break;
+            case 'V': 
+                Data::verbose=1;
+                break; 
+            case 'W':
+                whiten= atoi(optarg);
+                break;
             case 'h': 
                 print_help();
                 MPI_Finalize();
@@ -184,6 +205,7 @@ ParseCmdLine(int ac, char **av) {
      cout<<"Robust noise model for solver with degrees of freedom ["<<nulow<<","<<nuhigh<<"]."<<endl;
     }
 }
+
 
 /* real main program */
 int

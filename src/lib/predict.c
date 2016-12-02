@@ -215,7 +215,7 @@ gaussian_contrib(void*dd, double u, double v, double w) {
   /* Fourier TF is normalized with integrated flux,
     so to get the peak value right, scale the flux */
   //return 0.5*exp(-(ut*ut+vt*vt))/sqrt(2.0*a*b);
-  return 0.5*M_PI*exp(-(ut*ut+vt*vt));
+  return M_PI_2*exp(-(ut*ut+vt*vt));
 }
 
 complex double
@@ -272,9 +272,11 @@ predict_threadfn(void *data) {
  thread_data_base_t *t=(thread_data_base_t*)data;
  
  int ci,cm,cn;
- double phterm,sinph,cosph;
- complex double prodterm;
+ double *PHr=0,*PHi=0,*G=0,*II=0,*QQ=0,*UU=0,*VV=0; /* arrays to store calculations */
+
  complex double C[4];
+ double freq0=t->freq0;
+ double fdelta2=t->fdelta*0.5;
  for (ci=0; ci<t->Nb; ci++) {
    /* iterate over the sky model and calculate contribution */
    /* for this x[8*ci:8*(ci+1)-1] */
@@ -284,51 +286,125 @@ predict_threadfn(void *data) {
     for (cm=0; cm<(t->M); cm++) { /* clusters */
 
      memset(C,0,sizeof(complex double)*4);
+/*****************************************************************/
+     /* setup memory */
+     if (posix_memalign((void*)&PHr,sizeof(double),((size_t)t->carr[cm].N*sizeof(double)))!=0) {
+      fprintf(stderr,"%s: %d: No free memory\n",__FILE__,__LINE__);
+      exit(1);
+     }
+     if (posix_memalign((void*)&PHi,sizeof(double),((size_t)t->carr[cm].N*sizeof(double)))!=0) {
+      fprintf(stderr,"%s: %d: No free memory\n",__FILE__,__LINE__);
+      exit(1);
+     }
+     if (posix_memalign((void*)&G,sizeof(double),((size_t)t->carr[cm].N*sizeof(double)))!=0) {
+      fprintf(stderr,"%s: %d: No free memory\n",__FILE__,__LINE__);
+      exit(1);
+     }
+     if (posix_memalign((void*)&II,sizeof(double),((size_t)t->carr[cm].N*sizeof(double)))!=0) {
+      fprintf(stderr,"%s: %d: No free memory\n",__FILE__,__LINE__);
+      exit(1);
+     }
+     if (posix_memalign((void*)&QQ,sizeof(double),((size_t)t->carr[cm].N*sizeof(double)))!=0) {
+      fprintf(stderr,"%s: %d: No free memory\n",__FILE__,__LINE__);
+      exit(1);
+     }
+     if (posix_memalign((void*)&UU,sizeof(double),((size_t)t->carr[cm].N*sizeof(double)))!=0) {
+      fprintf(stderr,"%s: %d: No free memory\n",__FILE__,__LINE__);
+      exit(1);
+     }
+     if (posix_memalign((void*)&VV,sizeof(double),((size_t)t->carr[cm].N*sizeof(double)))!=0) {
+      fprintf(stderr,"%s: %d: No free memory\n",__FILE__,__LINE__);
+      exit(1);
+     }
+
+     /* phase (real,imag) parts */
+     /* note u=u/c, v=v/c, w=w/c here */
+     /* phterm is 2pi(u/c l +v/c m +w/c n) */
      for (cn=0; cn<t->carr[cm].N; cn++) {
-       /* note u=u/c, v=v/c, w=w/c here */
-       /* phterm is 2pi(u/c l +v/c m +w/c n) */
-       phterm=2.0*M_PI*(t->u[ci]*t->carr[cm].ll[cn]+t->v[ci]*t->carr[cm].mm[cn]+t->w[ci]*t->carr[cm].nn[cn]);
-       sincos(phterm*t->freq0,&sinph,&cosph);
-       /* calculate coherency, NOT scaled by 1/2 */
-       prodterm=t->carr[cm].sI[cn]*(cosph+_Complex_I*sinph);
+       G[cn]=2.0*M_PI*(t->u[ci]*t->carr[cm].ll[cn]+t->v[ci]*t->carr[cm].mm[cn]+t->w[ci]*t->carr[cm].nn[cn]);
+     }
+     for (cn=0; cn<t->carr[cm].N; cn++) {
+       sincos(G[cn]*freq0,&PHi[cn],&PHr[cn]);
+     }
+
+     /* term due to shape of source, also multiplied by freq/time smearing */
+     for (cn=0; cn<t->carr[cm].N; cn++) {
        /* freq smearing : extra term delta * sinc(delta/2 * phterm) */
-       phterm*=t->fdelta*0.5;
-       if (phterm!=0.0) {
-         sinph=sin(phterm)/phterm;
-         prodterm*=sinph;
-       }
-       /* full formula
-             exp(j*2*pi*k)*sinc(2*pi*k*delta/2), k=(ul+vm+wn)
-        */
-       /* time smearing TMS eq. 6.81 for EW-array formula */
-       //prodterm*=time_smear(t->carr[cm].ll[cn],t->carr[cm].mm[cn],t->dec0,t->tdelta,t->u[ci],t->v[ci],t->w[ci],t->freq0);
-       
-       /* check if source type is not a point source for additional 
-          calculations */
-       if (t->carr[cm].stype[cn]==STYPE_POINT) {
-        C[0]+=prodterm;
-        C[3]+=prodterm;
-       } else if (t->carr[cm].stype[cn]==STYPE_SHAPELET) {
-        prodterm*=shapelet_contrib(t->carr[cm].ex[cn],t->u[ci]*t->freq0,t->v[ci]*t->freq0,t->w[ci]*t->freq0);
-        C[0]+=prodterm;
-        C[3]+=prodterm;
-       } else if (t->carr[cm].stype[cn]==STYPE_GAUSSIAN) {
-        prodterm*=gaussian_contrib(t->carr[cm].ex[cn],t->u[ci]*t->freq0,t->v[ci]*t->freq0,t->w[ci]*t->freq0);
-        C[0]+=prodterm;
-        C[3]+=prodterm;
-       } else if (t->carr[cm].stype[cn]==STYPE_DISK) {
-        prodterm*=disk_contrib(t->carr[cm].ex[cn],t->u[ci]*t->freq0,t->v[ci]*t->freq0,t->w[ci]*t->freq0);
-        C[0]+=prodterm;
-        C[3]+=prodterm;
-       } else if (t->carr[cm].stype[cn]==STYPE_RING) {
-        prodterm*=ring_contrib(t->carr[cm].ex[cn],t->u[ci]*t->freq0,t->v[ci]*t->freq0,t->w[ci]*t->freq0);
-        C[0]+=prodterm;
-        C[3]+=prodterm;
+       if (G[cn]!=0.0) {
+         double smfac=G[cn]*fdelta2;
+         double sinph=sin(smfac)/smfac;
+         G[cn]=fabs(sinph);
+       } else {
+         G[cn]=1.0;
        }
      }
+
+     /* multiply (re,im) phase term with smearing/shape factor */
+     for (cn=0; cn<t->carr[cm].N; cn++) {
+       PHr[cn]*=G[cn];
+       PHi[cn]*=G[cn];
+     }
+
+
+     for (cn=0; cn<t->carr[cm].N; cn++) {
+       /* check if source type is not a point source for additional 
+          calculations */
+       if (t->carr[cm].stype[cn]!=STYPE_POINT) {
+        complex double sterm=PHr[cn]+_Complex_I*PHi[cn];
+        if (t->carr[cm].stype[cn]==STYPE_SHAPELET) {
+         sterm*=shapelet_contrib(t->carr[cm].ex[cn],t->u[ci]*freq0,t->v[ci]*freq0,t->w[ci]*freq0);
+        } else if (t->carr[cm].stype[cn]==STYPE_GAUSSIAN) {
+         sterm*=gaussian_contrib(t->carr[cm].ex[cn],t->u[ci]*freq0,t->v[ci]*freq0,t->w[ci]*freq0);
+        } else if (t->carr[cm].stype[cn]==STYPE_DISK) {
+         sterm*=disk_contrib(t->carr[cm].ex[cn],t->u[ci]*freq0,t->v[ci]*freq0,t->w[ci]*freq0);
+        } else if (t->carr[cm].stype[cn]==STYPE_RING) {
+         sterm*=ring_contrib(t->carr[cm].ex[cn],t->u[ci]*freq0,t->v[ci]*freq0,t->w[ci]*freq0);
+        }
+        PHr[cn]=creal(sterm);
+        PHi[cn]=cimag(sterm);
+       }
+
+     }
+
+
+     /* flux of each source, at each freq */
+     for (cn=0; cn<t->carr[cm].N; cn++) {
+       II[cn]=t->carr[cm].sI[cn];
+       QQ[cn]=t->carr[cm].sQ[cn];
+       UU[cn]=t->carr[cm].sU[cn];
+       VV[cn]=t->carr[cm].sV[cn];
+     }
+
+     /* add up terms together */
+     for (cn=0; cn<t->carr[cm].N; cn++) {
+       complex double Ph,IIl,QQl,UUl,VVl;
+       Ph=(PHr[cn]+_Complex_I*PHi[cn]);
+       IIl=Ph*II[cn];
+       QQl=Ph*QQ[cn];
+       UUl=Ph*UU[cn];
+       VVl=Ph*VV[cn];
+       C[0]+=IIl+QQl;
+       C[1]+=UUl+_Complex_I*VVl;
+       C[2]+=UUl-_Complex_I*VVl;
+       C[3]+=IIl-QQl;
+     }
+
+     free(PHr);
+     free(PHi);
+     free(G);
+     free(II);
+     free(QQ);
+     free(UU);
+     free(VV);
+
+/*****************************************************************/
      /* add to baseline visibilities */
      t->x[8*ci]+=creal(C[0]);
      t->x[8*ci+1]+=cimag(C[0]);
+     t->x[8*ci+2]+=creal(C[1]);
+     t->x[8*ci+3]+=cimag(C[1]);
+     t->x[8*ci+4]+=creal(C[2]);
+     t->x[8*ci+5]+=cimag(C[2]);
      t->x[8*ci+6]+=creal(C[3]);
      t->x[8*ci+7]+=cimag(C[3]);
     }
@@ -428,9 +504,12 @@ precal_threadfn(void *data) {
                      x[4M:2*4M-1] baseline 2 ... */
  int ci,cm,cn;
  int M=(t->M);
- double phterm,sinph,cosph,uvdist;
- complex double prodterm;
+ double uvdist;
+ double *PHr=0,*PHi=0,*G=0,*II=0,*QQ=0,*UU=0,*VV=0; /* arrays to store calculations */
  complex double C[4];
+ double freq0=t->freq0;
+ double fdelta2=t->fdelta*0.5;
+
  for (ci=0; ci<t->Nb; ci++) {
    /* iterate over the sky model and calculate contribution */
    /* for this x[8*ci:8*(ci+1)-1] */
@@ -438,49 +517,119 @@ precal_threadfn(void *data) {
    /* even if this baseline is flagged, we do compute */
     for (cm=0; cm<M; cm++) { /* clusters */
      memset(C,0,sizeof(complex double)*4);
-     for (cn=0; cn<t->carr[cm].N; cn++) {
-       /* note u=u/c, v=v/c, w=w/c here */
-       /* phterm is 2pi(u/c l +v/c m +w/c n) */
-       phterm=2.0*M_PI*(t->u[ci]*t->carr[cm].ll[cn]+t->v[ci]*t->carr[cm].mm[cn]+t->w[ci]*t->carr[cm].nn[cn]);
-       sincos(phterm*t->freq0,&sinph,&cosph);
+/*****************************************************************/
+     /* setup memory */
+     if (posix_memalign((void*)&PHr,sizeof(double),((size_t)t->carr[cm].N*sizeof(double)))!=0) {
+      fprintf(stderr,"%s: %d: No free memory\n",__FILE__,__LINE__);
+      exit(1);
+     }
+     if (posix_memalign((void*)&PHi,sizeof(double),((size_t)t->carr[cm].N*sizeof(double)))!=0) {
+      fprintf(stderr,"%s: %d: No free memory\n",__FILE__,__LINE__);
+      exit(1);
+     }
+     if (posix_memalign((void*)&G,sizeof(double),((size_t)t->carr[cm].N*sizeof(double)))!=0) {
+      fprintf(stderr,"%s: %d: No free memory\n",__FILE__,__LINE__);
+      exit(1);
+     }
+     if (posix_memalign((void*)&II,sizeof(double),((size_t)t->carr[cm].N*sizeof(double)))!=0) {
+      fprintf(stderr,"%s: %d: No free memory\n",__FILE__,__LINE__);
+      exit(1);
+     }
+     if (posix_memalign((void*)&QQ,sizeof(double),((size_t)t->carr[cm].N*sizeof(double)))!=0) {
+      fprintf(stderr,"%s: %d: No free memory\n",__FILE__,__LINE__);
+      exit(1);
+     }
+     if (posix_memalign((void*)&UU,sizeof(double),((size_t)t->carr[cm].N*sizeof(double)))!=0) {
+      fprintf(stderr,"%s: %d: No free memory\n",__FILE__,__LINE__);
+      exit(1);
+     }
+     if (posix_memalign((void*)&VV,sizeof(double),((size_t)t->carr[cm].N*sizeof(double)))!=0) {
+      fprintf(stderr,"%s: %d: No free memory\n",__FILE__,__LINE__);
+      exit(1);
+     }
 
-       /* caltulate coherency, NOT scaled by 1/2 */
-       prodterm=t->carr[cm].sI[cn]*(cosph+_Complex_I*sinph);
+     /* phase (real,imag) parts */
+     /* note u=u/c, v=v/c, w=w/c here */
+     /* phterm is 2pi(u/c l +v/c m +w/c n) */
+     for (cn=0; cn<t->carr[cm].N; cn++) {
+       G[cn]=2.0*M_PI*(t->u[ci]*t->carr[cm].ll[cn]+t->v[ci]*t->carr[cm].mm[cn]+t->w[ci]*t->carr[cm].nn[cn]);
+     }
+     for (cn=0; cn<t->carr[cm].N; cn++) {
+       sincos(G[cn]*freq0,&PHi[cn],&PHr[cn]);
+     }
+
+     /* term due to shape of source, also multiplied by freq/time smearing */
+     for (cn=0; cn<t->carr[cm].N; cn++) {
        /* freq smearing : extra term delta * sinc(delta/2 * phterm) */
-       phterm*=t->fdelta*0.5;
-       if (phterm!=0.0) {
-         sinph=sin(phterm)/phterm;
-         prodterm*=sinph;
-       }
-       /* full formula
-             exp(j*2*pi*k)*sinc(2*pi*k*delta/2), k=(ul+vm+wn)
-        */
-       /* time smearing TMS eq. 6.81 for EW-array formula */
-       //prodterm*=time_smear(t->carr[cm].ll[cn],t->carr[cm].mm[cn],t->dec0,t->tdelta,t->u[ci],t->v[ci],t->w[ci],t->freq0);
- 
-       /* check if source type is not a point source for additional 
-          calculations */
-       if (t->carr[cm].stype[cn]==STYPE_POINT) {
-        C[0]+=prodterm;
-        C[3]+=prodterm;
-       } else if (t->carr[cm].stype[cn]==STYPE_SHAPELET) {
-        prodterm*=shapelet_contrib(t->carr[cm].ex[cn],t->u[ci]*t->freq0,t->v[ci]*t->freq0,t->w[ci]*t->freq0);
-        C[0]+=prodterm;
-        C[3]+=prodterm;
-       } else if (t->carr[cm].stype[cn]==STYPE_GAUSSIAN) {
-        prodterm*=gaussian_contrib(t->carr[cm].ex[cn],t->u[ci]*t->freq0,t->v[ci]*t->freq0,t->w[ci]*t->freq0);
-        C[0]+=prodterm;
-        C[3]+=prodterm;
-       } else if (t->carr[cm].stype[cn]==STYPE_DISK) {
-        prodterm*=disk_contrib(t->carr[cm].ex[cn],t->u[ci]*t->freq0,t->v[ci]*t->freq0,t->w[ci]*t->freq0);
-        C[0]+=prodterm;
-        C[3]+=prodterm;
-       } else if (t->carr[cm].stype[cn]==STYPE_RING) {
-        prodterm*=ring_contrib(t->carr[cm].ex[cn],t->u[ci]*t->freq0,t->v[ci]*t->freq0,t->w[ci]*t->freq0);
-        C[0]+=prodterm;
-        C[3]+=prodterm;
+       if (G[cn]!=0.0) {
+         double smfac=G[cn]*fdelta2;
+         double sinph=sin(smfac)/smfac;
+         G[cn]=fabs(sinph);
+       } else {
+         G[cn]=1.0;
        }
      }
+
+     /* multiply (re,im) phase term with smearing/shape factor */
+     for (cn=0; cn<t->carr[cm].N; cn++) {
+       PHr[cn]*=G[cn];
+       PHi[cn]*=G[cn];
+     }
+
+
+     for (cn=0; cn<t->carr[cm].N; cn++) {
+       /* check if source type is not a point source for additional 
+          calculations */
+       if (t->carr[cm].stype[cn]!=STYPE_POINT) {
+        complex double sterm=PHr[cn]+_Complex_I*PHi[cn];
+        if (t->carr[cm].stype[cn]==STYPE_SHAPELET) {
+         sterm*=shapelet_contrib(t->carr[cm].ex[cn],t->u[ci]*freq0,t->v[ci]*freq0,t->w[ci]*freq0);
+        } else if (t->carr[cm].stype[cn]==STYPE_GAUSSIAN) {
+         sterm*=gaussian_contrib(t->carr[cm].ex[cn],t->u[ci]*freq0,t->v[ci]*freq0,t->w[ci]*freq0);
+        } else if (t->carr[cm].stype[cn]==STYPE_DISK) {
+         sterm*=disk_contrib(t->carr[cm].ex[cn],t->u[ci]*freq0,t->v[ci]*freq0,t->w[ci]*freq0);
+        } else if (t->carr[cm].stype[cn]==STYPE_RING) {
+         sterm*=ring_contrib(t->carr[cm].ex[cn],t->u[ci]*freq0,t->v[ci]*freq0,t->w[ci]*freq0);
+        }
+        PHr[cn]=creal(sterm);
+        PHi[cn]=cimag(sterm);
+       }
+
+     }
+
+
+     /* flux of each source, at each freq */
+     for (cn=0; cn<t->carr[cm].N; cn++) {
+       II[cn]=t->carr[cm].sI[cn];
+       QQ[cn]=t->carr[cm].sQ[cn];
+       UU[cn]=t->carr[cm].sU[cn];
+       VV[cn]=t->carr[cm].sV[cn];
+     }
+
+
+     /* add up terms together */
+     for (cn=0; cn<t->carr[cm].N; cn++) {
+       complex double Ph,IIl,QQl,UUl,VVl;
+       Ph=(PHr[cn]+_Complex_I*PHi[cn]);
+       IIl=Ph*II[cn];
+       QQl=Ph*QQ[cn];
+       UUl=Ph*UU[cn];
+       VVl=Ph*VV[cn];
+       C[0]+=IIl+QQl;
+       C[1]+=UUl+_Complex_I*VVl;
+       C[2]+=UUl-_Complex_I*VVl;
+       C[3]+=IIl-QQl;
+     }
+
+     free(PHr);
+     free(PHi);
+     free(G);
+     free(II);
+     free(QQ);
+     free(UU);
+     free(VV);
+
+/*****************************************************************/
      /* add to baseline visibilities */
      t->coh[4*M*ci+4*cm]=C[0];
      t->coh[4*M*ci+4*cm+1]=C[1];
@@ -589,8 +738,8 @@ rearrange_threadfn(void *data) {
  double *realcoh=(double*)t->coh;
  for (ci=t->startbase; ci<=t->endbase; ci++) {
    if (!t->barr[ci].flag) {
-     t->ddbase[2*ci]=(char)t->barr[ci].sta1;
-     t->ddbase[2*ci+1]=(char)t->barr[ci].sta2;
+     t->ddbase[2*ci]=(short)t->barr[ci].sta1;
+     t->ddbase[2*ci+1]=(short)t->barr[ci].sta2;
      /* loop over directions and copy coherencies */
      for (cj=0; cj<t->M; cj++) {
        memcpy(&(t->ddcoh[cj*(t->Nbase)*8+8*ci]),&realcoh[8*cj+8*(t->M)*ci],8*sizeof(double));
@@ -610,7 +759,7 @@ rearrange_threadfn(void *data) {
    ddbase: 2*Nbase x 1 (sta1,sta2) == -1 if flagged
 */
 int
-rearrange_coherencies(int Nbase, baseline_t *barr, complex double *coh, double *ddcoh, char *ddbase, int M, int Nt) {
+rearrange_coherencies(int Nbase, baseline_t *barr, complex double *coh, double *ddcoh, short *ddbase, int M, int Nt) {
 
   int nth,nth1,ci;
   int Nthb0,Nthb;
@@ -681,9 +830,9 @@ rearrange_threadfn2(void *data) {
  int ci,cj;
  double *realcoh=(double*)t->coh;
  for (ci=t->startbase; ci<=t->endbase; ci++) {
-     t->ddbase[3*ci]=(char)t->barr[ci].sta1;
-     t->ddbase[3*ci+1]=(char)t->barr[ci].sta2;
-     t->ddbase[3*ci+2]=(char)t->barr[ci].flag;
+     t->ddbase[3*ci]=(short)t->barr[ci].sta1;
+     t->ddbase[3*ci+1]=(short)t->barr[ci].sta2;
+     t->ddbase[3*ci+2]=(short)t->barr[ci].flag;
      /* loop over directions and copy coherencies */
      for (cj=0; cj<t->M; cj++) {
        memcpy(&(t->ddcoh[cj*(t->Nbase)*8+8*ci]),&realcoh[8*cj+8*(t->M)*ci],8*sizeof(double));
@@ -701,7 +850,7 @@ rearrange_threadfn2(void *data) {
    ddbase: 3*Nbase x 1 (sta1,sta2,flag)
 */
 int
-rearrange_coherencies2(int Nbase, baseline_t *barr, complex double *coh, double *ddcoh, char *ddbase, int M, int Nt) {
+rearrange_coherencies2(int Nbase, baseline_t *barr, complex double *coh, double *ddcoh, short *ddbase, int M, int Nt) {
 
   int nth,nth1,ci;
   int Nthb0,Nthb;
@@ -771,8 +920,8 @@ rearrange_base_threadfn(void *data) {
  int ci;
  for (ci=t->startbase; ci<=t->endbase; ci++) {
    if (!t->barr[ci].flag) {
-     t->ddbase[2*ci]=(char)t->barr[ci].sta1;
-     t->ddbase[2*ci+1]=(char)t->barr[ci].sta2;
+     t->ddbase[2*ci]=(short)t->barr[ci].sta1;
+     t->ddbase[2*ci+1]=(short)t->barr[ci].sta2;
    } else {
      t->ddbase[2*ci]=t->ddbase[2*ci+1]=-1;
    }
@@ -786,7 +935,7 @@ rearrange_base_threadfn(void *data) {
    ddbase: 2*Nbase x 1
 */
 int
-rearrange_baselines(int Nbase, baseline_t *barr, char *ddbase, int Nt) {
+rearrange_baselines(int Nbase, baseline_t *barr, short *ddbase, int Nt) {
 
   int nth,nth1,ci;
   int Nthb0,Nthb;
@@ -1198,7 +1347,7 @@ threadfn_fns_fcount(void *data) {
 
 /* cont how many baselines contribute to each station */
 int
-count_baselines(int Nbase, int N, float *iw, char *ddbase, int Nt) {
+count_baselines(int Nbase, int N, float *iw, short *ddbase, int Nt) {
  pthread_attr_t attr;
  pthread_t *th_array;
  thread_data_count_t *threaddata;
@@ -1402,7 +1551,7 @@ onezero_threadfn(void *data) {
    x: 8*Nbase (set to 0's and 1's)
 */
 int
-create_onezerovec(int Nbase, char *ddbase, float *x, int Nt) {
+create_onezerovec(int Nbase, short *ddbase, float *x, int Nt) {
 
   int nth,nth1,ci;
   int Nthb0,Nthb;

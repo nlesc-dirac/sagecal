@@ -18,6 +18,7 @@
  */
 
 #include "data.h"
+#include "sagecal.h"
 #include <measures/Measures/MDirection.h>
 #include <measures/Measures/UVWMachine.h>
 #include <casa/Quanta.h>
@@ -59,21 +60,28 @@ int Data::whiten=0;
 int Data::DoSim=0;
 int Data::DoDiag=0;
 int Data::doChan=0; /* if 1, solve for each channel in multi channel data */
+int Data::doBeam=0; /* if >0, enable LOFAR beam model */
+int Data::phaseOnly=0; /* if >0, enable phase only correction */
 int Data::solver_mode=0;
 int Data::ccid=-99999;
 double Data::rho=1e-9;
 char *Data::solfile=NULL;
 char *Data::ignorefile=NULL;
 char *Data::MSlist=NULL;
+char *Data::MSpattern=NULL;
 
 /* distributed sagecal parameters */
 int Data::Nadmm=1;
 int Data::Npoly=2;
+int Data::PolyType=2;
 double Data::admm_rho=5.0;
 char *Data::admm_rho_file=NULL;
 
 /* no upper limit, solve for all timeslots */
 int Data::Nmaxtime=0;
+/* skip starting time slots if given */
+int Data::Nskip=0;
+int Data::verbose=0; /* no verbose output */
 
 using namespace Data;
 
@@ -82,6 +90,11 @@ Data::readMSlist(char *fname, vector<string> *msnames) {
   cout<<"Reading "<<Data::MSlist<<endl;
      /* multiple MS */
      ifstream infile(fname);
+    /* check if the file exists and readable */
+    if(!infile.good()) {
+     cout <<"File "<<Data::MSlist<<" does not exist."<<endl;
+     exit(1);
+    }
      string buffer;
      if (infile.is_open()) {
       while(infile.good()) {
@@ -98,8 +111,6 @@ void
 Data::readAuxData(const char *fname, Data::IOData *data) {
 
     Table _t=Table(fname);
-    //sprintf(buff, "%s/ANTENNA", fname);
-    //Table _ant=Table(buff);
     Table _ant = Table(_t.keywordSet().asTable("ANTENNA"));
     ROScalarColumn<String> a1(_ant, "NAME");
     data->N=a1.nrow();
@@ -111,8 +122,6 @@ Data::readAuxData(const char *fname, Data::IOData *data) {
     data->totalt=(timeCol.nrow()+data->Nbase+data->N-1)/(data->Nbase+data->N);
     cout<<"Integration Time: "<<data->deltat<<" s,"<<" Total timeslots: "<<data->totalt<<endl;
 
-    //sprintf(buff, "%s/FIELD", fname);
-    //Table _field = Table(buff);
     Table _field = Table(_t.keywordSet().asTable("FIELD"));
     ROArrayColumn<double> ref_dir(_field, "REFERENCE_DIR");
     Array<double> dir = ref_dir(0);
@@ -122,8 +131,6 @@ Data::readAuxData(const char *fname, Data::IOData *data) {
     cout<<"Phase center ("<< c[0] << ", " << c[1] <<")"<<endl;
 
     //obtain the chanel freq information
-    //sprintf(buff, "%s/SPECTRAL_WINDOW", fname);
-    //Table _freq = Table(buff);
     Table _freq = Table(_t.keywordSet().asTable("SPECTRAL_WINDOW"));
     ROArrayColumn<double> chan_freq(_freq, "CHAN_FREQ"); 
     data->Nchan=chan_freq.shape(0)[0];
@@ -150,6 +157,280 @@ Data::readAuxData(const char *fname, Data::IOData *data) {
    ROArrayColumn<double> chan_width(_freq, "CHAN_WIDTH"); 
    data->deltaf=(double)data->Nchan*(chan_width(0).data()[0]);
 }
+
+void 
+Data::readAuxData(const char *fname, Data::IOData *data, Data::LBeam *binfo) {
+
+    Table _t=Table(fname);
+    Table _ant = Table(_t.keywordSet().asTable("ANTENNA"));
+    ROScalarColumn<String> a1(_ant, "NAME");
+    data->N=a1.nrow();
+    data->Nbase=data->N*(data->N-1)/2;
+    cout <<"Stations: "<<data->N<<" Baselines: "<<data->Nbase<<endl;
+
+    ROScalarColumn<double> timeCol(_t, "INTERVAL"); 
+    data->deltat=timeCol.get(0);
+    data->totalt=(timeCol.nrow()+data->Nbase+data->N-1)/(data->Nbase+data->N);
+    cout<<"Integration Time: "<<data->deltat<<" s,"<<" Total timeslots: "<<data->totalt<<endl;
+
+    Table _field = Table(_t.keywordSet().asTable("FIELD"));
+    ROArrayColumn<double> ref_dir(_field, "PHASE_DIR"); /* old REFERENCE_DIR */
+    Array<double> dir = ref_dir(0);
+    double *c = dir.data();
+    data->ra0=c[0];
+    data->dec0=c[1];
+    cout<<"Phase center ("<< c[0] << ", " << c[1] <<")"<<endl;
+
+    //obtain the chanel freq information
+    Table _freq = Table(_t.keywordSet().asTable("SPECTRAL_WINDOW"));
+    ROArrayColumn<double> chan_freq(_freq, "CHAN_FREQ"); 
+    data->Nchan=chan_freq.shape(0)[0];
+    data->Nms=1;
+   /* allocate memory */
+   data->u=new double[data->Nbase*data->tilesz];
+   data->v=new double[data->Nbase*data->tilesz];
+   data->w=new double[data->Nbase*data->tilesz];
+   data->x=new double[8*data->Nbase*data->tilesz];
+   data->xo=new double[8*data->Nbase*data->tilesz*data->Nchan];
+   data->freqs=new double[data->Nchan];
+   data->flag=new double[data->Nbase*data->tilesz];
+   data->NchanMS=new int[data->Nms];
+   data->NchanMS[0]=data->Nchan;
+
+   /* copy freq */
+   data->freq0=0.0;
+   for (int ci=0; ci<data->Nchan; ci++) {
+     data->freqs[ci]=chan_freq(0).data()[ci];
+     data->freq0+=data->freqs[ci];
+   }
+   data->freq0/=(double)data->Nchan;
+   /* need channel widths to calculate bandwidth */
+   ROArrayColumn<double> chan_width(_freq, "CHAN_WIDTH"); 
+   data->deltaf=(double)data->Nchan*(chan_width(0).data()[0]);
+
+   /* UTC time */
+   binfo->time_utc=new double[data->tilesz]; 
+   /* no of elements in each station */
+   binfo->Nelem=new int[data->N];
+   /* positions of stations */
+   binfo->sx=new double[data->N];
+   binfo->sy=new double[data->N];
+   binfo->sz=new double[data->N];
+   /* coordinates of elements */
+   binfo->xx=new double*[data->N];
+   binfo->yy=new double*[data->N];
+   binfo->zz=new double*[data->N];
+
+   Table antfield = Table(_t.keywordSet().asTable("LOFAR_ANTENNA_FIELD"));
+   ROArrayColumn<double> position(antfield, "POSITION"); 
+   ROArrayColumn<double> offset(antfield, "ELEMENT_OFFSET"); 
+   ROArrayColumn<double> coord(antfield, "COORDINATE_AXES"); 
+   ROArrayColumn<bool> eflag(antfield, "ELEMENT_FLAG");
+   ROArrayColumn<double> tileoffset(antfield, "TILE_ELEMENT_OFFSET");
+   /* check if TILE_ELEMENT_OFFSET has any rows, of no rows present, 
+      we know this is LBA */
+   bool isHBA=tileoffset.hasContent(0);
+
+   /* read positions, also setup memory for element coords */
+   for (int ci=0; ci<data->N; ci++) {
+     Array<double> _pos=position(ci);
+     double *tx=_pos.data();
+     binfo->sz[ci]=tx[2];
+
+     MPosition stnpos(MVPosition(tx[0],tx[1],tx[2]),MPosition::ITRF);
+     Array<double> _radpos=stnpos.getAngle("rad").getValue();
+     tx=_radpos.data();
+
+     binfo->sx[ci]=tx[0];
+     binfo->sy[ci]=tx[1];
+//cout<<"position "<<binfo->sx[ci]<<" "<<binfo->sy[ci]<<" "<<binfo->sz[ci]<<endl;
+     binfo->Nelem[ci]=offset.shape(ci)[1];
+   }
+
+
+   if (isHBA) {
+    double cones[16];
+    for (int ci=0; ci<16; ci++) {
+      cones[ci]=1.0;
+    }
+    double tempT[3*16];
+    /* now read in element offsets, also transform them to local coordinates */
+    for (int ci=0; ci<data->N; ci++) {
+      Array<double> _off=offset(ci);
+      double *off=_off.data();
+      Array<double> _coord=coord(ci);
+      double *coordmat=_coord.data();
+      Array<bool> _eflag=eflag(ci);
+      bool *ef=_eflag.data();
+      Array<double> _toff=tileoffset(ci);
+      double *toff=_toff.data();
+
+/*
+cout<<"A=["<<endl;
+     for (int cj=0; cj<binfo->Nelem[ci]; cj++) {
+cout<<off[3*cj]<<","<<off[3*cj+1]<<","<<off[3*cj+2]<<endl;
+     }
+cout<<"];"<<endl;
+cout<<"T0=["<<endl;
+     for (int cj=0; cj<16; cj++) {
+cout<<toff[3*cj]<<","<<toff[3*cj+1]<<","<<toff[3*cj+2]<<endl;
+     }
+cout<<"];"<<endl;
+cout<<"BT=["<<endl;
+     for (int cj=0; cj<3; cj++) {
+cout<<coordmat[3*cj]<<","<<coordmat[3*cj+1]<<","<<coordmat[3*cj+2]<<endl;
+     }
+cout<<"];"<<endl;
+*/
+
+      double *tempC=new double[3*binfo->Nelem[ci]];
+      my_dgemm('T', 'N', binfo->Nelem[ci], 3, 3, 1.0, off, 3, coordmat, 3, 0.0, tempC, binfo->Nelem[ci]); 
+      my_dgemm('T', 'N', 16, 3, 3, 1.0, toff, 3, coordmat, 3, 0.0, tempT, 16); 
+  
+/*
+cout<<"C=["<<endl;
+     for (int cj=0; cj<binfo->Nelem[ci]; cj++) {
+cout<<tempC[cj]<<","<<tempC[cj+binfo->Nelem[ci]]<<","<<tempC[cj+2*binfo->Nelem[ci]]<<endl;
+     }
+cout<<"];"<<endl;
+cout<<"T1=["<<endl;
+     for (int cj=0; cj<16; cj++) {
+cout<<tempT[cj]<<","<<tempT[cj+16]<<","<<tempT[cj+2*16]<<endl;
+     }
+cout<<"];"<<endl;
+*/
+
+      /* now inspect the element flag table to see if any of the dipoles are flagged */
+      int fcount=0;
+      for (int cj=0; cj<binfo->Nelem[ci]; cj++) {
+       if (ef[2*cj]==1 || ef[2*cj+1]==1) {
+        fcount++;
+       } 
+      }
+
+//cout<<"%%Flagged "<<fcount<<endl;
+
+      binfo->xx[ci]=new double[16*(binfo->Nelem[ci]-fcount)];
+      binfo->yy[ci]=new double[16*(binfo->Nelem[ci]-fcount)];
+      binfo->zz[ci]=new double[16*(binfo->Nelem[ci]-fcount)];
+      /* copy unflagged coords, 16 times for each dipole */
+      fcount=0;
+      for (int cj=0; cj<binfo->Nelem[ci]; cj++) {
+       if (!(ef[2*cj]==1 || ef[2*cj+1]==1)) {
+        //binfo->xx[ci][fcount]=tempC[cj];
+        //binfo->yy[ci][fcount]=tempC[cj+binfo->Nelem[ci]];
+        //binfo->zz[ci][fcount]=tempC[cj+2*binfo->Nelem[ci]];
+        my_dcopy(16,&tempT[0],1,&(binfo->xx[ci][fcount]),1);
+        my_daxpy(16,cones,tempC[cj],&(binfo->xx[ci][fcount]));
+        my_dcopy(16,&tempT[16],1,&(binfo->yy[ci][fcount]),1);
+        my_daxpy(16,cones,tempC[cj+binfo->Nelem[ci]],&(binfo->yy[ci][fcount]));
+        my_dcopy(16,&tempT[24],1,&(binfo->zz[ci][fcount]),1);
+        my_daxpy(16,cones,tempC[cj+2*binfo->Nelem[ci]],&(binfo->zz[ci][fcount]));
+        fcount+=16;
+       }
+      }
+      binfo->Nelem[ci]=fcount;
+/*
+cout<<"%%Copied "<<fcount<<endl;
+cout<<"D=["<<endl;
+     for (int cj=0; cj<binfo->Nelem[ci]; cj++) {
+cout<<binfo->xx[ci][cj]<<","<<binfo->yy[ci][cj]<<","<<binfo->zz[ci][cj]<<endl;
+     }
+cout<<"];"<<endl;
+*/
+      delete [] tempC;
+    }
+   } else { /* LBA */
+    /* now read in element offsets, also transform them to local coordinates */
+    for (int ci=0; ci<data->N; ci++) {
+      Array<double> _off=offset(ci);
+      double *off=_off.data();
+      Array<double> _coord=coord(ci);
+      double *coordmat=_coord.data();
+      Array<bool> _eflag=eflag(ci);
+      bool *ef=_eflag.data();
+
+/*
+cout<<"A=["<<endl;
+     for (int cj=0; cj<binfo->Nelem[ci]; cj++) {
+cout<<off[3*cj]<<","<<off[3*cj+1]<<","<<off[3*cj+2]<<endl;
+     }
+cout<<"];"<<endl;
+cout<<"BT=["<<endl;
+     for (int cj=0; cj<3; cj++) {
+cout<<coordmat[3*cj]<<","<<coordmat[3*cj+1]<<","<<coordmat[3*cj+2]<<endl;
+     }
+cout<<"];"<<endl;
+*/
+
+      double *tempC=new double[3*binfo->Nelem[ci]];
+      my_dgemm('T', 'N', binfo->Nelem[ci], 3, 3, 1.0, off, 3, coordmat, 3, 0.0, tempC, binfo->Nelem[ci]); 
+  
+/*
+cout<<"C=["<<endl;
+     for (int cj=0; cj<binfo->Nelem[ci]; cj++) {
+cout<<tempC[cj]<<","<<tempC[cj+binfo->Nelem[ci]]<<","<<tempC[cj+2*binfo->Nelem[ci]]<<endl;
+     }
+cout<<"];"<<endl;
+*/
+
+      /* now inspect the element flag table to see if any of the dipoles are flagged */
+      int fcount=0;
+      for (int cj=0; cj<binfo->Nelem[ci]; cj++) {
+       if (ef[2*cj]==1 || ef[2*cj+1]==1) {
+        fcount++;
+       } 
+      }
+
+//cout<<"%%Flagged "<<fcount<<endl;
+
+      binfo->xx[ci]=new double[(binfo->Nelem[ci]-fcount)];
+      binfo->yy[ci]=new double[(binfo->Nelem[ci]-fcount)];
+      binfo->zz[ci]=new double[(binfo->Nelem[ci]-fcount)];
+      /* copy unflagged coords for each dipole */
+      fcount=0;
+      for (int cj=0; cj<binfo->Nelem[ci]; cj++) {
+       if (!(ef[2*cj]==1 || ef[2*cj+1]==1)) {
+        binfo->xx[ci][fcount]=tempC[cj];
+        binfo->yy[ci][fcount]=tempC[cj+binfo->Nelem[ci]];
+        binfo->zz[ci][fcount]=tempC[cj+2*binfo->Nelem[ci]];
+        fcount++;
+       }
+      }
+      binfo->Nelem[ci]=fcount;
+/*
+cout<<"%%Copied "<<fcount<<endl;
+cout<<"D=["<<endl;
+     for (int cj=0; cj<binfo->Nelem[ci]; cj++) {
+cout<<binfo->xx[ci][cj]<<","<<binfo->yy[ci][cj]<<","<<binfo->zz[ci][cj]<<endl;
+     }
+cout<<"];"<<endl;
+*/
+      delete [] tempC;
+    }
+   }
+
+   /* read beam pointing direction (use Tile beam info: LBA also has it) */
+   ROArrayColumn<double> point_dir(_field, "LOFAR_TILE_BEAM_DIR");
+   Array<double> pdir = point_dir(0);
+   double *pc = pdir.data();
+   binfo->p_ra0=pc[0];
+   binfo->p_dec0=pc[1];
+
+   /* convert positions from xyz to longitude,latitude,height */
+/*   double *longitude=new double[data->N];
+   double *latitude=new double[data->N];
+   double *height=new double[data->N];
+   xyz2llh(binfo->sx,binfo->sy,binfo->sz,longitude,latitude,height,data->N);
+   delete [] binfo->sx;
+   delete [] binfo->sy;
+   delete [] binfo->sz;
+   binfo->sx=longitude;
+   binfo->sy=latitude;
+   binfo->sz=height;
+*/
+}
+
 
 void 
 Data::readAuxDataList(vector<string> msnames, Data::IOData *data) {
@@ -238,9 +519,10 @@ Data::readAuxDataList(vector<string> msnames, Data::IOData *data) {
   u,v,w are ordered with baselines, timeslots
   x: data to write size Nbase*8*tileze x 1
   ordered by XX(re,im),XY(re,im),YX(re,im), YY(re,im), baseline, timeslots
+  fratio: flagged data as a ratio to all available data
 */
 void 
-Data::loadData(Table ti, Data::IOData iodata) {
+Data::loadData(Table ti, Data::IOData iodata, double *fratio) {
 
     /* sort input table by ant1 and ant2 */
     Block<String> iv1(3);
@@ -269,6 +551,8 @@ Data::loadData(Table ti, Data::IOData iodata) {
       /* taper in m */
       invtaper=iodata.freq0/((double)max_uvtaper*CONST_C);
     }
+    /* counters for finding flagged data ratio */
+    int countgood=0; int countbad=0;
     for(int row = 0; row < nrow; row++) {
         uInt i = a1(row); //antenna1 
         uInt j = a2(row); //antenna2
@@ -300,7 +584,6 @@ Data::loadData(Table ti, Data::IOData iodata) {
         for(int k = 0; k < iodata.Nchan; k++) {
            Complex *ptr = data[k].data();
            bool *flgptr=flag[k].data();
-           //if (!flag.data()[k]){
            if (!flgptr[0] && !flgptr[1] && !flgptr[2] && !flgptr[3]){
              cxx+=ptr[0];
              cxy+=ptr[1];
@@ -319,10 +602,11 @@ Data::loadData(Table ti, Data::IOData iodata) {
            iodata.xo[iodata.Nbase*iodata.tilesz*8*k+row0*8+7]=ptr[3].imag();
         }
         if (nflag>iodata.Nchan/2) { /* at least half channels should have good data */
-         cxx/=(double)nflag;
-         cxy/=(double)nflag;
-         cyx/=(double)nflag;
-         cyy/=(double)nflag;
+         double invnflag=1.0/(double)nflag;
+         cxx*=invnflag;
+         cxy*=invnflag;
+         cyx*=invnflag;
+         cyy*=invnflag;
          if (dotaper) {
           cxx*=uvtaper;
           cxy*=uvtaper;
@@ -330,10 +614,12 @@ Data::loadData(Table ti, Data::IOData iodata) {
           cyy*=uvtaper;
          }
          iodata.flag[row0]=0;
+         countgood++;
         } else {
          if (!nflag) {
          /* all channels flagged, flag this row */
           iodata.flag[row0]=1;
+          countbad++;
          } else {
           iodata.flag[row0]=2;
          }
@@ -362,6 +648,12 @@ Data::loadData(Table ti, Data::IOData iodata) {
         iodata.flag[row]=1;
       }
     }
+    /* flagged data / total usable data, not counting excluded baselines */
+    if (countgood+countbad>0) {
+     *fratio=(double)countbad/(double)(countgood+countbad);
+    } else {
+     *fratio=1.0;
+    }
 }
 
 /* each time this is called read in data from MS, and format them as
@@ -369,9 +661,164 @@ Data::loadData(Table ti, Data::IOData iodata) {
   u,v,w are ordered with baselines, timeslots
   x: data to write size Nbase*8*tileze x 1
   ordered by XX(re,im),XY(re,im),YX(re,im), YY(re,im), baseline, timeslots
+
+  time_utc: UTC time, 1 per each Nbase
+  fratio: flagged data as a ratio to all available data
 */
 void 
-Data::loadDataList(vector<MSIter*> msitr, Data::IOData iodata) {
+Data::loadData(Table ti, Data::IOData iodata, LBeam binfo, double *fratio) {
+
+    /* sort input table by ant1 and ant2 */
+    Block<String> iv1(3);
+    iv1[0] = "TIME";
+    iv1[1] = "ANTENNA1";
+    iv1[2] = "ANTENNA2";
+    Table t=ti.sort(iv1,Sort::Ascending);
+
+    ROScalarColumn<int> a1(t, "ANTENNA1"), a2(t, "ANTENNA2");
+    /* only read only access for input */
+    ROArrayColumn<Complex> dataCol(t, Data::DataField);
+    ROArrayColumn<double> uvwCol(t, "UVW"); 
+    ROArrayColumn<bool> flagCol(t, "FLAG");
+    ROScalarColumn<double> tut(t,"TIME");
+
+    /* check we get correct rows */
+    int nrow=t.nrow();
+    if(nrow-iodata.N*iodata.tilesz>iodata.tilesz*iodata.Nbase) {
+      cout<<"Error in rows"<<endl;
+    }
+    int row0=0;
+    int rowt=0;
+    /* tapering */
+    bool dotaper=false;
+    double invtaper=1.0;
+    if (max_uvtaper>0.0f) {
+      dotaper=true;
+      /* taper in m */
+      invtaper=iodata.freq0/((double)max_uvtaper*CONST_C);
+    }
+    /* counters for finding flagged data ratio */
+    int countgood=0; int countbad=0;
+    for(int row = 0; row < nrow; row++) {
+        uInt i = a1(row); //antenna1 
+        uInt j = a2(row); //antenna2
+        if (!i && !j) {/* use baseline 0-0 to extract time */
+         double tt=tut(row);
+//cout.precision(22);
+//cout<<"("<<i<<","<<j<<") "<<rowt<<"="<<tt<<endl;
+         /* convert MJD (s) to JD (days) */
+         binfo.time_utc[rowt++]=(tt/86400.0+2400000.5); /* no +0.5 added */
+        }
+        /* only work with cross correlations */
+        if (i!=j) {
+        Array<Complex> data = dataCol(row);
+        Matrix<double> uvw = uvwCol(row);
+        Array<bool> flag = flagCol(row);
+
+        Complex cxx(0, 0);
+        Complex cxy(0, 0);
+        Complex cyx(0, 0);
+        Complex cyy(0, 0);
+        /* calculate sqrt(u^2+v^2) to select uv cuts */
+        double *c = uvw.data();
+        double uvd=sqrt(c[0]*c[0]+c[1]*c[1]);
+        bool flag_uvcut=0;
+        if (uvd<min_uvcut || uvd>max_uvcut) {
+          flag_uvcut=true;
+        } 
+        double uvtaper=1.0;
+        if (dotaper) {
+         uvtaper=uvd*invtaper;
+         if (uvtaper>1.0) {
+          uvtaper=1.0;
+         }
+        }
+        int nflag=0;
+        for(int k = 0; k < iodata.Nchan; k++) {
+           Complex *ptr = data[k].data();
+           bool *flgptr=flag[k].data();
+           if (!flgptr[0] && !flgptr[1] && !flgptr[2] && !flgptr[3]){
+             cxx+=ptr[0];
+             cxy+=ptr[1];
+             cyx+=ptr[2];
+             cyy+=ptr[3];
+             nflag++; /* remeber unflagged datapoints */ 
+           } 
+        
+           iodata.xo[iodata.Nbase*iodata.tilesz*8*k+row0*8]=ptr[0].real();
+           iodata.xo[iodata.Nbase*iodata.tilesz*8*k+row0*8+1]=ptr[0].imag();
+           iodata.xo[iodata.Nbase*iodata.tilesz*8*k+row0*8+2]=ptr[1].real();
+           iodata.xo[iodata.Nbase*iodata.tilesz*8*k+row0*8+3]=ptr[1].imag();
+           iodata.xo[iodata.Nbase*iodata.tilesz*8*k+row0*8+4]=ptr[2].real();
+           iodata.xo[iodata.Nbase*iodata.tilesz*8*k+row0*8+5]=ptr[2].imag();
+           iodata.xo[iodata.Nbase*iodata.tilesz*8*k+row0*8+6]=ptr[3].real();
+           iodata.xo[iodata.Nbase*iodata.tilesz*8*k+row0*8+7]=ptr[3].imag();
+        }
+        if (nflag>iodata.Nchan/2) { /* at least half channels should have good data */
+         double invnflag=1.0/(double)nflag;
+         cxx*=invnflag;
+         cxy*=invnflag;
+         cyx*=invnflag;
+         cyy*=invnflag;
+         if (dotaper) {
+          cxx*=uvtaper;
+          cxy*=uvtaper;
+          cyx*=uvtaper;
+          cyy*=uvtaper;
+         }
+         iodata.flag[row0]=0;
+         countgood++;
+        } else {
+         if (!nflag) {
+         /* all channels flagged, flag this row */
+          iodata.flag[row0]=1;
+          countbad++;
+         } else {
+          iodata.flag[row0]=2;
+         }
+        }
+        iodata.u[row0]=c[0];
+        iodata.v[row0]=c[1];
+        iodata.w[row0]=c[2];
+        if (flag_uvcut) {
+            iodata.flag[row0]=2;
+        }
+        iodata.x[row0*8]=cxx.real();
+        iodata.x[row0*8+1]=cxx.imag();
+        iodata.x[row0*8+2]=cxy.real();
+        iodata.x[row0*8+3]=cxy.imag();
+        iodata.x[row0*8+4]=cyx.real();
+        iodata.x[row0*8+5]=cyx.imag();
+        iodata.x[row0*8+6]=cyy.real();
+        iodata.x[row0*8+7]=cyy.imag();
+
+       row0++;
+      }
+    }
+    /* now if there is a tail of empty data remaining, flag them */
+    if (row0<iodata.tilesz*iodata.Nbase) {
+      for(int row = row0; row<iodata.tilesz*iodata.Nbase; row++) {
+        iodata.flag[row]=1;
+      }
+    }
+    /* flagged data / total usable data, not counting excluded baselines */
+    if (countgood+countbad>0) {
+     *fratio=(double)countbad/(double)(countgood+countbad);
+    } else {
+     *fratio=1.0;
+    }
+}
+
+
+/* each time this is called read in data from MS, and format them as
+  u,v,w: u,v,w coordinates (wavelengths) size Nbase*tilesz x 1 
+  u,v,w are ordered with baselines, timeslots
+  x: data to write size Nbase*8*tileze x 1
+  ordered by XX(re,im),XY(re,im),YX(re,im), YY(re,im), baseline, timeslots
+  fratio: flagged data as a ratio to all available data
+*/
+void 
+Data::loadDataList(vector<MSIter*> msitr, Data::IOData iodata, double *fratio) {
     Table ti=msitr[0]->table();
     /* sort input table by ant1 and ant2 */
     Block<String> iv1(3);
@@ -406,7 +853,10 @@ Data::loadDataList(vector<MSIter*> msitr, Data::IOData iodata) {
       invtaper=iodata.freq0/((double)max_uvtaper*CONST_C);
     }
 
-  int row0=0;
+    /* counters for finding flagged data ratio */
+    int countgood=0; int countbad=0;
+
+    int row0=0;
     for(int row = 0; row < nrow; row++) {
         uInt i = a1(row); //antenna1 
         uInt j = a2(row); //antenna2
@@ -441,7 +891,6 @@ Data::loadDataList(vector<MSIter*> msitr, Data::IOData iodata) {
         for(int k = 0; k < iodata.NchanMS[cm]; k++) {
            Complex *ptr = data[k].data();
            bool *flgptr=flag[k].data();
-           //if (!flag.data()[k]){
            if (!flgptr[0] && !flgptr[1] && !flgptr[2] && !flgptr[3]){
              cxx+=ptr[0];
              cxy+=ptr[1];
@@ -463,10 +912,11 @@ Data::loadDataList(vector<MSIter*> msitr, Data::IOData iodata) {
    }
 
         if (nflag>iodata.Nchan/2) {/* at least half channels should have good data */
-         cxx/=(double)nflag;
-         cxy/=(double)nflag;
-         cyx/=(double)nflag;
-         cyy/=(double)nflag;
+         double invnflag=1.0/(double)nflag;
+         cxx*=invnflag;
+         cxy*=invnflag;
+         cyx*=invnflag;
+         cyy*=invnflag;
          if (dotaper) {
           cxx*=uvtaper;
           cxy*=uvtaper;
@@ -474,10 +924,12 @@ Data::loadDataList(vector<MSIter*> msitr, Data::IOData iodata) {
           cyy*=uvtaper;
          }
          iodata.flag[row0]=0;
+         countgood++;
         } else {
          if (!nflag) {
          /* all channels flagged, flag this row */
           iodata.flag[row0]=1;
+          countbad++;
          } else {
           iodata.flag[row0]=2;
          }
@@ -509,6 +961,12 @@ Data::loadDataList(vector<MSIter*> msitr, Data::IOData iodata) {
     for (int cm=0; cm<iodata.Nms;cm++) {
      delete dataCols[cm];
      delete flagCols[cm];
+    }
+    /* flagged data / total usable data, not counting excluded baselines */
+    if (countgood+countbad>0) {
+     *fratio=(double)countbad/(double)(countgood+countbad);
+    } else {
+     *fratio=1.0;
     }
 }
 
@@ -631,4 +1089,31 @@ void Data::freeData(Data::IOData data)
    delete [] data.freqs;
    delete [] data.flag;
    delete [] data.NchanMS;
+}
+
+
+void Data::freeData(Data::IOData data, Data::LBeam binfo)
+{
+   delete [] data.u;
+   delete [] data.v;
+   delete [] data.w;
+   delete [] data.x;
+   delete [] data.xo;
+   delete [] data.freqs;
+   delete [] data.flag;
+   delete [] data.NchanMS;
+
+   delete [] binfo.time_utc;
+   delete [] binfo.Nelem;
+   delete [] binfo.sx;
+   delete [] binfo.sy;
+   delete [] binfo.sz;
+   for (int ci=0; ci<data.N; ci++) {
+     delete [] binfo.xx[ci];
+     delete [] binfo.yy[ci];
+     delete [] binfo.zz[ci];
+   }
+   delete [] binfo.xx;
+   delete [] binfo.yy;
+   delete [] binfo.zz;
 }

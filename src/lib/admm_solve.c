@@ -610,7 +610,6 @@ pipeline_slave_code_admm_flt(void *data)
   int tilechunk=(t->tilesz+t->carr[t->clus].nchunk-1)/t->carr[t->clus].nchunk;
 
 
-  int ret;
   int ci;
 
   int cj=0; 
@@ -629,11 +628,11 @@ pipeline_slave_code_admm_flt(void *data)
      }
 
       if (gd->status[tid]==PT_DO_WORK_NSD) {
-       ret=nsd_solve_cuda_robust_admm_fl(&gd->p[tid][ci*(gd->M[tid])], &gd->Y[tid][ci*(gd->M[tid])], &gd->Z[tid][ci*(gd->M[tid])], &gd->x[tid][8*cj*t->Nbase], gd->M[tid]/8, ntiles*t->Nbase, gd->itermax[tid]+15, gd->admm_rho[tid], gd->nulow, gd->nuhigh, gd->info[tid], gd->cbhandle[tid], gd->gWORK[tid],  cj, ntiles, (void*)gd->lmdata[tid]);
+       nsd_solve_cuda_robust_admm_fl(&gd->p[tid][ci*(gd->M[tid])], &gd->Y[tid][ci*(gd->M[tid])], &gd->Z[tid][ci*(gd->M[tid])], &gd->x[tid][8*cj*t->Nbase], gd->M[tid]/8, ntiles*t->Nbase, gd->itermax[tid]+15, gd->admm_rho[tid], gd->nulow, gd->nuhigh, gd->info[tid], gd->cbhandle[tid], gd->solver_handle[tid], cj, ntiles, (void*)gd->lmdata[tid]);
       } else {
        /* max trust region radius: keep reasonable */
        float Delta0=2.0f;
-       ret=rtr_solve_cuda_robust_admm_fl(&gd->p[tid][ci*(gd->M[tid])], &gd->Y[tid][ci*(gd->M[tid])], &gd->Z[tid][ci*(gd->M[tid])], &gd->x[tid][8*cj*t->Nbase], gd->M[tid]/8, ntiles*t->Nbase, gd->itermax[tid]+10, Delta0, Delta0*0.125f, gd->admm_rho[tid], gd->nulow, gd->nuhigh, gd->info[tid], gd->cbhandle[tid], gd->gWORK[tid],  cj, ntiles, (void*)gd->lmdata[tid]);
+       rtr_solve_cuda_robust_admm_fl(&gd->p[tid][ci*(gd->M[tid])], &gd->Y[tid][ci*(gd->M[tid])], &gd->Z[tid][ci*(gd->M[tid])], &gd->x[tid][8*cj*t->Nbase], gd->M[tid]/8, ntiles*t->Nbase, gd->itermax[tid]+10, Delta0, Delta0*0.125f, gd->admm_rho[tid], gd->nulow, gd->nuhigh, gd->info[tid], gd->cbhandle[tid], gd->solver_handle[tid], cj, ntiles, (void*)gd->lmdata[tid]);
       }
 
      init_res+=gd->info[tid][0];
@@ -649,9 +648,9 @@ pipeline_slave_code_admm_flt(void *data)
 /************************* work *********************/
   } else if (gd->status[tid]==PT_DO_AGPU) {
    /* no cula needed: 0 at end */
-   attach_gpu_to_thread2(tid,&gd->cbhandle[tid],&gd->gWORK[tid],gd->data_size,0);
+   attach_gpu_to_thread2(select_work_gpu(MAX_GPU_ID,td->pline->thst),&gd->cbhandle[tid],&gd->solver_handle[tid],&gd->gWORK[tid],gd->data_size,0);
   } else if (gd->status[tid]==PT_DO_DGPU) {
-   detach_gpu_from_thread2(tid,gd->cbhandle[tid],gd->gWORK[tid],0);
+   detach_gpu_from_thread2(gd->cbhandle[tid],gd->solver_handle[tid],gd->gWORK[tid],0);
   } else if (gd->status[tid]==PT_DO_MEMRESET) {
    reset_gpu_memory((double*)gd->gWORK[tid],gd->data_size);
   } else if (gd->status[tid]!=PT_DO_NOTHING) { /* catch error */
@@ -685,8 +684,12 @@ init_pipeline_admm_flt(th_pipeline *pline,
     fprintf(stderr,"no free memory\n");
     exit(1);
  }
+ if ((pline->thst=(taskhist*)malloc(sizeof(taskhist)))==0) {
+    fprintf(stderr,"no free memory\n");
+    exit(1);
+ }
 
-
+ init_task_hist(pline->thst);
  t0->pline=t1->pline=pline;
  t0->tid=0;
  t1->tid=1; /* link back t1, t2 to data so they could be freed */
@@ -694,6 +697,7 @@ init_pipeline_admm_flt(th_pipeline *pline,
  pline->sd1=t1;
  pthread_create(&(pline->slave0),&(pline->attr),pipeline_slave_code_admm_flt,(void*)t0);
  pthread_create(&(pline->slave1),&(pline->attr),pipeline_slave_code_admm_flt,(void*)t1);
+
 }
 
 /* destroy the pipeline */
@@ -709,6 +713,8 @@ destroy_pipeline_admm_flt(th_pipeline *pline)
  destroy_th_barrier(&(pline->gate1));
  destroy_th_barrier(&(pline->gate2));
  pthread_attr_destroy(&(pline->attr));
+ destroy_task_hist(pline->thst);
+ free(pline->thst);
  free(pline->sd0);
  free(pline->sd1);
  pline->data=NULL;
@@ -734,7 +740,7 @@ sagefit_visibilities_admm_dual_pt_flt(double *u, double *v, double *w, double *x
 
   /* rearraged memory for GPU use */
   double *ddcoh;
-  char *ddbase;
+  short *ddbase;
 
   int *cr=0; /* array for random permutation of clusters */
   int c0,c1;
@@ -788,7 +794,7 @@ sagefit_visibilities_admm_dual_pt_flt(double *u, double *v, double *w, double *x
      fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
      exit(1);
   }
-  if ((ddbase=(char*)calloc((size_t)(Nbase1*2),sizeof(char)))==0) {
+  if ((ddbase=(short*)calloc((size_t)(Nbase1*2),sizeof(short)))==0) {
      fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
      exit(1);
   }
@@ -865,11 +871,14 @@ sagefit_visibilities_admm_dual_pt_flt(double *u, double *v, double *w, double *x
    int64_t data_sz=0;
    /* size for RTR/NSD (float), 128 is the ThreadsPerBlock   
       NSD is a bit lower
+      Use dummy data size
    */
   if (solver_mode==SM_NSD_RLBFGS) {
-   data_sz=(8*N*(7+(Nbase1+128-1)/128)+N+8*Nbase1*2+3*Nbase1)*sizeof(float);
+   //data_sz=(8*N*(7+(Nbase1+128-1)/128)+N+8*Nbase1*2+3*Nbase1)*sizeof(float);
+   data_sz=8*sizeof(float);
   } else { /* default is RTR */
-   data_sz=(8*N*(11+(Nbase1+128-1)/128)+N+8*Nbase1*2+3*Nbase1)*sizeof(float);
+   //data_sz=(8*N*(11+(Nbase1+128-1)/128)+N+8*Nbase1*2+3*Nbase1)*sizeof(float);
+   data_sz=8*sizeof(float);
   }
 
   tpg.data_size=data_sz;
@@ -1172,7 +1181,7 @@ sagefit_visibilities_admm_dual_pt_flt_one(double *u, double *v, double *w, doubl
 
   /* rearraged memory for GPU use */
   double *ddcoh;
-  char *ddbase;
+  short *ddbase;
 
   int *cr=0; /* array for random permutation of clusters */
   int c0;
@@ -1226,7 +1235,7 @@ sagefit_visibilities_admm_dual_pt_flt_one(double *u, double *v, double *w, doubl
      fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
      exit(1);
   }
-  if ((ddbase=(char*)calloc((size_t)(Nbase1*2),sizeof(char)))==0) {
+  if ((ddbase=(short*)calloc((size_t)(Nbase1*2),sizeof(short)))==0) {
      fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
      exit(1);
   }
@@ -1304,7 +1313,8 @@ sagefit_visibilities_admm_dual_pt_flt_one(double *u, double *v, double *w, doubl
    /* size for RTR/NSD (float), 128 is the ThreadsPerBlock   
       NSD is a bit lower, but use the same
    */
-  data_sz=(8*N*(11+(Nbase1+128-1)/128)+N+8*Nbase1*2+3*Nbase1)*sizeof(float);
+  //data_sz=(8*N*(11+(Nbase1+128-1)/128)+N+8*Nbase1*2+3*Nbase1)*sizeof(float);
+  data_sz=8*sizeof(float);
 
   tpg.data_size=data_sz;
   tpg.nulow=nulow;

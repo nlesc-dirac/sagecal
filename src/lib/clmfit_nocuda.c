@@ -304,7 +304,6 @@ clevmar_der_single_nocuda(
      */
      /* since J is in ROW major order, assume it is transposed,
        so actually calculate A=J*J^T, where J is size MxN */
-     //status=culaDeviceDgemm('N','T',M,M,N,1.0,jacd,M,jacd,M,0.0,jacTjacd,M);
      my_dgemm('N','T',M,M,N,1.0,jac,M,jac,M,0.0,jacTjacd,M);
      
      /* create backup */
@@ -313,7 +312,6 @@ clevmar_der_single_nocuda(
      my_dcopy(M*M,jacTjacd,1,jacTjacd0,1);
      /* J^T e */
      /* calculate b=J^T*e (actually compute b=J*e, where J in row major (size MxN) */
-     //status=culaDeviceDgemv('N',M,N,1.0,jacd,M,ed,1,0.0,jacTed,1);
      my_dgemv('N',M,N,1.0,jac,M,ed,1,0.0,jacTed,1);
 
 
@@ -374,7 +372,6 @@ clevmar_der_single_nocuda(
       if (solve_axb==0) {
         /* Cholesky solver **********************/
         /* lower triangle of Ad is destroyed */
-        //status=culaDeviceDpotrf('U',M,jacTjacd,M);
         status=my_dpotrf('U',M,jacTjacd,M);
         if (!status) {
          issolved=1;
@@ -388,7 +385,6 @@ clevmar_der_single_nocuda(
          /* copy Dpd<=jacTed */
          //cbstatus=cublasDcopy(cbhandle, M, jacTed, 1, Dpd, 1);
          memcpy(Dpd,jacTed,M*sizeof(double));
-         //status=culaDeviceDpotrs('U',M,1,jacTjacd,M,Dpd,M);
          status=my_dpotrs('U',M,1,jacTjacd,M,Dpd,M);
          if (status) {
            issolved=0;
@@ -399,7 +395,6 @@ clevmar_der_single_nocuda(
         }
       } else if (solve_axb==1) {
         /* QR solver ********************************/
-        //status=culaDeviceDgeqrf(M,M,jacTjacd,M,taud);
         /* copy Dpd<=jacTed */
         memcpy(Dpd,jacTed,M*sizeof(double));
         status=my_dgels('N',M,M,1,jacTjacd,M,Dpd,M,WORK,lwork);
@@ -415,13 +410,11 @@ clevmar_der_single_nocuda(
       } else {
         /* SVD solver *********************************/
         /* U S VT = A */
-       // status=culaDeviceDgesvd('A','A',M,M,jacTjacd,M,Sd,Ud,M,VTd,M);
         status=my_dgesvd('A','A',M,M,jacTjacd,M,Sd,Ud,M,VTd,M,WORK,lwork);
         /* copy Dpd<=jacTed */
         //memcpy(Dpd,jacTed,M*sizeof(double));
         memcpy(bd,jacTed,M*sizeof(double));
         /* b<=U^T * b */
-        //status=culaDeviceDgemv('T',M,M,1.0,Ud,M,Dpd,1,0.0,Dpd,1);
         my_dgemv('T',M,M,1.0,Ud,M,bd,1,0.0,Dpd,1);
         /* robust correction */
         /* divide by singular values  Dpd[]/Sd[]  for Sd[]> eps1 */
@@ -434,7 +427,6 @@ clevmar_der_single_nocuda(
         }
 
         /* b<=VT^T * b */
-        //status=culaDeviceDgemv('T',M,M,1.0,VTd,M,Dpd,1,0.0,Dpd,1);
         memcpy(bd,Dpd,M*sizeof(double));
         my_dgemv('T',M,M,1.0,VTd,M,bd,1,0.0,Dpd,1);
 
