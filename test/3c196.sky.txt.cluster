@@ -1,3 +1,6 @@
+# cluster file
+# id chunks source list
+# -ve cluster ids are not subtracted from the data
 -1 2 P3C196C1 P3C196C2 P3C196C3 P3C196C4
 2 1 P2C1
 #3 2 P3C1 P3C2 P3C3
