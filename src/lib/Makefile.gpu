@@ -1,12 +1,13 @@
 CC=gcc
 CXX=g++
+NVCC=nvcc
 CFLAGS= -Wall -O3 -g -DHAVE_CUDA -DHYBRID_CODE
 CLIBS= -lm -lpthread
 LAPACK=-L/usr/local/OpenBLAS/lib/ -lopenblas -lgfortran -lpthread
 
 CUDAINC=/usr/local/cuda/include
 CUDALIB=-L/usr/local/cuda/lib64 -lcuda -lcudart
-NVCC=/usr/local/cuda/bin/nvcc
+#NVCC=/usr/local/cuda/bin/nvcc
 #NVCFLAGS=-arch=sm_35 -g -G --ptxas-options=-v -O3
 NVCFLAGS=-arch=sm_35 --ptxas-options=-v -O3
 
