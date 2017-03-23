@@ -1,6 +1,6 @@
 OUTPUT=
 CXX=g++
-CXXFLAGS=-O3 -Wall -g -DHAVE_CUDA -DONE_GPU
+CXXFLAGS=-O3 -Wall -g -DHAVE_CUDA
 CASA_LIBDIR=/opt/casacore/lib
 CASA_INCDIR=-I/opt/casacore/include/ -I/opt/casacore/include/casacore
 CASA_LIBS=-lcasa_casa -lcasa_tables -lcasa_measures -lcasa_ms -lcfitsio
