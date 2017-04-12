@@ -24,6 +24,8 @@
 #include <string.h>
 #include <pthread.h>
 
+#include "cuda_profiler_api.h"
+
 #include<sagecal.h>
 #ifndef LMCUT
 #define LMCUT 40
@@ -251,7 +253,7 @@ main(int argc, char **argv) {
     /**********************************************************/
      int M,Mt,ci,cj,ck;  
    /* parameters */
-   double *p,*pinit,*pfreq;
+   double *p,*pinit;
    double **pm;
    complex double *coh;
    FILE *sfp=0;
@@ -324,19 +326,6 @@ main(int argc, char **argv) {
     }
   }
 
-#ifdef USE_MIC
-  /* need for bitwise copyable parameter passing */
-  int *mic_pindex,*mic_chunks;
-  if ((mic_chunks=(int*)calloc((size_t)M,sizeof(int)))==0) {
-     fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
-     exit(1);
-  }
-  if ((mic_pindex=(int*)calloc((size_t)Mt,sizeof(int)))==0) {
-     fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
-     exit(1);
-  }
-  int cl=0;
-#endif
 
   /* update cluster array with correct pointers to parameters */
   cj=0;
@@ -345,14 +334,8 @@ main(int argc, char **argv) {
      fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
      exit(1);
     }
-#ifdef USE_MIC
-    mic_chunks[ci]=carr[ci].nchunk;
-#endif
     for (ck=0; ck<carr[ci].nchunk; ck++) {
       carr[ci].p[ck]=cj*8*iodata.N;
-#ifdef USE_MIC
-      mic_pindex[cl++]=carr[ci].p[ck];
-#endif
       cj++;
     }
   }
@@ -390,8 +373,8 @@ main(int argc, char **argv) {
 
     double res_0,res_1,res_00,res_01;   
    /* previous residual */
-   double res_prev=CLM_DBL_MAX;
-   double res_ratio=5; /* how much can the residual increase before resetting solutions */
+   // double res_prev=CLM_DBL_MAX;
+   // double res_ratio=5; /* how much can the residual increase before resetting solutions */
    res_0=res_1=res_00=res_01=0.0;
 
     /**********************************************************/
@@ -434,11 +417,14 @@ main(int argc, char **argv) {
 
 
     /* starting iterations are doubled */
-    int start_iter=1;
+    // int start_iter=1;
     int sources_precessed=0;
 
     double inv_c=1.0/CONST_C;
 
+#ifdef HAVE_CUDA
+    cudaProfilerStart();
+#endif
     while (msitr[0]->more()) {
       start_time = time(0);
       if (iodata.Nms==1) {
@@ -472,196 +458,22 @@ main(int argc, char **argv) {
     }
 
 
-#ifdef USE_MIC
-  double *mic_u,*mic_v,*mic_w,*mic_x;
-  mic_u=iodata.u;
-  mic_v=iodata.v;
-  mic_w=iodata.w;
-  mic_x=iodata.x;
-  int mic_Nbase=iodata.Nbase;
-  int mic_tilesz=iodata.tilesz;
-  int mic_N=iodata.N;
-  double mic_freq0=iodata.freq0;
-  double mic_deltaf=iodata.deltaf;
-  double mic_data_min_uvcut=Data::min_uvcut;
-  int mic_data_Nt=Data::Nt;
-  int mic_data_max_emiter=Data::max_emiter;
-  int mic_data_max_iter=Data::max_iter;
-  int mic_data_max_lbfgs=Data::max_lbfgs;
-  int mic_data_lbfgs_m=Data::lbfgs_m;
-  int mic_data_gpu_threads=Data::gpu_threads;
-  int mic_data_linsolv=Data::linsolv;
-  int mic_data_solver_mode=Data::solver_mode;
-  int mic_data_randomize=Data::randomize;
-  double mic_data_nulow=Data::nulow;
-  double mic_data_nuhigh=Data::nuhigh;
-#endif
 
    /* FIXME: uvmin is not needed in calibration, because its taken care of by flags */
     if (!Data::DoSim) {
     /****************** calibration **************************/
-////#ifndef HAVE_CUDA
-    if (!doBeam) {
-     precalculate_coherencies(iodata.u,iodata.v,iodata.w,coh,iodata.N,iodata.Nbase*iodata.tilesz,barr,carr,M,iodata.freq0,iodata.deltaf,iodata.deltat,iodata.dec0,Data::min_uvcut,Data::max_uvcut,Data::Nt);
-    } else {
-     precalculate_coherencies_withbeam(iodata.u,iodata.v,iodata.w,coh,iodata.N,iodata.Nbase*iodata.tilesz,barr,carr,M,iodata.freq0,iodata.deltaf,iodata.deltat,iodata.dec0,Data::min_uvcut,Data::max_uvcut,
-  beam.p_ra0,beam.p_dec0,iodata.freq0,beam.sx,beam.sy,beam.time_utc,iodata.tilesz,beam.Nelem,beam.xx,beam.yy,beam.zz,Data::Nt);
-    }
-////#endif
-////#ifdef HAVE_CUDA
-////     precalculate_coherencies_withbeam_gpu(iodata.u,iodata.v,iodata.w,coh,iodata.N,iodata.Nbase*iodata.tilesz,barr,carr,M,iodata.freq0,iodata.deltaf,iodata.deltat,iodata.dec0,Data::min_uvcut,Data::max_uvcut,
-////  beam.p_ra0,beam.p_dec0,iodata.freq0,beam.sx,beam.sy,beam.time_utc,iodata.tilesz,beam.Nelem,beam.xx,beam.yy,beam.zz,doBeam,Data::Nt);
-////#endif
-
-    
-#ifndef HAVE_CUDA
-    if (start_iter) {
-#ifdef USE_MIC
-    int mic_data_dochan=Data::doChan;
-    #pragma offload target(mic) \
-     nocopy(mic_u: length(1) alloc_if(1) free_if(0)) \
-     nocopy(mic_v: length(1) alloc_if(1) free_if(0)) \
-     nocopy(mic_w: length(1) alloc_if(1) free_if(0)) \
-     in(mic_x: length(8*mic_Nbase*mic_tilesz)) \
-     in(barr: length(mic_Nbase*mic_tilesz)) \
-     in(mic_chunks: length(M)) \
-     in(mic_pindex: length(Mt)) \
-     in(coh: length(4*M*mic_Nbase*mic_tilesz)) \
-     inout(p: length(8*mic_N*Mt)) 
-     sagefit_visibilities_mic(mic_u,mic_v,mic_w,mic_x,mic_N,mic_Nbase,mic_tilesz,barr,mic_chunks,mic_pindex,coh,M,Mt,mic_freq0,mic_deltaf,p,mic_data_min_uvcut,mic_data_Nt,2*mic_data_max_emiter,mic_data_max_iter,(mic_data_dochan? 0 :mic_data_max_lbfgs),mic_data_lbfgs_m,mic_data_gpu_threads,mic_data_linsolv,mic_data_solver_mode,mic_data_nulow,mic_data_nuhigh,mic_data_randomize,&mean_nu,&res_0,&res_1);
-#else /* NOT MIC */
-     sagefit_visibilities(iodata.u,iodata.v,iodata.w,iodata.x,iodata.N,iodata.Nbase,iodata.tilesz,barr,carr,coh,M,Mt,iodata.freq0,iodata.deltaf,p,Data::min_uvcut,Data::Nt,(iodata.N<=LMCUT?2*Data::max_emiter:4*Data::max_emiter),Data::max_iter,(Data::doChan? 0 :Data::max_lbfgs),Data::lbfgs_m,Data::gpu_threads,Data::linsolv,(iodata.N<=LMCUT && Data::solver_mode==SM_RTR_OSLM_LBFGS?SM_OSLM_LBFGS:(iodata.N<=LMCUT && (Data::solver_mode==SM_RTR_OSRLM_RLBFGS||Data::solver_mode==SM_NSD_RLBFGS)?SM_OSLM_OSRLM_RLBFGS:Data::solver_mode)),Data::nulow,Data::nuhigh,Data::randomize,&mean_nu,&res_0,&res_1);
-     //sagefit_visibilities(iodata.u,iodata.v,iodata.w,iodata.x,iodata.N,iodata.Nbase,iodata.tilesz,barr,carr,coh,M,Mt,iodata.freq0,iodata.deltaf,p,Data::min_uvcut,Data::Nt,2*Data::max_emiter,Data::max_iter,(Data::doChan? 0 :Data::max_lbfgs),Data::lbfgs_m,Data::gpu_threads,Data::linsolv,Data::solver_mode,Data::nulow,Data::nuhigh,Data::randomize,&mean_nu,&res_0,&res_1);
-#endif /* USE_MIC */
-     start_iter=0;
-    } else {
-#ifdef USE_MIC
-    int mic_data_dochan=Data::doChan;
-    #pragma offload target(mic) \
-     nocopy(mic_u: length(1) alloc_if(1) free_if(0)) \
-     nocopy(mic_v: length(1) alloc_if(1) free_if(0)) \
-     nocopy(mic_w: length(1) alloc_if(1) free_if(0)) \
-     in(mic_x: length(8*mic_Nbase*mic_tilesz)) \
-     in(barr: length(mic_Nbase*mic_tilesz)) \
-     in(mic_chunks: length(M)) \
-     in(mic_pindex: length(Mt)) \
-     in(coh: length(4*M*mic_Nbase*mic_tilesz)) \
-     inout(p: length(8*mic_N*Mt)) 
-     sagefit_visibilities_mic(mic_u,mic_v,mic_w,mic_x,mic_N,mic_Nbase,mic_tilesz,barr,mic_chunks,mic_pindex,coh,M,Mt,mic_freq0,mic_deltaf,p,mic_data_min_uvcut,mic_data_Nt,mic_data_max_emiter,mic_data_max_iter,(mic_data_dochan? 0: mic_data_max_lbfgs),mic_data_lbfgs_m,mic_data_gpu_threads,mic_data_linsolv,mic_data_solver_mode,mic_data_nulow,mic_data_nuhigh,mic_data_randomize,&mean_nu,&res_0,&res_1);
-#else /* NOT MIC */
-     sagefit_visibilities(iodata.u,iodata.v,iodata.w,iodata.x,iodata.N,iodata.Nbase,iodata.tilesz,barr,carr,coh,M,Mt,iodata.freq0,iodata.deltaf,p,Data::min_uvcut,Data::Nt,Data::max_emiter,Data::max_iter,(Data::doChan? 0: Data::max_lbfgs),Data::lbfgs_m,Data::gpu_threads,Data::linsolv,Data::solver_mode,Data::nulow,Data::nuhigh,Data::randomize,&mean_nu,&res_0,&res_1);
-#endif /* USE_MIC */
-    }
-#endif /* !HAVE_CUDA */
 #ifdef HAVE_CUDA
-#ifdef ONE_GPU
-    if (start_iter) {
-     sagefit_visibilities_dual_pt_one_gpu(iodata.u,iodata.v,iodata.w,iodata.x,iodata.N,iodata.Nbase,iodata.tilesz,barr,carr,coh,M,Mt,iodata.freq0,iodata.deltaf,p,Data::min_uvcut,Data::Nt, (iodata.N<=LMCUT?2*Data::max_emiter:4*Data::max_emiter),Data::max_iter,(Data::doChan? 0: Data::max_lbfgs),Data::lbfgs_m,Data::gpu_threads,Data::linsolv,(iodata.N<=LMCUT && Data::solver_mode==SM_RTR_OSLM_LBFGS?SM_OSLM_LBFGS:(iodata.N<=LMCUT && (Data::solver_mode==SM_RTR_OSRLM_RLBFGS||Data::solver_mode==SM_NSD_RLBFGS)?SM_OSLM_OSRLM_RLBFGS:Data::solver_mode)),Data::nulow,Data::nuhigh,Data::randomize,&mean_nu,&res_0,&res_1);
-     start_iter=0;
-    } else {
-     sagefit_visibilities_dual_pt_one_gpu(iodata.u,iodata.v,iodata.w,iodata.x,iodata.N,iodata.Nbase,iodata.tilesz,barr,carr,coh,M,Mt,iodata.freq0,iodata.deltaf,p,Data::min_uvcut,Data::Nt,Data::max_emiter,Data::max_iter,(Data::doChan? 0:Data::max_lbfgs),Data::lbfgs_m,Data::gpu_threads,Data::linsolv,Data::solver_mode,Data::nulow,Data::nuhigh,Data::randomize,&mean_nu,&res_0,&res_1);
-    }
-#endif /* ONE_GPU */
-#ifndef ONE_GPU
-    if (start_iter) {
-     sagefit_visibilities_dual_pt_flt(iodata.u,iodata.v,iodata.w,iodata.x,iodata.N,iodata.Nbase,iodata.tilesz,barr,carr,coh,M,Mt,iodata.freq0,iodata.deltaf,p,Data::min_uvcut,Data::Nt,(iodata.N<=LMCUT?2*Data::max_emiter:4*Data::max_emiter),Data::max_iter,(Data::doChan? 0:Data::max_lbfgs),Data::lbfgs_m,Data::gpu_threads,Data::linsolv,(iodata.N<=LMCUT && Data::solver_mode==SM_RTR_OSLM_LBFGS?SM_OSLM_LBFGS:(iodata.N<=LMCUT && (Data::solver_mode==SM_RTR_OSRLM_RLBFGS||Data::solver_mode==SM_NSD_RLBFGS)?SM_OSLM_OSRLM_RLBFGS:Data::solver_mode)),Data::nulow,Data::nuhigh,Data::randomize,&mean_nu,&res_0,&res_1);
-     ///DBG sagefit_visibilities_dual_pt_flt(iodata.u,iodata.v,iodata.w,iodata.x,iodata.N,iodata.Nbase,iodata.tilesz,barr,carr,coh,M,Mt,iodata.freq0,iodata.deltaf,p,Data::min_uvcut,Data::Nt,2*Data::max_emiter,Data::max_iter,(Data::doChan? 0:Data::max_lbfgs),Data::lbfgs_m,Data::gpu_threads,Data::linsolv,Data::solver_mode,Data::nulow,Data::nuhigh,Data::randomize,&mean_nu,&res_0,&res_1);
-     start_iter=0;
-    } else {
-     sagefit_visibilities_dual_pt_flt(iodata.u,iodata.v,iodata.w,iodata.x,iodata.N,iodata.Nbase,iodata.tilesz,barr,carr,coh,M,Mt,iodata.freq0,iodata.deltaf,p,Data::min_uvcut,Data::Nt,Data::max_emiter,Data::max_iter,(Data::doChan? 0:Data::max_lbfgs),Data::lbfgs_m,Data::gpu_threads,Data::linsolv,Data::solver_mode,Data::nulow,Data::nuhigh,Data::randomize,&mean_nu,&res_0,&res_1);
-    }
-#endif /* !ONE_GPU */
-#endif /* HAVE_CUDA */
-   /* if multi channel mode, run BFGS for each channel here 
-       and then calculate residuals, else just calculate residuals */
-      /* parameters 8*N*M ==> 8*N*Mt */
-    if (Data::doChan) {
-      if ((pfreq=(double*)calloc((size_t)iodata.N*8*Mt,sizeof(double)))==0) {
-        fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
-        exit(1);
-      }
-      double *xfreq;
-      if ((xfreq=(double*)calloc((size_t)iodata.Nbase*iodata.tilesz*8,sizeof(double)))==0) {
-        fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
-        exit(1);
-      }
-
-      double deltafch=iodata.deltaf/(double)iodata.Nchan;
-      for (ci=0; ci<iodata.Nchan; ci++) {
-        memcpy(pfreq,p,(size_t)iodata.N*8*Mt*sizeof(double));
-        memcpy(xfreq,&iodata.xo[ci*iodata.Nbase*iodata.tilesz*8],(size_t)iodata.Nbase*iodata.tilesz*8*sizeof(double));
-        precalculate_coherencies(iodata.u,iodata.v,iodata.w,coh,iodata.N,iodata.Nbase*iodata.tilesz,barr,carr,M,iodata.freqs[ci],deltafch,iodata.deltat,iodata.dec0,Data::min_uvcut,Data::max_uvcut,Data::Nt);
-      /* FIT, and calculate */
-#ifndef HAVE_CUDA
-#ifdef USE_MIC
-        mic_freq0=iodata.freqs[ci];
-        mic_deltaf=deltafch;
-     #pragma offload target(mic) \
-      nocopy(mic_u: length(1) alloc_if(1) free_if(0)) \
-      nocopy(mic_v: length(1) alloc_if(1) free_if(0)) \
-      nocopy(mic_w: length(1) alloc_if(1) free_if(0)) \
-      in(xfreq: length(8*mic_Nbase*mic_tilesz)) \
-      in(barr: length(mic_Nbase*mic_tilesz)) \
-      in(mic_chunks: length(M)) \
-      in(mic_pindex: length(Mt)) \
-      in(coh: length(4*M*mic_Nbase*mic_tilesz)) \
-      inout(pfreq: length(8*mic_N*Mt)) 
-        bfgsfit_visibilities_mic(mic_u,mic_v,mic_w,xfreq,mic_N,mic_Nbase,mic_tilesz,barr,mic_chunks,mic_pindex,coh,M,Mt,mic_freq0,mic_deltaf,pfreq,mic_data_min_uvcut,mic_data_Nt,mic_data_max_lbfgs,mic_data_lbfgs_m,mic_data_gpu_threads,mic_data_solver_mode,mean_nu,&res_00,&res_01);
-        mic_freq0=iodata.freq0;
-        mic_deltaf=iodata.deltaf;
-#else /* NOT MIC */
-        bfgsfit_visibilities(iodata.u,iodata.v,iodata.w,xfreq,iodata.N,iodata.Nbase,iodata.tilesz,barr,carr,coh,M,Mt,iodata.freqs[ci],deltafch,pfreq,Data::min_uvcut,Data::Nt,Data::max_lbfgs,Data::lbfgs_m,Data::gpu_threads,Data::solver_mode,mean_nu,&res_00,&res_01);
-#endif /* USE_MIC */
-#endif /* !HAVE_CUDA */
-#ifdef HAVE_CUDA
-        bfgsfit_visibilities_gpu(iodata.u,iodata.v,iodata.w,xfreq,iodata.N,iodata.Nbase,iodata.tilesz,barr,carr,coh,M,Mt,iodata.freqs[ci],deltafch,pfreq,Data::min_uvcut,Data::Nt,Data::max_lbfgs,Data::lbfgs_m,Data::gpu_threads,Data::solver_mode,mean_nu,&res_00,&res_01);
-#endif /* HAVE_CUDA */
-        calculate_residuals(iodata.u,iodata.v,iodata.w,pfreq,&iodata.xo[ci*iodata.Nbase*iodata.tilesz*8],iodata.N,iodata.Nbase,iodata.tilesz,barr,carr,M,iodata.freqs[ci],deltafch,iodata.deltat,iodata.dec0,Data::Nt,Data::ccid,Data::rho);
-      }
-      /* use last solution to save as output */
-      memcpy(p,pfreq,(size_t)iodata.N*8*Mt*sizeof(double));
-      free(pfreq);
-      free(xfreq);
-    } else {
-     /* since residual is calculated not using x (instead using xo), no need to unwhiten data
-        in case x was whitened */
-     if (!doBeam) {
-      calculate_residuals_multifreq(iodata.u,iodata.v,iodata.w,p,iodata.xo,iodata.N,iodata.Nbase,iodata.tilesz,barr,carr,M,iodata.freqs,iodata.Nchan,iodata.deltaf,iodata.deltat,iodata.dec0,Data::Nt,Data::ccid,Data::rho,Data::phaseOnly);
-     } else {
-      calculate_residuals_multifreq_withbeam(iodata.u,iodata.v,iodata.w,p,iodata.xo,iodata.N,iodata.Nbase,iodata.tilesz,barr,carr,M,iodata.freqs,iodata.Nchan,iodata.deltaf,iodata.deltat,iodata.dec0,
-beam.p_ra0,beam.p_dec0,iodata.freq0,beam.sx,beam.sy,beam.time_utc,beam.Nelem,beam.xx,beam.yy,beam.zz,Data::Nt,Data::ccid,Data::rho,Data::phaseOnly);
-     }
-    }
+     precalculate_coherencies_withbeam_gpu(iodata.u,iodata.v,iodata.w,coh,iodata.N,iodata.Nbase*iodata.tilesz,barr,carr,M,iodata.freq0,iodata.deltaf,iodata.deltat,iodata.dec0,Data::min_uvcut,Data::max_uvcut,
+  beam.p_ra0,beam.p_dec0,iodata.freq0,beam.sx,beam.sy,beam.time_utc,iodata.tilesz,beam.Nelem,beam.xx,beam.yy,beam.zz,doBeam,Data::Nt);
+#endif
     /****************** end calibration **************************/
     /****************** begin diagnostics ************************/
-#ifdef HAVE_CUDA
-    if (Data::DoDiag) {
-     calculate_diagnostics(iodata.u,iodata.v,iodata.w,p,iodata.xo,iodata.N,iodata.Nbase,iodata.tilesz,barr,carr,coh,M,Mt,Data::DoDiag,Data::Nt);
-    }
-#endif /* HAVE_CUDA */
-    /****************** end diagnostics **************************/
    } else {
-    /************ simulation only mode ***************************/
-    if (!solfile) {
-////#ifndef HAVE_CUDA
-     if (!doBeam) {
-      predict_visibilities_multifreq(iodata.u,iodata.v,iodata.w,iodata.xo,iodata.N,iodata.Nbase,iodata.tilesz,barr,carr,M,iodata.freqs,iodata.Nchan,iodata.deltaf,iodata.deltat,iodata.dec0,Data::Nt,(Data::DoSim>1?1:0));
-     } else {
-      predict_visibilities_multifreq_withbeam(iodata.u,iodata.v,iodata.w,iodata.xo,iodata.N,iodata.Nbase,iodata.tilesz,barr,carr,M,iodata.freqs,iodata.Nchan,iodata.deltaf,iodata.deltat,iodata.dec0,
-  beam.p_ra0,beam.p_dec0,iodata.freq0,beam.sx,beam.sy,beam.time_utc,beam.Nelem,beam.xx,beam.yy,beam.zz, Data::Nt,(Data::DoSim>1?1:0));
-     }
-////#endif
-////#ifdef HAVE_CUDA
-////      predict_visibilities_multifreq_withbeam_gpu(iodata.u,iodata.v,iodata.w,iodata.xo,iodata.N,iodata.Nbase,iodata.tilesz,barr,carr,M,iodata.freqs,iodata.Nchan,iodata.deltaf,iodata.deltat,iodata.dec0,
-////  beam.p_ra0,beam.p_dec0,iodata.freq0,beam.sx,beam.sy,beam.time_utc,beam.Nelem,beam.xx,beam.yy,beam.zz,doBeam,Data::Nt,(Data::DoSim>1?1:0));
-////#endif
-    } else {
-     read_solutions(sfp,p,carr,iodata.N,M);
-    /* if solution file is given, read in the solutions and predict */
-    predict_visibilities_multifreq_withsol(iodata.u,iodata.v,iodata.w,p,iodata.xo,ignorelist,iodata.N,iodata.Nbase,iodata.tilesz,barr,carr,M,iodata.freqs,iodata.Nchan,iodata.deltaf,iodata.deltat,iodata.dec0,Data::Nt,(Data::DoSim>1?1:0),Data::ccid,Data::rho,Data::phaseOnly);
+#ifdef HAVE_CUDA
+      predict_visibilities_multifreq_withbeam_gpu(iodata.u,iodata.v,iodata.w,iodata.xo,iodata.N,iodata.Nbase,iodata.tilesz,barr,carr,M,iodata.freqs,iodata.Nchan,iodata.deltaf,iodata.deltat,iodata.dec0,
+  beam.p_ra0,beam.p_dec0,iodata.freq0,beam.sx,beam.sy,beam.time_utc,beam.Nelem,beam.xx,beam.yy,beam.zz,doBeam,Data::Nt,(Data::DoSim>1?1:0));
+#endif
     }
-    /************ end simulation only mode ***************************/
-   }
 
    tilex+=iodata.tilesz;
    /* print solutions to file */
@@ -678,33 +490,15 @@ beam.p_ra0,beam.p_dec0,iodata.freq0,beam.sx,beam.sy,beam.time_utc,beam.Nelem,bea
    }
 
     /**********************************************************/
-      /* also write back */
-    if (iodata.Nms==1) {
-     Data::writeData(msitr[0]->table(),iodata);
-    } else {
-     Data::writeDataList(msitr,iodata);
-    }
     for(int cm=0; cm<iodata.Nms; cm++) {
       (*msitr[cm])++;
     }
-   if (!Data::DoSim) {
-   /* if residual has increased too much, or all are flagged (0 residual)
-      or NaN
-      reset solutions to original
-      initial values */
-   if (res_1==0.0 || !isfinite(res_1) || res_1>res_ratio*res_prev) {
-     cout<<"Resetting Solution"<<endl;
-     /* reset solutions so next iteration has default initial values */
-     memcpy(p,pinit,(size_t)iodata.N*8*Mt*sizeof(double));
-     /* also assume iterations have restarted from scratch */
-     start_iter=1;
-     /* also forget min residual (otherwise will try to reset it always) */
-     res_prev=res_1;
-   } else if (res_1<res_prev) { /* only store the min value */
-    res_prev=res_1;
-   }
-   }
+#ifdef HAVE_CUDA
+    cudaDeviceSynchronize();
+    cudaProfilerStop();
+#endif
     end_time = time(0);
+
     elapsed_time = ((double) (end_time-start_time)) / 60.0;
     if (!Data::DoSim) {
     if (solver_mode==SM_OSLM_OSRLM_RLBFGS||solver_mode==SM_RLM_RLBFGS||solver_mode==SM_RTR_OSRLM_RLBFGS || solver_mode==SM_NSD_RLBFGS) { 
@@ -728,10 +522,6 @@ beam.p_ra0,beam.p_dec0,iodata.freq0,beam.sx,beam.sy,beam.time_utc,beam.Nelem,bea
     Data::freeData(iodata,beam);
    }
 
-#ifdef USE_MIC
-   free(mic_pindex);
-   free(mic_chunks);
-#endif
     /**********************************************************/
 
   exinfo_gaussian *exg;
