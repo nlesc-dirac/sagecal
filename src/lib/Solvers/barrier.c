@@ -22,7 +22,7 @@
 #include <stdlib.h>
 #include <math.h>
 
-#include "Dirac.h"
+#include "Solvers.h"
 /* implementation of a barrier to sync threads.
   The barrier has two doors (enter and exit). Only one door 
   can be open at a time. Initially the enter door is open.

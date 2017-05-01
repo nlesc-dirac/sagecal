@@ -26,7 +26,9 @@
 
 #include "cuda_profiler_api.h"
 
-#include<sagecal.h>
+#include <Solvers.h>
+#include <Radio.h>
+
 #ifndef LMCUT
 #define LMCUT 40
 #endif

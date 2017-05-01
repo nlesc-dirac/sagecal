@@ -18,7 +18,7 @@
  */
 
 
-#include "Dirac.h"
+#include "Solvers.h"
 
 //#define DEBUG
 

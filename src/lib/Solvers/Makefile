@@ -17,7 +17,7 @@ GLIBL=-lglib-2.0
 
 OBJECTS= lmfit_nocuda.o clmfit_nocuda.o lbfgs_nocuda.o myblas.o residual.o robustlm.o updatenu.o robust_lbfgs_nocuda.o rtr_solve.o  rtr_solve_robust.o manifold_average.o consensus_poly.o rtr_solve_robust_admm.o admm_solve.o
 
-default:libdirac.a
+default:libsolvers.a
 lmfit_nocuda.o:lmfit_nocuda.c
 	$(CC) $(CFLAGS) $(INCLUDES) $(GLIBI)  -c $<
 clmfit_nocuda.o:clmfit_nocuda.c
@@ -49,6 +49,6 @@ admm_solve.o:admm_solve.c
 
 
 RANLIB=ranlib
-libdirac.a:$(OBJECTS) Dirac.h
+libsolvers.a:$(OBJECTS) Solvers.h
 	ar rv $@ $(OBJECTS); \
 	$(RANLIB) $@;

@@ -26,7 +26,7 @@ LIBPATH= $(CUDALIB)
 OBJECTS=lmfit.o lbfgs.o myblas.o mderiv.o clmfit.o clmfit_nocuda.o residual.o barrier.o robust.o robustlm.o oslmfit.o mderiv_fl.o clmfit_fl.o updatenu.o robust_lbfgs_nocuda.o robust_fl.o manifold_fl.o rtr_solve_cuda.o rtr_solve_robust_cuda.o diagnostics.o diag_fl.o manifold_average.o consensus_poly.o rtr_solve_robust_cuda_admm.o rtr_solve_robust_admm.o admm_solve.o load_balance.o 
 
 
-default:libdirac-gpu.a
+default:libsolvers-gpu.a
 lmfit.o:lmfit.c
 	$(CC) $(CFLAGS) $(INCLUDES) $(GLIBI)  -c $<
 lbfgs.o:lbfgs.c
@@ -83,6 +83,6 @@ load_balance.o:load_balance.c
 	$(CC) $(CFLAGS) $(INCLUDES) $(GLIBI)  -c $<
 
 RANLIB=ranlib
-libdirac-gpu.a:$(OBJECTS) Dirac.h
+libsolvers-gpu.a:$(OBJECTS) Solvers.h
 	ar rv $@ $(OBJECTS); \
 	$(RANLIB) $@;

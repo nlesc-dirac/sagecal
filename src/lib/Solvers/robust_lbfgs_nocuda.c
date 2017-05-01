@@ -18,7 +18,7 @@
  */
 
 
-#include "Dirac.h"
+#include "Solvers.h"
 #include <pthread.h>
 #ifdef HAVE_CUDA
 #include <cuda_runtime.h>

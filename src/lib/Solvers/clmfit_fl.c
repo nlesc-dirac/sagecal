@@ -24,7 +24,7 @@
 #include <math.h>
 #include <float.h>
 
-#include "Dirac.h"
+#include "Solvers.h"
 #include <cuda_runtime.h>
 
 //#define DEBUG

@@ -18,7 +18,7 @@
  */
 
 
-#include "Dirac.h"
+#include "Solvers.h"
 #include <string.h> /* for memcpy */
 
 /* machine precision */

@@ -17,7 +17,7 @@
  $Id$
  */
 
-#include "Dirac.h"
+#include "Solvers.h"
 #include <math.h>
 #include <stdio.h>
 

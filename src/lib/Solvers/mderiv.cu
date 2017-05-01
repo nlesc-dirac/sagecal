@@ -20,7 +20,7 @@
 #include "cuda.h"
 #include <cuComplex.h>
 #include <stdio.h>
-#include "Dirac.h"
+#include "Solvers.h"
 
 /* enable this for checking for kernel failure */
 //#define CUDA_DBG
