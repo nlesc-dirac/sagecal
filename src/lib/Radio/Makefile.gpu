@@ -1,0 +1,52 @@
+CC=gcc
+CXX=g++
+NVCC=nvcc
+CFLAGS= -Wall -O3 -g -DHAVE_CUDA -DHYBRID_CODE
+CLIBS= -lm -lpthread
+LAPACK=-L/usr/local/OpenBLAS/lib/ -lopenblas -lgfortran -lpthread
+
+CUDAINC=/usr/local/cuda/include
+CUDALIB=-L/usr/local/cuda/lib64 -lcuda -lcudart
+#NVCC=/usr/local/cuda/bin/nvcc
+#NVCFLAGS=-arch=sm_35 -g -G --ptxas-options=-v -O3
+NVCFLAGS=-arch=sm_35 --ptxas-options=-v -O3
+
+#### glib
+GLIBI=-I/usr/include/glib-2.0 -I/usr/lib64/glib-2.0/include/
+GLIBL=-lglib-2.0 -L/usr/lib64
+
+# NVML
+NVML_INC=/usr/include/nvidia/gdk/
+NVML_LIB=-lnvidia-ml -L/usr/lib64/nvidia/
+
+INCLUDES= -I. -I$(CUDAINC) -I$(NVML_INC) -I../Dirac
+LIBPATH= $(CUDALIB)
+
+
+OBJECTS=readsky.o predict.o transforms.o stationbeam.o predict_withbeam.o predict_withbeam_gpu.o predict_model.o predict_model_device.o
+
+
+default:libsagecal.a
+readsky.o:readsky.c
+	$(CC) $(CFLAGS) $(INCLUDES) $(GLIBI)  -c $<
+predict.o:predict.c
+	$(CC) $(CFLAGS) $(INCLUDES) $(GLIBI)  -c $<
+transforms.o:transforms.c
+	$(CC) $(CFLAGS) $(INCLUDES) $(GLIBI)  -c $<
+stationbeam.o:stationbeam.c
+	$(CC) $(CFLAGS) $(INCLUDES) $(GLIBI)  -c $<
+predict_withbeam.o:predict_withbeam.c
+	$(CC) $(CFLAGS) $(INCLUDES) $(GLIBI)  -c $<
+predict_withbeam_gpu.o:predict_withbeam_gpu.c
+	$(CC) $(CFLAGS) $(INCLUDES) $(GLIBI)  -c $<
+## for dynamic parallelism, two stage compilation
+predict_model.o:predict_model_device.o
+	$(NVCC) $(NVCFLAGS) -lineinfo -dlink $(INCLUDES) $(GLIBI) -o $@ $<
+predict_model_device.o:predict_model.cu
+	$(NVCC) $(NVCFLAGS) -lineinfo -rdc=true $(INCLUDES) $(GLIBI) -o $@ -c $<
+
+
+RANLIB=ranlib
+libsagecal.a:$(OBJECTS) Radio.h
+	ar rv $@ $(OBJECTS); \
+	$(RANLIB) $@;
