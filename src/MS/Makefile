@@ -14,9 +14,9 @@ LDFLAGS=-Wl,--rpath,/usr/local/OpenBLAS/lib/,${CASA_LIBDIR}
 #LDFLAGS=-Wl,-t,--rpath,/software/users/lofareor/SW/lib64
 # -Wl,--hash-style=both
 
-MY_LIBS=-lm -lsolvers -lsagecal
-INCLUDES=-I. -I../lib/Radio -I../lib/Solvers $(CASA_INCDIR) -I/usr/include
-LIBPATH=-L$(LAPACK_DIR) $(CASA_LIBDIR)  -L../lib/Radio -L../lib/Solvers
+MY_LIBS=-lm -ldirac -lsagecal
+INCLUDES=-I. -I../lib/Dirac -I../lib/Radio $(CASA_INCDIR) -I/usr/include
+LIBPATH=-L$(LAPACK_DIR) $(CASA_LIBDIR)  -L../lib/Dirac -L../lib/Radio
 
 #### glib
 GLIBI=-I/usr/include/glib-2.0 -I/usr/lib/glib-2.0/include -I/usr/lib/x86_64-linux-gnu/glib-2.0/include/ -I/usr/lib64/glib-2.0/include
@@ -24,12 +24,12 @@ GLIBL=-lglib-2.0
 
 
 OBJECTS=main.o data.o
-default:sagecal-gpu
+default:sagecal
 main.o:main.cpp
 	$(CXX) $(CXXFLAGS) $(INCLUDES) $(GLIBI) -c $<
 data.o:data.cpp data.h
 	$(CXX) $(CXXFLAGS) $(INCLUDES) $(GLIBI) -c $<
-sagecal-gpu:$(OBJECTS) ../lib/Radio/libsagecal-gpu.a ../lib/Solvers/libsolvers-gpu.a 
+sagecal:$(OBJECTS) ../lib/Radio/libsagecal.a ../lib/Dirac/libdirac.a 
 	$(CXX) $(CXXFLAGS) $(LDFLAGS) $(INCLUDES) $(GLIBI) $(LIBPATH)  -o $@  $(OBJECTS) $(MY_LIBS) $(LAPACK) $(CASA_LIBS)  $(GLIBL)
 clean:
 	rm *.o *.tmp *.fits

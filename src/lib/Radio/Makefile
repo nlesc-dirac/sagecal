@@ -8,7 +8,7 @@ CLIBS= -lm -lpthread
 LAPACK=-L/usr/local/OpenBLAS/lib/ -lopenblas -lgfortran -lpthread
 
 
-INCLUDES= -I. -I../Solvers/ 
+INCLUDES= -I. -I../Dirac/ 
 LIBPATH=
 
 #### glib

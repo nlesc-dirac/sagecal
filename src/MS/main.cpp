@@ -26,7 +26,7 @@
 
 #include "cuda_profiler_api.h"
 
-#include <Solvers.h>
+#include <Dirac.h>
 #include <Radio.h>
 
 #ifndef LMCUT

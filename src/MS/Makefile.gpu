@@ -24,9 +24,9 @@ LDFLAGS=-Wl,--rpath,/usr/local/OpenBLAS/lib/,${CASA_LIBDIR}
 # -Wl,--hash-style=both
 
 # with multithread FFTW
-MY_LIBS=-lm -lsolvers -lsagecal
-INCLUDES=-I. -I../lib/Solvers/ -I../lib/Radio/ $(CASA_INCDIR) -I/usr/include $(CUDAINC) -I$(NVML_INC)
-LIBPATH=-L$(LAPACK_DIR) -L$(CASA_LIBDIR) -L../lib/Solvers/ -L../lib/Radio/
+MY_LIBS=-lm -lsagecal -ldirac 
+INCLUDES=-I. -I../lib/Dirac/ -I../lib/Radio/ $(CASA_INCDIR) -I/usr/include $(CUDAINC) -I$(NVML_INC)
+LIBPATH=-L$(LAPACK_DIR) -L$(CASA_LIBDIR) -L../lib/Dirac/ -L../lib/Radio/
 
 #### glib
 GLIBI=-I/usr/include/glib-2.0 -I/usr/lib/glib-2.0/include -I/usr/lib/x86_64-linux-gnu/glib-2.0/include/ -I/usr/lib64/glib-2.0/include
@@ -39,7 +39,7 @@ main.o:main.cpp
 	$(CXX) $(CXXFLAGS) $(INCLUDES) $(GLIBI) -c $<
 data.o:data.cpp data.h
 	$(CXX) $(CXXFLAGS) $(INCLUDES) $(GLIBI) -c $<
-sagecal:$(OBJECTS) ../lib/Radio/libsagecal.a ../lib/Solvers/libsolvers.a 
+sagecal:$(OBJECTS) ../lib/Radio/libsagecal.a ../lib/Dirac/libdirac.a 
 	$(CXX) $(CXXFLAGS) $(LDFLAGS) $(INCLUDES) $(GLIBI) $(LIBPATH)  -o $@  $(OBJECTS) $(MY_LIBS) $(CASA_LIBS)  $(GLIBL) $(LAPACK)  $(CUDALIB) $(CULALIB) $(NVML_LIB)
 clean:
 	rm *.o *.tmp *.fits
