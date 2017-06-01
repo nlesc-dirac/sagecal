@@ -11,7 +11,7 @@ import warnings
 
 number_of_parameters = 19
 number_of_digits_for_sources = 5
-number_of_sources = 5e3
+number_of_sources = 10000
 try:
     assert number_of_sources < 10**number_of_digits_for_sources
 except AssertionError:
@@ -67,14 +67,25 @@ with warnings.catch_warnings():
     sources_parameters.sp2 = 0
 
     sources_parameters.RM = 0
-    sources_parameters.extX = 0
-    sources_parameters.extY = 0
-    sources_parameters.pos_angle = 0.
+
+    # Let's make the first half of the sources extended.
+    first_half = int(number_of_sources/2)
+    major_axes_in_degrees = 0.1 * np.random.rand(first_half)
+    semi_major_axes_in_radians = major_axes_in_degrees * np.pi/360.
+    # For convenience, I'll just construct semi-minor axes half the size of the semi-major axes.
+    semi_minor_axes_in_radians = semi_major_axes_in_radians/2.
+    sources_parameters.extX[0: first_half] = semi_major_axes_in_radians
+    sources_parameters.extX[first_half: number_of_sources] = 0
+    sources_parameters.extY[0: first_half] = semi_minor_axes_in_radians
+    sources_parameters.extY[first_half: number_of_sources] = 0
+    sources_parameters.pos_angle[0: first_half] = 360. * np.random.rand(first_half)
+    sources_parameters.pos_angle[first_half: number_of_sources] = 0
+
     sources_parameters.freq0 = 143000000.0
 
-print([elem for elem in sources_parameters[100]])
+# print([elem for elem in sources_parameters[100]])
 
-sources_parameters.tofile("extended_source_list_using_tofile.txt", sep='\n')
+# sources_parameters.tofile("extended_source_list_using_tofile.txt", sep='\n')
 
 with open("extended_source_list.txt", 'wb') as f:
     f.write(b"##  From Generate_sources.py by Hanno Spreeuw.\n")
@@ -83,9 +94,12 @@ with open("extended_source_list.txt", 'wb') as f:
     f.write(b"##  fields are (where h:m:s is RA, d:m:s is Dec):\n")
     f.write(b"##  name h m s d m s I Q U V spectral_index0 spectral_index1 spectral_index2 " +
             b"RM extent_X(rad) extent_Y(rad) pos_angle(rad) freq0\n")
+    f.write(b"\n")
 
     np.savetxt(f, sources_parameters, fmt=formats_reformatted)
 
 # Now write the cluster file
-with open("extended_source_list.cluster", 'wb') as f:
-    np.savetxt(f, (sources_parameters.name).reshape(1, sources_parameters.name.shape[0]), fmt='%s', delimiter=' ')
+# First add '1' and '1' to indicate the cluster id and chunk size.
+cluster_array = np.concatenate((np.array(['1', '1']), sources_parameters.name))
+with open("extended_source_list.txt.cluster", 'wb') as f:
+    np.savetxt(f, (cluster_array).reshape(1, cluster_array.shape[0]), fmt='%s', delimiter=' ')
