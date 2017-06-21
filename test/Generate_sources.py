@@ -70,6 +70,7 @@ with warnings.catch_warnings():
 
     # Let's make the first half of the sources extended.
     first_half = int(number_of_sources/2)
+    # Make major axes with a maximum of 0.1 degrees.
     major_axes_in_degrees = 0.1 * np.random.rand(first_half)
     semi_major_axes_in_radians = major_axes_in_degrees * np.pi/360.
     # For convenience, I'll just construct semi-minor axes half the size of the semi-major axes.
