@@ -22,7 +22,7 @@ INCLUDES= -I. -I$(CUDAINC) -I$(NVML_INC)
 LIBPATH= $(CUDALIB)
 
 
-OBJECTS=readsky.o dataio.o predict.o lmfit.o lbfgs.o myblas.o mderiv.o clmfit.o clmfit_nocuda.o residual.o barrier.o robust.o robustlm.o oslmfit.o mderiv_fl.o clmfit_fl.o updatenu.o robust_lbfgs_nocuda.o robust_fl.o manifold_fl.o rtr_solve_cuda.o rtr_solve_robust_cuda.o diagnostics.o diag_fl.o manifold_average.o consensus_poly.o rtr_solve_robust_cuda_admm.o rtr_solve_robust_admm.o admm_solve.o load_balance.o transforms.o stationbeam.o predict_withbeam.o  predict_withbeam_gpu.o predict_model.o predict_model_device.o
+OBJECTS=readsky.o dataio.o predict.o lmfit.o lbfgs.o myblas.o mderiv.o clmfit.o clmfit_nocuda.o residual.o barrier.o robust.o robustlm.o oslmfit.o mderiv_fl.o clmfit_fl.o updatenu.o robust_lbfgs_nocuda.o robust_fl.o manifold_fl.o rtr_solve_cuda.o rtr_solve_robust_cuda.o diagnostics.o diag_fl.o manifold_average.o consensus_poly.o rtr_solve_robust_cuda_admm.o rtr_solve_robust_admm.o admm_solve.o load_balance.o transforms.o stationbeam.o predict_withbeam.o  predict_withbeam_gpu.o predict_model.o predict_model_device.omdl.o
 
 
 default:libsagecal.a
@@ -99,6 +99,9 @@ predict_model.o:predict_model_device.o
 	$(NVCC) $(NVCFLAGS) -lineinfo -dlink $(INCLUDES) $(GLIBI) -o $@ $<
 predict_model_device.o:predict_model.cu
 	$(NVCC) $(NVCFLAGS) -lineinfo -rdc=true $(INCLUDES) $(GLIBI) -o $@ -c $<
+mdl.o:mdl.c
+	$(CC) $(CFLAGS) $(INCLUDES) $(GLIBI)  -c $<
+
 
 
 RANLIB=ranlib

@@ -66,6 +66,7 @@ int Data::solver_mode=0;
 int Data::ccid=-99999;
 double Data::rho=1e-9;
 char *Data::solfile=NULL;
+char *Data::initsolfile=NULL;
 char *Data::ignorefile=NULL;
 char *Data::MSlist=NULL;
 char *Data::MSpattern=NULL;
@@ -76,12 +77,14 @@ int Data::Npoly=2;
 int Data::PolyType=2;
 double Data::admm_rho=5.0;
 char *Data::admm_rho_file=NULL;
+int Data::aadmm=0;
 
 /* no upper limit, solve for all timeslots */
 int Data::Nmaxtime=0;
 /* skip starting time slots if given */
 int Data::Nskip=0;
 int Data::verbose=0; /* no verbose output */
+int Data::mdl=0; /* no AIC/MDL calculation by default */
 
 using namespace Data;
 

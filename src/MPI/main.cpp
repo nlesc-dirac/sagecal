@@ -33,17 +33,21 @@ using namespace Data;
 
 void
 print_copyright(void) {
-  cout<<"SAGECal-MPI 0.4.5 (C) 2011-2016 Sarod Yatawatta"<<endl;
+  cout<<"SAGECal-MPI 0.4.8 (C) 2011-2017 Sarod Yatawatta"<<endl;
 }
 
 
 void
 print_help(void) {
    cout << "Usage:" << endl;
-   cout<<"mpirun (MPI options) sagecal-mpi -f MSlist -s sky.txt -c cluster.txt"<<endl;
-   cout << "-f MSlist: text file with MS names" << endl;
+   cout<<"mpirun (MPI options) sagecal-mpi -f '*.MS' -s sky.txt -c cluster.txt (other options)"<<endl;
+   cout<<endl;
+   cout<<"Mandatory options:"<<endl;
+   cout << "-f '*.MS': text pattern to search MS names" << endl;
    cout << "-s sky.txt: sky model file"<< endl;
    cout << "-c cluster.txt: cluster file"<< endl;
+   cout<<endl;
+   cout<<"Other options:"<<endl;
    cout << "-p solutions.txt: if given, save (global) solutions in this file, but slaves will always write to 'XXX.MS.solutions'"<< endl;
    cout << "-F sky model format: 0: LSM, 1: LSM with 3 order spectra : default "<< Data::format<<endl;
    cout << "-I input column (DATA/CORRECTED_DATA/...) : default " <<Data::DataField<< endl;
@@ -60,6 +64,7 @@ print_help(void) {
    cout << "-Q consensus polynomial type (0,1,2,3): default " <<Data::PolyType<< endl;
    cout << "-r regularization factor: default " <<Data::admm_rho<< endl;
    cout << "-G regularization factor of each cluster (text file instead of -r, has to match exactly the cluster file first 2 columns): default : None" << endl;
+   cout << "-C if >0, adaptive update of regularization factor: default "<<Data::aadmm<< endl;
    cout << "-x exclude baselines length (lambda) lower than this in calibration : default "<<Data::min_uvcut << endl;
    cout << "-y exclude baselines length (lambda) higher than this in calibration : default "<<Data::max_uvcut << endl;
    cout <<endl<<"Advanced options:"<<endl;
@@ -72,7 +77,10 @@ print_help(void) {
    cout << "-W pre-whiten data: default "<<Data::whiten<< endl;
    cout << "-R randomize iterations: default "<<Data::randomize<< endl;
    cout << "-T stop after this number of solutions (0 means no limit): default "<<Data::Nmaxtime<< endl;
+   cout << "-K skip this number of timeslots before starting calibration: default "<<Data::Nskip<< endl;
    cout << "-V if given, enable verbose output: default "<<Data::verbose<<endl;
+   cout << "-M if given, evaluate AIC/MDL criteria for polynomials starting from 1 term to the one given by -P and suggest the best polynomial terms to use based on the minimum AIC/MDL: default "<<Data::mdl<<endl;
+   cout << "-q solutions.txt: if given, initialize solutions by reading this file (need to have the same format as a solution file, only solutions for 1 timeslot needed)"<< endl;
    cout <<"Report bugs to <sarod@users.sf.net>"<<endl;
 }
 
@@ -80,12 +88,12 @@ print_help(void) {
 void 
 ParseCmdLine(int ac, char **av) {
     char c;
-    while((c=getopt(ac, av, "c:e:f:g:j:k:l:m:n:o:p:r:s:t:x:y:A:B:F:I:J:L:O:P:Q:G:H:R:T:W:Vh"))!= -1)
+    while((c=getopt(ac, av, "c:e:f:g:j:k:l:m:n:o:p:q:r:s:t:x:y:A:B:C:F:I:J:K:L:O:P:Q:G:H:R:T:W:MVh"))!= -1)
     {
         switch(c)
         {
             case 'f':
-                MSlist=optarg;
+                MSpattern=optarg;
                 break;
             case 's':
                 SkyModel= optarg;
@@ -96,12 +104,19 @@ ParseCmdLine(int ac, char **av) {
             case 'p':
                 solfile= optarg;
                 break;
+            case 'q':
+                initsolfile= optarg;
+                break;
             case 'g':
                 max_iter= atoi(optarg);
                 break;
             case 'T':
                 Nmaxtime= atoi(optarg);
                 if (Nmaxtime<0) { Nmaxtime=0; }
+                break;
+            case 'K':
+                Nskip= atoi(optarg);
+                if (Nskip<0) { Nskip=0; }
                 break;
             case 'F':
                 format= atoi(optarg);
@@ -156,6 +171,9 @@ ParseCmdLine(int ac, char **av) {
             case 'A': 
                 Nadmm= atoi(optarg);
                 break;
+            case 'M': 
+                Data::mdl=1;
+                break; 
             case 'H': 
                 nuhigh= atof(optarg);
                 break;
@@ -167,6 +185,9 @@ ParseCmdLine(int ac, char **av) {
                 break;
             case 'R': 
                 randomize= atoi(optarg);
+                break;
+            case 'C': 
+                aadmm= atoi(optarg);
                 break;
             case 'x': 
                 Data::min_uvcut= atof(optarg);
@@ -191,8 +212,8 @@ ParseCmdLine(int ac, char **av) {
         }
     }
 
-    if (!MSlist) {
-     cout<<"MS list is mandatory."<<endl;
+    if (!MSpattern) {
+     cout<<"MS pattern is mandatory."<<endl;
      print_help();
      MPI_Finalize();
      exit(1);

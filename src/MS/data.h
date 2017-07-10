@@ -140,6 +140,7 @@ namespace Data
     extern int ccid;
     extern double rho;
     extern char *solfile;
+    extern char *initsolfile;
     extern char *ignorefile;
     extern double nulow,nuhigh;
     extern int randomize;
@@ -156,10 +157,12 @@ namespace Data
     extern int PolyType; /* what kind on polynomials to use 0,1,2,3 */
     extern double admm_rho; /* regularization */
     extern char *admm_rho_file; /* text file for regularization of each cluster */
+    extern int aadmm; /* if >0, enable adaptive update of rho */
     /* for debugging, upper limit on time slots */
     extern int Nmaxtime;
     /* skipping initial timeslots */
     extern int Nskip;
     extern int verbose; /* if >0, enable verbose output */
+    extern int mdl; /* if given, calculate AIC/MDL for different poly configs and find minimum */
 }
 #endif //__DATA_H__

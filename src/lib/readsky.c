@@ -714,7 +714,8 @@ printf("Nc=%d\n",Nc);
  /* if Nc>=0 and we have reached the EOF, something wrong with solution file
    so display warning */
  if (Nc>=0) {
-  printf("Warning: solution file EOF reached, check your solution file\n");
+  fprintf(stderr,"Warning: solution file EOF reached, check your solution file\n");
+  exit(1);
  } 
 
  free(buf);
@@ -779,6 +780,8 @@ read_arho_fromfile(const char *admm_rho_file,int Mt,double *arho, int M, double 
     if (c!=EOF && c>0) {
       /* found a valid line */
       arhoslave[M-1-cj]=admm_rho; /* reverse order */
+      /* FIXME: for hybrid>1, since data is divided by that amount, 
+         the actual value of rho should be also reduced ??? */
       for (hb=0; hb<hybrid; hb++) {
         if (hb==0) {
          arhoslave[M-1-cj]=admm_rho; /* reverse order */
@@ -801,6 +804,7 @@ read_arho_fromfile(const char *admm_rho_file,int Mt,double *arho, int M, double 
   /* report any errors */
   if (!(c==EOF && ci==Mt-1)) {
     fprintf(stderr,"%s: %d: Error: cluster numbers in cluster file and regularization file do not match up.\n",__FILE__,__LINE__);
+    exit(1);
   }
   fclose(cfp);
 

@@ -97,21 +97,22 @@ and use it as the 'ignore_file'.
 Use mpirun to run sagecal-mpi, example:
  mpirun  -np 11 -hostfile ./machines --map-by node --cpus-per-proc 8 
  --mca yield_when_idle 1 -mca orte_tmpdir_base /scratch/users/sarod 
- /full/path/to/sagecal-mpi -f mslist -A 30 -P 2 -r 5 
+ /full/path/to/sagecal-mpi -f 'MS*pattern' -A 30 -P 2 -r 5 
  -s sky.txt -c cluster.txt -n 16 -t 1 -e 3 -g 2 -l 10 -m 7 -x 10 -F 1 -j 5
 
 Specific options : 
 -np 11 : 11 processes : starts 10 slaves + 1 master
 ./machines : will list the host names of the 11 nodes used ( 1st name is the master ) : normally the node where you invoke mpirun
 /scratch/users/sarod : this is where MPI stores temp files (default /tmp)
-mslist : text file with 10 MS names that are used by the 10 slaves
+-f 'MS*pattern' : Search MS names that match this pattern and calibrate all of them together
 -A 30 : 30 C-ADMM iterations
 -P 2 : polynomial in frequency has 2 terms
 -r 5 : regularization factor is 5.0
 
+Note: the number of slaves (-np option) can be lower than the number of MS calibrated. The program will divide the workload among the number of available slaves.
+
+
 The rest of the options are similar to sagecal.
-
-
 
 
 ##########################################################################

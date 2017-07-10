@@ -1,7 +1,7 @@
 CC=gcc
 CXX=g++
-#CFLAGS= -Wall -O3 -g #-pg
-CFLAGS= -Wall -O3 -fopt-info-optimized
+CFLAGS= -Wall -O3 -g -Wshadow #-pg
+#CFLAGS= -Wall -O3 -fopt-info-optimized
 CLIBS= -lm -lpthread
 #LAPACK=-L/usr/lib/atlas/sse -llapack -lblas
 #LAPACK=-L/usr/local/GotoBLAS2/lib -lgoto2 -lpthread -lgfortran
@@ -15,7 +15,7 @@ LIBPATH=
 GLIBI=-I/usr/include/glib-2.0 -I/usr/lib/glib-2.0/include -I/usr/lib/x86_64-linux-gnu/glib-2.0/include/
 GLIBL=-lglib-2.0
 
-OBJECTS=readsky.o dataio.o predict.o lmfit_nocuda.o clmfit_nocuda.o lbfgs_nocuda.o myblas.o residual.o robustlm.o updatenu.o robust_lbfgs_nocuda.o rtr_solve.o  rtr_solve_robust.o manifold_average.o consensus_poly.o rtr_solve_robust_admm.o admm_solve.o transforms.o stationbeam.o predict_withbeam.o
+OBJECTS=readsky.o dataio.o predict.o lmfit_nocuda.o clmfit_nocuda.o lbfgs_nocuda.o myblas.o residual.o robustlm.o updatenu.o robust_lbfgs_nocuda.o rtr_solve.o  rtr_solve_robust.o manifold_average.o consensus_poly.o rtr_solve_robust_admm.o admm_solve.o transforms.o stationbeam.o predict_withbeam.o mdl.o
 
 default:libsagecal.a
 readsky.o:readsky.c
@@ -57,6 +57,8 @@ transforms.o:transforms.c
 stationbeam.o:stationbeam.c
 	$(CC) $(CFLAGS) $(INCLUDES) $(GLIBI)  -c $<
 predict_withbeam.o:predict_withbeam.c
+	$(CC) $(CFLAGS) $(INCLUDES) $(GLIBI)  -c $<
+mdl.o:mdl.c
 	$(CC) $(CFLAGS) $(INCLUDES) $(GLIBI)  -c $<
 
 

@@ -42,6 +42,17 @@
 #ifndef TAG_FRATIO
 #define TAG_FRATIO 106
 #endif
+#ifndef TAG_RHO_UPDATE
+#define TAG_RHO_UPDATE 107
+#endif
+#ifndef TAG_CONSENSUS_OLD
+#define TAG_CONSENSUS_OLD 108
+#endif
+#ifndef TAG_CHUNK
+#define TAG_CHUNK 109
+#endif
+
+
 
 
 

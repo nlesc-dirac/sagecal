@@ -1533,16 +1533,27 @@ predictwithgain_threadfn_multifreq(void *data) {
       amb(G1,C,T1);
       /* T2=T1*G2' */
       ambt(T1,G2,T2);
-
-      /* add to baseline visibilities */
-      t->x[8*ci+cf*Ntilebase*8]+=creal(T2[0]);
-      t->x[8*ci+1+cf*Ntilebase*8]+=cimag(T2[0]);
-      t->x[8*ci+2+cf*Ntilebase*8]+=creal(T2[1]);
-      t->x[8*ci+3+cf*Ntilebase*8]+=cimag(T2[1]);
-      t->x[8*ci+4+cf*Ntilebase*8]+=creal(T2[2]);
-      t->x[8*ci+5+cf*Ntilebase*8]+=cimag(T2[2]);
-      t->x[8*ci+6+cf*Ntilebase*8]+=creal(T2[3]);
-      t->x[8*ci+7+cf*Ntilebase*8]+=cimag(T2[3]);
+      if (t->add_to_data==1) {
+        /* add to baseline visibilities */
+        t->x[8*ci+cf*Ntilebase*8]+=creal(T2[0]);
+        t->x[8*ci+1+cf*Ntilebase*8]+=cimag(T2[0]);
+        t->x[8*ci+2+cf*Ntilebase*8]+=creal(T2[1]);
+        t->x[8*ci+3+cf*Ntilebase*8]+=cimag(T2[1]);
+        t->x[8*ci+4+cf*Ntilebase*8]+=creal(T2[2]);
+        t->x[8*ci+5+cf*Ntilebase*8]+=cimag(T2[2]);
+        t->x[8*ci+6+cf*Ntilebase*8]+=creal(T2[3]);
+        t->x[8*ci+7+cf*Ntilebase*8]+=cimag(T2[3]);
+      } else {
+        /* subtract from baseline visibilities */
+        t->x[8*ci+cf*Ntilebase*8]-=creal(T2[0]);
+        t->x[8*ci+1+cf*Ntilebase*8]-=cimag(T2[0]);
+        t->x[8*ci+2+cf*Ntilebase*8]-=creal(T2[1]);
+        t->x[8*ci+3+cf*Ntilebase*8]-=cimag(T2[1]);
+        t->x[8*ci+4+cf*Ntilebase*8]-=creal(T2[2]);
+        t->x[8*ci+5+cf*Ntilebase*8]-=cimag(T2[2]);
+        t->x[8*ci+6+cf*Ntilebase*8]-=creal(T2[3]);
+        t->x[8*ci+7+cf*Ntilebase*8]-=cimag(T2[3]);
+      }
      }
      }
    }

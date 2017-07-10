@@ -210,8 +210,8 @@ typedef struct thread_data_base_ {
 
   /* following for ignoring clusters in simulation */
   int *ignlist; /* Mx1 array, if any value 1, that cluster will not be simulated */
-  /* flag for adding model to data */
-  int add_to_data;
+  /* flag for adding/subtracting model to data */
+  int add_to_data; /* 1: add, else: subtract */
 
   /* following used for multifrequency (channel) data */
   double *freqs;
@@ -1016,7 +1016,7 @@ calculate_residuals_multifreq(double *u,double *v,double *w,double *p,double *x,
 
 /* 
   calculate visibilities for multiple channels, no solutions are used
-  note: output column x is set to 0 if add_to_data ==0, else model is added to data
+  note: output column x is set to 0 if add_to_data ==0, else model is added/subtracted (==1 or 2) to data
 */
 extern int
 predict_visibilities_multifreq(double *u,double *v,double *w,double *x,int N,int Nbase,int tilesz,baseline_t *barr, clus_source_t *carr, int M,double *freqs,int Nchan, double fdelta,double tdelta,double dec0,int Nt,int add_to_data);
@@ -2407,6 +2407,20 @@ setup_polynomials(double *B, int Npoly, int Nf, double *freqs, double freq0, int
 extern int
 find_prod_inverse(double *B, double *Bi, int Npoly, int Nf, double *fratio);
 
+/* build matrix with polynomial terms
+  B : Npoly x Nf, each row is one basis function
+  Bi: Npoly x Npoly pseudo inverse of sum( B(:,col) x B(:,col)' ) : M times
+  Npoly : total basis functions
+  Nf: frequencies
+  M: clusters
+  rho: NfxM array of regularization factors (for each freq, M values)
+  Sum taken is a weighted sum, using weights in rho, rho is assumed to change for each freq,cluster pair 
+
+  Nt: no. of threads
+*/
+extern int
+find_prod_inverse_full(double *B, double *Bi, int Npoly, int Nf, int M, double *rho, int Nt);
+
 /* update Z
    Z: 8NxNpoly x M double array (real and complex need to be updated separate)
    N : stations
@@ -2418,6 +2432,27 @@ find_prod_inverse(double *B, double *Bi, int Npoly, int Nf, double *fratio);
 extern int
 update_global_z(double *Z,int N,int M,int Npoly,double *z,double *Bi);
 
+/* update Z
+   Z: 8N Npoly x M double array (real and complex need to be updated separate)
+   N : stations
+   M : clusters
+   Npoly: no of basis functions
+   z : right hand side 8NM Npoly x 1 (note the different ordering from Z)
+   Bi : M values of NpolyxNpoly matrices, Bi^T=Bi assumed
+
+   Nt: no. of threads
+*/
+extern int 
+update_global_z_multi(double *Z,int N,int M,int Npoly,double *z,double *Bi, int Nt);
+
+
+/* generate a random integer in the range 0,1,...,maxval */
+extern int
+random_int(int maxval);
+
+
+extern int
+update_rho_bb(double *rho, double *rhoupper, int N, int M, int Mt, clus_source_t *carr, double *Yhat, double *Yhat_k0, double *J, double *J_k0, int Nt);
 
 /****************************** admm_solve.c ****************************/
 /* ADMM cost function  = normal_cost + ||Y^H(J-BZ)|| + rho/2 ||J-BZ||^2 */
@@ -2610,19 +2645,24 @@ extern int
 precess_source_locations(double jd_tdb, clus_source_t *carr, int M, double *ra_beam, double *dec_beam, int Nt);
 
 /****************************** predict_withbeam_gpu.c ****************************/
+#ifdef HAVE_CUDA
 /* if dobeam==0, beam calculation is off */
 extern int
 precalculate_coherencies_withbeam_gpu(double *u, double *v, double *w, complex double *x, int N,
    int Nbase, baseline_t *barr,  clus_source_t *carr, int M, double freq0, double fdelta, double tdelta, double dec0, double uvmin, double uvmax, 
  double ph_ra0, double ph_dec0, double ph_freq0, double *longitude, double *latitude, double *time_utc, int tileze, int *Nelem, double **xx, double **yy, double **zz, int dobeam, int Nt);
 
+
+/* FIXME: add_to_data: no subtraction is done */
 extern int
 predict_visibilities_multifreq_withbeam_gpu(double *u,double *v,double *w,double *x,int N,int Nbase,int tilesz,baseline_t *barr, clus_source_t *carr, int M,double *freqs,int Nchan, double fdelta,double tdelta, double dec0,
  double ph_ra0, double ph_dec0, double ph_freq0, double *longitude, double *latitude, double *time_utc,int *Nelem, double **xx, double **yy, double **zz, int dobeam, int Nt, int add_to_data);
 
+#endif /*!HAVE_CUDA */
 
 
 /****************************** predict_model.cu ****************************/
+#ifdef HAVE_CUDA
 extern void
 cudakernel_array_beam(int N, int T, int K, int F, float *freqs, float *longitude, float *latitude,
  double *time_utc, int *Nelem, float **xx, float **yy, float **zz, float *ra, float *dec, float ph_ra0, float  ph_dec0, float ph_freq0, float *beam);
@@ -2635,6 +2675,29 @@ cudakernel_coherencies(int B, int N, int T, int K, int F, float *u, float *v, fl
 
 extern void
 cudakernel_convert_time(int T, double *time_utc);
+#endif /* !HAVE_CUDA */
+
+
+/****************************** mdl.c ****************************/
+/*
+  change polynomial order from Kstart to Kfinish
+  evaluate Z for each poly order, then find MDL
+   N: stations
+   M: clusters
+   F: frequencies
+   J: weightxrhoxJ solutions (note: not true J, but J scaled by each slaves' rho), 8NMxF blocks
+   rho: regularization, no weighting applied, Mx1 
+   freqs: frequencies, Fx1
+   freq0: reference freq
+   weight: weight for each freq, based on flagged data, Fx1
+   polytype: type of polynomial
+  Kstart, Kfinish: range of order of polynomials to calculate the MDL
+   Nt: no. of threads
+*/
+extern int
+minimum_description_length(int N, int M, int F, double *J, double *rho, double *freqs, double freq0, double *weight, int polytype, int Kstart, int Kfinish, int Nt);
+
+
 #ifdef __cplusplus
      } /* extern "C" */
 #endif
