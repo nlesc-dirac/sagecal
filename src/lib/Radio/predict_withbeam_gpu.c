@@ -290,10 +290,98 @@ precalcoh_threadfn(void *data) {
      err=cudaMemcpy(dev_p, host_p, t->carr[ncl].N*sizeof(int*), cudaMemcpyHostToDevice);
      checkCudaError(err,__FILE__,__LINE__);
 
+     FILE *t_N;
+     t_N=fopen("t_N.bin","wb");
+     fwrite(&t->N, sizeof(t->N), 1, t_N);
+     fclose(t_N);
+
+     FILE *t_tilesz;
+     t_tilesz=fopen("t_tilesz.bin","wb");
+     fwrite(&t->tilesz, sizeof(t->tilesz), 1, t_tilesz);
+     fclose(t_tilesz);
+
+     FILE *t_carr_ncl_N;
+     t_carr_ncl_N=fopen("t_carr_ncl_N.bin","wb");
+     fwrite(&t->carr[ncl].N, sizeof(t->carr[ncl].N), 1, t_carr_ncl_N);
+     fclose(t_carr_ncl_N);
+
+     FILE *t_Nf;
+     t_Nf=fopen("t_Nf.bin","wb");
+     fwrite(&t->Nf, sizeof(t->Nf), 1, t_Nf);
+     fclose(t_Nf);
+
+     FILE *freq_sd;
+     freq_sd=fopen("freq_sd.bin","wb");
+     fwrite(&freqsd, sizeof(freqsd), 1, freq_sd);
+     fclose(freq_sd);
+
+     FILE *long_d;
+     long_d=fopen("long_d.bin","wb");
+     fwrite(&longd, sizeof(longd), 1, long_d);
+     fclose(long_d);
+
+     FILE *lat_d;
+     lat_d=fopen("lat_d.bin","wb");
+     fwrite(&latd, sizeof(latd), 1, lat_d);
+     fclose(lat_d);
+
+     FILE *time_d;
+     time_d=fopen("time_d.bin","wb");
+     fwrite(&timed, sizeof(timed), 1, time_d);
+     fclose(time_d);
+
+     FILE *Nelem_d;
+     Nelem_d=fopen("Nelem_d.bin","wb");
+     fwrite(&Nelemd, sizeof(Nelemd), 1, Nelem_d);
+     fclose(Nelem_d);
+
+     FILE *xx_d;
+     xx_d=fopen("xx_d.bin","wb");
+     fwrite(&xxd, sizeof(xxd), 1, xx_d);
+     fclose(xx_d);
+
+     FILE *yy_d;
+     yy_d=fopen("yy_d.bin","wb");
+     fwrite(&yyd, sizeof(yyd), 1, yy_d);
+     fclose(yy_d);
+
+     FILE *zz_d;
+     zz_d=fopen("zz_d.bin","wb");
+     fwrite(&zzd, sizeof(zzd), 1, zz_d);
+     fclose(zz_d);
+
+     FILE *ra_d;
+     ra_d=fopen("ra_d.bin","wb");
+     fwrite(&rad, sizeof(rad), 1, ra_d);
+     fclose(ra_d);
+
+     FILE *dec_d;
+     dec_d=fopen("dec_d.bin","wb");
+     fwrite(&decd, sizeof(decd), 1, dec_d);
+     fclose(dec_d);
+
+     FILE *t_ph_ra0;
+     t_ph_ra0=fopen("t_ph_ra0.bin","wb");
+     fwrite((float *)&t->ph_ra0, sizeof((float)t->ph_ra0), 1, t_ph_ra0);
+     fclose(t_ph_ra0);
+
+     FILE *t_ph_dec0;
+     t_ph_dec0=fopen("t_ph_dec0.bin","wb");
+     fwrite((float *)&t->ph_dec0, sizeof((float)t->ph_dec0), 1, t_ph_dec0);
+     fclose(t_ph_dec0);
+
+     FILE *t_ph_freq0;
+     t_ph_freq0=fopen("t_ph_freq0.bin","wb");
+     fwrite((float *)&t->ph_freq0, sizeof((float)t->ph_freq0), 1, t_ph_freq0);
+     fclose(t_ph_freq0);
 
      /* now calculate beam for all sources in this cluster */
      cudakernel_array_beam(t->N,t->tilesz,t->carr[ncl].N,t->Nf,freqsd,longd,latd,timed,Nelemd,xxd,yyd,zzd,rad,decd,(float)t->ph_ra0,(float)t->ph_dec0,(float)t->ph_freq0,beamd);
 
+     FILE *beam_d;
+     beam_d=fopen("beam_d.bin","wb");
+     fwrite(&beamd, sizeof(beamd), 1, beam_d);
+     fclose(beam_d);
 
      /* calculate coherencies for all sources in this cluster, add them up */
      cudakernel_coherencies(t->Nbase,t->N,t->tilesz,t->carr[ncl].N,t->Nf,ud,vd,wd,barrd,freqsd,beamd,
