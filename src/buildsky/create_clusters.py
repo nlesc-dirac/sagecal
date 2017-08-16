@@ -32,7 +32,7 @@ def read_lsm_sky(infilename):
 
   # regexp pattern
   pp=re.compile(r"""
-   ^(?P<col1>[A-Za-z0-9_.-]+)  # column 1 name: must start with a character
+   ^(?P<col1>[A-Za-z0-9_.-/]+)  # column 1 name: must start with a character
    \s+             # skip white space
    (?P<col2>[-+]?\d+(\.\d+)?)   # RA angle - hours 
    \s+             # skip white space
@@ -67,7 +67,7 @@ def read_lsm_sky(infilename):
    (?P<col17>[-+]?(\d+(\.\d*)?|\d*\.\d+)([eE][-+]?\d+)?)?   # reference frequency
    [\S\s]*""",re.VERBOSE)
   pp1=re.compile(r"""
-   ^(?P<col1>[A-Za-z0-9_.-]+)  # column 1 name: must start with a character
+   ^(?P<col1>[A-Za-z0-9_.-/]+)  # column 1 name: must start with a character
    \s+             # skip white space
    (?P<col2>[-+]?\d+(\.\d+)?)   # RA angle - hours 
    \s+             # skip white space
