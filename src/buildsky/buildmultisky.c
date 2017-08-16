@@ -195,9 +195,10 @@ fillup_pixel_hashtablef(long totalrows, long offset, long firstrow, long nrows,
   bmaj (rad),bmin (rad) ,pa (rad): PSF parameters from the FITS files: Nfx1 arrays
   minpix: footprint of MEAN psf in pixels
   ignlist: list of islands to ignore (integer list)
+  donegative: fit -ve pixels instead of positive
 */
 int 
-read_fits_file_f(const char *fitsdir, const char *maskfile, GHashTable **pixtable, int *Nf, double **freqs, double **bmaj, double **bmin, double **pa, int beam_given, double *minpix, GList *ignlist) {
+read_fits_file_f(const char *fitsdir, const char *maskfile, GHashTable **pixtable, int *Nf, double **freqs, double **bmaj, double **bmin, double **pa, int beam_given, double *minpix, GList *ignlist, int donegative) {
  // hash table, list params
  GHashTableIter iter;
  GList *li; 
@@ -211,12 +212,10 @@ read_fits_file_f(const char *fitsdir, const char *maskfile, GHashTable **pixtabl
  int status;
  int naxis;
  int bitpix;
- long int new_naxis[4];
 
 
 		int ii,jj,kk;
 		int datatype=0;
-		long int totalpix;
 		double bscale,bzero;
 		long int increment[4]={1,1,1,1};
 		int null_flag=0;
@@ -324,16 +323,6 @@ read_fits_file_f(const char *fitsdir, const char *maskfile, GHashTable **pixtabl
      fbuff.arr_dims.hpix[1]=fbuff.arr_dims.d[1];
      fbuff.arr_dims.hpix[2]=1; /* freq axes */
      fbuff.arr_dims.hpix[3]=1;
-	  /******* create new array **********/	
-		new_naxis[0]=fbuff.arr_dims.hpix[0]-fbuff.arr_dims.lpix[0]+1;
-		new_naxis[1]=fbuff.arr_dims.hpix[1]-fbuff.arr_dims.lpix[1]+1;
-		new_naxis[2]=fbuff.arr_dims.hpix[2]-fbuff.arr_dims.lpix[2]+1;
-		new_naxis[3]=fbuff.arr_dims.hpix[3]-fbuff.arr_dims.lpix[3]+1;
-		/* calculate total number of pixels */
-    totalpix=((fbuff.arr_dims.hpix[0]-fbuff.arr_dims.lpix[0]+1)
-     *(fbuff.arr_dims.hpix[1]-fbuff.arr_dims.lpix[1]+1)
-     *(fbuff.arr_dims.hpix[2]-fbuff.arr_dims.lpix[2]+1)
-     *(fbuff.arr_dims.hpix[3]-fbuff.arr_dims.lpix[3]+1));
 
     /* define input column structure members for the iterator function */
     fits_iter_set_file(&cols[0], fbuff.fptr);
@@ -654,10 +643,14 @@ printf("freq=%lf\n",(*freqs)[cnt]);
           0, &mypix, &null_flag, &status);
 
           /* if pixel has -ve flux, throw it away */
-          if (mypix<0.0) {
+          if (!donegative && mypix<0.0) {
+             mypix=0.0;
+          } else if (donegative && mypix >0.0) {
+            /* if pixel has +ve flux, throw it away */
              mypix=0.0;
           }
-          ppix->sI[cnt]=mypix;
+          /* always use +ve flux for fitting */
+          ppix->sI[cnt]=(donegative?-mypix:mypix);
           val->stI+=mypix;
 #ifdef DEBUG
           printf("[pixel (%d,%d), lm (%lf,%lf), radec (%lf,%lf), sI ( ",ppix->x,ppix->y,ppix->l,ppix->m,ppix->ra,ppix->dec);
@@ -904,6 +897,7 @@ add_guard_pixels_f(GList *pixlist, int Nf, double threshold, hpixelf **parr, int
           fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
           return 1;
   }
+  GList *pixval0=pixval;
   ci=1;
 #ifdef DEBUG
   printf("Before x:");
@@ -915,6 +909,7 @@ add_guard_pixels_f(GList *pixlist, int Nf, double threshold, hpixelf **parr, int
    printf("%u ",*xkey);
 #endif
   }
+  g_list_free(pixval0);
 #ifdef DEBUG
   printf("\n");
 #endif
@@ -963,6 +958,7 @@ add_guard_pixels_f(GList *pixlist, int Nf, double threshold, hpixelf **parr, int
           fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
           return 1;
   }
+  pixval0=pixval;
   ci=1;
 #ifdef DEBUG
   printf("Before y:");
@@ -974,6 +970,7 @@ add_guard_pixels_f(GList *pixlist, int Nf, double threshold, hpixelf **parr, int
    printf("%u ",*xkey);
 #endif
   }
+  g_list_free(pixval0);
 #ifdef DEBUG
   printf("\n");
 #endif
@@ -1276,7 +1273,7 @@ process_pixels_f(GHashTable *pixtable, int Nf, double *freqs, double *bmaj, doub
 
 
 int 
-write_world_coords_f(const char *imgfile, GHashTable *pixtable, double minpix, int Nf, double *freqs, double *bmaj, double *bmin, double *bpa, double ref_freq, int outformat, double clusterratio, int nclusters, const char *unistr){
+write_world_coords_f(const char *imgfile, GHashTable *pixtable, double minpix, int Nf, double *freqs, double *bmaj, double *bmin, double *bpa, double ref_freq, int outformat, double clusterratio, int nclusters, const char *unistr,int donegative, int scaleflux){
  GHashTableIter iter;
  GList *li,*pli; 
  pixellistf *val;
@@ -1482,11 +1479,13 @@ write_world_coords_f(const char *imgfile, GHashTable *pixtable, double minpix, i
       }
       //printf("BEAM %lf,%lf\n",bmaj,bmin);
       total_model_flux*=minpix; /* FIXME: no scale change */
-      fluxscale=val->stI/(total_model_flux);
+      if (scaleflux) {
+       fluxscale=val->stI/(total_model_flux);
+      }
      } 
      printf("(%d) Total flux/beam=%lf model=%lf scale=%lf\n",*key_,val->stI/minpix,total_model_flux/minpix,fluxscale);
      /* do not scale up flux */
-     fluxscale=1.0;
+     fluxscale=(donegative?-1.0:1.0);
      /* try to cluster */
      cluslist=NULL;
      if (clusterratio>0.0) {
@@ -1497,7 +1496,7 @@ write_world_coords_f(const char *imgfile, GHashTable *pixtable, double minpix, i
       printf("Choosing clustered version ");
       li=cluslist;
       /* if cluster only have 1 source, normalize by peak flux, not the sum */
-      if (g_list_length(cluslist)==1) {
+      if (g_list_length(cluslist)==1 && scaleflux) {
         srcx=li->data;
         fluxscale=0.0;
         for (ii=0;ii<Nf;++ii) {

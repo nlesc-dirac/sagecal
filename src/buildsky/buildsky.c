@@ -559,7 +559,7 @@ read_fits_file(const char *imgfile, const char *maskfile, GHashTable **pixtable,
 
 
 int 
-write_world_coords(const char *imgfile, GHashTable *pixtable, double minpix, double bmaj, double bmin, double bpa, int outformat, double clusterratio, int nclusters,const char *unistr){
+write_world_coords(const char *imgfile, GHashTable *pixtable, double minpix, double bmaj, double bmin, double bpa, int outformat, double clusterratio, int nclusters,const char *unistr, int scaleflux){
  GHashTableIter iter;
  GList *li,*pli; 
  pixellist *val;
@@ -722,7 +722,9 @@ write_world_coords(const char *imgfile, GHashTable *pixtable, double minpix, dou
       }
       //printf("BEAM %lf,%lf\n",bmaj,bmin);
       total_model_flux*=1.1*minpix; /* FIXME: no scale change */
-      fluxscale=val->stI/(total_model_flux);
+      if (scaleflux) {
+       fluxscale=val->stI/(total_model_flux);
+      }
      } 
      printf("(%d) Total flux/beam=%lf model=%lf scale=%lf\n",*key_,val->stI/minpix,total_model_flux/minpix,fluxscale);
      /* try to cluster */
@@ -736,7 +738,7 @@ write_world_coords(const char *imgfile, GHashTable *pixtable, double minpix, dou
       printf("Choosing clustered version ");
       li=cluslist;
       /* if cluster only have 1 source, normalize by peak flux, not the sum */
-      if (g_list_length(cluslist)==1) {
+      if (g_list_length(cluslist)==1 && scaleflux) {
         srcx=li->data;
         /* peak absolute flux */
         peak_abs=-1e6;
@@ -1077,6 +1079,7 @@ add_guard_pixels(GList *pixlist, double threshold, hpixel **parr, int *n) {
           fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
           return 1;
   }
+  GList *pixval0=pixval;
   ci=1;
 #ifdef DEBUG
   printf("Before x:");
@@ -1088,6 +1091,7 @@ add_guard_pixels(GList *pixlist, double threshold, hpixel **parr, int *n) {
    printf("%u ",*xkey);
 #endif
   }
+  g_list_free(pixval0);
 #ifdef DEBUG
   printf("\n");
 #endif
@@ -1136,6 +1140,7 @@ add_guard_pixels(GList *pixlist, double threshold, hpixel **parr, int *n) {
           fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
           return 1;
   }
+  pixval0=pixval;
   ci=1;
 #ifdef DEBUG
   printf("Before y:");
@@ -1147,6 +1152,7 @@ add_guard_pixels(GList *pixlist, double threshold, hpixel **parr, int *n) {
    printf("%u ",*xkey);
 #endif
   }
+  g_list_free(pixval0);
 #ifdef DEBUG
   printf("\n");
 #endif

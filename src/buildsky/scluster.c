@@ -99,7 +99,7 @@ fit_two_to_one(GList *pixlist, double bmaj, double bmin, double bpa, double *lva
  hpixel *ppix;
  double *pixell,*pixelm,*p,*x,*x1;
  GList *pli;
- int ci,ret;
+ int ci;
  /* setup levmar */
  double opts[CLM_OPTS_SZ], info[CLM_INFO_SZ];
  opts[0]=CLM_INIT_MU; opts[1]=1E-15; opts[2]=1E-15; opts[3]=1E-15;
@@ -177,7 +177,7 @@ fit_two_to_one(GList *pixlist, double bmaj, double bmin, double bpa, double *lva
  printf("Initial merge val (%lf)\n",p[0]);
 #endif
 
- ret=clevmar_der_single_nocuda(mylm_fit_single_pfmult, NULL, p, x, m, n, maxiter, opts, info, 2, (void*)&lmdata);
+ clevmar_der_single_nocuda(mylm_fit_single_pfmult, NULL, p, x, m, n, maxiter, opts, info, 2, (void*)&lmdata);
 
  /* output */
  *sI=p[0];
@@ -252,7 +252,7 @@ fit_two_to_one_f(GList *pixlist, int Nf, double *freqs, double *bmaj, double *bm
  hpixelf *ppix;
  double *pixell,*pixelm,*p,*x,*x1;
  GList *pli;
- int ci,ret;
+ int ci;
  /* setup levmar */
  double opts[CLM_OPTS_SZ], info[CLM_INFO_SZ];
  opts[0]=CLM_INIT_MU; opts[1]=1E-15; opts[2]=1E-15; opts[3]=1E-15;
@@ -338,7 +338,7 @@ fit_two_to_one_f(GList *pixlist, int Nf, double *freqs, double *bmaj, double *bm
  printf("Initial merge val (%lf,%lf)\n",p[0],p[1]);
 #endif
 
- ret=clevmar_der_single_nocuda(mylm_fit_single_sipfmult, NULL, p, x, m, n, maxiter, opts, info, 2, (void*)&lmdata);
+ clevmar_der_single_nocuda(mylm_fit_single_sipfmult, NULL, p, x, m, n, maxiter, opts, info, 2, (void*)&lmdata);
 
  /* output */
  *sI=p[0];

@@ -285,9 +285,10 @@ filter_pixels(GHashTable *pixtable, double wcutoff);
    clusterratio: components closer than clusteratio*(bmaj+bmin)/2 will be merged
    nclusters: no of max clusters to cluster the sky
    unistr: unique string for source names
+   scaleflux: if 1, scale model flux to match total flux of island
 */
 extern int
-write_world_coords(const char *imgfile, GHashTable *pixtable, double minpix, double bmaj, double bmin, double bpa, int outformat, double clusterratio, int nclusters,const char *unistr);
+write_world_coords(const char *imgfile, GHashTable *pixtable, double minpix, double bmaj, double bmin, double bpa, int outformat, double clusterratio, int nclusters,const char *unistr, int scaleflux);
 
 /******************************** buildmultisky.c ****************************/
 /* FITS reading, multiple files
@@ -299,9 +300,10 @@ write_world_coords(const char *imgfile, GHashTable *pixtable, double minpix, dou
   bmaj (rad),bmin (rad) ,pa (rad): PSF parameters from the FITS files: Nfx1 arrays
   minpix: footprint of MEAN psf in pixels
   ignlist: list of islands to ignore (integer list)
+  donegative: if >0, fit -ve pixels instead of +ve pixels
 */
 extern int 
-read_fits_file_f(const char *fitsdir, const char *maskfile, GHashTable **pixtable, int *Nf, double **freqs, double **bmaj, double **bmin, double **pa, int beam_given, double *minpix, GList *ignlist);
+read_fits_file_f(const char *fitsdir, const char *maskfile, GHashTable **pixtable, int *Nf, double **freqs, double **bmaj, double **bmin, double **pa, int beam_given, double *minpix, GList *ignlist, int donegative);
 
 
 /*  calculates the centroids, etc 
@@ -353,9 +355,11 @@ filter_pixels_f(GHashTable *pixtable, double wcutoff);
    clusterratio: components closer than clusteratio*(bmaj+bmin)/2 will be merged
    nclusters: no of max clusters to cluster the sky
    unistr: unique string for source names
+   donegative: if >0, print -ve flux instead of +ve flux
+   scaleflux: if 1, scale model flux to match total flux of island
 */
 extern int
-write_world_coords_f(const char *imgfile, GHashTable *pixtable, double minpix, int Nf, double *freqs, double *bmaj, double *bmin, double *bpa, double ref_freq, int outformat, double clusterratio, int nclusters, const char *unistr);
+write_world_coords_f(const char *imgfile, GHashTable *pixtable, double minpix, int Nf, double *freqs, double *bmaj, double *bmin, double *bpa, double ref_freq, int outformat, double clusterratio, int nclusters, const char *unistr,int donegative, int scaleflux);
 
 
 /******************************** fitpixels.c *******************************/

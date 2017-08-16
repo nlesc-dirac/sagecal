@@ -34,7 +34,7 @@ print_help(void) {
    fprintf(stderr,"PSF options\n-a : major axis width (arcsec): default 10\n");
    fprintf(stderr,"-b : minor axis width (arcsec): default 10\n");
    fprintf(stderr,"-p : position angle, measured from positive y axis, counter clockwise (deg): default 0\n");
-   fprintf(stderr,"If NO PSF is given, it will be read from the FITS file\n");
+   fprintf(stderr,"If NO PSF is given, it will be read from the FITS file\n\n");
    fprintf(stderr,"-o format: output format (0: BBS, 1: LSM (with 3 order spec.idx) 2: (l,m) positions) default BBS\n");
    fprintf(stderr,"-g ignorelist: text file of island numbers to ignore: default none\n");
    fprintf(stderr,"-w cutoff: cutoff value to detect possible sidelobes: defalut 0\n");
@@ -42,13 +42,15 @@ print_help(void) {
    fprintf(stderr,"-l maxfits: limit the number of attempted fits to this value: default 10\n");
    fprintf(stderr,"-k clusters: max no of clusters to cluster the sky\n(-ve clusters for hierarchical, 0 for no clustering)\n");
    fprintf(stderr,"-s string: additional unique string to use with source names: default nothing\n");
+   fprintf(stderr,"-N : if used, fit negative flux instead of positive\n");
+   fprintf(stderr,"-q : if 1, scale model fluxes to match the total flux of detected island: default 0\n");
    fprintf(stderr,"Report bugs to <sarod@users.sf.net>\n");
 }
 
 
 void
 print_copyright(void) {
-  printf("Buildsky 0.0.9 (C) 2011-2016 Sarod Yatawatta\n");
+  printf("Buildsky 0.1.0 (C) 2011-2016 Sarod Yatawatta\n");
 }
 
 
@@ -68,6 +70,7 @@ int main(int argc, char **argv) {
 
   double threshold=0.0;
   int use_em=1;
+  int donegative=0;
   int maxiter=1000;
   int maxemiter=4;
   int outformat=0; /* 0: BBS, 1: LSM */
@@ -85,6 +88,8 @@ int main(int argc, char **argv) {
   int nclusters=0;
   double wcutoff=0.0;
 
+  int scaleflux=0; /* if 1, scale flux to match the total flux of island */
+
   /* for multiple FITS files */
   int Nf=0;
   double *freqs,*bmajs,*bmins,*bpas;
@@ -97,7 +102,7 @@ int main(int argc, char **argv) {
     print_help();
     return 1;
   }
-  while ((c=getopt(argc,argv,"f:m:t:i:e:a:b:o:p:l:g:c:s:d:k:w:nh"))!=-1) {
+  while ((c=getopt(argc,argv,"a:b:c:d:e:f:g:i:k:l:m:o:p:q:s:t:w:Nnh"))!=-1) {
    switch(c) {
     case 'f':
      if (optarg) {
@@ -190,6 +195,12 @@ int main(int argc, char **argv) {
        if (endptr==optarg) maxemiter=1000;
      }
     break;
+   case 'q':
+     if (optarg) {
+       scaleflux=(int)strtol(optarg,&endptr,base);
+       if (endptr==optarg) scaleflux=0;
+     }
+    break;
    case 'a':
      if (optarg) {
        bmaj=strtod(optarg,0);
@@ -225,6 +236,9 @@ int main(int argc, char **argv) {
    break;
    case 'n':
     use_em=0;
+    break;
+   case 'N':
+    donegative=1;
     break;
    case 'w':
      if (optarg) {
@@ -279,7 +293,7 @@ int main(int argc, char **argv) {
     read_fits_file(ffile,mfile, &pixtable,&bmaj,&bmin,&bpa, beam_given, &minpix, ignlist);
    } else {
     freqs=bmajs=bmins=bpas=0;
-    read_fits_file_f(ffile,mfile, &pixtable,&Nf,&freqs,&bmajs,&bmins,&bpas, beam_given, &minpix, ignlist);
+    read_fits_file_f(ffile,mfile, &pixtable,&Nf,&freqs,&bmajs,&bmins,&bpas, beam_given, &minpix, ignlist,donegative);
    }
    /* dont need ignore list anymore */
    for(ignli=ignlist; ignli!=NULL; ignli=g_list_next(ignli)) {
@@ -300,10 +314,10 @@ int main(int argc, char **argv) {
    }
    if (!multifits) {
     process_pixels(pixtable,bmaj,bmin,bpa,minpix,threshold,maxiter,maxemiter,use_em,maxfits);
-    write_world_coords(ffile,pixtable,minpix,bmaj,bmin,bpa,outformat,clusterratio,nclusters,unistr);
+    write_world_coords(ffile,pixtable,minpix,bmaj,bmin,bpa,outformat,clusterratio,nclusters,unistr,scaleflux);
    } else {
      process_pixels_f(pixtable,Nf,freqs,bmajs,bmins,bpas,&ref_freq,minpix,threshold,maxiter,maxemiter,use_em,maxfits);
-     write_world_coords_f(mfile,pixtable,minpix,Nf,freqs,bmajs,bmins,bpas,ref_freq,outformat,clusterratio,nclusters,unistr);
+     write_world_coords_f(mfile,pixtable,minpix,Nf,freqs,bmajs,bmins,bpas,ref_freq,outformat,clusterratio,nclusters,unistr,donegative, scaleflux);
      free(freqs);
      free(bmajs);
      free(bmins);

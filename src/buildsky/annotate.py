@@ -44,7 +44,7 @@ def annotate_lsm_sky(infilename,clusterfilename,outfilename,clid=None,color='yel
    \s+             # skip white space
    (?P<col7>[-+]?\d+(\.\d+)?)   # Dec angle - sec 
    \s+             # skip white space
-   (?P<col8>[-+]?\d+(\.\d+)?)   # Stokes I - Flux
+   (?P<col8>[-+]?(\d+(\.\d*)?|\d*\.\d+)([eE][-+]?\d+)?)  # Stokes I - Flux 
    \s+             # skip white space
    (?P<col9>[-+]?(\d+(\.\d*)?|\d*\.\d+)([eE][-+]?\d+)?)  # Stokes Q - Flux 
    \s+             # skip white space
@@ -79,7 +79,7 @@ def annotate_lsm_sky(infilename,clusterfilename,outfilename,clid=None,color='yel
    \s+             # skip white space
    (?P<col7>[-+]?\d+(\.\d+)?)   # Dec angle - sec 
    \s+             # skip white space
-   (?P<col8>[-+]?\d+(\.\d+)?)   # Stokes I - Flux
+   (?P<col8>[-+]?(\d+(\.\d*)?|\d*\.\d+)([eE][-+]?\d+)?)  # Stokes I - Flux 
    \s+             # skip white space
    (?P<col9>[-+]?(\d+(\.\d*)?|\d*\.\d+)([eE][-+]?\d+)?)  # Stokes Q - Flux 
    \s+             # skip white space
@@ -111,17 +111,35 @@ def annotate_lsm_sky(infilename,clusterfilename,outfilename,clid=None,color='yel
 
   SR={} # sources
   for eachline in all:
-    v=pp.search(eachline)
+    v=pp1.search(eachline)
     if v!= None:
-      # find RA,DEC (rad) and flux
-      mra=(float(v.group('col2'))+float(v.group('col3'))/60.0+float(v.group('col4'))/3600.0)*360.0/24.0
-      mdec=(float(v.group('col5'))+float(v.group('col6'))/60.0+float(v.group('col7'))/3600.0)
+      # find RA,DEC (rad) and flux, with proper sign
+      if (float(v.group('col2'))) >= 0.0:
+         mysign=1.0
+      else:
+         mysign=-1.0
+      mra=mysign*(abs(float(v.group('col2')))+float(v.group('col3'))/60.0+float(v.group('col4'))/3600.0)*360.0/24.0
+      if (float(v.group('col5'))) >= 0.0:
+         mysign=1.0
+      else:
+         mysign=-1.0
+
+      mdec=mysign*(abs(float(v.group('col5')))+float(v.group('col6'))/60.0+float(v.group('col7'))/3600.0)
       SR[str(v.group('col1'))]=(mra,mdec,float(v.group('col8')))
     else:  
-      v=pp1.search(eachline)
+      v=pp.search(eachline)
       if v!= None:
-        mra=(float(v.group('col2'))+float(v.group('col3'))/60.0+float(v.group('col4'))/3600.0)*360.0/24.0
-        mdec=(float(v.group('col5'))+float(v.group('col6'))/60.0+float(v.group('col7'))/3600.0)
+        if (float(v.group('col2'))) >= 0.0:
+           mysign=1.0
+        else:
+           mysign=-1.0
+        mra=mysign*(abs(float(v.group('col2')))+float(v.group('col3'))/60.0+float(v.group('col4'))/3600.0)*360.0/24.0
+        if (float(v.group('col5'))) >= 0.0:
+           mysign=1.0
+        else:
+           mysign=-1.0
+
+        mdec=mysign*(abs(float(v.group('col5')))+float(v.group('col6'))/60.0+float(v.group('col7'))/3600.0)
         SR[str(v.group('col1'))]=(mra,mdec,float(v.group('col8')))
 
   print 'Read %d sources'%len(SR)
@@ -140,8 +158,8 @@ def annotate_lsm_sky(infilename,clusterfilename,outfilename,clid=None,color='yel
   for eachline in all:
     v=pp.search(eachline)
     if v!= None:
-       # iterate over list of source names
-       CL[str(v.group('col1'))]=re.split('\W+',re.sub('\n','',str(v.group('col3'))))
+       # iterate over list of source names (names can also have a '.')
+       CL[str(v.group('col1'))]=re.split('[^a-zA-Z0-9_\.]+',re.sub('\n','',str(v.group('col3'))))
 
   print 'Read %d clusters'%len(CL)
 

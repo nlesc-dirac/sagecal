@@ -62,7 +62,7 @@ def convert_sky_bbs_lsm(infilename,outfilename):
    \s*             # skip white space
    \,           # skip comma
    \s*             # skip white space
-   (?P<col10>[-+]?\d+(\.\d+)?)   # sI
+   (?P<col10>[-+]?\d+(\.\d+)?([eE](-|\+)(\d+))?)   # sI
    \s*             # skip white space
    \,           # skip comma
    \s*             # skip white space
@@ -106,7 +106,7 @@ def convert_sky_bbs_lsm(infilename,outfilename):
    \s*             # skip white space
    \,           # skip comma
    \s*             # skip white space
-   (?P<col10>[-+]?\d+(\.\d+)?)   # sI
+   (?P<col10>[-+]?\d+(\.\d+)?([eE](-|\+)(\d+))?)   # sI
    \s*             # skip white space
    \,           # skip comma
    \s*             # skip white space
@@ -274,54 +274,9 @@ def convert_sky_bbs_lsm(infilename,outfilename):
  outfile.write("## LSM file\n")
  outfile.write("### Name  | RA (hr,min,sec) | DEC (deg,min,sec) | I | Q | U |  V | SI | RM | eX | eY | eP | freq0\n")
  for eachline in all:
-   v=pp1.search(eachline)
+   v=pp3.search(eachline)
    if v!= None:
-      strline=str(v.group('col1'))+' '+str(v.group('col4'))+' '+str(v.group('col5'))+' '+str(v.group('col6'))
-      strline=strline+' '+str(v.group('col7'))+' '+str(v.group('col8'))+' '+str(v.group('col9'))+' '+str(v.group('col10'))
-      strline=strline+' '+str(v.group('col11'))+' '+str(v.group('col12'))+' '+str(v.group('col13'))+' '+str(v.group('col15'))
-      strline=strline+' 0 0 0 0 '+str(v.group('col14'))+'\n'
-      outfile.write(strline)
-   else:
-     v=pp.search(eachline)
-     if v!= None:
-      strline=str(v.group('col1'))+' '+str(v.group('col4'))+' '+str(v.group('col5'))+' '+str(v.group('col6'))
-      strline=strline+' '+str(v.group('col7'))+' '+str(v.group('col8'))+' '+str(v.group('col9'))+' '+str(v.group('col10'))
-      strline=strline+' 0 0 0 0 0 0 0 0\n'
-      outfile.write(strline)
-     else:
-       v=pp2.search(eachline)
-       if v!= None:
-        stype=v.group('col2')
-        sname=str(v.group('col1'))
-        bad_source=False
-        if stype=='GAUSSIAN':
-          sname='G'+sname
-        strline=sname+' '+str(v.group('col4'))+' '+str(v.group('col5'))+' '+str(v.group('col6'))
-        strline=strline+' '+str(v.group('col7'))+' '+str(v.group('col8'))+' '+str(v.group('col9'))+' '+str(v.group('col10'))
-        strline=strline+' '+str(v.group('col11'))+' '+str(v.group('col12'))+' '+str(v.group('col13'))+' '+str(v.group('col18'))
-        # need the right conversion factor for Gaussians: Bmaj,Bmin arcsec (rad) diameter, PA (deg) West-> counterclockwise, BDSM its North->counterclockwise
-        if stype=='GAUSSIAN':
-          bmaj=float(v.group('col14'))*(0.5/3600)*math.pi/180.0
-          bmin=float(v.group('col15'))*(0.5/3600)*math.pi/180.0
-          bpa=math.pi/2-(math.pi-float(v.group('col16'))/180.0*math.pi)
-          # also throw away bad Gaussians with zero bmaj or bmin
-          if bmaj<1e-6 or bmin<1e-6:
-            bad_source=True
-        else:
-          bmaj=0.0
-          bmin=0.0
-          bpa=0.0
-        
-        strline=strline+' 0 '+str(bmaj)+' '+str(bmin)+' '+str(bpa)
-        strline=strline+' '+str(v.group('col17'))+'\n'
-        # only write good sources
-        if not bad_source:
-          outfile.write(strline)
-        else:
-          print 'Error in source '+strline
-       else:
-         v=pp3.search(eachline)
-         if v!= None:
+################################################################################
           stype=v.group('col2')
           sname=str(v.group('col1'))
           bad_source=False
@@ -349,35 +304,72 @@ def convert_sky_bbs_lsm(infilename,outfilename):
           if not bad_source:
             outfile.write(strline)
           else:
-            print 'Error in source '+strline
-         else:
-            splitfields=eachline.split(',');
-            if len(splitfields)>10:
-             # type
-             if 'GAUSSIAN' in splitfields[1]:
-              # read last 3 fields for shape
-              bpa=splitfields.pop()
-              bmin=splitfields.pop()
-              bmaj=splitfields.pop()
-              # convert to right format
-              bmaj=float(bmaj)*(0.5/3600.0)*math.pi/180.0
-              bmin=float(bmin)*(0.5/3600.0)*math.pi/180.0
-              bpa=math.pi/2-(math.pi-float(bpa)/180.0*math.pi)
-              sname='G'+splitfields[0]
-             else:
-              sname='P'+splitfields[0]
-              bmaj=0
-              bmin=0
-              bpa=0
-             # read in 2nd,3rd field for RA,DEC
-             raline=splitfields[2].split(':')
-             decline=splitfields[3].split('.')
-             # finally sI
-             sI=splitfields[4]
-             strline=sname+' '+str(int(raline[0]))+' '+str(int(raline[1]))+' '+str(float(raline[2]))+' '+str(int(decline[0]))+' '+str(int(decline[1]))+' '+str(float(decline[2]+'.'+decline[3]))+' '+str(float(sI))
-             # add missing fields (Q U V SI RM)
-             strline=strline+' 0 0 0 0 0 '+str(bmaj)+' '+str(bmin)+' '+str(bpa)+' 150e6\n'
-             outfile.write(strline)
+            pass
+            #print 'Error in source '+strline
+################################################################################
+   else:
+     v=pp2.search(eachline)
+     if v!= None:
+################################################################################
+        print eachline
+        stype=v.group('col2')
+        sname=str(v.group('col1'))
+        bad_source=False
+        if stype=='GAUSSIAN':
+          sname='G'+sname
+        strline=sname+' '+str(v.group('col4'))+' '+str(v.group('col5'))+' '+str(v.group('col6'))
+        strline=strline+' '+str(v.group('col7'))+' '+str(v.group('col8'))+' '+str(v.group('col9'))+' '+str(v.group('col10'))
+        strline=strline+' '+str(v.group('col11'))+' '+str(v.group('col12'))+' '+str(v.group('col13'))+' '+str(v.group('col18'))
+        # need the right conversion factor for Gaussians: Bmaj,Bmin arcsec (rad) diameter, PA (deg) West-> counterclockwise, BDSM its North->counterclockwise
+        if stype=='GAUSSIAN':
+          bmaj=float(v.group('col14'))*(0.5/3600)*math.pi/180.0
+          bmin=float(v.group('col15'))*(0.5/3600)*math.pi/180.0
+          bpa=math.pi/2-(math.pi-float(v.group('col16'))/180.0*math.pi)
+          # also throw away bad Gaussians with zero bmaj or bmin
+          if bmaj<1e-6 or bmin<1e-6:
+            bad_source=True
+          print "%f %f %f"%(bmaj,bmin,bpa)
+        else:
+          bmaj=0.0
+          bmin=0.0
+          bpa=0.0
+        
+        strline=strline+' 0 '+str(bmaj)+' '+str(bmin)+' '+str(bpa)
+        strline=strline+' '+str(v.group('col17'))+'\n'
+        print strline
+        # only write good sources
+        if not bad_source:
+          outfile.write(strline)
+        else:
+          pass
+          #print 'Error in source '+strline
+
+################################################################################
+     else:
+       v=pp1.search(eachline)
+       if v!= None:
+################################################################################
+        strline=str(v.group('col1'))+' '+str(v.group('col4'))+' '+str(v.group('col5'))+' '+str(v.group('col6'))
+        strline=strline+' '+str(v.group('col7'))+' '+str(v.group('col8'))+' '+str(v.group('col9'))+' '+str(v.group('col10'))
+        strline=strline+' '+str(v.group('col11'))+' '+str(v.group('col12'))+' '+str(v.group('col13'))+' '+str(v.group('col15'))
+        strline=strline+' 0 0 0 0 '+str(v.group('col14'))+'\n'
+        outfile.write(strline)
+
+################################################################################
+       else:
+        v=pp.search(eachline)
+        if v!= None:
+################################################################################
+         strline=str(v.group('col1'))+' '+str(v.group('col4'))+' '+str(v.group('col5'))+' '+str(v.group('col6'))
+         strline=strline+' '+str(v.group('col7'))+' '+str(v.group('col8'))+' '+str(v.group('col9'))+' '+str(v.group('col10'))
+         strline=strline+' 0 0 0 0 0 0 0 0\n'
+         outfile.write(strline)
+
+################################################################################
+        else:
+         pass
+         #print eachline
+
 
 def convert_sky_lsm_bbs(infilename,outfilename):
   # LSM format

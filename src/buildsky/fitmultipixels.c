@@ -266,7 +266,7 @@ mylm_fit_single_pf_1d(double *p, double *x, int m, int n, void *data) {
 
 double
 fit_single_point_f(hpixelf *parr, int npix, int Nf, double *freqs, double *bmaj, double *bmin, double *bpa, double ref_freq, int  maxiter, double *ll1, double *mm1, double *sI1, double *sP1){
- int ci,cj,ret;
+ int ci,cj;
  double *p,*p1,*p2, // params m x 1
      *x; // observed data n x 1, the image pixel fluxes
  int m,n;
@@ -381,12 +381,12 @@ fit_single_point_f(hpixelf *parr, int npix, int Nf, double *freqs, double *bmaj,
 
  double aic1,aic2,aic3;
  //ret=dlevmar_dif(mylm_fit_single_sipf, p, x, m, n, maxiter, opts, info, NULL, NULL, (void*)&lmdata);  // no Jacobian
- ret=clevmar_der_single_nocuda(mylm_fit_single_sipf, NULL, p, x, m, n, maxiter, opts, info, 2, (void*)&lmdata);  // no Jacobian
+ clevmar_der_single_nocuda(mylm_fit_single_sipf, NULL, p, x, m, n, maxiter, opts, info, 2, (void*)&lmdata);  // no Jacobian
  /* penalize only 1/10 of parameters */
  aic3=0.3+log(info[1]);
- ret=clevmar_der_single_nocuda(mylm_fit_single_sipf_2d, NULL, p2, x, m-1, n, maxiter, opts, info, 2, (void*)&lmdata);  // no Jacobian
+ clevmar_der_single_nocuda(mylm_fit_single_sipf_2d, NULL, p2, x, m-1, n, maxiter, opts, info, 2, (void*)&lmdata);  // no Jacobian
  aic2=0.2+log(info[1]);
- ret=clevmar_der_single_nocuda(mylm_fit_single_sipf_1d, NULL, p1, x, m-2, n, maxiter, opts, info, 2, (void*)&lmdata);  // no Jacobian
+ clevmar_der_single_nocuda(mylm_fit_single_sipf_1d, NULL, p1, x, m-2, n, maxiter, opts, info, 2, (void*)&lmdata);  // no Jacobian
  aic1=0.1+log(info[1]);
  /* choose one with minimum error */
  if (aic3<aic2) {
@@ -467,6 +467,8 @@ fit_single_point_f(hpixelf *parr, int npix, int Nf, double *freqs, double *bmaj,
  sP1[2]=p[3];
 
  free(p);
+ free(p1);
+ free(p2);
  free(x);
 
  /* AIC, 4 parms */
@@ -479,7 +481,7 @@ fit_single_point_f(hpixelf *parr, int npix, int Nf, double *freqs, double *bmaj,
 double
 fit_N_point_em_f(hpixelf *parr, int npix, int Nf, double *freqs, double *bmaj, double *bmin, double *bpa, double ref_freq, int maxiter, int max_em_iter, double *ll, double *mm, double *sI, double *sP, int N, int Nh, hpoint *hull){
 
- int ci,ret,cj,ck;
+ int ci,cj,ck;
  double *p,*p1,*p2, // params m x 1
      *x; // observed data n x 1, the image pixel fluxes
  double *xdummy, *xsub; //extra arrays
@@ -647,12 +649,12 @@ fit_N_point_em_f(hpixelf *parr, int npix, int Nf, double *freqs, double *bmaj, d
     p[3]=sP[cj+2*N]; p1[3]=p2[3]=0.0;
 
     //ret=dlevmar_dif(mylm_fit_single_pf, p, xdummy, m, n, maxiter, opts, info, NULL, NULL, (void*)&lmdata);  // no Jacobian
-    ret=clevmar_der_single_nocuda(mylm_fit_single_pf, NULL, p, xdummy, m, n, maxiter, opts, info, 2, (void*)&lmdata);  // no Jacobian
+    clevmar_der_single_nocuda(mylm_fit_single_pf, NULL, p, xdummy, m, n, maxiter, opts, info, 2, (void*)&lmdata);  // no Jacobian
 /* penalize only 1/10 of parameters */
     aic3=0.3+log(info[1]);
-    ret=clevmar_der_single_nocuda(mylm_fit_single_pf_2d, NULL, p2, xdummy, m-1, n, maxiter, opts, info, 2, (void*)&lmdata);  // no Jacobian
+    clevmar_der_single_nocuda(mylm_fit_single_pf_2d, NULL, p2, xdummy, m-1, n, maxiter, opts, info, 2, (void*)&lmdata);  // no Jacobian
     aic2=0.2+log(info[1]);
-    ret=clevmar_der_single_nocuda(mylm_fit_single_pf_1d, NULL, p1, xdummy, m-2, n, maxiter, opts, info, 2, (void*)&lmdata);  // no Jacobian
+    clevmar_der_single_nocuda(mylm_fit_single_pf_1d, NULL, p1, xdummy, m-2, n, maxiter, opts, info, 2, (void*)&lmdata);  // no Jacobian
     aic1=0.1+log(info[1]);
     /* choose one with minimum error */
     if (aic3<aic2) {

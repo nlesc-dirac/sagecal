@@ -293,7 +293,7 @@ mylm_fit_single(double *p, double *x, int m, int n, void *data) {
 
 double
 fit_single_point(hpixel *parr, int npix, double bmaj, double bmin, double bpa, int  maxiter, double *ll1, double *mm1, double *sI1){
- int ci,ret;
+ int ci;
  double *p, // params m x 1
      *x; // observed data n x 1, the image pixel fluxes
  int m,n;
@@ -343,8 +343,8 @@ fit_single_point(hpixel *parr, int npix, double bmaj, double bmin, double bpa, i
  lmdata.bmin=bmin;
  lmdata.bpa=bpa;
 
- //ret=dlevmar_dif(mylm_fit_single, p, x, 3, n, maxiter, opts, info, NULL, NULL, (void*)&lmdata);  // no Jacobian
- ret=clevmar_der_single_nocuda(mylm_fit_single, NULL, p, x, 3, n, maxiter, opts, info, 2, (void*)&lmdata);  // no Jacobian
+ //dlevmar_dif(mylm_fit_single, p, x, 3, n, maxiter, opts, info, NULL, NULL, (void*)&lmdata);  // no Jacobian
+ clevmar_der_single_nocuda(mylm_fit_single, NULL, p, x, 3, n, maxiter, opts, info, 2, (void*)&lmdata);  // no Jacobian
 
 #ifdef DEBUG
   print_levmar_info(info[0],info[1],(int)info[5], (int)info[6], (int)info[7], (int)info[8], (int)info[9]);
@@ -398,7 +398,7 @@ mylm_fit_N(double *p, double *x, int m, int n, void *data) {
 double
 fit_N_point_em(hpixel *parr, int npix, double bmaj, double bmin, double bpa, int maxiter, int max_em_iter, double *ll, double *mm, double *sI, int N, int Nh, hpoint *hull){
 
- int ci,ret,cj,ck;
+ int ci,cj,ck;
  double *p, // params m x 1
      *x; // observed data n x 1, the image pixel fluxes
  double *xdummy, *xsub; //extra arrays
@@ -493,17 +493,17 @@ fit_N_point_em(hpixel *parr, int npix, double bmaj, double bmin, double bpa, int
        my_daxpy(n, xsub, -1.0, xdummy);
      }
     }
-    //ret=dlevmar_dif(mylm_fit_single, &p[3*cj], xdummy, 3, n, maxiter, opts, info, NULL, NULL, (void*)&lmdata);  // no Jacobian
-    //ret=clevmar_der_single_nocuda(mylm_fit_single, NULL, &p[3*cj], xdummy, 3, n, maxiter, opts, info, 2, (void*)&lmdata);  // no Jacobian
+    //dlevmar_dif(mylm_fit_single, &p[3*cj], xdummy, 3, n, maxiter, opts, info, NULL, NULL, (void*)&lmdata);  // no Jacobian
+    //clevmar_der_single_nocuda(mylm_fit_single, NULL, &p[3*cj], xdummy, 3, n, maxiter, opts, info, 2, (void*)&lmdata);  // no Jacobian
     // weighted least squares estimation
-    ret=dweighted_ls_fit(&p[3*cj], xdummy, 3, n, maxiter, (void*)&lmdata);
+    dweighted_ls_fit(&p[3*cj], xdummy, 3, n, maxiter, (void*)&lmdata);
    } 
  }
 
 
  /* final global fit */
- //ret=dlevmar_dif(mylm_fit_N, p, x, m, n, maxiter, opts, info, NULL, NULL, (void*)&lmdata);  // no Jacobian
- ret=clevmar_der_single_nocuda(mylm_fit_N, NULL, p, x, m, n, maxiter, opts, info, 2, (void*)&lmdata);  // no Jacobian
+ //dlevmar_dif(mylm_fit_N, p, x, m, n, maxiter, opts, info, NULL, NULL, (void*)&lmdata);  // no Jacobian
+ clevmar_der_single_nocuda(mylm_fit_N, NULL, p, x, m, n, maxiter, opts, info, 2, (void*)&lmdata);  // no Jacobian
 #ifdef DEBUG
   print_levmar_info(info[0],info[1],(int)info[5], (int)info[6], (int)info[7], (int)info[8], (int)info[9]);
   printf("Levenberg-Marquardt returned %d in %g iter, reason %g\nSolution: ", ret, info[5], info[6]);
