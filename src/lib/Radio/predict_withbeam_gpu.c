@@ -366,35 +366,24 @@ precalcoh_threadfn(void *data) {
      fclose(Nelem_d);
 
      FILE *xx_d;
-     int k;
      xx_d=fopen("xx_d.bin","wb");
      for (j=0; j<t->N; j++){
-         for (k=0; k<t->Nelem[j]; k++){
-             fprintf(stderr, "%s %d %s %d %s %p %s %zu\n", " j = ", j, " k = ", k, " &xx_p[j][k] = ",
-                 *(xx_p+j)+k, " sizeof(xx_p[j][k]) = ", sizeof(xx_p[j][k]));
-
-         }
-         fwrite(&xx_p[j], sizeof(float), t->Nelem[j], xx_d);
+         fwrite(t->xx[j], sizeof(double), t->Nelem[j], xx_d);
      }
      fclose(xx_d);
 
      FILE *yy_d;
      yy_d=fopen("yy_d.bin","wb");
      for (j=0; j<t->N; j++){
-         for (k=0; k<t->Nelem[j]; k++){
-             fprintf(stderr, "%s %d %s %d %s %p %s %zu\n", " j = ", j, " k = ", k, " &yy_p[j][k] = ",
-                 *(yy_p+j)+k, " sizeof(yy_p[j][k]) = ", sizeof(yy_p[j][k]));
-
-         }
-         fwrite(&yy_p[j], sizeof(float), t->Nelem[j], yy_d);
+         fwrite(t->yy[j], sizeof(double), t->Nelem[j], yy_d);
      }
-     // fwrite(&yyd, sizeof(yyd[0]), sizeof(yyd)/sizeof(yyd[0]), yy_d);
      fclose(yy_d);
 
-     fprintf(stderr, "%s %zu\n", "sizeof(zzd) = ", sizeof(zzd));
      FILE *zz_d;
      zz_d=fopen("zz_d.bin","wb");
-     fwrite(&zzd, sizeof(zzd[0]), sizeof(zzd)/sizeof(zzd[0]), zz_d);
+     for (j=0; j<t->N; j++){
+         fwrite(t->zz[j], sizeof(double), t->Nelem[j], zz_d);
+     }
      fclose(zz_d);
 
      FILE *ra_d;
