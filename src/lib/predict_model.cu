@@ -574,17 +574,17 @@ kernel_coherencies_slave(int sta1, int sta2, int itm, int B, int N, int T, int K
     nTotalThreads = halfPoint; // Reducing the binary tree size by two
   }
 
-  /* add up to form final result */
+  /* add up to form final result (not replace!) */
   if (threadIdx.x==0) {
     for(int cf=0; cf<F; cf++) {
-     coh[cf*8*B]=tmpcoh[8*cf];
-     coh[cf*8*B+1]=tmpcoh[8*cf+1];
-     coh[cf*8*B+2]=tmpcoh[8*cf+2];
-     coh[cf*8*B+3]=tmpcoh[8*cf+3];
-     coh[cf*8*B+4]=tmpcoh[8*cf+4];
-     coh[cf*8*B+5]=tmpcoh[8*cf+5];
-     coh[cf*8*B+6]=tmpcoh[8*cf+6];
-     coh[cf*8*B+7]=tmpcoh[8*cf+7];
+     coh[cf*8*B]+=tmpcoh[8*cf];
+     coh[cf*8*B+1]+=tmpcoh[8*cf+1];
+     coh[cf*8*B+2]+=tmpcoh[8*cf+2];
+     coh[cf*8*B+3]+=tmpcoh[8*cf+3];
+     coh[cf*8*B+4]+=tmpcoh[8*cf+4];
+     coh[cf*8*B+5]+=tmpcoh[8*cf+5];
+     coh[cf*8*B+6]+=tmpcoh[8*cf+6];
+     coh[cf*8*B+7]+=tmpcoh[8*cf+7];
     }
   }
 }

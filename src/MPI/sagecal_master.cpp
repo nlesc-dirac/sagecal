@@ -139,6 +139,13 @@ sagecal_master(int argc, char **argv) {
 
 
 cout<<"Master received all "<<totalfiles<<" files"<<endl;
+   // check if we have more slaves than there are files, print a warning and exit
+   if (totalfiles < nslaves) {
+    cout<<"Error: The total number of datasets "<<totalfiles<<" is lower than the slaves used ("<<nslaves<<")."<<endl;
+    cout<<"Error: Reduce the number of slaves to a value lower than "<<totalfiles<<" and rerun."<<endl;
+    cout<<"Error: Value for -np should be something less than or equal to "<<totalfiles+1<<"."<<endl;
+    exit(1);
+   }
 
    vector<string>::iterator mp;
    vector<vector<string> >::iterator mrow;

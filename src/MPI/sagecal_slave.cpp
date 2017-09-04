@@ -708,8 +708,9 @@ cout<<myrank<<" : "<<cm<<": downweight ratio ("<<iodata_vec[cm].fratio<<") based
        
 
 
-      /* BB : update rho, only after each MS is given 1 ADMM iteration*/
-      if (Data::aadmm && admm>=mymscount) {
+      /* BB : update rho, only after each MS is given 1 ADMM iteration
+       and also if mymscount == 1, only update skipping every iteration */
+      if (Data::aadmm && ((mymscount>1 && admm>=mymscount)|| (mymscount==1 && admm>1 && admm%2==0))) {
        update_rho_bb(arho_vec[mmid],arhoupper_vec[mmid],iodata_vec[mmid].N,M,Mt,carr_vec[mmid],Yhat,Yhat0_vec[mmid],p_vec[mmid],J0_vec[mmid],Data::Nt);
       }
       /* BB : send updated rho to master */
