@@ -159,8 +159,8 @@ precalcoh_threadfn(void *data) {
   /* convert time jd to GMST angle */
   cudakernel_convert_time(t->tilesz,timed);
 
-  // Fill copyoftimed and apply convert_time.
-  err=cudaMemcpy(copyoftimed, timed, t->tilesz*sizeof(double), cudaMemcpyDeviceToHost);
+  // Fill copyoftimed.
+  err=cudaMemcpy((double*)copyoftimed, timed, t->tilesz*sizeof(double), cudaMemcpyDeviceToHost);
 
   err=cudaMemcpy(Nelemd, t->Nelem, t->N*sizeof(int), cudaMemcpyHostToDevice);
   checkCudaError(err,__FILE__,__LINE__);

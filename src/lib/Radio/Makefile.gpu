@@ -1,7 +1,7 @@
 CC=gcc
 CXX=g++
 NVCC=nvcc
-CFLAGS= -Wall -O3 -g -DHAVE_CUDA -DHYBRID_CODE
+CFLAGS= -Wall -O3 -g -DHAVE_CUDA -DHYBRID_CODE -pg
 CLIBS= -lm -lpthread
 LAPACK=-L/usr/local/OpenBLAS/lib/ -lopenblas -lgfortran -lpthread
 # LAPACK=-lblas -lgfortran -lpthread
