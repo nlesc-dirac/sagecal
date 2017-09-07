@@ -23,6 +23,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <pthread.h>
+#include <casacore/casa/Quanta/Quantum.h>
 
 #include "cuda_profiler_api.h"
 
