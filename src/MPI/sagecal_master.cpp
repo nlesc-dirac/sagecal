@@ -657,7 +657,8 @@ cout<<"Reference frequency (MHz)="<<iodata.freq0*1.0e-6<<endl;
      if (solfile) {
       for (int p=0; p<iodata.N*8*Npoly; p++) {
        fprintf(sfp,"%d ",p);
-       for (int ppi=0; ppi<iodata.M; ppi++) {
+       //for (int ppi=0; ppi<iodata.M; ppi++) {
+       for (int ppi=iodata.M-1; ppi>=0; ppi--) { /* reverse ordering */
         fprintf(sfp," %e",Z[ppi*iodata.N*8*Npoly+p]);
        }
        fprintf(sfp,"\n");
@@ -666,7 +667,7 @@ cout<<"Reference frequency (MHz)="<<iodata.freq0*1.0e-6<<endl;
      if (resetcount>nslaves/2) {
        /* if most slaves have reset, print a warning only */
        //memset(Z,0,sizeof(double)*(size_t)iodata.N*8*Npoly*iodata.M);
-       cout<<"Resetting Global Solution"<<endl;
+       cout<<"Warning: Most slaves did not converge."<<endl;
      }
 
 
