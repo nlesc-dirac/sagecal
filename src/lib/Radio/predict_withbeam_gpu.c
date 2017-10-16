@@ -376,27 +376,27 @@ precalcoh_threadfn(void *data) {
 
      FILE *ra_d;
      ra_d=fopen("ra_d.bin","wb");
-     fwrite(&rad, sizeof(rad[0]), sizeof(rad)/sizeof(rad[0]), ra_d);
+     fwrite(t->carr[ncl].ra, t->carr[ncl].N, sizeof(double), ra_d);
      fclose(ra_d);
 
      FILE *dec_d;
      dec_d=fopen("dec_d.bin","wb");
-     fwrite(&decd, sizeof(decd[0]), sizeof(decd)/sizeof(decd[0]), dec_d);
+     fwrite(t->carr[ncl].dec, t->carr[ncl].N, sizeof(double), dec_d);
      fclose(dec_d);
 
      FILE *t_ph_ra0;
      t_ph_ra0=fopen("t_ph_ra0.bin","wb");
-     fwrite((float *)&t->ph_ra0, sizeof(float), sizeof((float)t->ph_ra0)/sizeof(float), t_ph_ra0);
+     fwrite((double *)&t->ph_ra0, 1, sizeof(double), t_ph_ra0);
      fclose(t_ph_ra0);
 
      FILE *t_ph_dec0;
      t_ph_dec0=fopen("t_ph_dec0.bin","wb");
-     fwrite((float *)&t->ph_dec0, sizeof(float), sizeof((float)t->ph_dec0)/sizeof(float), t_ph_dec0);
+     fwrite((double *)&t->ph_dec0, 1, sizeof(double), t_ph_dec0);
      fclose(t_ph_dec0);
 
      FILE *t_ph_freq0;
      t_ph_freq0=fopen("t_ph_freq0.bin","wb");
-     fwrite((float *)&t->ph_freq0, sizeof(float), sizeof((float)t->ph_freq0)/sizeof(float), t_ph_freq0);
+     fwrite((double *)&t->ph_freq0, 1, sizeof(double), t_ph_freq0);
      fclose(t_ph_freq0);
 
      /* now calculate beam for all sources in this cluster */
