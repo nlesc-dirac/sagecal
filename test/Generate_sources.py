@@ -19,9 +19,19 @@ except AssertionError:
     print("Sorry, number of sources too large, reset to {0}".format(number_of_sources))
 
 
-# For the declinations I have chosen sources between 45 and 90 degrees declination.
-decl_low = 45
-decl_high = 90
+# Best to center sources around 3C196 if using the sm.ms measurement set with a 
+# four degree tolerance
+tol_degrees = 4.
+tol_hours = tol_degrees * 24/360
+
+ra_3C196 = 8.
+ra_low = ra_3C196 - tol_hours
+ra_high = ra_3C196 + tol_hours
+
+decl_3C196 = 48.
+decl_low = decl_3C196 - tol_degrees
+decl_high = decl_3C196 + tol_degrees
+
 I_low = 10
 I_high = 100
 
@@ -48,7 +58,7 @@ with warnings.catch_warnings():
         sources_parameters.name[source_name] = 'P' + str(source_name).zfill(number_of_digits_for_sources)
 
     # Right ascension can have all values.
-    sources_parameters.rah = np.random.randint(0, 24, size=number_of_sources)
+    sources_parameters.rah = np.random.randint(ra_low, ra_high, size=number_of_sources)
     sources_parameters.ram = np.random.randint(0, 59, size=number_of_sources)
     sources_parameters.ras = 60 * np.random.rand(number_of_sources)
 
@@ -88,7 +98,7 @@ with warnings.catch_warnings():
 
 # sources_parameters.tofile("extended_source_list_using_tofile.txt", sep='\n')
 
-with open("extended_source_list.txt", 'wb') as f:
+with open("extended_source_list_centered_on_3C196.txt", 'wb') as f:
     f.write(b"##  From Generate_sources.py by Hanno Spreeuw.\n")
     f.write(b"##  Generates point sources at random positions with random brighnesses within some range.\n")
     f.write(b"##  this is an LSM text (hms/dms) file\n")
@@ -102,5 +112,5 @@ with open("extended_source_list.txt", 'wb') as f:
 # Now write the cluster file
 # First add '1' and '1' to indicate the cluster id and chunk size.
 cluster_array = np.concatenate((np.array(['1', '1']), sources_parameters.name))
-with open("extended_source_list.txt.cluster", 'wb') as f:
+with open("extended_source_list_centered_on_3C196.txt.cluster", 'wb') as f:
     np.savetxt(f, (cluster_array).reshape(1, cluster_array.shape[0]), fmt='%s', delimiter=' ')
