@@ -21,16 +21,36 @@ except AssertionError:
 
 # Best to center sources around 3C196 if using the sm.ms measurement set with a 
 # four degree tolerance
-tol_degrees = 4.
-tol_hours = tol_degrees * 24/360
+tol_seconds_of_decl = 0.9 
+tol_seconds_of_RA = tol_seconds_of_decl * 24/360
 
-ra_3C196 = 8.
-ra_low = ra_3C196 - tol_hours
-ra_high = ra_3C196 + tol_hours
+RA_hours_3C196 = 8
+RA_minutes_3C196 = 13
+RA_seconds_3C196 = 35.981540
 
-decl_3C196 = 48.
-decl_low = decl_3C196 - tol_degrees
-decl_high = decl_3C196 + tol_degrees
+RA_seconds_3C196 = (RA_hours_3C196 * 60 + RA_minutes_3C196) *60 + RA_seconds_3C196
+
+RA_seconds_low = RA_seconds_3C196 - tol_seconds_of_RA
+RA_minutes_low, RA_seconds_low = divmod(RA_seconds_low, 60)
+RA_hours_low, RA_minutes_low = divmod(RA_minutes_low, 60)
+
+RA_seconds_high = RA_seconds_3C196 + tol_seconds_of_RA
+RA_minutes_high, RA_seconds_high = divmod(RA_seconds_high, 60)
+RA_hours_high, RA_minutes_high = divmod(RA_minutes_high, 60)
+
+decl_degrees_3C196 = 48
+decl_minutes_3C196 = 12
+decl_seconds_3C196 = 59.174770
+
+decl_seconds_3C196 = (decl_degrees_3C196 * 60 + decl_minutes_3C196) *60 + decl_seconds_3C196
+
+decl_seconds_low = decl_seconds_3C196 - tol_seconds_of_decl
+decl_minutes_low, decl_seconds_low = divmod(decl_seconds_low, 60)
+decl_degrees_low, decl_minutes_low = divmod(decl_minutes_low, 60)
+
+decl_seconds_high = decl_seconds_3C196 + tol_seconds_of_decl
+decl_minutes_high, decl_seconds_high = divmod(decl_seconds_high, 60)
+decl_degrees_high, decl_minutes_high = divmod(decl_minutes_high, 60)
 
 I_low = 10
 I_high = 100
@@ -58,13 +78,17 @@ with warnings.catch_warnings():
         sources_parameters.name[source_name] = 'P' + str(source_name).zfill(number_of_digits_for_sources)
 
     # Right ascension can have all values.
-    sources_parameters.rah = np.random.randint(ra_low, ra_high, size=number_of_sources)
-    sources_parameters.ram = np.random.randint(0, 59, size=number_of_sources)
-    sources_parameters.ras = 60 * np.random.rand(number_of_sources)
+    # sources_parameters.rah = np.random.randint(ra_low, ra_high, size=number_of_sources)
+    # sources_parameters.ram = np.random.randint(0, 59, size=number_of_sources)
+    # sources_parameters.ras = 60 * np.random.rand(number_of_sources)
 
-    sources_parameters.dad = np.random.randint(decl_low, decl_high, size=number_of_sources)
-    sources_parameters.dam = np.random.randint(0, 59, size=number_of_sources)
-    sources_parameters.das = 60 * np.random.rand(number_of_sources)
+    sources_parameters.rah = (RA_hours_high - RA_hours_low) * np.random.random_sample(number_of_sources) + RA_hours_low 
+    sources_parameters.ram = (RA_minutes_high - RA_minutes_low) * np.random.random_sample(number_of_sources) + RA_minutes_low 
+    sources_parameters.ras = (RA_seconds_high - RA_seconds_low) * np.random.random_sample(number_of_sources) + RA_seconds_low
+
+    sources_parameters.dad = (decl_degrees_high - decl_degrees_low) * np.random.random_sample(number_of_sources) + decl_degrees_low  
+    sources_parameters.dam = (decl_minutes_high - decl_minutes_low) * np.random.random_sample(number_of_sources) + decl_minutes_low    
+    sources_parameters.das = (decl_seconds_high - decl_seconds_low) * np.random.random_sample(number_of_sources) + decl_seconds_low    
 
     sources_parameters.I = (I_high - I_low) * np.random.rand(number_of_sources) + I_low
     sources_parameters.Q = 0
