@@ -33,7 +33,7 @@ using namespace Data;
 
 void
 print_copyright(void) {
-  cout<<"SAGECal-MPI 0.4.8 (C) 2011-2017 Sarod Yatawatta"<<endl;
+  cout<<"SAGECal-MPI 0.4.9 (C) 2011-2017 Sarod Yatawatta"<<endl;
 }
 
 
@@ -77,7 +77,9 @@ print_help(void) {
    cout << "-W pre-whiten data: default "<<Data::whiten<< endl;
    cout << "-R randomize iterations: default "<<Data::randomize<< endl;
    cout << "-T stop after this number of solutions (0 means no limit): default "<<Data::Nmaxtime<< endl;
-   cout << "-K skip this number of timeslots before starting calibration: default "<<Data::Nskip<< endl;
+   cout << "-K skip this number of solutions before starting calibration: default "<<Data::Nskip<< endl;
+   cout << "Note: if -K a -T b, then calibration will start at 'a' and end at 'b', so b > a always."<<endl;
+   cout << "Note: a,b are measured in number of solutions (tiles), so amount of data calibrated depends on -t parameter."<<endl;
    cout << "-V if given, enable verbose output: default "<<Data::verbose<<endl;
    cout << "-M if given, evaluate AIC/MDL criteria for polynomials starting from 1 term to the one given by -P and suggest the best polynomial terms to use based on the minimum AIC/MDL: default "<<Data::mdl<<endl;
    cout << "-q solutions.txt: if given, initialize solutions by reading this file (need to have the same format as a solution file, only solutions for 1 timeslot needed)"<< endl;
@@ -213,7 +215,7 @@ ParseCmdLine(int ac, char **av) {
     }
 
     if (!MSpattern) {
-     cout<<"MS pattern is mandatory."<<endl;
+     cout<<"Error: MS pattern is mandatory."<<endl;
      print_help();
      MPI_Finalize();
      exit(1);
@@ -224,6 +226,12 @@ ParseCmdLine(int ac, char **av) {
      cout<<"Gaussian noise model for solver."<<endl;
     } else {
      cout<<"Robust noise model for solver with degrees of freedom ["<<nulow<<","<<nuhigh<<"]."<<endl;
+    }
+    if (Nskip && Nmaxtime && Nskip>=Nmaxtime) {
+     cout<<"Error: Start time of calibration "<< Nskip <<" is later than end time "<<Nmaxtime<<"."<<endl;
+     print_help();
+     MPI_Finalize();
+     exit(1);
     }
 }
 
