@@ -21,7 +21,7 @@ except AssertionError:
 
 # Best to center sources around 3C196 if using the sm.ms measurement set with a 
 # four degree tolerance
-tol_seconds_of_decl = 0.9 
+tol_seconds_of_decl = 3600 * 10 
 tol_seconds_of_RA = tol_seconds_of_decl * 24/360
 
 RA_hours_3C196 = 8
