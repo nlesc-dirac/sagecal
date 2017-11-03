@@ -1265,7 +1265,7 @@ predict_visibilities_multifreq(double *u,double *v,double *w,double *x,int N,int
     exit(1);
   }
 
-  if (!add_to_data) {
+  if (add_to_data==SIMUL_ONLY) {
    /* set output column to zero */
    memset(x,0,sizeof(double)*8*Nbase*tilesz*Nchan);
   }
@@ -1344,7 +1344,7 @@ predictwithgain_threadfn_multifreq(void *data) {
    /* iterate over the sky model and calculate contribution */
    /* for this x[8*ci:8*(ci+1)-1] */
    /* if this baseline is flagged, we do not compute */
-   if (!t->add_to_data) { /* only model is written as output */
+   if (t->add_to_data==SIMUL_ONLY) { /* only model is written as output */
     for (cf=0; cf<t->Nchan; cf++) {
      memset(&t->x[8*ci+cf*Ntilebase*8],0,sizeof(double)*8);
     }
@@ -1533,7 +1533,7 @@ predictwithgain_threadfn_multifreq(void *data) {
       amb(G1,C,T1);
       /* T2=T1*G2' */
       ambt(T1,G2,T2);
-      if (t->add_to_data==1) {
+      if (t->add_to_data==SIMUL_ADD) {
         /* add to baseline visibilities */
         t->x[8*ci+cf*Ntilebase*8]+=creal(T2[0]);
         t->x[8*ci+1+cf*Ntilebase*8]+=cimag(T2[0]);
@@ -1543,7 +1543,7 @@ predictwithgain_threadfn_multifreq(void *data) {
         t->x[8*ci+5+cf*Ntilebase*8]+=cimag(T2[2]);
         t->x[8*ci+6+cf*Ntilebase*8]+=creal(T2[3]);
         t->x[8*ci+7+cf*Ntilebase*8]+=cimag(T2[3]);
-      } else {
+      } else if (t->add_to_data==SIMUL_SUB) {
         /* subtract from baseline visibilities */
         t->x[8*ci+cf*Ntilebase*8]-=creal(T2[0]);
         t->x[8*ci+1+cf*Ntilebase*8]-=cimag(T2[0]);

@@ -59,7 +59,7 @@ print_help(void) {
    cout << "-m LBFGS memory size : default " <<Data::lbfgs_m<< endl;
    cout << "-n no of worker threads : default "<<Data::Nt << endl;
    cout << "-t tile size : default " <<Data::TileSize<< endl;
-   cout << "-a 0,1,2,3 : if 1, only simulate, if 2, simulate and add to input, if 3, simulate and subtract from input (multiplied by solutions if solutions file is also given): default " <<Data::DoSim<< endl;
+   cout << "-a 0,1,2,3 : if "<<SIMUL_ONLY<<", only simulate, if "<<SIMUL_ADD<<", simulate and add to input, if "<<SIMUL_SUB<<", simulate and subtract from input (multiplied by solutions if solutions file is also given): default " <<Data::DoSim<< endl;
    cout << "-z ignore_clusters: if only doing a simulation, ignore the cluster ids listed in this file" << endl;
    cout << "-b 0,1 : if 1, solve for each channel: default " <<Data::doChan<< endl;
    cout << "-B 0,1 : if 1, predict array beam: default " <<Data::doBeam<< endl;
@@ -668,10 +668,10 @@ beam.p_ra0,beam.p_dec0,iodata.freq0,beam.sx,beam.sy,beam.time_utc,beam.Nelem,bea
     if (!solfile) {
 ////#ifndef HAVE_CUDA
      if (!doBeam) {
-      predict_visibilities_multifreq(iodata.u,iodata.v,iodata.w,iodata.xo,iodata.N,iodata.Nbase,iodata.tilesz,barr,carr,M,iodata.freqs,iodata.Nchan,iodata.deltaf,iodata.deltat,iodata.dec0,Data::Nt,Data::DoSim-1);
+      predict_visibilities_multifreq(iodata.u,iodata.v,iodata.w,iodata.xo,iodata.N,iodata.Nbase,iodata.tilesz,barr,carr,M,iodata.freqs,iodata.Nchan,iodata.deltaf,iodata.deltat,iodata.dec0,Data::Nt,Data::DoSim);
      } else {
       predict_visibilities_multifreq_withbeam(iodata.u,iodata.v,iodata.w,iodata.xo,iodata.N,iodata.Nbase,iodata.tilesz,barr,carr,M,iodata.freqs,iodata.Nchan,iodata.deltaf,iodata.deltat,iodata.dec0,
-  beam.p_ra0,beam.p_dec0,iodata.freq0,beam.sx,beam.sy,beam.time_utc,beam.Nelem,beam.xx,beam.yy,beam.zz, Data::Nt,Data::DoSim-1);
+  beam.p_ra0,beam.p_dec0,iodata.freq0,beam.sx,beam.sy,beam.time_utc,beam.Nelem,beam.xx,beam.yy,beam.zz, Data::Nt,Data::DoSim);
      }
 ////#endif
 ////#ifdef HAVE_CUDA
@@ -681,7 +681,7 @@ beam.p_ra0,beam.p_dec0,iodata.freq0,beam.sx,beam.sy,beam.time_utc,beam.Nelem,bea
     } else {
      read_solutions(sfp,p,carr,iodata.N,M);
     /* if solution file is given, read in the solutions and predict */
-    predict_visibilities_multifreq_withsol(iodata.u,iodata.v,iodata.w,p,iodata.xo,ignorelist,iodata.N,iodata.Nbase,iodata.tilesz,barr,carr,M,iodata.freqs,iodata.Nchan,iodata.deltaf,iodata.deltat,iodata.dec0,Data::Nt,Data::DoSim-1,Data::ccid,Data::rho,Data::phaseOnly);
+    predict_visibilities_multifreq_withsol(iodata.u,iodata.v,iodata.w,p,iodata.xo,ignorelist,iodata.N,iodata.Nbase,iodata.tilesz,barr,carr,M,iodata.freqs,iodata.Nchan,iodata.deltaf,iodata.deltat,iodata.dec0,Data::Nt,Data::DoSim,Data::ccid,Data::rho,Data::phaseOnly);
     }
     /************ end simulation only mode ***************************/
    }

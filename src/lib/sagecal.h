@@ -83,6 +83,11 @@
 /* max source name length, increase it if names get longer */
 #define MAX_SNAME 2048
 
+/* simulation options */
+#define SIMUL_ONLY 1 /* only predict model */
+#define SIMUL_ADD 2 /* add to input */
+#define SIMUL_SUB 3 /* subtract from input */
+
 /********* constants - from levmar ******************/
 #define CLM_INIT_MU       1E-03
 #define CLM_STOP_THRESH   1E-17
@@ -211,7 +216,7 @@ typedef struct thread_data_base_ {
   /* following for ignoring clusters in simulation */
   int *ignlist; /* Mx1 array, if any value 1, that cluster will not be simulated */
   /* flag for adding/subtracting model to data */
-  int add_to_data; /* 1: add, else: subtract */
+  int add_to_data; /* see SIMUL* defs */
 
   /* following used for multifrequency (channel) data */
   double *freqs;
@@ -2663,6 +2668,15 @@ predict_visibilities_multifreq_withbeam_gpu(double *u,double *v,double *w,double
 
 /****************************** predict_model.cu ****************************/
 #ifdef HAVE_CUDA
+
+#ifndef ARRAY_USE_SHMEM /* use shared memory for calculation station beam */
+#define ARRAY_USE_SHMEM 1
+#endif
+#ifndef ARRAY_MAX_ELEM /* if using shared memory, max possible elements for a station */
+#define ARRAY_MAX_ELEM 512
+#endif
+
+
 extern void
 cudakernel_array_beam(int N, int T, int K, int F, float *freqs, float *longitude, float *latitude,
  double *time_utc, int *Nelem, float **xx, float **yy, float **zz, float *ra, float *dec, float ph_ra0, float  ph_dec0, float ph_freq0, float *beam);
