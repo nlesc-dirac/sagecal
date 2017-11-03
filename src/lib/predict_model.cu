@@ -160,25 +160,49 @@ NearestPowerOf2 (int n){
 }
 
 
+/* use compiler directives to use/not use shared memory */
+/* ARRAY_MAX_ELEM : define this in header file beforehand, if using shared memory */
 /* master kernel to calculate beam */
-/* tarr: size NTKFx2 buffer to store sin() cos() sums */
 __global__ void 
-kernel_array_beam(int N, int T, int K, int F, float *freqs, float *longitude, float *latitude,
- double *time_utc, int *Nelem, float **xx, float **yy, float **zz, float *ra, float *dec, float ph_ra0, float ph_dec0, float ph_freq0, float *beam, float *tarr) {
+kernel_array_beam(int N, int T, int K, int F, 
+ const float *__restrict__ freqs, const float *__restrict__ longitude, const float *__restrict__ latitude,
+ const double *__restrict__ time_utc, const int *__restrict__ Nelem, 
+ const float * const *__restrict__ xx, const float * const *__restrict__ yy, const float * const *__restrict__ zz, 
+ const float *__restrict__ ra, const float *__restrict__ dec, 
+ float ph_ra0, float ph_dec0, float ph_freq0, float *beam) {
 
-  /* global thread index */
-  unsigned int n=threadIdx.x+blockDim.x*blockIdx.x;
-  /* allowed max threads */
-  int Ntotal=N*T*K*F;
-  if (n<Ntotal) {
-   /* find respective station,source,freq,time for this thread */
-   int istat=n/(K*T*F);
-   int n1=n-istat*(K*T*F);
-   int isrc=n1/(T*F);
-   n1=n1-isrc*(T*F);
-   int ifrq=n1/(T);
-   n1=n1-ifrq*(T);
-   int itm=n1;
+    /* global thread index, x-dimension (data) */
+    int x=threadIdx.x+blockDim.x*blockIdx.x;
+    /* y-dimension is station */
+    int istat=blockIdx.y;
+
+    // find respective source,freq,time for this thread
+    int n1 = x;
+    int isrc=n1/(T*F);
+    n1=n1-isrc*(T*F);
+    int ifrq=n1/(T);
+    n1=n1-ifrq*(T);
+    int itm=n1;
+
+    //number of elements for this station
+    int Nelems = __ldg(&Nelem[istat]);
+
+    //using shared memory
+    #if (ARRAY_USE_SHMEM==1)
+      __shared__ float sh_x[ARRAY_MAX_ELEM];
+      __shared__ float sh_y[ARRAY_MAX_ELEM];
+      __shared__ float sh_z[ARRAY_MAX_ELEM];
+      for (int i=threadIdx.x; i<Nelems; i+=blockDim.x) {
+        sh_x[i] = __ldg(&xx[istat][i]);
+        sh_y[i] = __ldg(&yy[istat][i]);
+        sh_z[i] = __ldg(&zz[istat][i]);
+      }
+      __syncthreads();
+    #endif
+
+  float r1,r2,r3;
+  //check data limit
+  if (x<(K*T*F)) {
 
 /*********************************************************************/
    /* time is already converted to thetaGMST */
@@ -202,7 +226,6 @@ kernel_array_beam(int N, int T, int K, int F, float *freqs, float *longitude, fl
    sincosf(theta0,&sint0,&cost0);
    sincosf(phi0,&sinph0,&cosph0);
 
-   float r1,r2,r3;
    /*r1=(float)-tpc*(ph_freq0*sint0*cosph0-freqs[ifrq]*sint*cosph);
    r2=(float)-tpc*(ph_freq0*sint0*sinph0-freqs[ifrq]*sint*sinph);
    r3=(float)-tpc*(ph_freq0*cost0-freqs[ifrq]*cost);
@@ -215,31 +238,26 @@ kernel_array_beam(int N, int T, int K, int F, float *freqs, float *longitude, fl
    r3=-tpc*(ph_freq0*cost0-f*cost);
    
 
-   /* always use 1 block, assuming total elements<512 */
-   /* shared memory to store either sin or cos values */
+        float ssum = 0.0f;
+        float csum = 0.0f;
+        for (int i=0; i<Nelems; i++) {
+            float ss,cc;
+            #if (ARRAY_USE_SHMEM == 0)
+            sincosf((r1*__ldg(&xx[istat][i])+r2*__ldg(&yy[istat][i])+r3*__ldg(&zz[istat][i])),&ss,&cc);
+            #else
+            sincosf(r1*sh_x[i]+r2*sh_y[i]+r3*sh_z[i],&ss,&cc);
+            #endif
+            ssum += ss;
+            csum += cc;
+        }
 
-#ifdef CUDA_DBG
-   cudaError_t error;
-#endif
-   //int boffset=istat*K*T*F + isrc*T*F + ifrq*T + itm;
-   int boffset=itm*N*K*F+isrc*N*F+ifrq*N+istat;
-   int Nelems=__ldg(&Nelem[istat]);
-   kernel_array_beam_slave_sincos<<<1,Nelems,sizeof(float)*Nelems*2>>>(Nelems,r1,r2,r3,xx[istat],yy[istat],zz[istat],&tarr[2*n],NearestPowerOf2(Nelems));
-   cudaDeviceSynchronize();
-#ifdef CUDA_DBG
-  error = cudaGetLastError();
-  if(error != cudaSuccess) {
-    // print the CUDA error message and exit
-    printf("CUDA error: %s :%s: %d\n", cudaGetErrorString(error),__FILE__,__LINE__);
-  }
-#endif
-   float ssum=__ldg(&tarr[2*n]);
-   float csum=__ldg(&tarr[2*n+1]);
-   
+
+
    float Nnor=1.0f/(float)Nelems;
    ssum*=Nnor;
    csum*=Nnor;
    /* store output (amplitude of beam)*/
+   int boffset=itm*N*K*F+isrc*N*F+ifrq*N+istat;
    beam[boffset]=sqrtf(ssum*ssum+csum*csum);
    //printf("thread %d stat %d src %d freq %d time %d : %lf longitude=%lf latitude=%lf time=%lf freq=%lf elem=%d ra=%lf dec=%lf beam=%lf\n",n,istat,isrc,ifrq,itm,time_utc[itm],longitude[istat],latitude[istat],time_utc[itm],freqs[ifrq],Nelem[istat],ra[isrc],dec[isrc],beam[boffset]);
   }
@@ -715,27 +733,17 @@ cudakernel_array_beam(int N, int T, int K, int F, float *freqs, float *longitude
   //cudaDeviceSetLimit(cudaLimitMallocHeapSize, 128*1024*1024);
   // for an array of max 24*16 x 2  double, the default 8MB is ok
 
-  /* total number of threads needed */
-  int Ntotal=N*T*K*F;
-  float *buffer;
-  /* allocate buffer to store intermerdiate sin() cos() values per thread */
-#ifdef CUDA_DBG
-  error=cudaMalloc((void**)&buffer, 2*Ntotal*sizeof(float));
-  checkCudaError(error,__FILE__,__LINE__);
-#endif
-#ifndef CUDA_DBG
-  cudaMalloc((void**)&buffer, 2*Ntotal*sizeof(float));
-#endif
-  cudaMemset(buffer,0,sizeof(float)*2*Ntotal);
-
-
   int ThreadsPerBlock=DEFAULT_TH_PER_BK;
   /* note: make sure we do not exceed max no of blocks available, otherwise (too many sources, loop over source id) */
-  int BlocksPerGrid=(Ntotal+ThreadsPerBlock-1)/ThreadsPerBlock;
-  kernel_array_beam<<<BlocksPerGrid,ThreadsPerBlock>>>(N,T,K,F,freqs,longitude,latitude,time_utc,Nelem,xx,yy,zz,ra,dec,ph_ra0,ph_dec0,ph_freq0,beam,buffer);
+
+  /* 2D grid of threads: x dim->data, y dim-> stations */
+  dim3 grid(1, 1, 1);
+  grid.x = (int)ceilf((K*T*F) / (float)ThreadsPerBlock);
+  grid.y = N;
+
+  kernel_array_beam<<<grid,ThreadsPerBlock>>>(N,T,K,F,freqs,longitude,latitude,time_utc,Nelem,xx,yy,zz,ra,dec,ph_ra0,ph_dec0,ph_freq0,beam);
   cudaDeviceSynchronize();
 
-  cudaFree(buffer);
 #ifdef CUDA_DBG
   error = cudaGetLastError();
   if(error != cudaSuccess) {
