@@ -637,9 +637,9 @@ predictvis_threadfn(void *data) {
   float *ud,*vd,*wd,*cohd;
   baseline_t *barrd;
   float *freqsd;
-  float *longd,*latd; double *timed;
+  float *longd=0,*latd=0; double *timed;
   int *Nelemd;
-  float **xx_p,**yy_p,**zz_p;
+  float **xx_p=0,**yy_p=0,**zz_p=0;
   float **xxd,**yyd,**zzd;
   /* allocate memory in GPU */
   err=cudaMalloc((void**) &cohd, t->Nbase*8*t->Nf*sizeof(float)); /* coherencies only for 1 cluster, Nf freq, used to store sum of clusters*/
@@ -655,8 +655,10 @@ predictvis_threadfn(void *data) {
   dtofcopy(t->Nbase,&wd,t->w);
   err=cudaMemcpy(barrd, t->barr, t->Nbase*sizeof(baseline_t), cudaMemcpyHostToDevice);
   checkCudaError(err,__FILE__,__LINE__);
-
   dtofcopy(t->Nf,&freqsd,t->freqs);
+
+  /* check if beam is actually calculated */
+  if (t->dobeam) {
   dtofcopy(t->N,&longd,t->longitude);
   dtofcopy(t->N,&latd,t->latitude);
   err=cudaMalloc((void**) &timed, t->tilesz*sizeof(double));
@@ -710,6 +712,7 @@ predictvis_threadfn(void *data) {
   checkCudaError(err,__FILE__,__LINE__);
   err=cudaMemcpy(zzd, zz_p, t->N*sizeof(int*), cudaMemcpyHostToDevice);
   checkCudaError(err,__FILE__,__LINE__);
+  }
 
 
   float *beamd;
@@ -798,8 +801,10 @@ predictvis_threadfn(void *data) {
      checkCudaError(err,__FILE__,__LINE__);
 
 
-     /* now calculate beam for all sources in this cluster */
-     cudakernel_array_beam(t->N,t->tilesz,t->carr[ncl].N,t->Nf,freqsd,longd,latd,timed,Nelemd,xxd,yyd,zzd,rad,decd,(float)t->ph_ra0,(float)t->ph_dec0,(float)t->ph_freq0,beamd);
+     if (t->dobeam) {
+      /* now calculate beam for all sources in this cluster */
+      cudakernel_array_beam(t->N,t->tilesz,t->carr[ncl].N,t->Nf,freqsd,longd,latd,timed,Nelemd,xxd,yyd,zzd,rad,decd,(float)t->ph_ra0,(float)t->ph_dec0,(float)t->ph_freq0,beamd);
+     }
 
 
      /* calculate coherencies for all sources in this cluster, add them up */
@@ -900,6 +905,8 @@ predictvis_threadfn(void *data) {
   checkCudaError(err,__FILE__,__LINE__);
   err=cudaFree(freqsd);
   checkCudaError(err,__FILE__,__LINE__);
+
+  if (t->dobeam) {
   err=cudaFree(longd);
   checkCudaError(err,__FILE__,__LINE__);
   err=cudaFree(latd);
@@ -929,6 +936,7 @@ predictvis_threadfn(void *data) {
   free(xx_p);
   free(yy_p);
   free(zz_p);
+  }
 
   /* reset error state */
   err=cudaGetLastError(); 
@@ -979,7 +987,7 @@ double ph_ra0, double ph_dec0, double ph_freq0, double *longitude, double *latit
     exit(1);
   }
 
-  if (!add_to_data) {
+  if (add_to_data==SIMUL_ONLY) {
    /* set output column to zero */
    memset(x,0,sizeof(double)*Nbase*8*tilesz*Nchan);
   }
