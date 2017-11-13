@@ -21,6 +21,7 @@
 
 #include "sagecal.h"
 
+//#define CUDA_DEBUG
 static void
 checkCudaError(cudaError_t err, char *file, int line)
 {
@@ -119,12 +120,13 @@ precalcoh_threadfn(void *data) {
   err=cudaSetDevice(card);
   checkCudaError(err,__FILE__,__LINE__);
 
-  float *ud,*vd,*wd,*cohd;
+  double *ud,*vd,*wd;
+  double *cohd;
   baseline_t *barrd;
-  float *freqsd;
-  float *longd,*latd; double *timed;
+  double *freqsd;
+  float *longd=0,*latd=0; double *timed;
   int *Nelemd;
-  float **xx_p,**yy_p,**zz_p;
+  float **xx_p=0,**yy_p=0,**zz_p=0;
   float **xxd,**yyd,**zzd;
   /* allocate memory in GPU */
   err=cudaMalloc((void**) &cohd, t->Nbase*8*sizeof(float)); /* coherencies only for 1 cluster, Nf=1 */
@@ -134,14 +136,29 @@ precalcoh_threadfn(void *data) {
   err=cudaMalloc((void**) &Nelemd, t->N*sizeof(int));
   checkCudaError(err,__FILE__,__LINE__);
   
-  /* copy to device */
-  dtofcopy(t->Nbase,&ud,t->u);
-  dtofcopy(t->Nbase,&vd,t->v);
-  dtofcopy(t->Nbase,&wd,t->w);
-  err=cudaMemcpy(barrd, t->barr, t->Nbase*sizeof(baseline_t), cudaMemcpyHostToDevice);
+  /* u,v,w and l,m,n coords need to be double for precision */
+  err=cudaMalloc((void**) &ud, t->Nbase*sizeof(double));
+  checkCudaError(err,__FILE__,__LINE__);
+  err=cudaMalloc((void**) &vd, t->Nbase*sizeof(double));
+  checkCudaError(err,__FILE__,__LINE__);
+  err=cudaMalloc((void**) &wd, t->Nbase*sizeof(double));
+  checkCudaError(err,__FILE__,__LINE__);
+  err=cudaMemcpy(ud, t->u, t->Nbase*sizeof(double), cudaMemcpyHostToDevice);
+  checkCudaError(err,__FILE__,__LINE__);
+  err=cudaMemcpy(vd, t->v, t->Nbase*sizeof(double), cudaMemcpyHostToDevice);
+  checkCudaError(err,__FILE__,__LINE__);
+  err=cudaMemcpy(wd, t->w, t->Nbase*sizeof(double), cudaMemcpyHostToDevice);
   checkCudaError(err,__FILE__,__LINE__);
 
-  dtofcopy(t->Nf,&freqsd,t->freqs);
+  err=cudaMemcpy(barrd, t->barr, t->Nbase*sizeof(baseline_t), cudaMemcpyHostToDevice);
+  checkCudaError(err,__FILE__,__LINE__);
+  err=cudaMalloc((void**) &freqsd, t->Nf*sizeof(double));
+  checkCudaError(err,__FILE__,__LINE__);
+  err=cudaMemcpy(freqsd, t->freqs, t->Nf*sizeof(double), cudaMemcpyHostToDevice);
+  checkCudaError(err,__FILE__,__LINE__);
+
+
+  if (t->dobeam) {
   dtofcopy(t->N,&longd,t->longitude);
   dtofcopy(t->N,&latd,t->latitude);
   err=cudaMalloc((void**) &timed, t->tilesz*sizeof(double));
@@ -153,14 +170,6 @@ precalcoh_threadfn(void *data) {
 
   err=cudaMemcpy(Nelemd, t->Nelem, t->N*sizeof(int), cudaMemcpyHostToDevice);
   checkCudaError(err,__FILE__,__LINE__);
-
-  /* temp host storage to copy coherencies */
-  complex float *tempcoh;
-  if ((tempcoh=(complex float*)calloc((size_t)t->Nbase*4,sizeof(complex float)))==0) {
-      fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
-      exit(1);
-  }
-
 
   /* jagged arrays for element locations */
   err=cudaMalloc((void**)&xxd, t->N*sizeof(int*));
@@ -203,39 +212,79 @@ precalcoh_threadfn(void *data) {
   checkCudaError(err,__FILE__,__LINE__);
   err=cudaMemcpy(zzd, zz_p, t->N*sizeof(int*), cudaMemcpyHostToDevice);
   checkCudaError(err,__FILE__,__LINE__);
+  }
 
 
   float *beamd;
-  float *lld,*mmd,*nnd,*sId,*rad,*decd;
+  double *lld,*mmd,*nnd;
+  double *sId; float *rad,*decd;
   unsigned char *styped;
-  float *sI0d,*f0d,*spec_idxd,*spec_idx1d,*spec_idx2d;
+  double *sI0d,*f0d,*spec_idxd,*spec_idx1d,*spec_idx2d;
   int **host_p,**dev_p;
 /******************* begin loop over clusters **************************/
   for (ncl=t->soff; ncl<t->soff+t->Ns; ncl++) {
-     /* allocate memory for this clusters beam */
-     err=cudaMalloc((void**)&beamd, t->N*t->tilesz*t->carr[ncl].N*t->Nf*sizeof(float));
-     checkCudaError(err,__FILE__,__LINE__);
 
+     if (t->dobeam) {
+      /* allocate memory for this clusters beam */
+      err=cudaMalloc((void**)&beamd, t->N*t->tilesz*t->carr[ncl].N*t->Nf*sizeof(float));
+      checkCudaError(err,__FILE__,__LINE__);
+     } else {
+      beamd=0;
+     }
 
      /* copy cluster details to GPU */
      err=cudaMalloc((void**)&styped, t->carr[ncl].N*sizeof(unsigned char));
      checkCudaError(err,__FILE__,__LINE__);
 
-     dtofcopy(t->carr[ncl].N,&lld,t->carr[ncl].ll);
-     dtofcopy(t->carr[ncl].N,&mmd,t->carr[ncl].mm);
-     dtofcopy(t->carr[ncl].N,&nnd,t->carr[ncl].nn);
-     dtofcopy(t->carr[ncl].N,&sId,t->carr[ncl].sI);
-     dtofcopy(t->carr[ncl].N,&rad,t->carr[ncl].ra);
-     dtofcopy(t->carr[ncl].N,&decd,t->carr[ncl].dec);
+     err=cudaMalloc((void**) &lld, t->carr[ncl].N*sizeof(double));
+     checkCudaError(err,__FILE__,__LINE__);
+     err=cudaMemcpy(lld, t->carr[ncl].ll, t->carr[ncl].N*sizeof(double), cudaMemcpyHostToDevice);
+     checkCudaError(err,__FILE__,__LINE__);
+     err=cudaMalloc((void**) &mmd, t->carr[ncl].N*sizeof(double));
+     checkCudaError(err,__FILE__,__LINE__);
+     err=cudaMemcpy(mmd, t->carr[ncl].mm, t->carr[ncl].N*sizeof(double), cudaMemcpyHostToDevice);
+     checkCudaError(err,__FILE__,__LINE__);
+     err=cudaMalloc((void**) &nnd, t->carr[ncl].N*sizeof(double));
+     checkCudaError(err,__FILE__,__LINE__);
+     err=cudaMemcpy(nnd, t->carr[ncl].nn, t->carr[ncl].N*sizeof(double), cudaMemcpyHostToDevice);
+     checkCudaError(err,__FILE__,__LINE__);
+
+     err=cudaMalloc((void**) &sId, t->carr[ncl].N*sizeof(double));
+     checkCudaError(err,__FILE__,__LINE__);
+     err=cudaMemcpy(sId, t->carr[ncl].sI, t->carr[ncl].N*sizeof(double), cudaMemcpyHostToDevice);
+     checkCudaError(err,__FILE__,__LINE__);
+
+     if (t->dobeam) {
+      dtofcopy(t->carr[ncl].N,&rad,t->carr[ncl].ra);
+      dtofcopy(t->carr[ncl].N,&decd,t->carr[ncl].dec);
+     } else {
+       rad=0;
+       decd=0;
+     }
      err=cudaMemcpy(styped, t->carr[ncl].stype, t->carr[ncl].N*sizeof(unsigned char), cudaMemcpyHostToDevice);
      checkCudaError(err,__FILE__,__LINE__);
 
      /* for multi channel data */
-     dtofcopy(t->carr[ncl].N,&sI0d,t->carr[ncl].sI0);
-     dtofcopy(t->carr[ncl].N,&f0d,t->carr[ncl].f0);
-     dtofcopy(t->carr[ncl].N,&spec_idxd,t->carr[ncl].spec_idx);
-     dtofcopy(t->carr[ncl].N,&spec_idx1d,t->carr[ncl].spec_idx1);
-     dtofcopy(t->carr[ncl].N,&spec_idx2d,t->carr[ncl].spec_idx2);
+     err=cudaMalloc((void**) &sI0d, t->carr[ncl].N*sizeof(double));
+     checkCudaError(err,__FILE__,__LINE__);
+     err=cudaMemcpy(sI0d, t->carr[ncl].sI0, t->carr[ncl].N*sizeof(double), cudaMemcpyHostToDevice);
+     checkCudaError(err,__FILE__,__LINE__);
+     err=cudaMalloc((void**) &f0d, t->carr[ncl].N*sizeof(double));
+     checkCudaError(err,__FILE__,__LINE__);
+     err=cudaMemcpy(f0d, t->carr[ncl].f0, t->carr[ncl].N*sizeof(double), cudaMemcpyHostToDevice);
+     checkCudaError(err,__FILE__,__LINE__);
+     err=cudaMalloc((void**) &spec_idxd, t->carr[ncl].N*sizeof(double));
+     checkCudaError(err,__FILE__,__LINE__);
+     err=cudaMemcpy(spec_idxd, t->carr[ncl].spec_idx, t->carr[ncl].N*sizeof(double), cudaMemcpyHostToDevice);
+     checkCudaError(err,__FILE__,__LINE__);
+     err=cudaMalloc((void**) &spec_idx1d, t->carr[ncl].N*sizeof(double));
+     checkCudaError(err,__FILE__,__LINE__);
+     err=cudaMemcpy(spec_idx1d, t->carr[ncl].spec_idx1, t->carr[ncl].N*sizeof(double), cudaMemcpyHostToDevice);
+     checkCudaError(err,__FILE__,__LINE__);
+     err=cudaMalloc((void**) &spec_idx2d, t->carr[ncl].N*sizeof(double));
+     checkCudaError(err,__FILE__,__LINE__);
+     err=cudaMemcpy(spec_idx2d, t->carr[ncl].spec_idx2, t->carr[ncl].N*sizeof(double), cudaMemcpyHostToDevice);
+     checkCudaError(err,__FILE__,__LINE__);
 
      /* extra info for source, if any */
      if ((host_p=(int**)calloc((size_t)t->carr[ncl].N,sizeof(int*)))==0) {
@@ -290,37 +339,25 @@ precalcoh_threadfn(void *data) {
      err=cudaMemcpy(dev_p, host_p, t->carr[ncl].N*sizeof(int*), cudaMemcpyHostToDevice);
      checkCudaError(err,__FILE__,__LINE__);
 
-
+     if (t->dobeam) {
      /* now calculate beam for all sources in this cluster */
-     cudakernel_array_beam(t->N,t->tilesz,t->carr[ncl].N,t->Nf,freqsd,longd,latd,timed,Nelemd,xxd,yyd,zzd,rad,decd,(float)t->ph_ra0,(float)t->ph_dec0,(float)t->ph_freq0,beamd);
+      cudakernel_array_beam(t->N,t->tilesz,t->carr[ncl].N,t->Nf,freqsd,longd,latd,timed,Nelemd,xxd,yyd,zzd,rad,decd,(float)t->ph_ra0,(float)t->ph_dec0,(float)t->ph_freq0,beamd);
+     }
 
 
      /* calculate coherencies for all sources in this cluster, add them up */
      cudakernel_coherencies(t->Nbase,t->N,t->tilesz,t->carr[ncl].N,t->Nf,ud,vd,wd,barrd,freqsd,beamd,
-     lld,mmd,nnd,sId,styped,sI0d,f0d,spec_idxd,spec_idx1d,spec_idx2d,dev_p,(float)t->fdelta,(float)t->tdelta,(float)t->dec0,cohd,t->dobeam);
+     lld,mmd,nnd,sId,styped,sI0d,f0d,spec_idxd,spec_idx1d,spec_idx2d,dev_p,t->fdelta,t->tdelta,t->dec0,cohd,t->dobeam);
     
      /* copy back coherencies to host, 
         coherencies on host have 8M stride, on device have 8 stride */
-     err=cudaMemcpy((float*)tempcoh, cohd, sizeof(float)*t->Nbase*8, cudaMemcpyDeviceToHost);
-     checkCudaError(err,__FILE__,__LINE__);
      complex double *tempdcoh;
      if ((tempdcoh=(complex double*)calloc((size_t)t->Nbase*4,sizeof(complex double)))==0) {
        fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
        exit(1);
      }
-     int di;
-     double *dcp=(double*)tempdcoh;
-     float *fcp=(float*)tempcoh;
-     for (di=0; di<t->Nbase; di++) {
-       dcp[8*di]=(double)fcp[8*di];
-       dcp[8*di+1]=(double)fcp[8*di+1];
-       dcp[8*di+2]=(double)fcp[8*di+2];
-       dcp[8*di+3]=(double)fcp[8*di+3];
-       dcp[8*di+4]=(double)fcp[8*di+4];
-       dcp[8*di+5]=(double)fcp[8*di+5];
-       dcp[8*di+6]=(double)fcp[8*di+6];
-       dcp[8*di+7]=(double)fcp[8*di+7];
-     }
+     err=cudaMemcpy((double*)tempdcoh, cohd, sizeof(double)*t->Nbase*8, cudaMemcpyDeviceToHost);
+     checkCudaError(err,__FILE__,__LINE__);
      /* now copy this with right offset and stride */
      my_ccopy(t->Nbase,&tempdcoh[0],4,&(t->coh[4*ncl]),4*t->M);
      my_ccopy(t->Nbase,&tempdcoh[1],4,&(t->coh[4*ncl+1]),4*t->M);
@@ -355,9 +392,10 @@ precalcoh_threadfn(void *data) {
      err=cudaFree(dev_p);
      checkCudaError(err,__FILE__,__LINE__);
 
-
-     err=cudaFree(beamd);
-     checkCudaError(err,__FILE__,__LINE__);
+     if (t->dobeam) {
+      err=cudaFree(beamd);
+      checkCudaError(err,__FILE__,__LINE__);
+     }
      err=cudaFree(lld);
      checkCudaError(err,__FILE__,__LINE__);
      err=cudaFree(mmd);
@@ -366,10 +404,12 @@ precalcoh_threadfn(void *data) {
      checkCudaError(err,__FILE__,__LINE__);
      err=cudaFree(sId);
      checkCudaError(err,__FILE__,__LINE__);
-     err=cudaFree(rad);
-     checkCudaError(err,__FILE__,__LINE__);
-     err=cudaFree(decd);
-     checkCudaError(err,__FILE__,__LINE__);
+     if (t->dobeam) {
+      err=cudaFree(rad);
+      checkCudaError(err,__FILE__,__LINE__);
+      err=cudaFree(decd);
+      checkCudaError(err,__FILE__,__LINE__);
+     }
      err=cudaFree(styped);
      checkCudaError(err,__FILE__,__LINE__);
 
@@ -386,8 +426,6 @@ precalcoh_threadfn(void *data) {
   }
 /******************* end loop over clusters **************************/
 
-  free(tempcoh);
-
   /* free memory */
   err=cudaFree(ud);
   checkCudaError(err,__FILE__,__LINE__);
@@ -401,6 +439,8 @@ precalcoh_threadfn(void *data) {
   checkCudaError(err,__FILE__,__LINE__);
   err=cudaFree(freqsd);
   checkCudaError(err,__FILE__,__LINE__);
+  
+  if (t->dobeam) {
   err=cudaFree(longd);
   checkCudaError(err,__FILE__,__LINE__);
   err=cudaFree(latd);
@@ -409,7 +449,6 @@ precalcoh_threadfn(void *data) {
   checkCudaError(err,__FILE__,__LINE__);
   err=cudaFree(Nelemd);
   checkCudaError(err,__FILE__,__LINE__);
-
 
   for (ci=0; ci<t->N; ci++) {
     err=cudaFree(xx_p[ci]);
@@ -430,6 +469,7 @@ precalcoh_threadfn(void *data) {
   free(xx_p);
   free(yy_p);
   free(zz_p);
+  }
 
   /* reset error state */
   err=cudaGetLastError(); 
@@ -468,12 +508,7 @@ precalculate_coherencies_withbeam_gpu(double *u, double *v, double *w, complex d
   taskhist thst;
   init_task_hist(&thst);
 
-  int Ngpu;
-  if (M<4) {
-   Ngpu=2;
-  } else {
-   Ngpu=4;
-  }
+  int Ngpu=MAX_GPU_ID+1;
 
   /* calculate min clusters thread can handle */
   Nthb0=(M+Ngpu-1)/Ngpu;
@@ -507,7 +542,7 @@ precalculate_coherencies_withbeam_gpu(double *u, double *v, double *w, complex d
      threaddata[nth].v=v;
      threaddata[nth].w=w;
      threaddata[nth].coh=x;
-     threaddata[nth].x=0; /* no data */
+     threaddata[nth].x=0; /* no input data */
 
      threaddata[nth].N=N;
      threaddata[nth].Nbase=Nbase; /* total baselines: actually Nbasextilesz */
@@ -631,18 +666,31 @@ predictvis_threadfn(void *data) {
   cudaError_t err;
   int ci,ncl,cj;
 
+printf("Attath %d to card %d\n",t->tid,card);
+
   err=cudaSetDevice(card);
   checkCudaError(err,__FILE__,__LINE__);
 
-  float *ud,*vd,*wd,*cohd;
+  /* make sure enough heap memory is available for shapelet computations */
+  size_t plim;
+  err=cudaDeviceGetLimit(&plim,cudaLimitMallocHeapSize);
+  checkCudaError(err,__FILE__,__LINE__);
+  if (plim<16*1024*1024) { /* 16MB */
+   err=cudaDeviceSetLimit(cudaLimitMallocHeapSize, 16*1024*1024);
+   checkCudaError(err,__FILE__,__LINE__);
+  }
+
+
+  double *ud,*vd,*wd;
+  double *cohd;
   baseline_t *barrd;
-  float *freqsd;
+  double *freqsd;
   float *longd=0,*latd=0; double *timed;
   int *Nelemd;
   float **xx_p=0,**yy_p=0,**zz_p=0;
   float **xxd,**yyd,**zzd;
   /* allocate memory in GPU */
-  err=cudaMalloc((void**) &cohd, t->Nbase*8*t->Nf*sizeof(float)); /* coherencies only for 1 cluster, Nf freq, used to store sum of clusters*/
+  err=cudaMalloc((void**) &cohd, t->Nbase*8*t->Nf*sizeof(double)); /* coherencies only for 1 cluster, Nf freq, used to store sum of clusters*/
   checkCudaError(err,__FILE__,__LINE__);
   err=cudaMalloc((void**) &barrd, t->Nbase*sizeof(baseline_t));
   checkCudaError(err,__FILE__,__LINE__);
@@ -650,12 +698,28 @@ predictvis_threadfn(void *data) {
   checkCudaError(err,__FILE__,__LINE__);
   
   /* copy to device */
-  dtofcopy(t->Nbase,&ud,t->u);
-  dtofcopy(t->Nbase,&vd,t->v);
-  dtofcopy(t->Nbase,&wd,t->w);
+  /* u,v,w and l,m,n coords need to be double for precision */
+  err=cudaMalloc((void**) &ud, t->Nbase*sizeof(double));
+  checkCudaError(err,__FILE__,__LINE__);
+  err=cudaMalloc((void**) &vd, t->Nbase*sizeof(double));
+  checkCudaError(err,__FILE__,__LINE__);
+  err=cudaMalloc((void**) &wd, t->Nbase*sizeof(double));
+  checkCudaError(err,__FILE__,__LINE__);
+  err=cudaMemcpy(ud, t->u, t->Nbase*sizeof(double), cudaMemcpyHostToDevice);
+  checkCudaError(err,__FILE__,__LINE__);
+  err=cudaMemcpy(vd, t->v, t->Nbase*sizeof(double), cudaMemcpyHostToDevice);
+  checkCudaError(err,__FILE__,__LINE__);
+  err=cudaMemcpy(wd, t->w, t->Nbase*sizeof(double), cudaMemcpyHostToDevice);
+  checkCudaError(err,__FILE__,__LINE__);
+
+
   err=cudaMemcpy(barrd, t->barr, t->Nbase*sizeof(baseline_t), cudaMemcpyHostToDevice);
   checkCudaError(err,__FILE__,__LINE__);
-  dtofcopy(t->Nf,&freqsd,t->freqs);
+  err=cudaMalloc((void**) &freqsd, t->Nf*sizeof(double));
+  checkCudaError(err,__FILE__,__LINE__);
+  err=cudaMemcpy(freqsd, t->freqs, t->Nf*sizeof(double), cudaMemcpyHostToDevice);
+  checkCudaError(err,__FILE__,__LINE__);
+
 
   /* check if beam is actually calculated */
   if (t->dobeam) {
@@ -716,36 +780,83 @@ predictvis_threadfn(void *data) {
 
 
   float *beamd;
-  float *lld,*mmd,*nnd,*sId,*rad,*decd;
+  double *lld,*mmd,*nnd;
+  double *sId; float *rad,*decd;
   unsigned char *styped;
-  float *sI0d,*f0d,*spec_idxd,*spec_idx1d,*spec_idx2d;
+  double *sI0d,*f0d,*spec_idxd,*spec_idx1d,*spec_idx2d;
   int **host_p,**dev_p;
+
+  double *xlocal;
+  err=cudaMallocHost((void**)&xlocal,sizeof(double)*(size_t)t->Nbase*8*t->Nf);
+  checkCudaError(err,__FILE__,__LINE__);
+
 /******************* begin loop over clusters **************************/
   for (ncl=t->soff; ncl<t->soff+t->Ns; ncl++) {
+     printf("th %d clus %d:%d working %d\n",t->tid,t->soff,t->soff+t->Ns-1,ncl);
      /* allocate memory for this clusters beam */
-     err=cudaMalloc((void**)&beamd, t->N*t->tilesz*t->carr[ncl].N*t->Nf*sizeof(float));
-     checkCudaError(err,__FILE__,__LINE__);
+     if (t->dobeam) {
+      err=cudaMalloc((void**)&beamd, t->N*t->tilesz*t->carr[ncl].N*t->Nf*sizeof(float));
+      checkCudaError(err,__FILE__,__LINE__);
+     } else {
+       beamd=0;
+     }
 
 
      /* copy cluster details to GPU */
      err=cudaMalloc((void**)&styped, t->carr[ncl].N*sizeof(unsigned char));
      checkCudaError(err,__FILE__,__LINE__);
 
-     dtofcopy(t->carr[ncl].N,&lld,t->carr[ncl].ll);
-     dtofcopy(t->carr[ncl].N,&mmd,t->carr[ncl].mm);
-     dtofcopy(t->carr[ncl].N,&nnd,t->carr[ncl].nn);
-     dtofcopy(t->carr[ncl].N,&sId,t->carr[ncl].sI);
-     dtofcopy(t->carr[ncl].N,&rad,t->carr[ncl].ra);
-     dtofcopy(t->carr[ncl].N,&decd,t->carr[ncl].dec);
+     err=cudaMalloc((void**) &lld, t->carr[ncl].N*sizeof(double));
+     checkCudaError(err,__FILE__,__LINE__);
+     err=cudaMemcpy(lld, t->carr[ncl].ll, t->carr[ncl].N*sizeof(double), cudaMemcpyHostToDevice);
+     checkCudaError(err,__FILE__,__LINE__);
+     err=cudaMalloc((void**) &mmd, t->carr[ncl].N*sizeof(double));
+     checkCudaError(err,__FILE__,__LINE__);
+     err=cudaMemcpy(mmd, t->carr[ncl].mm, t->carr[ncl].N*sizeof(double), cudaMemcpyHostToDevice);
+     checkCudaError(err,__FILE__,__LINE__);
+     err=cudaMalloc((void**) &nnd, t->carr[ncl].N*sizeof(double));
+     checkCudaError(err,__FILE__,__LINE__);
+     err=cudaMemcpy(nnd, t->carr[ncl].nn, t->carr[ncl].N*sizeof(double), cudaMemcpyHostToDevice);
+     checkCudaError(err,__FILE__,__LINE__);
+
+
+     err=cudaMalloc((void**) &sId, t->carr[ncl].N*sizeof(double));
+     checkCudaError(err,__FILE__,__LINE__);
+     err=cudaMemcpy(sId, t->carr[ncl].sI, t->carr[ncl].N*sizeof(double), cudaMemcpyHostToDevice);
+     checkCudaError(err,__FILE__,__LINE__);
+
+     if (t->dobeam) {
+      dtofcopy(t->carr[ncl].N,&rad,t->carr[ncl].ra);
+      dtofcopy(t->carr[ncl].N,&decd,t->carr[ncl].dec);
+     } else {
+       rad=0;
+       decd=0;
+     }
      err=cudaMemcpy(styped, t->carr[ncl].stype, t->carr[ncl].N*sizeof(unsigned char), cudaMemcpyHostToDevice);
      checkCudaError(err,__FILE__,__LINE__);
 
      /* for multi channel data */
-     dtofcopy(t->carr[ncl].N,&sI0d,t->carr[ncl].sI0);
-     dtofcopy(t->carr[ncl].N,&f0d,t->carr[ncl].f0);
-     dtofcopy(t->carr[ncl].N,&spec_idxd,t->carr[ncl].spec_idx);
-     dtofcopy(t->carr[ncl].N,&spec_idx1d,t->carr[ncl].spec_idx1);
-     dtofcopy(t->carr[ncl].N,&spec_idx2d,t->carr[ncl].spec_idx2);
+     err=cudaMalloc((void**) &sI0d, t->carr[ncl].N*sizeof(double));
+     checkCudaError(err,__FILE__,__LINE__);
+     err=cudaMemcpy(sI0d, t->carr[ncl].sI0, t->carr[ncl].N*sizeof(double), cudaMemcpyHostToDevice);
+     checkCudaError(err,__FILE__,__LINE__);
+     err=cudaMalloc((void**) &f0d, t->carr[ncl].N*sizeof(double));
+     checkCudaError(err,__FILE__,__LINE__);
+     err=cudaMemcpy(f0d, t->carr[ncl].f0, t->carr[ncl].N*sizeof(double), cudaMemcpyHostToDevice);
+     checkCudaError(err,__FILE__,__LINE__);
+     err=cudaMalloc((void**) &spec_idxd, t->carr[ncl].N*sizeof(double));
+     checkCudaError(err,__FILE__,__LINE__);
+     err=cudaMemcpy(spec_idxd, t->carr[ncl].spec_idx, t->carr[ncl].N*sizeof(double), cudaMemcpyHostToDevice);
+     checkCudaError(err,__FILE__,__LINE__);
+     err=cudaMalloc((void**) &spec_idx1d, t->carr[ncl].N*sizeof(double));
+     checkCudaError(err,__FILE__,__LINE__);
+     err=cudaMemcpy(spec_idx1d, t->carr[ncl].spec_idx1, t->carr[ncl].N*sizeof(double), cudaMemcpyHostToDevice);
+     checkCudaError(err,__FILE__,__LINE__);
+     err=cudaMalloc((void**) &spec_idx2d, t->carr[ncl].N*sizeof(double));
+     checkCudaError(err,__FILE__,__LINE__);
+     err=cudaMemcpy(spec_idx2d, t->carr[ncl].spec_idx2, t->carr[ncl].N*sizeof(double), cudaMemcpyHostToDevice);
+     checkCudaError(err,__FILE__,__LINE__);
+
 
      /* extra info for source, if any */
      if ((host_p=(int**)calloc((size_t)t->carr[ncl].N,sizeof(int*)))==0) {
@@ -809,31 +920,13 @@ predictvis_threadfn(void *data) {
 
      /* calculate coherencies for all sources in this cluster, add them up */
      cudakernel_coherencies(t->Nbase,t->N,t->tilesz,t->carr[ncl].N,t->Nf,ud,vd,wd,barrd,freqsd,beamd,
-     lld,mmd,nnd,sId,styped,sI0d,f0d,spec_idxd,spec_idx1d,spec_idx2d,dev_p,(float)t->fdelta,(float)t->tdelta,(float)t->dec0,cohd,t->dobeam);
+     lld,mmd,nnd,sId,styped,sI0d,f0d,spec_idxd,spec_idx1d,spec_idx2d,dev_p,t->fdelta,t->tdelta,t->dec0,cohd,t->dobeam);
     
      /* copy back coherencies to host, 
         coherencies on host have 8M stride, on device have 8 stride */
-     float *tempx;
-     if ((tempx=(float*)calloc((size_t)t->Nbase*8*t->Nf,sizeof(float)))==0) {
-      fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
-      exit(1);
-     }
-     err=cudaMemcpy(tempx, cohd, sizeof(float)*t->Nbase*8*t->Nf, cudaMemcpyDeviceToHost);
+     err=cudaMemcpy(xlocal, cohd, sizeof(double)*t->Nbase*8*t->Nf, cudaMemcpyDeviceToHost);
      checkCudaError(err,__FILE__,__LINE__);
-     /* copy back as double */
-     int di;
-     for (di=0; di<t->Nbase*t->Nf; di++) {
-      t->x[8*di]=(double)tempx[8*di];
-      t->x[8*di+1]=(double)tempx[8*di+1];
-      t->x[8*di+2]=(double)tempx[8*di+2];
-      t->x[8*di+3]=(double)tempx[8*di+3];
-      t->x[8*di+4]=(double)tempx[8*di+4];
-      t->x[8*di+5]=(double)tempx[8*di+5];
-      t->x[8*di+6]=(double)tempx[8*di+6];
-      t->x[8*di+7]=(double)tempx[8*di+7];
-     }
-     free(tempx);
-
+     my_daxpy(t->Nbase*8*t->Nf,xlocal,1.0,t->x);
 
      for (cj=0; cj<t->carr[ncl].N; cj++) {
         if (t->carr[ncl].stype[cj]==STYPE_POINT) {
@@ -861,9 +954,10 @@ predictvis_threadfn(void *data) {
      err=cudaFree(dev_p);
      checkCudaError(err,__FILE__,__LINE__);
 
-
-     err=cudaFree(beamd);
-     checkCudaError(err,__FILE__,__LINE__);
+     if (t->dobeam) {
+      err=cudaFree(beamd);
+      checkCudaError(err,__FILE__,__LINE__);
+     }
      err=cudaFree(lld);
      checkCudaError(err,__FILE__,__LINE__);
      err=cudaFree(mmd);
@@ -872,10 +966,12 @@ predictvis_threadfn(void *data) {
      checkCudaError(err,__FILE__,__LINE__);
      err=cudaFree(sId);
      checkCudaError(err,__FILE__,__LINE__);
-     err=cudaFree(rad);
-     checkCudaError(err,__FILE__,__LINE__);
-     err=cudaFree(decd);
-     checkCudaError(err,__FILE__,__LINE__);
+     if (t->dobeam) {
+      err=cudaFree(rad);
+      checkCudaError(err,__FILE__,__LINE__);
+      err=cudaFree(decd);
+      checkCudaError(err,__FILE__,__LINE__);
+     }
      err=cudaFree(styped);
      checkCudaError(err,__FILE__,__LINE__);
 
@@ -893,6 +989,9 @@ predictvis_threadfn(void *data) {
 /******************* end loop over clusters **************************/
 
   /* free memory */
+  err=cudaFreeHost(xlocal);
+  checkCudaError(err,__FILE__,__LINE__);
+
   err=cudaFree(ud);
   checkCudaError(err,__FILE__,__LINE__);
   err=cudaFree(vd);
@@ -957,12 +1056,8 @@ double ph_ra0, double ph_dec0, double ph_freq0, double *longitude, double *latit
   taskhist thst;
   init_task_hist(&thst);
 
-  int Ngpu;
-  if (M<4) {
-   Ngpu=2;
-  } else {
-   Ngpu=4;
-  }
+  /* oversubsribe GPU */
+  int Ngpu=MAX_GPU_ID+1;
 
   /* calculate min clusters thread can handle */
   Nthb0=(M+Ngpu-1)/Ngpu;
@@ -988,7 +1083,7 @@ double ph_ra0, double ph_dec0, double ph_freq0, double *longitude, double *latit
   }
 
   if (add_to_data==SIMUL_ONLY) {
-   /* set output column to zero */
+   /* set input column to zero */
    memset(x,0,sizeof(double)*Nbase*8*tilesz*Nchan);
   }
 
@@ -1054,7 +1149,11 @@ double ph_ra0, double ph_dec0, double ph_freq0, double *longitude, double *latit
   for(ci=0; ci<nth; ci++) {
     pthread_join(th_array[ci],NULL);
     /* add or copy xlocal back to x */
-    my_daxpy(Nbase*8*tilesz*Nchan,threaddata[ci].x,1.0,x);
+    if (add_to_data==SIMUL_ONLY || add_to_data==SIMUL_ADD) {
+     my_daxpy(Nbase*8*tilesz*Nchan,threaddata[ci].x,1.0,x);
+    } else { /* subtract */
+     my_daxpy(Nbase*8*tilesz*Nchan,threaddata[ci].x,-1.0,x);
+    }
   }
 
 
