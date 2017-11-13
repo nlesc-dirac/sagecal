@@ -550,7 +550,7 @@ visibilities_threadfn_multifreq(void *data) {
 
 
 /***********************************************/
-      if (t->add_to_data==1) {
+      if (t->add_to_data==SIMUL_ONLY || t->add_to_data==SIMUL_ADD) {
         /* add to baseline visibilities */
         t->x[8*ci+cf*Ntilebase*8]+=creal(C[0]);
         t->x[8*ci+1+cf*Ntilebase*8]+=cimag(C[0]);
@@ -560,7 +560,7 @@ visibilities_threadfn_multifreq(void *data) {
         t->x[8*ci+5+cf*Ntilebase*8]+=cimag(C[2]);
         t->x[8*ci+6+cf*Ntilebase*8]+=creal(C[3]);
         t->x[8*ci+7+cf*Ntilebase*8]+=cimag(C[3]);
-      } else {
+      } else if (t->add_to_data==SIMUL_SUB) {
         /* subtract from baseline visibilities */
         t->x[8*ci+cf*Ntilebase*8]-=creal(C[0]);
         t->x[8*ci+1+cf*Ntilebase*8]-=cimag(C[0]);
@@ -615,7 +615,7 @@ double ph_ra0, double ph_dec0, double ph_freq0, double *longitude, double *latit
   }
 
 
-  if (!add_to_data) {
+  if (add_to_data==SIMUL_ONLY) {
    /* set output column to zero */
    memset(x,0,sizeof(double)*8*Nbase*tilesz*Nchan);
   }

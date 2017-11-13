@@ -1533,7 +1533,7 @@ predictwithgain_threadfn_multifreq(void *data) {
       amb(G1,C,T1);
       /* T2=T1*G2' */
       ambt(T1,G2,T2);
-      if (t->add_to_data==SIMUL_ADD) {
+      if (t->add_to_data==SIMUL_ONLY || t->add_to_data==SIMUL_ADD) {
         /* add to baseline visibilities */
         t->x[8*ci+cf*Ntilebase*8]+=creal(T2[0]);
         t->x[8*ci+1+cf*Ntilebase*8]+=cimag(T2[0]);

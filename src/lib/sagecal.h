@@ -2678,13 +2678,13 @@ predict_visibilities_multifreq_withbeam_gpu(double *u,double *v,double *w,double
 
 
 extern void
-cudakernel_array_beam(int N, int T, int K, int F, float *freqs, float *longitude, float *latitude,
+cudakernel_array_beam(int N, int T, int K, int F, double *freqs, float *longitude, float *latitude,
  double *time_utc, int *Nelem, float **xx, float **yy, float **zz, float *ra, float *dec, float ph_ra0, float  ph_dec0, float ph_freq0, float *beam);
 
 
 extern void
-cudakernel_coherencies(int B, int N, int T, int K, int F, float *u, float *v, float *w,baseline_t *barr, float *freqs, float *beam, float *ll, float *mm, float *nn, float *sI,
-  unsigned char *stype, float *sI0, float *f0, float *spec_idx, float *spec_idx1, float *spec_idx2, int **exs, float deltaf, float deltat, float dec0, float *coh,int dobeam);
+cudakernel_coherencies(int B, int N, int T, int K, int F, double *u, double *v, double *w,baseline_t *barr, double *freqs, float *beam, double *ll, double *mm, double *nn, double *sI,
+  unsigned char *stype, double *sI0, double *f0, double *spec_idx, double *spec_idx1, double *spec_idx2, int **exs, double deltaf, double deltat, double dec0, double *coh, int dobeam);
 
 
 extern void
