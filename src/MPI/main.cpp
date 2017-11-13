@@ -33,7 +33,7 @@ using namespace Data;
 
 void
 print_copyright(void) {
-  cout<<"SAGECal-MPI 0.4.9 (C) 2011-2017 Sarod Yatawatta"<<endl;
+  cout<<"SAGECal-MPI 0.5.0 (C) 2011-2018 Sarod Yatawatta"<<endl;
 }
 
 
@@ -59,6 +59,7 @@ print_help(void) {
    cout << "-n no of worker threads : default "<<Data::Nt << endl;
    cout << "-t tile size : default " <<Data::TileSize<< endl;
    cout << "-B 0,1 : if 1, predict array beam: default " <<Data::doBeam<< endl;
+   cout << "-E 0,1 : if 1, use GPU for model computing: default " <<Data::GPUpredict<< endl;
    cout << "-A ADMM iterations: default " <<Data::Nadmm<< endl;
    cout << "-P consensus polynomial terms: default " <<Data::Npoly<< endl;
    cout << "-Q consensus polynomial type (0,1,2,3): default " <<Data::PolyType<< endl;
@@ -90,7 +91,7 @@ print_help(void) {
 void 
 ParseCmdLine(int ac, char **av) {
     char c;
-    while((c=getopt(ac, av, "c:e:f:g:j:k:l:m:n:o:p:q:r:s:t:x:y:A:B:C:F:I:J:K:L:O:P:Q:G:H:R:T:W:MVh"))!= -1)
+    while((c=getopt(ac, av, "c:e:f:g:j:k:l:m:n:o:p:q:r:s:t:x:y:A:B:C:E:F:I:J:K:L:O:P:Q:G:H:R:T:W:E:MVh"))!= -1)
     {
         switch(c)
         {
@@ -176,6 +177,9 @@ ParseCmdLine(int ac, char **av) {
             case 'M': 
                 Data::mdl=1;
                 break; 
+            case 'E': 
+                GPUpredict=atoi(optarg);
+                break; 
             case 'H': 
                 nuhigh= atof(optarg);
                 break;
@@ -234,7 +238,6 @@ ParseCmdLine(int ac, char **av) {
      exit(1);
     }
 }
-
 
 /* real main program */
 int
