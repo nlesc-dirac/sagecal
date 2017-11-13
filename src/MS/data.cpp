@@ -85,6 +85,7 @@ int Data::Nmaxtime=0;
 int Data::Nskip=0;
 int Data::verbose=0; /* no verbose output */
 int Data::mdl=0; /* no AIC/MDL calculation by default */
+int Data::GPUpredict=0; /* use CPU for model calculation, if GPU not specified */
 
 using namespace Data;
 

@@ -164,5 +164,6 @@ namespace Data
     extern int Nskip;
     extern int verbose; /* if >0, enable verbose output */
     extern int mdl; /* if given, calculate AIC/MDL for different poly configs and find minimum */
+    extern int GPUpredict; /* if given, use GPU for model calculation */
 }
 #endif //__DATA_H__

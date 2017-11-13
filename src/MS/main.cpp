@@ -35,7 +35,7 @@ using namespace Data;
 
 void
 print_copyright(void) {
-  cout<<"SAGECal 0.4.7 (C) 2011-2017 Sarod Yatawatta"<<endl;
+  cout<<"SAGECal 0.5.0 (C) 2011-2018 Sarod Yatawatta"<<endl;
 }
 
 
@@ -63,6 +63,7 @@ print_help(void) {
    cout << "-z ignore_clusters: if only doing a simulation, ignore the cluster ids listed in this file" << endl;
    cout << "-b 0,1 : if 1, solve for each channel: default " <<Data::doChan<< endl;
    cout << "-B 0,1 : if 1, predict array beam: default " <<Data::doBeam<< endl;
+   cout << "-E 0,1 : if 1, use GPU for model computing: default " <<Data::GPUpredict<< endl;
    cout << "-x exclude baselines length (lambda) lower than this in calibration : default "<<Data::min_uvcut << endl;
    cout << "-y exclude baselines length (lambda) higher than this in calibration : default "<<Data::max_uvcut << endl;
    cout <<endl<<"Advanced options:"<<endl;
@@ -89,7 +90,7 @@ ParseCmdLine(int ac, char **av) {
         print_help();
         exit(0);
     }
-    while((c=getopt(ac, av, "a:b:c:d:e:f:g:j:k:l:m:n:o:p:q:s:t:x:y:z:B:D:F:I:J:O:L:H:R:W:h"))!= -1)
+    while((c=getopt(ac, av, "a:b:c:d:e:f:g:j:k:l:m:n:o:p:q:s:t:x:y:z:B:D:E:F:I:J:O:L:H:R:W:E:h"))!= -1)
     {
         switch(c)
         {
@@ -125,6 +126,9 @@ ParseCmdLine(int ac, char **av) {
             case 'B':
                 doBeam= atoi(optarg);
                 if (doBeam>1) { doBeam=1; }
+                break;
+            case 'E':
+                GPUpredict=atoi(optarg);
                 break;
             case 'F':
                 format= atoi(optarg);
@@ -217,7 +221,6 @@ ParseCmdLine(int ac, char **av) {
      cout<<"Only doing simulation (with possible correction for cluster id "<<ccid<<")."<<endl;
     }
 }
-
 
 int 
 main(int argc, char **argv) {
@@ -666,18 +669,27 @@ beam.p_ra0,beam.p_dec0,iodata.freq0,beam.sx,beam.sy,beam.time_utc,beam.Nelem,bea
    } else {
     /************ simulation only mode ***************************/
     if (!solfile) {
-////#ifndef HAVE_CUDA
+#ifndef HAVE_CUDA
      if (!doBeam) {
       predict_visibilities_multifreq(iodata.u,iodata.v,iodata.w,iodata.xo,iodata.N,iodata.Nbase,iodata.tilesz,barr,carr,M,iodata.freqs,iodata.Nchan,iodata.deltaf,iodata.deltat,iodata.dec0,Data::Nt,Data::DoSim);
      } else {
       predict_visibilities_multifreq_withbeam(iodata.u,iodata.v,iodata.w,iodata.xo,iodata.N,iodata.Nbase,iodata.tilesz,barr,carr,M,iodata.freqs,iodata.Nchan,iodata.deltaf,iodata.deltat,iodata.dec0,
   beam.p_ra0,beam.p_dec0,iodata.freq0,beam.sx,beam.sy,beam.time_utc,beam.Nelem,beam.xx,beam.yy,beam.zz, Data::Nt,Data::DoSim);
      }
-////#endif
-////#ifdef HAVE_CUDA
-////      predict_visibilities_multifreq_withbeam_gpu(iodata.u,iodata.v,iodata.w,iodata.xo,iodata.N,iodata.Nbase,iodata.tilesz,barr,carr,M,iodata.freqs,iodata.Nchan,iodata.deltaf,iodata.deltat,iodata.dec0,
-////  beam.p_ra0,beam.p_dec0,iodata.freq0,beam.sx,beam.sy,beam.time_utc,beam.Nelem,beam.xx,beam.yy,beam.zz,doBeam,Data::Nt,(Data::DoSim>1?1:0));
-////#endif
+#endif
+#ifdef HAVE_CUDA
+     if (GPUpredict) {
+      predict_visibilities_multifreq_withbeam_gpu(iodata.u,iodata.v,iodata.w,iodata.xo,iodata.N,iodata.Nbase,iodata.tilesz,barr,carr,M,iodata.freqs,iodata.Nchan,iodata.deltaf,iodata.deltat,iodata.dec0,
+  beam.p_ra0,beam.p_dec0,iodata.freq0,beam.sx,beam.sy,beam.time_utc,beam.Nelem,beam.xx,beam.yy,beam.zz,doBeam,Data::Nt,Data::DoSim);
+     } else {
+      if (!doBeam) {
+       predict_visibilities_multifreq(iodata.u,iodata.v,iodata.w,iodata.xo,iodata.N,iodata.Nbase,iodata.tilesz,barr,carr,M,iodata.freqs,iodata.Nchan,iodata.deltaf,iodata.deltat,iodata.dec0,Data::Nt,Data::DoSim);
+      } else {
+       predict_visibilities_multifreq_withbeam(iodata.u,iodata.v,iodata.w,iodata.xo,iodata.N,iodata.Nbase,iodata.tilesz,barr,carr,M,iodata.freqs,iodata.Nchan,iodata.deltaf,iodata.deltat,iodata.dec0,
+       beam.p_ra0,beam.p_dec0,iodata.freq0,beam.sx,beam.sy,beam.time_utc,beam.Nelem,beam.xx,beam.yy,beam.zz, Data::Nt,Data::DoSim);
+      }
+     }
+#endif
     } else {
      read_solutions(sfp,p,carr,iodata.N,M);
     /* if solution file is given, read in the solutions and predict */
