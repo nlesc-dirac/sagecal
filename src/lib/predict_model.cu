@@ -51,121 +51,12 @@ radec2azel_gmst__(float ra, float dec, float longitude, float latitude, float th
   *az=azd;
 }
 
-/* slave kernel to calculate phase of manifold vector for given station */
-/* x,y,z: Nx1 arrays of element coords */
-/* sum: scalar to store result */
-/* NOTE: only 1 block should be used here */
-__global__ void 
-kernel_array_beam_slave_sin(int N, float r1, float r2, float r3, float *x, float *y, float *z, float *sum, int blockDim_2) {
-  unsigned int n=threadIdx.x+blockDim.x*blockIdx.x;
-  extern __shared__ float tmpsum[]; /* assumed to be size Nx1 */
-  if (n<N) {
-    tmpsum[n]=sinf((r1*__ldg(&x[n])+r2*__ldg(&y[n])+r3*__ldg(&z[n])));
-  }
-  __syncthreads();
-
- // Build summation tree over elements, handling case where total threads is not a power of two.
-  int nTotalThreads = blockDim_2; // Total number of threads (==N), rounded up to the next power of two
-  while(nTotalThreads > 1) {
-    int halfPoint = (nTotalThreads >> 1); // divide by two
-    if (n < halfPoint) {
-     int thread2 = n + halfPoint;
-     if (thread2 < blockDim.x) { // Skipping the fictitious threads >N ( blockDim.x ... blockDim_2-1 )
-      tmpsum[n] = tmpsum[n]+tmpsum[thread2];
-     }
-    }
-    __syncthreads();
-    nTotalThreads = halfPoint; // Reducing the binary tree size by two
-  }
-
-  /* now thread 0 will add up results */
-  if (threadIdx.x==0) {
-   *sum=tmpsum[0];
-  }
-}
-
-__global__ void 
-kernel_array_beam_slave_cos(int N, float r1, float r2, float r3, float *x, float *y, float *z, float *sum, int blockDim_2) {
-  unsigned int n=threadIdx.x+blockDim.x*blockIdx.x;
-  extern __shared__ float tmpsum[]; /* assumed to be size Nx1 */
-  if (n<N) {
-    tmpsum[n]=cosf((r1*__ldg(&x[n])+r2*__ldg(&y[n])+r3*__ldg(&z[n])));
-  }
-  __syncthreads();
-  // Build summation tree over elements, handling case where total threads is not a power of two.
-  int nTotalThreads = blockDim_2; // Total number of threads (==N), rounded up to the next power of two
-  while(nTotalThreads > 1) {
-    int halfPoint = (nTotalThreads >> 1); // divide by two
-    if (n < halfPoint) {
-     int thread2 = n + halfPoint;
-     if (thread2 < blockDim.x) { // Skipping the fictitious threads >N ( blockDim.x ... blockDim_2-1 )
-      tmpsum[n] = tmpsum[n]+tmpsum[thread2];
-     }
-    }
-    __syncthreads();
-    nTotalThreads = halfPoint; // Reducing the binary tree size by two
-  }
-
-  /* now thread 0 will add up results */
-  if (threadIdx.x==0) {
-   *sum=tmpsum[0];
-  }
-}
-
-/* sum: 2x1 array */
-__global__ void 
-kernel_array_beam_slave_sincos(int N, float r1, float r2, float r3, float *x, float *y, float *z, float *sum, int blockDim_2) {
-  unsigned int n=threadIdx.x+blockDim.x*blockIdx.x;
-  extern __shared__ float tmpsum[]; /* assumed to be size 2*Nx1 */
-  if (n<N) {
-    float ss,cc;
-    sincosf((r1*__ldg(&x[n])+r2*__ldg(&y[n])+r3*__ldg(&z[n])),&ss,&cc);
-    tmpsum[2*n]=ss;
-    tmpsum[2*n+1]=cc;
-  }
-  __syncthreads();
-
- // Build summation tree over elements, handling case where total threads is not a power of two.
-  int nTotalThreads = blockDim_2; // Total number of threads (==N), rounded up to the next power of two
-  while(nTotalThreads > 1) {
-    int halfPoint = (nTotalThreads >> 1); // divide by two
-    if (n < halfPoint) {
-     int thread2 = n + halfPoint;
-     if (thread2 < blockDim.x) { // Skipping the fictitious threads >N ( blockDim.x ... blockDim_2-1 )
-      tmpsum[2*n] = tmpsum[2*n]+tmpsum[2*thread2];
-      tmpsum[2*n+1] = tmpsum[2*n+1]+tmpsum[2*thread2+1];
-     }
-    }
-    __syncthreads();
-    nTotalThreads = halfPoint; // Reducing the binary tree size by two
-  }
-
-  /* now thread 0 will add up results */
-  if (threadIdx.x==0) {
-   sum[0]=tmpsum[0];
-   sum[1]=tmpsum[1];
-  }
-}
-
-
-__device__ int
-NearestPowerOf2 (int n){
-  if (!n) return n;  //(0 == 2^0)
-
-  int x = 1;
-  while(x < n) {
-      x <<= 1;
-  }
-  return x;
-}
-
-
 /* use compiler directives to use/not use shared memory */
 /* ARRAY_MAX_ELEM : define this in header file beforehand, if using shared memory */
 /* master kernel to calculate beam */
 __global__ void 
 kernel_array_beam(int N, int T, int K, int F, 
- const float *__restrict__ freqs, const float *__restrict__ longitude, const float *__restrict__ latitude,
+ const double *__restrict__ freqs, const float *__restrict__ longitude, const float *__restrict__ latitude,
  const double *__restrict__ time_utc, const int *__restrict__ Nelem, 
  const float * const *__restrict__ xx, const float * const *__restrict__ yy, const float * const *__restrict__ zz, 
  const float *__restrict__ ra, const float *__restrict__ dec, 
@@ -230,7 +121,7 @@ kernel_array_beam(int N, int T, int K, int F,
    r2=(float)-tpc*(ph_freq0*sint0*sinph0-freqs[ifrq]*sint*sinph);
    r3=(float)-tpc*(ph_freq0*cost0-freqs[ifrq]*cost);
    */
-   float f=__ldg(&freqs[ifrq]);
+   float f=(float)__ldg(&freqs[ifrq]);
    float rat1=ph_freq0*sint0;
    float rat2=f*sint;
    r1=-tpc*(rat1*cosph0-rat2*cosph);
@@ -265,8 +156,8 @@ kernel_array_beam(int N, int T, int K, int F,
 }
 
 /***************************************************************************/
-__device__ cuFloatComplex
-gaussian_contrib(int *dd, float u, float v, float w) {
+__device__ cuDoubleComplex
+gaussian_contrib__(int *dd, float u, float v, float w) {
   exinfo_gaussian *dp=(exinfo_gaussian*)dd;
   float up,vp,a,b,ut,vt,cosph,sinph;
 
@@ -286,13 +177,13 @@ gaussian_contrib(int *dd, float u, float v, float w) {
   ut=a*(cosph*up-sinph*vp);
   vt=b*(sinph*up+cosph*vp);
 
-  return make_cuFloatComplex(0.5f*M_PI*expf(-(ut*ut+vt*vt)),0.0f);
+  return make_cuDoubleComplex((double)(0.5f*M_PI*expf(-(ut*ut+vt*vt))),0.0);
 }
 
 
 
-__device__ cuFloatComplex
-ring_contrib(int *dd, float u, float v, float w) {
+__device__ cuDoubleComplex
+ring_contrib__(int *dd, float u, float v, float w) {
   exinfo_ring *dp=(exinfo_ring*)dd;
   float up,vp,a,b;
 
@@ -303,11 +194,11 @@ ring_contrib(int *dd, float u, float v, float w) {
   a=dp->eX; /* diameter */
   b=sqrtf(up*up+vp*vp)*a*2.0f*M_PI;
 
-  return make_cuFloatComplex(j0f(b),0.0f);
+  return make_cuDoubleComplex((double)j0f(b),0.0);
 }
 
-__device__ cuFloatComplex
-disk_contrib(int *dd, float u, float v, float w) {
+__device__ cuDoubleComplex
+disk_contrib__(int *dd, float u, float v, float w) {
   exinfo_disk *dp=(exinfo_disk*)dd;
   float up,vp,a,b;
 
@@ -318,7 +209,7 @@ disk_contrib(int *dd, float u, float v, float w) {
   a=dp->eX; /* diameter */
   b=sqrtf(up*up+vp*vp)*a*2.0f*M_PI;
 
-  return make_cuFloatComplex(j1f(b),0.0f);
+  return make_cuDoubleComplex((double)j1f(b),0.0);
 }
 
 
@@ -411,8 +302,8 @@ calculate_uv_mode_vectors_scalar(float u, float v, float beta, int n0, float *Av
   free(shpvl);
 }
 
-__device__ cuFloatComplex
-shapelet_contrib(int *dd, float u, float v, float w) {
+__device__ cuDoubleComplex
+shapelet_contrib__(int *dd, float u, float v, float w) {
   exinfo_shapelet *dp=(exinfo_shapelet*)dd;
   int *cplx;
   float *Av;
@@ -457,81 +348,57 @@ shapelet_contrib(int *dd, float u, float v, float w) {
   //return 2.0*M_PI*(realsum+_Complex_I*imagsum);
   realsum*=2.0f*M_PI*a*b;
   imagsum*=2.0f*M_PI*a*b;
-  return make_cuFloatComplex(realsum,imagsum);
+  return make_cuDoubleComplex((double)realsum,(double)imagsum);
 }
 
 
+__device__ cuDoubleComplex 
+compute_prodterm(int sta1, int sta2, int N, int K, int T, int F,
+double phterm0, double sIf, double sI0f, double spec_idxf, double spec_idx1f, double spec_idx2f, double myf0,
+const double *__restrict__ freqs, double deltaf, int dobeam, int itm, int k, int cf, const float *__restrict__ beam, int **exs, unsigned char stypeT, double u, double v, double w) {
 
-/* slave thread to calculate coherencies, for 1 source */
-/* baseline (sta1,sta2) at time itm */
-/* K: total sources, uset to find right offset 
-   Kused: actual sources calculated in this thread block
-   Koff: offset in source array to start calculation
-   NOTE: only 1 block is used
- */
-__global__ void 
-kernel_coherencies_slave(int sta1, int sta2, int itm, int B, int N, int T, int K, int Kused, int Koff, int F, float u, float v, float w, float *freqs, float *beam, float *ll, float *mm, float *nn, float *sI,
-  unsigned char *stype, float *sI0, float *f0, float *spec_idx, float *spec_idx1, float *spec_idx2, int **exs, float deltaf, float deltat, float dec0, float *__restrict__ coh,int dobeam,int blockDim_2) {
-  /* which source we work on */
-  unsigned int k=threadIdx.x+blockDim.x*blockIdx.x;
-
-  extern __shared__ float tmpcoh[]; /* assumed to be size 8*F*Kusedx1 */
-
-  if (k<Kused) {
-   int k1=k+Koff; /* actual source id */
-   /* preload all freq independent variables */
-   /* Fourier phase */
-   float phterm0=2.0f*M_PI*(u*__ldg(&ll[k])+v*__ldg(&mm[k])+w*__ldg(&nn[k]));
-   float sIf,sI0f,spec_idxf,spec_idx1f,spec_idx2f,myf0;
-   sIf=__ldg(&sI[k]);
-   if (F>1) {
-     sI0f=__ldg(&sI0[k]);
-     spec_idxf=__ldg(&spec_idx[k]);
-     spec_idx1f=__ldg(&spec_idx1[k]);
-     spec_idx2f=__ldg(&spec_idx2[k]);
-     myf0=__ldg(&f0[k]);
-   }
-   unsigned char stypeT=__ldg(&stype[k]);
-   for(int cf=0; cf<F; cf++) {
-     float sinph,cosph;
-     float myfreq=__ldg(&freqs[cf]);
-     sincosf(phterm0*myfreq,&sinph,&cosph);
-     cuFloatComplex prodterm=make_cuFloatComplex(cosph,sinph);
-     float If;
+     double sinph,cosph;
+     double myfreq=__ldg(&freqs[cf]);
+     sincos(phterm0*myfreq,&sinph,&cosph);
+     cuDoubleComplex prodterm=make_cuDoubleComplex(cosph,sinph);
+     double If;
      if (F==1) {
       /* flux: do not use spectra here, because F=1*/
       If=sIf;
      } else {
       /* evaluate spectra */
-      float fratio=__logf(myfreq/myf0);
-      float fratio1=fratio*fratio;
-      float fratio2=fratio1*fratio;
+      double fratio=log(myfreq/myf0);
+      double fratio1=fratio*fratio;
+      double fratio2=fratio1*fratio;
       /* catch -ve flux */
-      if (sI0f>0.0f) {
-        If=__expf(__logf(sI0f)+spec_idxf*fratio+spec_idx1f*fratio1+spec_idx2f*fratio2);
-      } else if (sI0f<0.0f) {
-        If=-__expf(__logf(-sI0f)+spec_idxf*fratio+spec_idx1f*fratio1+spec_idx2f*fratio2);
+      if (sI0f>0.0) {
+        If=exp(log(sI0f)+spec_idxf*fratio+spec_idx1f*fratio1+spec_idx2f*fratio2);
+      } else if (sI0f<0.0) {
+        If=-exp(log(-sI0f)+spec_idxf*fratio+spec_idx1f*fratio1+spec_idx2f*fratio2);
       } else {
-        If=0.0f;
+        If=0.0;
       }
      }
      /* smearing */
-     float phterm =phterm0*0.5f*deltaf;
-     if (phterm!=0.0f) {
-      sinph=__sinf(phterm)/phterm;
+     double phterm =(phterm0*0.5*deltaf);
+     if (phterm!=0.0) {
+      sinph=(sin(phterm)/phterm);
       If *=fabsf(sinph); /* catch -ve values due to rounding off */
      }
 
      if (dobeam) {
       /* get beam info */
       //int boffset1=sta1*K*T*F + k1*T*F + cf*T + itm;
-      int boffset1=itm*N*K*F+k1*N*F+cf*N+sta1;
+
+      int boffset1=itm*N*K*F+k*N*F+cf*N+sta1;
+      //  printf("itm=%d, k1=%d, sta1=%d, sta2=%d, boffset1=%d, boffset2=%d\n", itm, k1, sta1, sta2, boffset1, boffset2);
       float beam1=__ldg(&beam[boffset1]);
       //int boffset2=sta2*K*T*F + k1*T*F + cf*T + itm;
-      int boffset2=itm*N*K*F+k1*N*F+cf*N+sta2;
+      int boffset2=itm*N*K*F+k*N*F+cf*N+sta2;
       float beam2=__ldg(&beam[boffset2]);
-      If *=beam1*beam2;
+      If *=(double)(beam1*beam2);
      }
+
 
      /* form complex value */
      prodterm.x *=If;
@@ -539,78 +406,33 @@ kernel_coherencies_slave(int sta1, int sta2, int itm, int B, int N, int T, int K
 
      /* check for type of source */
      if (stypeT!=STYPE_POINT) {
-      float uscaled=u*myfreq;
-      float vscaled=v*myfreq;
-      float wscaled=w*myfreq;
+      double uscaled=u*myfreq;
+      double vscaled=v*myfreq;
+      double wscaled=w*myfreq;
       if (stypeT==STYPE_SHAPELET) {
-       prodterm=cuCmulf(shapelet_contrib(exs[k],uscaled,vscaled,wscaled),prodterm);
+       prodterm=cuCmul(shapelet_contrib__(exs[k],uscaled,vscaled,wscaled),prodterm);
       } else if (stypeT==STYPE_GAUSSIAN) {
-       prodterm=cuCmulf(gaussian_contrib(exs[k],uscaled,vscaled,wscaled),prodterm);
+       prodterm=cuCmul(gaussian_contrib__(exs[k],uscaled,vscaled,wscaled),prodterm);
       } else if (stypeT==STYPE_DISK) {
-       prodterm=cuCmulf(disk_contrib(exs[k],uscaled,vscaled,wscaled),prodterm);
+       prodterm=cuCmul(disk_contrib__(exs[k],uscaled,vscaled,wscaled),prodterm);
       } else if (stypeT==STYPE_RING) {
-       prodterm=cuCmulf(ring_contrib(exs[k],uscaled,vscaled,wscaled),prodterm);
+       prodterm=cuCmul(ring_contrib__(exs[k],uscaled,vscaled,wscaled),prodterm);
       }
      }
-     
-//printf("k=%d cf=%d freq=%f uvw %f,%f,%f lmn %f,%f,%f phterm %f If %f\n",k,cf,freqs[cf],u,v,w,ll[k],mm[k],nn[k],phterm,If);
 
-     /* write output to shared array */
-     tmpcoh[k*8*F+8*cf]=prodterm.x;
-     tmpcoh[k*8*F+8*cf+1]=prodterm.y;
-     tmpcoh[k*8*F+8*cf+2]=0.0f;
-     tmpcoh[k*8*F+8*cf+3]=0.0f;
-     tmpcoh[k*8*F+8*cf+4]=0.0f;
-     tmpcoh[k*8*F+8*cf+5]=0.0f;
-     tmpcoh[k*8*F+8*cf+6]=prodterm.x;
-     tmpcoh[k*8*F+8*cf+7]=prodterm.y;
-   }
-  }
-  __syncthreads();
+//printf("Input k=%d uvw %lE,%lE,%lE sI=%f phterm0=%lf\n",k,u,v,w,sIf,phterm0);
+//printf("phterm %lf smearing %f\n",phterm,sinph);
+//printf("k=%d  uvw %lE,%lE,%lE If=%f phterm %lf out=%f,%f\n",k,u,v,w,If,phterm,prodterm.x,prodterm.y);
+    return prodterm;
 
-  // Build summation tree over elements, handling case where total threads is not a power of two.
-  int nTotalThreads = blockDim_2; // Total number of threads (==Kused), rounded up to the next power of two
-  while(nTotalThreads > 1) {
-    int halfPoint = (nTotalThreads >> 1); // divide by two
-    if (k < halfPoint) {
-     int thread2 = k + halfPoint;
-     if (thread2 < blockDim.x) { // Skipping the fictitious threads >Kused ( blockDim.x ... blockDim_2-1 )
-      for(int cf=0; cf<F; cf++) {
-       tmpcoh[k*8*F+8*cf]=tmpcoh[k*8*F+8*cf]+tmpcoh[thread2*8*F+8*cf];
-       tmpcoh[k*8*F+8*cf+1]=tmpcoh[k*8*F+8*cf+1]+tmpcoh[thread2*8*F+8*cf+1];
-       tmpcoh[k*8*F+8*cf+2]=tmpcoh[k*8*F+8*cf+2]+tmpcoh[thread2*8*F+8*cf+2];
-       tmpcoh[k*8*F+8*cf+3]=tmpcoh[k*8*F+8*cf+3]+tmpcoh[thread2*8*F+8*cf+3];
-       tmpcoh[k*8*F+8*cf+4]=tmpcoh[k*8*F+8*cf+4]+tmpcoh[thread2*8*F+8*cf+4];
-       tmpcoh[k*8*F+8*cf+5]=tmpcoh[k*8*F+8*cf+5]+tmpcoh[thread2*8*F+8*cf+5];
-       tmpcoh[k*8*F+8*cf+6]=tmpcoh[k*8*F+8*cf+6]+tmpcoh[thread2*8*F+8*cf+6];
-       tmpcoh[k*8*F+8*cf+7]=tmpcoh[k*8*F+8*cf+7]+tmpcoh[thread2*8*F+8*cf+7];
-      }
-
-     }
-    }
-    __syncthreads();
-    nTotalThreads = halfPoint; // Reducing the binary tree size by two
-  }
-
-  /* add up to form final result (not replace!) */
-  if (threadIdx.x==0) {
-    for(int cf=0; cf<F; cf++) {
-     coh[cf*8*B]+=tmpcoh[8*cf];
-     coh[cf*8*B+1]+=tmpcoh[8*cf+1];
-     coh[cf*8*B+2]+=tmpcoh[8*cf+2];
-     coh[cf*8*B+3]+=tmpcoh[8*cf+3];
-     coh[cf*8*B+4]+=tmpcoh[8*cf+4];
-     coh[cf*8*B+5]+=tmpcoh[8*cf+5];
-     coh[cf*8*B+6]+=tmpcoh[8*cf+6];
-     coh[cf*8*B+7]+=tmpcoh[8*cf+7];
-    }
-  }
 }
 
 /* master kernel to calculate coherencies */
 __global__ void 
-kernel_coherencies(int B, int N, int T, int K, int F,float *u, float *v, float *w,baseline_t *barr, float *freqs, float *beam, float *ll, float *mm, float *nn, float *sI,
-  unsigned char *stype, float *sI0, float *f0, float *spec_idx, float *spec_idx1, float *spec_idx2, int **exs, float deltaf, float deltat, float dec0, float *coh, int dobeam) {
+kernel_coherencies(int B, int N, int T, int K, int F,
+  const double *__restrict__ u, const double *__restrict__ v, const double *__restrict__ w,
+  baseline_t *barr, const double *__restrict__ freqs, const float *__restrict__ beam, const double *__restrict__ ll, const double *__restrict__ mm, const double *__restrict__ nn, const double *__restrict__ sI,
+  const unsigned char *__restrict__ stype, const double *__restrict__ sI0, const double *__restrict__ f0, const double *__restrict__ spec_idx, const double *__restrict__ spec_idx1, const double *__restrict__ spec_idx2, int **exs, double deltaf, double deltat, double dec0, double *coh, int dobeam) {
 
   /* global thread index */
   unsigned int n=threadIdx.x+blockDim.x*blockIdx.x;
@@ -623,49 +445,55 @@ kernel_coherencies(int B, int N, int T, int K, int F,float *u, float *v, float *
    int tslot=n/((N*(N-1)/2));
 
 
-#ifdef CUDA_DBG
-   cudaError_t error;
-#endif
+   double u_n=(u[n]);
+   double v_n=(v[n]);
+   double w_n=(w[n]);
 
-   int ThreadsPerBlock=DEFAULT_TH_PER_BK;
-   /* each slave thread will calculate one source, 8xF values for all freq */
-   /* also give right offset for coherencies */
-   if (K<ThreadsPerBlock) {
-    /* one kernel is enough, offset is 0 */
-    kernel_coherencies_slave<<<1,K,sizeof(float)*(8*F*K)>>>(sta1,sta2,tslot,B,N,T,K,K,0,F,__ldg(&u[n]),__ldg(&v[n]),__ldg(&w[n]),freqs,beam,ll,mm,nn,sI,stype,sI0,f0,spec_idx,spec_idx1,spec_idx2,exs,deltaf,deltat,dec0,&coh[8*n],dobeam,NearestPowerOf2(K));
-    cudaDeviceSynchronize();
-#ifdef CUDA_DBG
-  error = cudaGetLastError();
-  if(error != cudaSuccess) {
-    // print the CUDA error message and exit
-    printf("CUDA error: %s :%s: %d\n", cudaGetErrorString(error),__FILE__,__LINE__);
-  }
-#endif
-   } else {
-    /* more than 1 kernel */
-    int L=(K+ThreadsPerBlock-1)/ThreadsPerBlock;
-    int ct=0;
-    int myT;
-    for (int ci=0; ci<L; ci++) {
-     if (ct+ThreadsPerBlock<K) {
-       myT=ThreadsPerBlock;
-     } else {
-       myT=K-ct;
-     }
-     /* launch kernel with myT threads, starting at ct offset */
-     kernel_coherencies_slave<<<1,myT,sizeof(float)*(8*F*myT)>>>(sta1,sta2,tslot,B,N,T,K,myT,ct,F,__ldg(&u[n]),__ldg(&v[n]),__ldg(&w[n]),freqs,beam,&ll[ct],&mm[ct],&nn[ct],&sI[ct],&stype[ct],&sI0[ct],&f0[ct],&spec_idx[ct],&spec_idx1[ct],&spec_idx2[ct],&exs[ct],deltaf,deltat,dec0,&coh[8*n],dobeam,NearestPowerOf2(myT));
-     cudaDeviceSynchronize();
-#ifdef CUDA_DBG
-  error = cudaGetLastError();
-  if(error != cudaSuccess) {
-    // print the CUDA error message and exit
-    printf("CUDA error: %s :%s: %d\n", cudaGetErrorString(error),__FILE__,__LINE__);
-  }
-#endif
-     ct=ct+ThreadsPerBlock;
-    }
+   //TODO: figure out if this max_f makes any sense
+   #define MAX_F 20
+   cuDoubleComplex l_coh[MAX_F];
+   for(int cf=0; cf<F; cf++) {
+        l_coh[cf] = make_cuDoubleComplex(0.0, 0.0);
    }
 
+    //use simply for-loop, if K is very large this may be slow and may need further parallelization
+    for (int k=0; k<K; k++) {
+        //source specific params
+        double sIf,sI0f,spec_idxf,spec_idx1f,spec_idx2f,myf0;
+        double phterm0 = (2.0*M_PI*(u_n*__ldg(&ll[k])+v_n*__ldg(&mm[k])+w_n*__ldg(&nn[k])));
+        sIf=__ldg(&sI[k]);
+        if (F>1) {
+            sI0f=__ldg(&sI0[k]);
+            spec_idxf=__ldg(&spec_idx[k]);
+            spec_idx1f=__ldg(&spec_idx1[k]);
+            spec_idx2f=__ldg(&spec_idx2[k]);
+            myf0=__ldg(&f0[k]);
+        }
+
+        unsigned char stypeT=__ldg(&stype[k]);
+
+        for(int cf=0; cf<F; cf++) {
+            l_coh[cf] = cuCadd(l_coh[cf], compute_prodterm(sta1, sta2, N, K, T, F, phterm0, sIf, sI0f, spec_idxf, spec_idx1f, spec_idx2f, 
+               myf0, freqs, deltaf, dobeam, tslot, k, cf, beam, exs, stypeT, u_n, v_n, w_n));
+        }
+
+    }
+
+
+     //write output with right multi frequency offset
+    double *coh1 = &coh[8*n];
+    for(int cf=0; cf<F; cf++) {
+        coh1[cf*8*B+0] = l_coh[cf].x;
+        coh1[cf*8*B+1] = l_coh[cf].y;
+        coh1[cf*8*B+2] = 0.0;
+        coh1[cf*8*B+3] = 0.0;
+        coh1[cf*8*B+4] = 0.0;
+        coh1[cf*8*B+5] = 0.0;
+        coh1[cf*8*B+6] = l_coh[cf].x;
+        coh1[cf*8*B+7] = l_coh[cf].y;
+    }
+
+  
   }
 
 }
@@ -722,7 +550,7 @@ checkCudaError(cudaError_t err, const char *file, int line)
 */
 
 void
-cudakernel_array_beam(int N, int T, int K, int F, float *freqs, float *longitude, float *latitude,
+cudakernel_array_beam(int N, int T, int K, int F, double *freqs, float *longitude, float *latitude,
  double *time_utc, int *Nelem, float **xx, float **yy, float **zz, float *ra, float *dec, float ph_ra0, float ph_dec0, float ph_freq0, float *beam) {
 #ifdef CUDA_DBG
   cudaError_t error;
@@ -780,16 +608,11 @@ cudakernel_array_beam(int N, int T, int K, int F, float *freqs, float *longitude
   dobeam: enable beam if >0
 */
 void
-cudakernel_coherencies(int B, int N, int T, int K, int F, float *u, float *v, float *w,baseline_t *barr, float *freqs, float *beam, float *ll, float *mm, float *nn, float *sI,
-  unsigned char *stype, float *sI0, float *f0, float *spec_idx, float *spec_idx1, float *spec_idx2, int **exs, float deltaf, float deltat, float dec0, float *coh,int dobeam) {
+cudakernel_coherencies(int B, int N, int T, int K, int F, double *u, double *v, double *w,baseline_t *barr, double *freqs, float *beam, double *ll, double *mm, double *nn, double *sI,
+  unsigned char *stype, double *sI0, double *f0, double *spec_idx, double *spec_idx1, double *spec_idx2, int **exs, double deltaf, double deltat, double dec0, double *coh,int dobeam) {
 #ifdef CUDA_DBG
   cudaError_t error;
   error = cudaGetLastError();
-  error=cudaMemset(coh,0,sizeof(float)*8*B*F);
-  checkCudaError(error,__FILE__,__LINE__);
-#endif
-#ifndef CUDA_DBG
-  cudaMemset(coh,0,sizeof(float)*8*B*F);
 #endif
 
   /* spawn threads to handle baselines, these threads will spawn threads for sources */
@@ -826,7 +649,7 @@ cudakernel_convert_time(int T, double *time_utc) {
   int BlocksPerGrid=(T+ThreadsPerBlock-1)/ThreadsPerBlock;
   kernel_convert_time<<<BlocksPerGrid,ThreadsPerBlock>>>(T,time_utc);
   cudaDeviceSynchronize();
- #ifdef CUDA_DBG
+#ifdef CUDA_DBG
   error = cudaGetLastError();
   if(error != cudaSuccess) {
     // print the CUDA error message and exit
