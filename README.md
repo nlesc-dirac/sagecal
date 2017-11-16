@@ -1,15 +1,16 @@
-SAGECAL
+# SAGECAL
 =======
 Read INSTALL for installation. This file gives a brief guide to use SAGECal.
 Warning: this file may be obsolete. use sagecal -h to see up-to-date options.
 
 
-Step by Step Introduction:
-#######################################################################
+## Step by Step Introduction:
+
 1a)Calibrate data in the standard way using BBS/CASA or anything else. 
 Use NDPP to average the data in your MS to a few channels (also average in time to about 10sec). Also flag any spikes in the data.
 1b)For subtraction of the ATeam from raw data (CasA,CygA,...), no initial calibration is necessary. Just run sagecal on raw data, but it is better to scale the sky model to match the apparent flux of the sources that are being subtracted.
-#######################################################################
+
+
 2) Sky Model:
 3a)Make an image of your MS (using ExCon/casapy). 
 Use Duchamp to create a mask for the image. Use buildsky to create a sky model. (see the README file on top level directory). Also create a proper cluster file.
