@@ -1,7 +1,8 @@
 vr  2 dec 2016 23:07:19 CET
+
 # SAGECal Installation
-====================
-0) Prerequsites:
+
+## 1 Prerequsites:
  - CASACORE http://casacore.googlecode.com/
  - glib http://developer.gnome.org/glib
  - BLAS/LAPACK
@@ -15,12 +16,13 @@ vr  2 dec 2016 23:07:19 CET
   -- Intel MKL and other libraries
  - Get the source for SAGECal : git clone git://git.code.sf.net/p/sagecal/code sagecal-code
 
-1) The basic way to build is
+## 2 The basic way to build is
   1.a) go to ./src/lib  and run make (which will create libsagecal.a)
   1.b) go to ./src/MS and run make (which will create the executable)
 
 
-2) In ./src/lib and ./src/MS you MUST edit the Makefiles to suit your system. Some common items to edit are:
+## 3 Build settings
+In ./src/lib and ./src/MS you MUST edit the Makefiles to suit your system. Some common items to edit are:
  - LAPACK: directory where LAPACK/OpenBLAS is installed
  - GLIBI/GLIBL: include/lib files for glib
  - CASA_LIBDIR/CASA_INCDIR/CASA_LIBS : casacore include/library location and files:
@@ -39,23 +41,23 @@ vr  2 dec 2016 23:07:19 CET
 
 
 
-SAGECAL-MPI Installation
-========================
-0) Prerequsites:
+# SAGECAL-MPI Installation
+
+## 1 Prerequsites:
  - Same as above 
  - MPI (e.g. OpenMPI)
 
-1) Build ./src/lib as above (using mpicc -DMPI_BUILD)
+## 2 Build ./src/lib as above (using mpicc -DMPI_BUILD)
 
-2) Build ./src/MPI using mpicc++
-
-
-
-BUILDSKY Installation
-=====================
-1) See INSTALL in ./src/buildsky
+## 3 Build ./src/MPI using mpicc++
 
 
-RESTORE Installation
-=====================
-1) See INSTALL in ./src/restore
+
+## BUILDSKY Installation
+
+  - See INSTALL in ./src/buildsky
+
+
+## RESTORE Installation
+
+  - See INSTALL in ./src/restore
