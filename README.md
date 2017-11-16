@@ -1,5 +1,6 @@
 # SAGECAL
-=======
+
+
 Read INSTALL for installation. This file gives a brief guide to use SAGECal.
 Warning: this file may be obsolete. use sagecal -h to see up-to-date options.
 
