@@ -1,5 +1,5 @@
 vr  2 dec 2016 23:07:19 CET
-SAGECal Installation
+# SAGECal Installation
 ====================
 0) Prerequsites:
  - CASACORE http://casacore.googlecode.com/
