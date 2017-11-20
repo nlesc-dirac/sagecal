@@ -1224,6 +1224,7 @@ attach_gpu_to_thread1(int card,  cublasHandle_t *cbhandle, cusolverDnHandle_t *s
     status=cusolverDnCreate(solver_handle);
     if (status != CUSOLVER_STATUS_SUCCESS) {
      fprintf(stderr,"%s: %d: CUSOLV create fail %d\n",__FILE__,__LINE__,status);
+     fprintf(stderr,"common problems: not initialized %d, alloc fail %d, no compute %d\n",CUSOLVER_STATUS_NOT_INITIALIZED, CUSOLVER_STATUS_ALLOC_FAILED, CUSOLVER_STATUS_ARCH_MISMATCH);
      exit(1);
     }
   }

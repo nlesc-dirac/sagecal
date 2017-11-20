@@ -26,6 +26,25 @@
 /* enable this for checking for kernel failure */
 //#define CUDA_DBG
 
+/* matrix multiplications */
+/* C=A*B */
+__device__ void
+amb(const cuDoubleComplex *__restrict__ a, const cuDoubleComplex *__restrict__ b, cuDoubleComplex *__restrict__ c) {
+ c[0]=cuCadd(cuCmul(a[0],b[0]),cuCmul(a[1],b[2]));
+ c[1]=cuCadd(cuCmul(a[0],b[1]),cuCmul(a[1],b[3]));
+ c[2]=cuCadd(cuCmul(a[2],b[0]),cuCmul(a[3],b[2]));
+ c[3]=cuCadd(cuCmul(a[2],b[1]),cuCmul(a[3],b[3]));
+}
+/* C=A*B^H */
+__device__ void
+ambt(const cuDoubleComplex *__restrict__ a, const cuDoubleComplex *__restrict__ b, cuDoubleComplex *__restrict__ c) {
+ c[0]=cuCadd(cuCmul(a[0],cuConj(b[0])),cuCmul(a[1],cuConj(b[1])));
+ c[1]=cuCadd(cuCmul(a[0],cuConj(b[2])),cuCmul(a[1],cuConj(b[3])));
+ c[2]=cuCadd(cuCmul(a[2],cuConj(b[0])),cuCmul(a[3],cuConj(b[1])));
+ c[3]=cuCadd(cuCmul(a[2],cuConj(b[2])),cuCmul(a[3],cuConj(b[3])));
+}
+
+
 __device__ void
 radec2azel_gmst__(float ra, float dec, float longitude, float latitude, float thetaGMST, float *az, float *el) {
   float thetaLST=thetaGMST+longitude*180.0f/M_PI;
@@ -327,6 +346,11 @@ shapelet_contrib__(int *dd, float u, float v, float w) {
   __sincosf((float)dp->eP,&sinph,&cosph);
   ut=a*(cosph*up-sinph*vp);
   vt=b*(sinph*up+cosph*vp);
+  /* if u,v is way off the scale (beta) of shapelet modes, the result is almost always zero,
+     so check this here and return 0, otherwise spurious nans may result */
+  if (__fdiv_rz(100.0f,__fsqrt_rz(ut*ut+vt*vt))<dp->beta) {
+   return make_cuDoubleComplex(0.0,0.0);
+  }
   /* note: we decompose f(-l,m) so the Fourier transform is F(-u,v)
    so negate the u grid */
   Av=(float*)malloc((size_t)((dp->n0)*(dp->n0))*sizeof(float));
@@ -345,45 +369,57 @@ shapelet_contrib__(int *dd, float u, float v, float w) {
 
   free(Av);
   free(cplx);
-  //return 2.0*M_PI*(realsum+_Complex_I*imagsum);
   realsum*=2.0f*M_PI*a*b;
   imagsum*=2.0f*M_PI*a*b;
+  /* additional safeguards */
+  if ( isnan(realsum) ) { realsum=0.0f; }
+  if ( isnan(imagsum) ) { imagsum=0.0f; }
   return make_cuDoubleComplex((double)realsum,(double)imagsum);
 }
 
-
-__device__ cuDoubleComplex 
-compute_prodterm(int sta1, int sta2, int N, int K, int T, int F,
-double phterm0, double sIf, double sI0f, double spec_idxf, double spec_idx1f, double spec_idx2f, double myf0,
-const double *__restrict__ freqs, double deltaf, int dobeam, int itm, int k, int cf, const float *__restrict__ beam, int **exs, unsigned char stypeT, double u, double v, double w) {
-
+__device__ void 
+compute_prodterm_multifreq(int sta1, int sta2, int N, int K, int T, int F,
+double phterm0, double sI0f, double sQ0f, double sU0f, double sV0f, double spec_idxf, double spec_idx1f, double spec_idx2f, double myf0,
+ double myfreq, double deltaf, int dobeam, int itm, int k, int cf, const float *__restrict__ beam, int **exs, unsigned char stypeT, double u, double v, double w, double *__restrict__ output) {
+     /* F>1 is assumed output: 8x1 array */
      double sinph,cosph;
-     double myfreq=__ldg(&freqs[cf]);
      sincos(phterm0*myfreq,&sinph,&cosph);
      cuDoubleComplex prodterm=make_cuDoubleComplex(cosph,sinph);
-     double If;
-     if (F==1) {
-      /* flux: do not use spectra here, because F=1*/
-      If=sIf;
-     } else {
-      /* evaluate spectra */
-      double fratio=log(myfreq/myf0);
-      double fratio1=fratio*fratio;
-      double fratio2=fratio1*fratio;
-      /* catch -ve flux */
-      if (sI0f>0.0) {
-        If=exp(log(sI0f)+spec_idxf*fratio+spec_idx1f*fratio1+spec_idx2f*fratio2);
-      } else if (sI0f<0.0) {
-        If=-exp(log(-sI0f)+spec_idxf*fratio+spec_idx1f*fratio1+spec_idx2f*fratio2);
-      } else {
-        If=0.0;
-      }
+     double If,Qf,Uf,Vf;
+     If=Qf=Uf=Vf=0.0;
+     /* evaluate spectra */
+     double fratio=log(myfreq/myf0);
+     double fratio1=fratio*fratio;
+     double fratio2=fratio1*fratio;
+     double cm=spec_idxf*fratio+spec_idx1f*fratio1+spec_idx2f*fratio2;
+     /* catch -ve flux */
+     if (sI0f>0.0) {
+        If=exp(log(sI0f)+cm);
+     } else if (sI0f<0.0) {
+        If=-exp(log(-sI0f)+cm);
+     } 
+     if (sQ0f>0.0) {
+        Qf=exp(log(sQ0f)+cm);
+     } else if (sI0f<0.0) {
+        Qf=-exp(log(-sQ0f)+cm);
+     } 
+     if (sU0f>0.0) {
+        Uf=exp(log(sU0f)+cm);
+     } else if (sI0f<0.0) {
+        Uf=-exp(log(-sU0f)+cm);
+     } 
+     if (sV0f>0.0) {
+        Vf=exp(log(sV0f)+cm);
+     } else if (sI0f<0.0) {
+        Vf=-exp(log(-sV0f)+cm);
      }
-     /* smearing */
+
+     /* smearing, beam */
+     double scalef=1.0;
      double phterm =(phterm0*0.5*deltaf);
      if (phterm!=0.0) {
       sinph=(sin(phterm)/phterm);
-      If *=fabsf(sinph); /* catch -ve values due to rounding off */
+      scalef *=fabs(sinph); /* catch -ve values due to rounding off */
      }
 
      if (dobeam) {
@@ -396,13 +432,13 @@ const double *__restrict__ freqs, double deltaf, int dobeam, int itm, int k, int
       //int boffset2=sta2*K*T*F + k1*T*F + cf*T + itm;
       int boffset2=itm*N*K*F+k*N*F+cf*N+sta2;
       float beam2=__ldg(&beam[boffset2]);
-      If *=(double)(beam1*beam2);
+      scalef *=(double)(beam1*beam2);
      }
 
 
      /* form complex value */
-     prodterm.x *=If;
-     prodterm.y *=If;
+     prodterm.x *=scalef;
+     prodterm.y *=scalef;
 
      /* check for type of source */
      if (stypeT!=STYPE_POINT) {
@@ -420,10 +456,99 @@ const double *__restrict__ freqs, double deltaf, int dobeam, int itm, int k, int
       }
      }
 
-//printf("Input k=%d uvw %lE,%lE,%lE sI=%f phterm0=%lf\n",k,u,v,w,sIf,phterm0);
-//printf("phterm %lf smearing %f\n",phterm,sinph);
-//printf("k=%d  uvw %lE,%lE,%lE If=%f phterm %lf out=%f,%f\n",k,u,v,w,If,phterm,prodterm.x,prodterm.y);
-    return prodterm;
+    double Ix,Iy,Qx,Qy,Ux,Uy,Vx,Vy;
+    Ix=If*prodterm.x;
+    Iy=If*prodterm.y;
+    Qx=Qf*prodterm.x;
+    Qy=Qf*prodterm.y;
+    Ux=Uf*prodterm.x;
+    Uy=Uf*prodterm.y;
+    Vx=Vf*prodterm.x;
+    Vy=Vf*prodterm.y;
+
+
+
+    output[0]=Ix+Qx;
+    output[1]=Iy+Qy;
+    output[2]=Ux-Vy;
+    output[3]=Vx+Uy;
+    output[4]=Ux+Vy;
+    output[5]=-Vx+Uy;
+    output[6]=Ix-Qx;
+    output[7]=Iy-Qy;
+
+}
+
+
+__device__ void 
+compute_prodterm(int sta1, int sta2, int N, int K, int T,
+ double phterm0, double If, double Qf, double Uf, double Vf,
+ double myfreq, double deltaf, int dobeam, int itm, int k, const float *__restrict__ beam, int **exs, unsigned char stypeT, double u, double v, double w, double *__restrict__ output) {
+     /* F==1 is assumed, output: 8x1 array */
+     double sinph,cosph;
+     sincos(phterm0*myfreq,&sinph,&cosph);
+     cuDoubleComplex prodterm=make_cuDoubleComplex(cosph,sinph);
+
+     /* smearing, beam */
+     double scalef=1.0;
+     double phterm =(phterm0*0.5*deltaf);
+     if (phterm!=0.0) {
+      sinph=(sin(phterm)/phterm);
+      scalef *=fabs(sinph); /* catch -ve values due to rounding off */
+     }
+
+     if (dobeam) {
+      /* get beam info */
+      int boffset1=itm*N*K+k*N+sta1;
+      //  printf("itm=%d, k1=%d, sta1=%d, sta2=%d, boffset1=%d, boffset2=%d\n", itm, k1, sta1, sta2, boffset1, boffset2);
+      float beam1=__ldg(&beam[boffset1]);
+      int boffset2=itm*N*K+k*N+sta2;
+      float beam2=__ldg(&beam[boffset2]);
+      scalef *=(double)(beam1*beam2);
+     }
+
+
+     /* form complex value */
+     prodterm.x *=scalef;
+     prodterm.y *=scalef;
+
+     /* check for type of source */
+     if (stypeT!=STYPE_POINT) {
+      double uscaled=u*myfreq;
+      double vscaled=v*myfreq;
+      double wscaled=w*myfreq;
+      if (stypeT==STYPE_SHAPELET) {
+       prodterm=cuCmul(shapelet_contrib__(exs[k],uscaled,vscaled,wscaled),prodterm);
+      } else if (stypeT==STYPE_GAUSSIAN) {
+       prodterm=cuCmul(gaussian_contrib__(exs[k],uscaled,vscaled,wscaled),prodterm);
+      } else if (stypeT==STYPE_DISK) {
+       prodterm=cuCmul(disk_contrib__(exs[k],uscaled,vscaled,wscaled),prodterm);
+      } else if (stypeT==STYPE_RING) {
+       prodterm=cuCmul(ring_contrib__(exs[k],uscaled,vscaled,wscaled),prodterm);
+      }
+     }
+
+
+    double Ix,Iy,Qx,Qy,Ux,Uy,Vx,Vy;
+    Ix=If*prodterm.x;
+    Iy=If*prodterm.y;
+    Qx=Qf*prodterm.x;
+    Qy=Qf*prodterm.y;
+    Ux=Uf*prodterm.x;
+    Uy=Uf*prodterm.y;
+    Vx=Vf*prodterm.x;
+    Vy=Vf*prodterm.y;
+
+
+
+    output[0]=Ix+Qx;
+    output[1]=Iy+Qy;
+    output[2]=Ux-Vy;
+    output[3]=Vx+Uy;
+    output[4]=Ux+Vy;
+    output[5]=-Vx+Uy;
+    output[6]=Ix-Qx;
+    output[7]=Iy-Qy;
 
 }
 
@@ -431,8 +556,11 @@ const double *__restrict__ freqs, double deltaf, int dobeam, int itm, int k, int
 __global__ void 
 kernel_coherencies(int B, int N, int T, int K, int F,
   const double *__restrict__ u, const double *__restrict__ v, const double *__restrict__ w,
-  baseline_t *barr, const double *__restrict__ freqs, const float *__restrict__ beam, const double *__restrict__ ll, const double *__restrict__ mm, const double *__restrict__ nn, const double *__restrict__ sI,
-  const unsigned char *__restrict__ stype, const double *__restrict__ sI0, const double *__restrict__ f0, const double *__restrict__ spec_idx, const double *__restrict__ spec_idx1, const double *__restrict__ spec_idx2, int **exs, double deltaf, double deltat, double dec0, double *coh, int dobeam) {
+  baseline_t *barr, const double *__restrict__ freqs, const float *__restrict__ beam, const double *__restrict__ ll, const double *__restrict__ mm, const double *__restrict__ nn, 
+  const double *__restrict__ sI, const double *__restrict__ sQ, const double *__restrict__ sU, const double *__restrict__ sV,
+  const unsigned char *__restrict__ stype, const double *__restrict__ sI0, 
+const double *__restrict__ sQ0, const double *__restrict__ sU0, const double *__restrict__ sV0,
+  const double *__restrict__ f0, const double *__restrict__ spec_idx, const double *__restrict__ spec_idx1, const double *__restrict__ spec_idx2, int **exs, double deltaf, double deltat, double dec0, double *coh, int dobeam) {
 
   /* global thread index */
   unsigned int n=threadIdx.x+blockDim.x*blockIdx.x;
@@ -451,46 +579,96 @@ kernel_coherencies(int B, int N, int T, int K, int F,
 
    //TODO: figure out if this max_f makes any sense
    #define MAX_F 20
-   cuDoubleComplex l_coh[MAX_F];
+   double l_coh[MAX_F][8];
    for(int cf=0; cf<F; cf++) {
-        l_coh[cf] = make_cuDoubleComplex(0.0, 0.0);
+        l_coh[cf][0]=0.0;
+        l_coh[cf][1]=0.0;
+        l_coh[cf][2]=0.0;
+        l_coh[cf][3]=0.0;
+        l_coh[cf][4]=0.0;
+        l_coh[cf][5]=0.0;
+        l_coh[cf][6]=0.0;
+        l_coh[cf][7]=0.0;
    }
 
-    //use simply for-loop, if K is very large this may be slow and may need further parallelization
-    for (int k=0; k<K; k++) {
+
+   // split to two cases, F==1 and F>1
+   if (F==1) {
+     //use simply for-loop, if K is very large this may be slow and may need further parallelization
+     for (int k=0; k<K; k++) {
         //source specific params
-        double sIf,sI0f,spec_idxf,spec_idx1f,spec_idx2f,myf0;
+        double sIf,sQf,sUf,sVf;
         double phterm0 = (2.0*M_PI*(u_n*__ldg(&ll[k])+v_n*__ldg(&mm[k])+w_n*__ldg(&nn[k])));
         sIf=__ldg(&sI[k]);
-        if (F>1) {
-            sI0f=__ldg(&sI0[k]);
-            spec_idxf=__ldg(&spec_idx[k]);
-            spec_idx1f=__ldg(&spec_idx1[k]);
-            spec_idx2f=__ldg(&spec_idx2[k]);
-            myf0=__ldg(&f0[k]);
-        }
+        sQf=__ldg(&sQ[k]);
+        sUf=__ldg(&sU[k]);
+        sVf=__ldg(&sV[k]);
+
+        unsigned char stypeT=__ldg(&stype[k]);
+
+        double llcoh[8];
+        compute_prodterm(sta1, sta2, N, K, T, phterm0, sIf, sQf, sUf, sVf,
+               __ldg(&(freqs[0])), deltaf, dobeam, tslot, k, beam, exs, stypeT, u_n, v_n, w_n, llcoh);
+
+         l_coh[0][0] +=llcoh[0];
+         l_coh[0][1] +=llcoh[1];
+         l_coh[0][2] +=llcoh[2];
+         l_coh[0][3] +=llcoh[3];
+         l_coh[0][4] +=llcoh[4];
+         l_coh[0][5] +=llcoh[5];
+         l_coh[0][6] +=llcoh[6];
+         l_coh[0][7] +=llcoh[7];
+
+     }
+   } else {
+     //use simply for-loop, if K is very large this may be slow and may need further parallelization
+     for (int k=0; k<K; k++) {
+        //source specific params
+        double sI0f,sQ0f,sU0f,sV0f,spec_idxf,spec_idx1f,spec_idx2f,myf0;
+        double phterm0 = (2.0*M_PI*(u_n*__ldg(&ll[k])+v_n*__ldg(&mm[k])+w_n*__ldg(&nn[k])));
+        sI0f=__ldg(&sI0[k]);
+        sQ0f=__ldg(&sQ0[k]);
+        sU0f=__ldg(&sU0[k]);
+        sV0f=__ldg(&sV0[k]);
+        spec_idxf=__ldg(&spec_idx[k]);
+        spec_idx1f=__ldg(&spec_idx1[k]);
+        spec_idx2f=__ldg(&spec_idx2[k]);
+        myf0=__ldg(&f0[k]);
 
         unsigned char stypeT=__ldg(&stype[k]);
 
         for(int cf=0; cf<F; cf++) {
-            l_coh[cf] = cuCadd(l_coh[cf], compute_prodterm(sta1, sta2, N, K, T, F, phterm0, sIf, sI0f, spec_idxf, spec_idx1f, spec_idx2f, 
-               myf0, freqs, deltaf, dobeam, tslot, k, cf, beam, exs, stypeT, u_n, v_n, w_n));
+            double llcoh[8];
+            compute_prodterm_multifreq(sta1, sta2, N, K, T, F, phterm0, sI0f, sQ0f, sU0f, sV0f, spec_idxf, spec_idx1f, spec_idx2f, 
+               myf0, __ldg(&(freqs[cf])), deltaf, dobeam, tslot, k, cf, beam, exs, stypeT, u_n, v_n, w_n,llcoh);
+         l_coh[cf][0] +=llcoh[0];
+         l_coh[cf][1] +=llcoh[1];
+         l_coh[cf][2] +=llcoh[2];
+         l_coh[cf][3] +=llcoh[3];
+         l_coh[cf][4] +=llcoh[4];
+         l_coh[cf][5] +=llcoh[5];
+         l_coh[cf][6] +=llcoh[6];
+         l_coh[cf][7] +=llcoh[7];
         }
 
-    }
+     }
+
+
+   }
+
 
 
      //write output with right multi frequency offset
     double *coh1 = &coh[8*n];
     for(int cf=0; cf<F; cf++) {
-        coh1[cf*8*B+0] = l_coh[cf].x;
-        coh1[cf*8*B+1] = l_coh[cf].y;
-        coh1[cf*8*B+2] = 0.0;
-        coh1[cf*8*B+3] = 0.0;
-        coh1[cf*8*B+4] = 0.0;
-        coh1[cf*8*B+5] = 0.0;
-        coh1[cf*8*B+6] = l_coh[cf].x;
-        coh1[cf*8*B+7] = l_coh[cf].y;
+        coh1[cf*8*B+0] = l_coh[cf][0];
+        coh1[cf*8*B+1] = l_coh[cf][1];
+        coh1[cf*8*B+2] = l_coh[cf][2];
+        coh1[cf*8*B+3] = l_coh[cf][3];
+        coh1[cf*8*B+4] = l_coh[cf][4];
+        coh1[cf*8*B+5] = l_coh[cf][5];
+        coh1[cf*8*B+6] = l_coh[cf][6];
+        coh1[cf*8*B+7] = l_coh[cf][7];
     }
 
   
@@ -498,6 +676,196 @@ kernel_coherencies(int B, int N, int T, int K, int F,
 
 }
 
+/* kernel to calculate residuals */
+__global__ void 
+kernel_residuals(int B, int N, int T, int K, int F,
+  const double *__restrict__ u, const double *__restrict__ v, const double *__restrict__ w,
+  const double *__restrict__ p, int nchunk,
+  baseline_t *barr, const double *__restrict__ freqs, const float *__restrict__ beam, const double *__restrict__ ll, const double *__restrict__ mm, const double *__restrict__ nn, 
+  const double *__restrict__ sI, const double *__restrict__ sQ, const double *__restrict__ sU, const double *__restrict__ sV,
+  const unsigned char *__restrict__ stype, const double *__restrict__ sI0, 
+const double *__restrict__ sQ0, const double *__restrict__ sU0, const double *__restrict__ sV0,
+  const double *__restrict__ f0, const double *__restrict__ spec_idx, const double *__restrict__ spec_idx1, const double *__restrict__ spec_idx2, int **exs, double deltaf, double deltat, double dec0, double *coh, int dobeam) {
+
+  /* global thread index */
+  unsigned int n=threadIdx.x+blockDim.x*blockIdx.x;
+
+  /* each thread will calculate for one baseline, over all sources */
+  if (n<B) {
+   int sta1=barr[n].sta1;
+   int sta2=barr[n].sta2;
+   /* find out which time slot this baseline is from */
+   int tslot=n/((N*(N-1)/2));
+   /* find out which chunk to select from p : 0,1..nchunk-1 */
+   int chunk=(n*nchunk)/B;
+   /* create G1 and G2 Jones matrices from p */
+   cuDoubleComplex G1[4],G2[4];
+   G1[0].x=__ldg(&p[chunk*8*N+sta1*8]);
+   G1[0].y=__ldg(&p[chunk*8*N+sta1*8+1]);
+   G1[1].x=__ldg(&p[chunk*8*N+sta1*8+2]);
+   G1[1].y=__ldg(&p[chunk*8*N+sta1*8+3]);
+   G1[2].x=__ldg(&p[chunk*8*N+sta1*8+4]);
+   G1[2].y=__ldg(&p[chunk*8*N+sta1*8+5]);
+   G1[3].x=__ldg(&p[chunk*8*N+sta1*8+6]);
+   G1[3].y=__ldg(&p[chunk*8*N+sta1*8+7]);
+   G2[0].x=__ldg(&p[chunk*8*N+sta2*8]);
+   G2[0].y=__ldg(&p[chunk*8*N+sta2*8+1]);
+   G2[1].x=__ldg(&p[chunk*8*N+sta2*8+2]);
+   G2[1].y=__ldg(&p[chunk*8*N+sta2*8+3]);
+   G2[2].x=__ldg(&p[chunk*8*N+sta2*8+4]);
+   G2[2].y=__ldg(&p[chunk*8*N+sta2*8+5]);
+   G2[3].x=__ldg(&p[chunk*8*N+sta2*8+6]);
+   G2[3].y=__ldg(&p[chunk*8*N+sta2*8+7]);
+
+   double u_n=(u[n]);
+   double v_n=(v[n]);
+   double w_n=(w[n]);
+
+   //TODO: figure out if this max_f makes any sense
+   #define MAX_F 20
+   double l_coh[MAX_F][8];
+   for(int cf=0; cf<F; cf++) {
+        l_coh[cf][0]=0.0;
+        l_coh[cf][1]=0.0;
+        l_coh[cf][2]=0.0;
+        l_coh[cf][3]=0.0;
+        l_coh[cf][4]=0.0;
+        l_coh[cf][5]=0.0;
+        l_coh[cf][6]=0.0;
+        l_coh[cf][7]=0.0;
+   }
+
+
+   // split to two cases, F==1 and F>1
+   if (F==1) {
+     //use simply for-loop, if K is very large this may be slow and may need further parallelization
+     for (int k=0; k<K; k++) {
+        //source specific params
+        double sIf,sQf,sUf,sVf;
+        double phterm0 = (2.0*M_PI*(u_n*__ldg(&ll[k])+v_n*__ldg(&mm[k])+w_n*__ldg(&nn[k])));
+        sIf=__ldg(&sI[k]);
+        sQf=__ldg(&sQ[k]);
+        sUf=__ldg(&sU[k]);
+        sVf=__ldg(&sV[k]);
+
+        unsigned char stypeT=__ldg(&stype[k]);
+
+        double llcoh[8];
+        compute_prodterm(sta1, sta2, N, K, T, phterm0, sIf, sQf, sUf, sVf,
+               __ldg(&(freqs[0])), deltaf, dobeam, tslot, k, beam, exs, stypeT, u_n, v_n, w_n, llcoh);
+
+         l_coh[0][0] +=llcoh[0];
+         l_coh[0][1] +=llcoh[1];
+         l_coh[0][2] +=llcoh[2];
+         l_coh[0][3] +=llcoh[3];
+         l_coh[0][4] +=llcoh[4];
+         l_coh[0][5] +=llcoh[5];
+         l_coh[0][6] +=llcoh[6];
+         l_coh[0][7] +=llcoh[7];
+
+
+     }
+     cuDoubleComplex L1[4],L2[4];
+     L1[0].x=l_coh[0][0];
+     L1[0].y=l_coh[0][1];
+     L1[1].x=l_coh[0][2];
+     L1[1].y=l_coh[0][3];
+     L1[2].x=l_coh[0][4];
+     L1[2].y=l_coh[0][5];
+     L1[3].x=l_coh[0][6];
+     L1[3].y=l_coh[0][7];
+     /* L2=G1*L1 */
+     amb(G1,L1,L2);
+     /* L1=L2*G2^H */
+     ambt(L2,G2,L1);
+     l_coh[0][0]=L1[0].x;
+     l_coh[0][1]=L1[0].y;
+     l_coh[0][2]=L1[1].x;
+     l_coh[0][3]=L1[1].y;
+     l_coh[0][4]=L1[2].x;
+     l_coh[0][5]=L1[2].y;
+     l_coh[0][6]=L1[3].x;
+     l_coh[0][7]=L1[3].y;
+
+   } else {
+     //use simply for-loop, if K is very large this may be slow and may need further parallelization
+     for (int k=0; k<K; k++) {
+        //source specific params
+        double sI0f,sQ0f,sU0f,sV0f,spec_idxf,spec_idx1f,spec_idx2f,myf0;
+        double phterm0 = (2.0*M_PI*(u_n*__ldg(&ll[k])+v_n*__ldg(&mm[k])+w_n*__ldg(&nn[k])));
+        sI0f=__ldg(&sI0[k]);
+        sQ0f=__ldg(&sQ0[k]);
+        sU0f=__ldg(&sU0[k]);
+        sV0f=__ldg(&sV0[k]);
+        spec_idxf=__ldg(&spec_idx[k]);
+        spec_idx1f=__ldg(&spec_idx1[k]);
+        spec_idx2f=__ldg(&spec_idx2[k]);
+        myf0=__ldg(&f0[k]);
+
+        unsigned char stypeT=__ldg(&stype[k]);
+
+        for(int cf=0; cf<F; cf++) {
+            double llcoh[8];
+            compute_prodterm_multifreq(sta1, sta2, N, K, T, F, phterm0, sI0f, sQ0f, sU0f, sV0f, spec_idxf, spec_idx1f, spec_idx2f, 
+               myf0, __ldg(&(freqs[cf])), deltaf, dobeam, tslot, k, cf, beam, exs, stypeT, u_n, v_n, w_n,llcoh);
+         l_coh[cf][0] +=llcoh[0];
+         l_coh[cf][1] +=llcoh[1];
+         l_coh[cf][2] +=llcoh[2];
+         l_coh[cf][3] +=llcoh[3];
+         l_coh[cf][4] +=llcoh[4];
+         l_coh[cf][5] +=llcoh[5];
+         l_coh[cf][6] +=llcoh[6];
+         l_coh[cf][7] +=llcoh[7];
+        }
+
+     }
+
+     cuDoubleComplex L1[4],L2[4];
+     for(int cf=0; cf<F; cf++) {
+       L1[0].x=l_coh[cf][0];
+       L1[0].y=l_coh[cf][1];
+       L1[1].x=l_coh[cf][2];
+       L1[1].y=l_coh[cf][3];
+       L1[2].x=l_coh[cf][4];
+       L1[2].y=l_coh[cf][5];
+       L1[3].x=l_coh[cf][6];
+       L1[3].y=l_coh[cf][7];
+       /* L2=G1*L1 */
+       amb(G1,L1,L2);
+       /* L1=L2*G2^H */
+       ambt(L2,G2,L1);
+       l_coh[cf][0]=L1[0].x;
+       l_coh[cf][1]=L1[0].y;
+       l_coh[cf][2]=L1[1].x;
+       l_coh[cf][3]=L1[1].y;
+       l_coh[cf][4]=L1[2].x;
+       l_coh[cf][5]=L1[2].y;
+       l_coh[cf][6]=L1[3].x;
+       l_coh[cf][7]=L1[3].y;
+     }
+
+
+   }
+
+
+
+     //write output with right multi frequency offset
+    double *coh1 = &coh[8*n];
+    for(int cf=0; cf<F; cf++) {
+        coh1[cf*8*B+0] = l_coh[cf][0];
+        coh1[cf*8*B+1] = l_coh[cf][1];
+        coh1[cf*8*B+2] = l_coh[cf][2];
+        coh1[cf*8*B+3] = l_coh[cf][3];
+        coh1[cf*8*B+4] = l_coh[cf][4];
+        coh1[cf*8*B+5] = l_coh[cf][5];
+        coh1[cf*8*B+6] = l_coh[cf][6];
+        coh1[cf*8*B+7] = l_coh[cf][7];
+    }
+
+  
+  }
+
+}
 
 /* kernel to convert time (JD) to GMST angle*/
 __global__ void 
@@ -585,7 +953,7 @@ cudakernel_array_beam(int N, int T, int K, int F, double *freqs, float *longitud
 
 /* 
   calculate coherencies:
-  B: total baselines
+  B: total baselines (could be more than one timeslot)
   N: no of stations
   T: no of time slots
   K: no of sources
@@ -608,8 +976,8 @@ cudakernel_array_beam(int N, int T, int K, int F, double *freqs, float *longitud
   dobeam: enable beam if >0
 */
 void
-cudakernel_coherencies(int B, int N, int T, int K, int F, double *u, double *v, double *w,baseline_t *barr, double *freqs, float *beam, double *ll, double *mm, double *nn, double *sI,
-  unsigned char *stype, double *sI0, double *f0, double *spec_idx, double *spec_idx1, double *spec_idx2, int **exs, double deltaf, double deltat, double dec0, double *coh,int dobeam) {
+cudakernel_coherencies(int B, int N, int T, int K, int F, double *u, double *v, double *w,baseline_t *barr, double *freqs, float *beam, double *ll, double *mm, double *nn, double *sI, double *sQ, double *sU, double *sV,
+  unsigned char *stype, double *sI0, double *sQ0, double *sU0, double *sV0, double *f0, double *spec_idx, double *spec_idx1, double *spec_idx2, int **exs, double deltaf, double deltat, double dec0, double *coh,int dobeam) {
 #ifdef CUDA_DBG
   cudaError_t error;
   error = cudaGetLastError();
@@ -620,8 +988,8 @@ cudakernel_coherencies(int B, int N, int T, int K, int F, double *u, double *v, 
   /* note: make sure we do not exceed max no of blocks available, 
    otherwise (too many baselines, loop over source id) */
   int BlocksPerGrid=(B+ThreadsPerBlock-1)/ThreadsPerBlock;
-  kernel_coherencies<<<BlocksPerGrid,ThreadsPerBlock>>>(B, N, T, K, F,u,v,w,barr,freqs, beam, ll, mm, nn, sI,
-    stype, sI0, f0, spec_idx, spec_idx1, spec_idx2, exs, deltaf, deltat, dec0, coh, dobeam);
+  kernel_coherencies<<<BlocksPerGrid,ThreadsPerBlock>>>(B, N, T, K, F,u,v,w,barr,freqs, beam, ll, mm, nn, sI, sQ, sU, sV,
+    stype, sI0, sQ0, sU0, sV0, f0, spec_idx, spec_idx1, spec_idx2, exs, deltaf, deltat, dec0, coh, dobeam);
   cudaDeviceSynchronize();
 #ifdef CUDA_DBG
   error = cudaGetLastError();
@@ -633,6 +1001,33 @@ cudakernel_coherencies(int B, int N, int T, int K, int F, double *u, double *v, 
 #endif
 }
 
+
+/* p : parameters 8Nxnchunk values */
+void
+cudakernel_residuals(int B, int N, int T, int K, int F, double *u, double *v, double *w, double *p, int nchunk, baseline_t *barr, double *freqs, float *beam, double *ll, double *mm, double *nn, double *sI, double *sQ, double *sU, double *sV,
+  unsigned char *stype, double *sI0, double *sQ0, double *sU0, double *sV0, double *f0, double *spec_idx, double *spec_idx1, double *spec_idx2, int **exs, double deltaf, double deltat, double dec0, double *coh,int dobeam) {
+#ifdef CUDA_DBG
+  cudaError_t error;
+  error = cudaGetLastError();
+#endif
+
+  /* spawn threads to handle baselines, these threads will spawn threads for sources */
+  int ThreadsPerBlock=DEFAULT_TH_PER_BK;
+  /* note: make sure we do not exceed max no of blocks available, 
+   otherwise (too many baselines, loop over source id) */
+  int BlocksPerGrid=(B+ThreadsPerBlock-1)/ThreadsPerBlock;
+  kernel_residuals<<<BlocksPerGrid,ThreadsPerBlock>>>(B, N, T, K, F,u,v,w,p,nchunk,barr,freqs, beam, ll, mm, nn, sI, sQ, sU, sV,
+    stype, sI0, sQ0, sU0, sV0, f0, spec_idx, spec_idx1, spec_idx2, exs, deltaf, deltat, dec0, coh, dobeam);
+  cudaDeviceSynchronize();
+#ifdef CUDA_DBG
+  error = cudaGetLastError();
+  if(error != cudaSuccess) {
+    // print the CUDA error message and exit
+    fprintf(stderr,"CUDA error: %s :%s: %d\n", cudaGetErrorString(error),__FILE__,__LINE__);
+    exit(-1);
+  }
+#endif
+}
 
 /* convert time JD to GMST angle
   store result at the same location */

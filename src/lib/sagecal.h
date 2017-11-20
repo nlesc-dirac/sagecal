@@ -2658,10 +2658,15 @@ precalculate_coherencies_withbeam_gpu(double *u, double *v, double *w, complex d
  double ph_ra0, double ph_dec0, double ph_freq0, double *longitude, double *latitude, double *time_utc, int tileze, int *Nelem, double **xx, double **yy, double **zz, int dobeam, int Nt);
 
 
-/* FIXME: add_to_data: no subtraction is done */
 extern int
 predict_visibilities_multifreq_withbeam_gpu(double *u,double *v,double *w,double *x,int N,int Nbase,int tilesz,baseline_t *barr, clus_source_t *carr, int M,double *freqs,int Nchan, double fdelta,double tdelta, double dec0,
  double ph_ra0, double ph_dec0, double ph_freq0, double *longitude, double *latitude, double *time_utc,int *Nelem, double **xx, double **yy, double **zz, int dobeam, int Nt, int add_to_data);
+
+extern int
+calculate_residuals_multifreq_withbeam_gpu(double *u,double *v,double *w,double *p,double *x,int N,int Nbase,int tilesz,baseline_t *barr, clus_source_t *carr, int M,double *freqs,int Nchan, double fdelta,double tdelta, double dec0,
+ double ph_ra0, double ph_dec0, double ph_freq0, double *longitude, double *latitude, double *time_utc,int *Nelem, double **xx, double **yy, double **zz, int dobeam, int Nt, int ccid, double rho, int phase_only);
+
+
 
 #endif /*!HAVE_CUDA */
 
@@ -2675,6 +2680,12 @@ predict_visibilities_multifreq_withbeam_gpu(double *u,double *v,double *w,double
 #ifndef ARRAY_MAX_ELEM /* if using shared memory, max possible elements for a station */
 #define ARRAY_MAX_ELEM 512
 #endif
+/* default GPU heap size (in MB) needed to calculate some shapelet models,
+    if model has n0>20 or so, try increasing this and recompiling
+   the default GPU values is ~ 8MB */
+#ifndef GPU_HEAP_SIZE
+#define GPU_HEAP_SIZE 20 
+#endif
 
 
 extern void
@@ -2683,9 +2694,12 @@ cudakernel_array_beam(int N, int T, int K, int F, double *freqs, float *longitud
 
 
 extern void
-cudakernel_coherencies(int B, int N, int T, int K, int F, double *u, double *v, double *w,baseline_t *barr, double *freqs, float *beam, double *ll, double *mm, double *nn, double *sI,
-  unsigned char *stype, double *sI0, double *f0, double *spec_idx, double *spec_idx1, double *spec_idx2, int **exs, double deltaf, double deltat, double dec0, double *coh, int dobeam);
+cudakernel_coherencies(int B, int N, int T, int K, int F, double *u, double *v, double *w,baseline_t *barr, double *freqs, float *beam, double *ll, double *mm, double *nn, double *sI, double *sQ, double *sU, double *sV,
+  unsigned char *stype, double *sI0, double *sQ0, double *sU0, double *sV0, double *f0, double *spec_idx, double *spec_idx1, double *spec_idx2, int **exs, double deltaf, double deltat, double dec0, double *coh, int dobeam);
 
+extern void
+cudakernel_residuals(int B, int N, int T, int K, int F, double *u, double *v, double *w, double *p, int nchunk, baseline_t *barr, double *freqs, float *beam, double *ll, double *mm, double *nn, double *sI, double *sQ, double *sU, double *sV,
+  unsigned char *stype, double *sI0, double *sQ0, double *sU0, double *sV0, double *f0, double *spec_idx, double *spec_idx1, double *spec_idx2, int **exs, double deltaf, double deltat, double dec0, double *coh,int dobeam);
 
 extern void
 cudakernel_convert_time(int T, double *time_utc);
