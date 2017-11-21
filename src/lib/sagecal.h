@@ -2701,6 +2701,19 @@ extern void
 cudakernel_residuals(int B, int N, int T, int K, int F, double *u, double *v, double *w, double *p, int nchunk, baseline_t *barr, double *freqs, float *beam, double *ll, double *mm, double *nn, double *sI, double *sQ, double *sU, double *sV,
   unsigned char *stype, double *sI0, double *sQ0, double *sU0, double *sV0, double *f0, double *spec_idx, double *spec_idx1, double *spec_idx2, int **exs, double deltaf, double deltat, double dec0, double *coh,int dobeam);
 
+/* B: total baselines
+   N: stations
+   Nb: baselines worked by this kernel 
+   boff: baseline offset 0..B-1
+   F: frequencies
+   nchunk: how many solutions
+   x: residual to be corrected: size Nb*8*F
+   p: solutions (inverted) size N*8*nchunk
+   barr: baseline array to get station indices: size Nb
+*/
+extern void
+cudakernel_correct_residuals(int B, int N, int Nb, int boff, int F, int nchunk, double *x, double *p, baseline_t *barr);
+
 extern void
 cudakernel_convert_time(int T, double *time_utc);
 #endif /* !HAVE_CUDA */

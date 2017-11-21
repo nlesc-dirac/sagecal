@@ -697,7 +697,7 @@ const double *__restrict__ sQ0, const double *__restrict__ sU0, const double *__
    /* find out which time slot this baseline is from */
    int tslot=n/((N*(N-1)/2));
    /* find out which chunk to select from p : 0,1..nchunk-1 */
-   int chunk=(n*nchunk)/B;
+   int chunk=(n)/((B+nchunk-1)/nchunk);
    /* create G1 and G2 Jones matrices from p */
    cuDoubleComplex G1[4],G2[4];
    G1[0].x=__ldg(&p[chunk*8*N+sta1*8]);
@@ -867,6 +867,68 @@ const double *__restrict__ sQ0, const double *__restrict__ sU0, const double *__
 
 }
 
+
+/* kernel to correct residuals */
+__global__ void
+kernel_correct_residuals(int B, int N, int Nb, int boff, int F, int nchunk, double *__restrict__ x, const double *__restrict__ p, baseline_t *barr)  {
+
+  /* relative baseline index */
+  unsigned int n=threadIdx.x+blockDim.x*blockIdx.x;
+
+  if (n<Nb) {
+   int sta1=barr[n].sta1;
+   int sta2=barr[n].sta2;
+   /* find out which chunk to select from p : 0,1..nchunk-1 */
+   int chunk=(n+boff)/((B+nchunk-1)/nchunk);
+   /* create G1 and G2 Jones matrices from p */
+   cuDoubleComplex G1[4],G2[4];
+   G1[0].x=__ldg(&p[chunk*8*N+sta1*8]);
+   G1[0].y=__ldg(&p[chunk*8*N+sta1*8+1]);
+   G1[1].x=__ldg(&p[chunk*8*N+sta1*8+2]);
+   G1[1].y=__ldg(&p[chunk*8*N+sta1*8+3]);
+   G1[2].x=__ldg(&p[chunk*8*N+sta1*8+4]);
+   G1[2].y=__ldg(&p[chunk*8*N+sta1*8+5]);
+   G1[3].x=__ldg(&p[chunk*8*N+sta1*8+6]);
+   G1[3].y=__ldg(&p[chunk*8*N+sta1*8+7]);
+   G2[0].x=__ldg(&p[chunk*8*N+sta2*8]);
+   G2[0].y=__ldg(&p[chunk*8*N+sta2*8+1]);
+   G2[1].x=__ldg(&p[chunk*8*N+sta2*8+2]);
+   G2[1].y=__ldg(&p[chunk*8*N+sta2*8+3]);
+   G2[2].x=__ldg(&p[chunk*8*N+sta2*8+4]);
+   G2[2].y=__ldg(&p[chunk*8*N+sta2*8+5]);
+   G2[3].x=__ldg(&p[chunk*8*N+sta2*8+6]);
+   G2[3].y=__ldg(&p[chunk*8*N+sta2*8+7]);
+
+   for (int cf=0; cf<F; cf++) {
+      cuDoubleComplex L1[4],L2[4];
+
+      L1[0].x=x[cf*8*Nb+n];
+      L1[0].y=x[cf*8*Nb+n+1];
+      L1[1].x=x[cf*8*Nb+n+2];
+      L1[1].y=x[cf*8*Nb+n+3];
+      L1[2].x=x[cf*8*Nb+n+4];
+      L1[2].y=x[cf*8*Nb+n+5];
+      L1[3].x=x[cf*8*Nb+n+6];
+      L1[3].y=x[cf*8*Nb+n+7];
+
+      /* L2=G1*L1 */
+      amb(G1,L1,L2);
+      /* L1=L2*G2^H */
+      ambt(L2,G2,L1);
+
+      x[cf*8*Nb+n]=L1[0].x;
+      x[cf*8*Nb+n+1]=L1[0].y;
+      x[cf*8*Nb+n+2]=L1[1].x;
+      x[cf*8*Nb+n+3]=L1[1].y;
+      x[cf*8*Nb+n+4]=L1[2].x;
+      x[cf*8*Nb+n+5]=L1[2].y;
+      x[cf*8*Nb+n+6]=L1[3].x;
+      x[cf*8*Nb+n+7]=L1[3].y;
+
+   }
+  }
+}
+
 /* kernel to convert time (JD) to GMST angle*/
 __global__ void 
 kernel_convert_time(int T, double *time_utc) {
@@ -1011,13 +1073,36 @@ cudakernel_residuals(int B, int N, int T, int K, int F, double *u, double *v, do
   error = cudaGetLastError();
 #endif
 
-  /* spawn threads to handle baselines, these threads will spawn threads for sources */
+  /* spawn threads to handle baselines, these threads will loop over sources */
   int ThreadsPerBlock=DEFAULT_TH_PER_BK;
   /* note: make sure we do not exceed max no of blocks available, 
    otherwise (too many baselines, loop over source id) */
   int BlocksPerGrid=(B+ThreadsPerBlock-1)/ThreadsPerBlock;
   kernel_residuals<<<BlocksPerGrid,ThreadsPerBlock>>>(B, N, T, K, F,u,v,w,p,nchunk,barr,freqs, beam, ll, mm, nn, sI, sQ, sU, sV,
     stype, sI0, sQ0, sU0, sV0, f0, spec_idx, spec_idx1, spec_idx2, exs, deltaf, deltat, dec0, coh, dobeam);
+  cudaDeviceSynchronize();
+#ifdef CUDA_DBG
+  error = cudaGetLastError();
+  if(error != cudaSuccess) {
+    // print the CUDA error message and exit
+    fprintf(stderr,"CUDA error: %s :%s: %d\n", cudaGetErrorString(error),__FILE__,__LINE__);
+    exit(-1);
+  }
+#endif
+}
+
+
+void
+cudakernel_correct_residuals(int B, int N, int Nb, int boff, int F, int nchunk, double *x, double *p, baseline_t *barr) {
+#ifdef CUDA_DBG
+  cudaError_t error;
+  error = cudaGetLastError();
+#endif
+
+  /* spawn threads to handle baselines */
+  int ThreadsPerBlock=DEFAULT_TH_PER_BK;
+  int BlocksPerGrid=(Nb+ThreadsPerBlock-1)/ThreadsPerBlock;
+  kernel_correct_residuals<<<BlocksPerGrid,ThreadsPerBlock>>>(B, N, Nb, boff, F, nchunk, x, p, barr);
   cudaDeviceSynchronize();
 #ifdef CUDA_DBG
   error = cudaGetLastError();

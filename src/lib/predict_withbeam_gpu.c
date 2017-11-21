@@ -33,6 +33,44 @@ checkCudaError(cudaError_t err, char *file, int line)
 #endif
 }
 
+/* invert matrix xx - 8x1 array
+ *  * store it in   yy - 8x1 array
+ * FIXME: remove duplication of this  */
+static int
+mat_invert(double xx[8],double yy[8], double rho) {
+ complex double a[4];
+ complex double det;
+ complex double b[4];
+  
+ a[0]=xx[0]+xx[1]*_Complex_I+rho;
+ a[1]=xx[2]+xx[3]*_Complex_I;
+ a[2]=xx[4]+xx[5]*_Complex_I;
+ a[3]=xx[6]+xx[7]*_Complex_I+rho;
+  
+  
+  
+ det=a[0]*a[3]-a[1]*a[2];
+ if (sqrt(cabs(det))<=rho) {
+  det+=rho;
+ }
+ det=1.0/det;
+ b[0]=a[3]*det;
+ b[1]=-a[1]*det;
+ b[2]=-a[2]*det;
+ b[3]=a[0]*det;
+
+
+ yy[0]=creal(b[0]);
+ yy[1]=cimag(b[0]);
+ yy[2]=creal(b[1]);
+ yy[3]=cimag(b[1]);
+ yy[4]=creal(b[2]);
+ yy[5]=cimag(b[2]);
+ yy[6]=creal(b[3]);
+ yy[7]=cimag(b[3]);
+
+ return 0;
+}
 
 /* struct to pass data to worker threads attached to GPUs */
 typedef struct thread_data_pred_t_ {
@@ -70,6 +108,22 @@ typedef struct thread_data_pred_t_ {
 
 } thread_data_pred_t;
 
+/* struct for passing data to threads for correcting data */
+typedef struct thread_data_corr_t_ {
+  int tid; /* this thread id */
+  taskhist *hst; /* for load balancing GPUs */
+
+  double *x; /* residual vector to be corrected : 8*Nbase*Nf*/
+  int N; /* stations */
+  int Nbase; /* total baselines (N-1)N/2 x tilesz */
+  int boff; /* offset of x in for each thread (multiple columns if Nf>1) */
+  int Nb; /* no of baselines handeled by this thread */
+  baseline_t *barr; /* baseline info */
+  int Nf; /* of of freqs */
+
+  double *pinv; /* inverse of solutions to apply: size 8N*nchunk */
+  int nchunk; /* how many solutions */
+} thread_data_corr_t;
 
 /* copy Nx1 double array x to device as float
    first allocate device memory */
@@ -1431,6 +1485,8 @@ residual_threadfn(void *data) {
 
 /******************* begin loop over clusters **************************/
   for (ncl=t->soff; ncl<t->soff+t->Ns; ncl++) {
+     /* check if cluster id >=0 to do a subtraction */
+     if (t->carr[ncl].id>=0) {
      /* allocate memory for this clusters beam */
      if (t->dobeam) {
       err=cudaMalloc((void**)&beamd, t->N*t->tilesz*t->carr[ncl].N*t->Nf*sizeof(float));
@@ -1682,6 +1738,7 @@ residual_threadfn(void *data) {
      err=cudaFree(sV0d);
      checkCudaError(err,__FILE__,__LINE__);
      }
+   }
   }
 /******************* end loop over clusters **************************/
 
@@ -1742,6 +1799,67 @@ residual_threadfn(void *data) {
 }
 
 
+static void *
+correct_threadfn(void *data) {
+  thread_data_corr_t *t=(thread_data_corr_t*)data;
+  /* first, select a GPU, if total threads > MAX_GPU_ID
+    use random selection, elese use this thread id */
+  int card;
+  if (t->tid>MAX_GPU_ID) {
+   card=select_work_gpu(MAX_GPU_ID,t->hst);
+  } else {
+   card=t->tid;
+  }
+  cudaError_t err;
+  int cf;
+
+  err=cudaSetDevice(card);
+  checkCudaError(err,__FILE__,__LINE__);
+
+  double *xd;
+  baseline_t *barrd;
+  double *pd;
+
+  /* allocate memory in GPU */
+  err=cudaMalloc((void**) &xd, t->Nb*8*t->Nf*sizeof(double)); /* coherencies only for Nb baselines, Nf freqs */
+  checkCudaError(err,__FILE__,__LINE__);
+  err=cudaMalloc((void**) &barrd, t->Nb*sizeof(baseline_t));
+  checkCudaError(err,__FILE__,__LINE__);
+  err=cudaMalloc((void**) &pd, t->N*8*t->nchunk*sizeof(double));
+  checkCudaError(err,__FILE__,__LINE__);
+
+  /* copy with right offset */
+  err=cudaMemcpy(barrd, &(t->barr[t->boff]), t->Nb*sizeof(baseline_t), cudaMemcpyHostToDevice);
+  checkCudaError(err,__FILE__,__LINE__);
+  err=cudaMemcpy(pd, t->pinv, t->N*8*t->Nf*sizeof(double), cudaMemcpyHostToDevice);
+  checkCudaError(err,__FILE__,__LINE__);
+  
+  for (cf=0; cf<t->Nf; cf++) {
+    err=cudaMemcpy(&xd[cf*8*t->Nb], &(t->x[cf*8*t->Nbase+t->boff*8]), t->Nb*8*sizeof(double), cudaMemcpyHostToDevice);
+    checkCudaError(err,__FILE__,__LINE__);
+  }
+
+  /* run kernel */
+  cudakernel_correct_residuals(t->Nbase,t->N,t->Nb,t->boff,t->Nf,t->nchunk,xd,pd,barrd);
+ 
+  /* copy back corrected result */
+  for (cf=0; cf<t->Nf; cf++) {
+    err=cudaMemcpy(&(t->x[cf*8*t->Nbase+t->boff*8]), &xd[cf*8*t->Nb], t->Nb*8*sizeof(double), cudaMemcpyDeviceToHost);
+    checkCudaError(err,__FILE__,__LINE__);
+  }
+
+  err=cudaFree(xd);
+  checkCudaError(err,__FILE__,__LINE__);
+  err=cudaFree(barrd);
+  checkCudaError(err,__FILE__,__LINE__);
+  err=cudaFree(pd);
+  checkCudaError(err,__FILE__,__LINE__);
+
+  /* reset error state */
+  err=cudaGetLastError();
+  return NULL;
+}
+
 /* p: 8NMx1 parameter array, but M is 'effective' clusters, need to use carr to find the right offset
    ccid: which cluster to use as correction
    rho: MMSE robust parameter J+rho I inverted
@@ -1758,6 +1876,7 @@ double ph_ra0, double ph_dec0, double ph_freq0, double *longitude, double *latit
   pthread_attr_t attr;
   pthread_t *th_array;
   thread_data_pred_t *threaddata;
+  thread_data_corr_t *threaddata_corr;
   taskhist thst;
   init_task_hist(&thst);
 
@@ -1855,9 +1974,102 @@ double ph_ra0, double ph_dec0, double ph_freq0, double *longitude, double *latit
 
   free(xlocal);
   free(threaddata);
-  destroy_task_hist(&thst);
+
+  /* find if any cluster is specified for correction of data */
+  int cm,cj;
+  cm=-1;
+  for (cj=0; cj<M; cj++) { /* clusters */
+    /* check if cluster id == ccid to do a correction */
+    if (carr[cj].id==ccid) {
+     /* valid cluster found */
+     cm=cj;
+    }
+  }
+  /* correction of data, if valid cluster is given */
+  if (cm>=0) {
+   double *pm,*pinv,*pphase=0;
+   /* allocate memory for inverse J */
+   if ((pinv=(double*)malloc((size_t)8*N*carr[cm].nchunk*sizeof(double)))==0) {
+     fprintf(stderr,"%s: %d: No free memory\n",__FILE__,__LINE__);
+     exit(1);
+   }
+   if (!phase_only) {
+    for (cj=0; cj<carr[cm].nchunk; cj++) {
+     pm=&(p[carr[cm].p[cj]]); /* start of solutions */
+     /* invert N solutions */
+     for (ci=0; ci<N; ci++) {
+      mat_invert(&pm[8*ci],&pinv[8*ci+8*N*cj], rho);
+     }
+    }
+   } else {
+    /* joint diagonalize solutions and get only phases before inverting */
+    if ((pphase=(double*)malloc((size_t)8*N*sizeof(double)))==0) {
+     fprintf(stderr,"%s: %d: No free memory\n",__FILE__,__LINE__);
+     exit(1);
+    }
+    for (cj=0; cj<carr[cm].nchunk; cj++) {
+      pm=&(p[carr[cm].p[cj]]); /* start of solutions */
+      /* extract phase of pm, output to pphase */
+      extract_phases(pm,pphase,N,10);
+      /* invert N solutions */
+      for (ci=0; ci<N; ci++) {
+       mat_invert(&pphase[8*ci],&pinv[8*ci+8*N*cj], rho);
+      }
+    }
+    free(pphase);
+   }
+
+   /* divide x[] over GPUs */
+   int Nbase1=Nbase*tilesz;
+   Nthb0=(Nbase1+Ngpu-1)/Ngpu;
+
+   if ((threaddata_corr=(thread_data_corr_t*)malloc((size_t)Ngpu*sizeof(thread_data_corr_t)))==0) {
+    fprintf(stderr,"%s: %d: No free memory\n",__FILE__,__LINE__);
+    exit(1);
+   }
+   ci=0;
+   for (nth=0;  nth<Ngpu && ci<Nbase1; nth++) {
+    /* this thread will handle baselines [ci:min(Nbase-1,ci+Nthb0-1)] */
+    /* determine actual no. of baselines */
+    if (ci+Nthb0<Nbase1) {
+     Nthb=Nthb0;
+    } else {
+     Nthb=Nbase1-ci;
+    }
+
+    threaddata_corr[nth].hst=&thst;
+    threaddata_corr[nth].tid=nth;
+    threaddata_corr[nth].boff=ci;
+    threaddata_corr[nth].Nb=Nthb;
+    threaddata_corr[nth].barr=barr;
+    threaddata_corr[nth].x=x;
+    threaddata_corr[nth].N=N;
+    threaddata_corr[nth].Nbase=Nbase1;
+    threaddata_corr[nth].Nf=Nchan;
+    /* for correction of data */
+    threaddata_corr[nth].pinv=pinv;
+    threaddata_corr[nth].nchunk=carr[cm].nchunk;
+
+
+    pthread_create(&th_array[nth],&attr,correct_threadfn,(void*)(&threaddata_corr[nth]));
+    /* next baseline set */
+    ci=ci+Nthb;
+   }
+
+   /* now wait for threads to finish */
+   for(ci=0; ci<nth; ci++) {
+    pthread_join(th_array[ci],NULL);
+   }
+
+   
+   free(pinv);
+   free(threaddata_corr);
+  }
+
+
   free(th_array);
   pthread_attr_destroy(&attr);
 
+  destroy_task_hist(&thst);
   return 0;
 }
