@@ -902,28 +902,28 @@ kernel_correct_residuals(int B, int N, int Nb, int boff, int F, int nchunk, doub
    for (int cf=0; cf<F; cf++) {
       cuDoubleComplex L1[4],L2[4];
 
-      L1[0].x=x[cf*8*Nb+n];
-      L1[0].y=x[cf*8*Nb+n+1];
-      L1[1].x=x[cf*8*Nb+n+2];
-      L1[1].y=x[cf*8*Nb+n+3];
-      L1[2].x=x[cf*8*Nb+n+4];
-      L1[2].y=x[cf*8*Nb+n+5];
-      L1[3].x=x[cf*8*Nb+n+6];
-      L1[3].y=x[cf*8*Nb+n+7];
+      L1[0].x=x[cf*8*Nb+8*n];
+      L1[0].y=x[cf*8*Nb+8*n+1];
+      L1[1].x=x[cf*8*Nb+8*n+2];
+      L1[1].y=x[cf*8*Nb+8*n+3];
+      L1[2].x=x[cf*8*Nb+8*n+4];
+      L1[2].y=x[cf*8*Nb+8*n+5];
+      L1[3].x=x[cf*8*Nb+8*n+6];
+      L1[3].y=x[cf*8*Nb+8*n+7];
 
       /* L2=G1*L1 */
       amb(G1,L1,L2);
       /* L1=L2*G2^H */
       ambt(L2,G2,L1);
 
-      x[cf*8*Nb+n]=L1[0].x;
-      x[cf*8*Nb+n+1]=L1[0].y;
-      x[cf*8*Nb+n+2]=L1[1].x;
-      x[cf*8*Nb+n+3]=L1[1].y;
-      x[cf*8*Nb+n+4]=L1[2].x;
-      x[cf*8*Nb+n+5]=L1[2].y;
-      x[cf*8*Nb+n+6]=L1[3].x;
-      x[cf*8*Nb+n+7]=L1[3].y;
+      x[cf*8*Nb+8*n]=L1[0].x;
+      x[cf*8*Nb+8*n+1]=L1[0].y;
+      x[cf*8*Nb+8*n+2]=L1[1].x;
+      x[cf*8*Nb+8*n+3]=L1[1].y;
+      x[cf*8*Nb+8*n+4]=L1[2].x;
+      x[cf*8*Nb+8*n+5]=L1[2].y;
+      x[cf*8*Nb+8*n+6]=L1[3].x;
+      x[cf*8*Nb+8*n+7]=L1[3].y;
 
    }
   }
