@@ -173,6 +173,8 @@ precalcoh_threadfn(void *data) {
 
   err=cudaSetDevice(card);
   checkCudaError(err,__FILE__,__LINE__);
+  err=cudaSetDeviceFlags(cudaDeviceLmemResizeToMax);
+  checkCudaError(err,__FILE__,__LINE__);
 
   /* make sure enough heap memory is available for shapelet computations */
   size_t plim;
@@ -592,6 +594,7 @@ precalcoh_threadfn(void *data) {
 
   /* reset error state */
   err=cudaGetLastError(); 
+
   return NULL;
 
 }
@@ -765,6 +768,7 @@ precalculate_coherencies_withbeam_gpu(double *u, double *v, double *w, complex d
  free(threaddata1);
  pthread_attr_destroy(&attr);
  free(th_array);
+
  return 0;
 }
 
@@ -787,6 +791,8 @@ predictvis_threadfn(void *data) {
 
 
   err=cudaSetDevice(card);
+  checkCudaError(err,__FILE__,__LINE__);
+  err=cudaSetDeviceFlags(cudaDeviceLmemResizeToMax);
   checkCudaError(err,__FILE__,__LINE__);
 
   /* make sure enough heap memory is available for shapelet computations */
@@ -1209,6 +1215,7 @@ predictvis_threadfn(void *data) {
   }
 
 
+
   /* reset error state */
   err=cudaGetLastError(); 
   return NULL;
@@ -1357,6 +1364,8 @@ residual_threadfn(void *data) {
 
 
   err=cudaSetDevice(card);
+  checkCudaError(err,__FILE__,__LINE__);
+  err=cudaSetDeviceFlags(cudaDeviceLmemResizeToMax);
   checkCudaError(err,__FILE__,__LINE__);
 
   /* make sure enough heap memory is available for shapelet computations */
@@ -1792,6 +1801,7 @@ residual_threadfn(void *data) {
   }
 
 
+
   /* reset error state */
   err=cudaGetLastError(); 
   return NULL;
@@ -1815,6 +1825,8 @@ correct_threadfn(void *data) {
 
   err=cudaSetDevice(card);
   checkCudaError(err,__FILE__,__LINE__);
+  err=cudaSetDeviceFlags(cudaDeviceLmemResizeToMax);
+  checkCudaError(err,__FILE__,__LINE__);
 
   double *xd;
   baseline_t *barrd;
@@ -1831,7 +1843,7 @@ correct_threadfn(void *data) {
   /* copy with right offset */
   err=cudaMemcpy(barrd, &(t->barr[t->boff]), t->Nb*sizeof(baseline_t), cudaMemcpyHostToDevice);
   checkCudaError(err,__FILE__,__LINE__);
-  err=cudaMemcpy(pd, t->pinv, t->N*8*t->Nf*sizeof(double), cudaMemcpyHostToDevice);
+  err=cudaMemcpy(pd, t->pinv, t->N*8*t->nchunk*sizeof(double), cudaMemcpyHostToDevice);
   checkCudaError(err,__FILE__,__LINE__);
   
   for (cf=0; cf<t->Nf; cf++) {
@@ -1854,6 +1866,7 @@ correct_threadfn(void *data) {
   checkCudaError(err,__FILE__,__LINE__);
   err=cudaFree(pd);
   checkCudaError(err,__FILE__,__LINE__);
+
 
   /* reset error state */
   err=cudaGetLastError();
@@ -2071,5 +2084,6 @@ double ph_ra0, double ph_dec0, double ph_freq0, double *longitude, double *latit
   pthread_attr_destroy(&attr);
 
   destroy_task_hist(&thst);
+
   return 0;
 }
