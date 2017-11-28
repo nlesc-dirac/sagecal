@@ -76,7 +76,8 @@ sagecal -d my_data.MS -s my_skymodel -c my_clustering -n no.of.threads -t 60 -p 
 
 Use your solution interval (-t 60) so that its big enough to get a decent solution and not too big to make the parameters vary too much. (about 20 minutes per solution is reasonable).
 
-Note: It is also possible to calibrate more than one MS together. See the -f option.
+Note: It is also possible to calibrate more than one MS together. See section 4 below.
+Note: To fully use GPU acceleration use -E 1 option.
 
 Simulations:
 With -a 1, only a simulation of the sky model is done.
