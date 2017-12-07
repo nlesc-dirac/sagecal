@@ -1,9 +1,11 @@
 OUTPUT=
 CXX=g++
-# CXXFLAGS=-O3 -Wall -g -pg -std=c++11 #-pg #-fnostack-protector
-# Extra arguments for making callgraphs.
-CXXFLAGS=-O3 -Wall -g -pg -std=c++11 -ansi -fPIC -fpermissive -fno-omit-frame-pointer -DNDEBUG -fno-inline-functions -fno-inline-functions-called-once -fno-optimize-sibling-calls
+
+CXXFLAGS=-O3 -Wall -g -pg #-fnostack-protector
+# CASA_LIBDIR=-L/cm/shared/package/casacore/v2.1.0-gcc-4.9.3/lib -L/cm/shared/package/cfitsio/3380-gcc-4.9.3/lib -L/cm/shared/package/lapack/3.6.0-gcc-4.9.3/lib64
 CASA_LIBDIR=-L/cm/shared/package/casacore/v2.3.0-gcc-4.9.3/lib -L/cm/shared/package/cfitsio/3380-gcc-4.9.3/lib -L/cm/shared/package/lapack/3.6.0-gcc-4.9.3/lib64
+# CASA_INCDIR=-I/cm/shared/package/casacore/v2.1.0-g++-4.9.3/include -I/cm/shared/package/casacore/v2.1.0-g++-4.9.3/include/casacore
+
 CASA_INCDIR=-I/cm/shared/package/casacore/v2.3.0-gcc-4.9.3/include -I/cm/shared/package/casacore/v2.3.0-gcc-4.9.3/include/casacore
 CASA_LIBS=-lcasa_casa -lcasa_tables -lcasa_measures -lcasa_ms -lcfitsio
 #LAPACK=-llapack -lblas
@@ -34,4 +36,5 @@ data.o:data.cpp data.h
 sagecal:$(OBJECTS) ../lib/Radio/libsagecal.a ../lib/Dirac/libdirac.a 
 	$(CXX) $(CXXFLAGS) $(LDFLAGS) $(INCLUDES) $(GLIBI) $(LIBPATH)  -o $@  $(OBJECTS) $(MY_LIBS) $(LAPACK) $(CASA_LIBS)  $(GLIBL)
 clean:
-	rm *.o *.tmp *.fits
+	rm *.o *.tmp *.fits *.swp *.swo *.o *.output
+

@@ -237,11 +237,7 @@ main(int argc, char **argv) {
      Data::readMSlist(Data::MSlist,&msnames);
     }
     if (Data::TableName) {
-     if (!doBeam) {
-      Data::readAuxData(Data::TableName,&iodata);
-     } else {
       Data::readAuxData(Data::TableName,&iodata,&beam);
-     }
      cout<<"Only one MS"<<endl;
     } else if (Data::MSlist) {
      Data::readAuxDataList(msnames,&iodata);
@@ -252,7 +248,8 @@ main(int argc, char **argv) {
      srand(time(0)); /* use different seed */
     }
 
-    openblas_set_num_threads(1);//Data::Nt;
+    // openblas_set_num_threads(1);//Data::Nt;
+    // export OMP_NUM_THREADS=1
     /**********************************************************/
      int M,Mt,ci,cj,ck;  
    /* parameters */
@@ -421,7 +418,7 @@ main(int argc, char **argv) {
 
     /* starting iterations are doubled */
     // int start_iter=1;
-    int sources_precessed=0;
+    // int sources_precessed=0;
 
     double inv_c=1.0/CONST_C;
 
@@ -431,11 +428,7 @@ main(int argc, char **argv) {
     while (msitr[0]->more()) {
       start_time = time(0);
       if (iodata.Nms==1) {
-       if (!doBeam) {
-        Data::loadData(msitr[0]->table(),iodata,&iodata.fratio);
-       } else {
         Data::loadData(msitr[0]->table(),iodata,beam,&iodata.fratio);
-       }
       } else { 
        Data::loadDataList(msitr,iodata,&iodata.fratio);
       }
@@ -450,15 +443,9 @@ main(int argc, char **argv) {
     preset_flags_and_data(iodata.Nbase*iodata.tilesz,iodata.flag,barr,iodata.x,Data::Nt);
     /* if data is being whitened, whiten x here,
      no need for a copy because we use xo for residual calculation */
-    if (Data::whiten) {
-     whiten_data(iodata.Nbase*iodata.tilesz,iodata.x,iodata.u,iodata.v,iodata.freq0,Data::Nt);
-    }
     /* precess source locations (also beam pointing) from J2000 to JAPP if we do any beam predictions,
       using first time slot as epoch */
-    if (doBeam && !sources_precessed) {
-      precess_source_locations(beam.time_utc[iodata.tilesz/2],carr,M,&beam.p_ra0,&beam.p_dec0,Data::Nt);
-      sources_precessed=1;
-    }
+    // sources_precessed=1;
 
 
 
@@ -469,6 +456,9 @@ main(int argc, char **argv) {
      precalculate_coherencies_withbeam_gpu(iodata.u,iodata.v,iodata.w,coh,iodata.N,iodata.Nbase*iodata.tilesz,barr,carr,M,iodata.freq0,iodata.deltaf,iodata.deltat,iodata.dec0,Data::min_uvcut,Data::max_uvcut,
   beam.p_ra0,beam.p_dec0,iodata.freq0,beam.sx,beam.sy,beam.time_utc,iodata.tilesz,beam.Nelem,beam.xx,beam.yy,beam.zz,doBeam,Data::Nt);
 #endif
+#ifndef HAVE_CUDA
+     precalculate_coherencies(iodata.u,iodata.v,iodata.w,coh,iodata.N,iodata.Nbase*iodata.tilesz,barr,carr,M,iodata.freq0,iodata.deltaf,iodata.deltat,iodata.dec0,Data::min_uvcut,Data::max_uvcut,Data::Nt);
+#endif
     /****************** end calibration **************************/
     /****************** begin diagnostics ************************/
    } else {
@@ -476,7 +466,17 @@ main(int argc, char **argv) {
       predict_visibilities_multifreq_withbeam_gpu(iodata.u,iodata.v,iodata.w,iodata.xo,iodata.N,iodata.Nbase,iodata.tilesz,barr,carr,M,iodata.freqs,iodata.Nchan,iodata.deltaf,iodata.deltat,iodata.dec0,
   beam.p_ra0,beam.p_dec0,iodata.freq0,beam.sx,beam.sy,beam.time_utc,beam.Nelem,beam.xx,beam.yy,beam.zz,doBeam,Data::Nt,(Data::DoSim>1?1:0));
 #endif
-    }
+#ifndef HAVE_CUDA
+     precalculate_coherencies_withbeam(iodata.u,iodata.v,iodata.w,coh,iodata.N,iodata.Nbase*iodata.tilesz,barr,carr,M,iodata.freq0,iodata.deltaf,iodata.deltat,iodata.dec0,Data::min_uvcut,Data::max_uvcut,
+  beam.p_ra0,beam.p_dec0,iodata.freq0,beam.sx,beam.sy,beam.time_utc,iodata.tilesz,beam.Nelem,beam.xx,beam.yy,beam.zz,Data::Nt);
+#endif    
+}
+
+#ifdef HAVE_CUDA
+    cudaDeviceSynchronize();
+    cudaProfilerStop();
+    exit(0);
+#endif
 
    tilex+=iodata.tilesz;
    /* print solutions to file */
@@ -496,10 +496,6 @@ main(int argc, char **argv) {
     for(int cm=0; cm<iodata.Nms; cm++) {
       (*msitr[cm])++;
     }
-#ifdef HAVE_CUDA
-    cudaDeviceSynchronize();
-    cudaProfilerStop();
-#endif
     end_time = time(0);
 
     elapsed_time = ((double) (end_time-start_time)) / 60.0;

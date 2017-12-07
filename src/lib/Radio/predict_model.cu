@@ -610,6 +610,7 @@ kernel_coherencies(int B, int N, int T, int K, int F,float *u, float *v, float *
 #endif
 
    int ThreadsPerBlock=DEFAULT_TH_PER_BK;
+   // int ThreadsPerBlock=16;
    /* each slave thread will calculate one source, 8xF values for all freq */
    /* also give right offset for coherencies */
    if (K<ThreadsPerBlock) {
@@ -729,7 +730,8 @@ cudakernel_array_beam(int N, int T, int K, int F, float *freqs, float *longitude
   cudaMemset(buffer,0,sizeof(float)*2*Ntotal);
 
 
-  int ThreadsPerBlock=DEFAULT_TH_PER_BK;
+  // int ThreadsPerBlock=DEFAULT_TH_PER_BK;
+  int ThreadsPerBlock=8;
   /* note: make sure we do not exceed max no of blocks available, otherwise (too many sources, loop over source id) */
   int BlocksPerGrid= 2*(Ntotal+ThreadsPerBlock-1)/ThreadsPerBlock;
   kernel_array_beam<<<BlocksPerGrid,ThreadsPerBlock>>>(N,T,K,F,freqs,longitude,latitude,time_utc,Nelem,xx,yy,zz,ra,dec,ph_ra0,ph_dec0,ph_freq0,beam,buffer);
@@ -786,6 +788,7 @@ cudakernel_coherencies(int B, int N, int T, int K, int F, float *u, float *v, fl
 
   /* spawn threads to handle baselines, these threads will spawn threads for sources */
   int ThreadsPerBlock=DEFAULT_TH_PER_BK;
+  // int ThreadsPerBlock=16;
   /* note: make sure we do not exceed max no of blocks available, 
    otherwise (too many baselines, loop over source id) */
   int BlocksPerGrid= 2*(B+ThreadsPerBlock-1)/ThreadsPerBlock;

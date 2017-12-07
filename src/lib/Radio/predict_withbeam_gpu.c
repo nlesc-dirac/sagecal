@@ -122,7 +122,15 @@ precalcoh_threadfn(void *data) {
   float *ud,*vd,*wd,*cohd;
   baseline_t *barrd;
   float *freqsd;
-  float *longd,*latd; double *timed;
+
+  float *longd,*latd; double *timed, *copyoftimed;
+  // This is needed to write times to file. 
+  // Because of the convert_time applied to timed, we cannot use t->time_utc as input to fwrite.
+  if ((copyoftimed=(double*)calloc((size_t) t->tilesz, sizeof(double)))==0) {
+      fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
+      exit(1);
+  }
+
   int *Nelemd;
   float **xx_p,**yy_p,**zz_p;
   float **xxd,**yyd,**zzd;
@@ -151,6 +159,9 @@ precalcoh_threadfn(void *data) {
   /* convert time jd to GMST angle */
   cudakernel_convert_time(t->tilesz,timed);
 
+  // Fill copyoftimed.
+  err=cudaMemcpy((double*)copyoftimed, timed, t->tilesz*sizeof(double), cudaMemcpyDeviceToHost);
+
   err=cudaMemcpy(Nelemd, t->Nelem, t->N*sizeof(int), cudaMemcpyHostToDevice);
   checkCudaError(err,__FILE__,__LINE__);
 
@@ -160,7 +171,6 @@ precalcoh_threadfn(void *data) {
       fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
       exit(1);
   }
-
 
   /* jagged arrays for element locations */
   err=cudaMalloc((void**)&xxd, t->N*sizeof(int*));
@@ -204,8 +214,10 @@ precalcoh_threadfn(void *data) {
   err=cudaMemcpy(zzd, zz_p, t->N*sizeof(int*), cudaMemcpyHostToDevice);
   checkCudaError(err,__FILE__,__LINE__);
 
-
   float *beamd;
+  /* temp host storage for beam */
+  float *tempbeam;
+
   float *lld,*mmd,*nnd,*sId,*rad,*decd;
   unsigned char *styped;
   float *sI0d,*f0d,*spec_idxd,*spec_idx1d,*spec_idx2d;
@@ -215,7 +227,6 @@ precalcoh_threadfn(void *data) {
      /* allocate memory for this clusters beam */
      err=cudaMalloc((void**)&beamd, t->N*t->tilesz*t->carr[ncl].N*t->Nf*sizeof(float));
      checkCudaError(err,__FILE__,__LINE__);
-
 
      /* copy cluster details to GPU */
      err=cudaMalloc((void**)&styped, t->carr[ncl].N*sizeof(unsigned char));
@@ -286,14 +297,119 @@ precalcoh_threadfn(void *data) {
         
 
      }
+
+     if ((tempbeam=(float*)calloc((size_t) t->N*t->tilesz*t->carr[ncl].N*t->Nf,sizeof(float)))==0) {
+         fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
+         exit(1);
+     }
+
      /* now copy pointer locations to device */
      err=cudaMemcpy(dev_p, host_p, t->carr[ncl].N*sizeof(int*), cudaMemcpyHostToDevice);
      checkCudaError(err,__FILE__,__LINE__);
 
+     FILE *t_N;
+     t_N=fopen("t_N.bin","wb");
+     fwrite(&t->N, sizeof(int), sizeof(t->N)/sizeof(int), t_N);
+     fclose(t_N);
+
+     FILE *t_tilesz;
+     t_tilesz=fopen("t_tilesz.bin","wb");
+     fwrite(&t->tilesz, sizeof(int), sizeof(t->tilesz)/sizeof(int), t_tilesz);
+     fclose(t_tilesz);
+
+     FILE *t_carr_ncl_N;
+     t_carr_ncl_N=fopen("t_carr_ncl_N.bin","wb");
+     fwrite(&t->carr[ncl].N, sizeof(int), sizeof(t->carr[ncl].N)/sizeof(int), t_carr_ncl_N);
+     fclose(t_carr_ncl_N);
+
+     FILE *t_Nf;
+     t_Nf=fopen("t_Nf.bin","wb");
+     fwrite(&t->Nf, sizeof(int), sizeof(t->Nf)/sizeof(int), t_Nf);
+     fclose(t_Nf);
+
+     FILE *freq_sd;
+     freq_sd=fopen("freq_sd.bin","wb");
+     fwrite(t->freqs, sizeof(double), t->Nf, freq_sd);
+     fclose(freq_sd);
+
+     FILE *long_d;
+     long_d=fopen("long_d.bin","wb");
+     fwrite(t->longitude, sizeof(double), t->N, long_d);
+     fclose(long_d);
+
+     FILE *lat_d;
+     lat_d=fopen("lat_d.bin","wb");
+     fwrite(t->latitude, sizeof(double), t->N, lat_d);
+     fclose(lat_d);
+
+     FILE *time_d;
+     time_d=fopen("time_d.bin","wb");
+     fwrite(&copyoftimed, sizeof(double), t->tilesz, time_d);
+     fclose(time_d);
+
+     FILE *Nelem_d;
+     Nelem_d=fopen("Nelem_d.bin","wb");
+     fwrite(t->Nelem, sizeof(int), t->N, Nelem_d);
+     fclose(Nelem_d);
+
+     FILE *xx_d;
+     xx_d=fopen("xx_d.bin","wb");
+     int j;
+     for (j=0; j<t->N; j++){
+         fwrite(t->xx[j], sizeof(double), t->Nelem[j], xx_d);
+     }
+     fclose(xx_d);
+
+     FILE *yy_d;
+     yy_d=fopen("yy_d.bin","wb");
+     for (j=0; j<t->N; j++){
+         fwrite(t->yy[j], sizeof(double), t->Nelem[j], yy_d);
+     }
+     fclose(yy_d);
+
+     FILE *zz_d;
+     zz_d=fopen("zz_d.bin","wb");
+     for (j=0; j<t->N; j++){
+         fwrite(t->zz[j], sizeof(double), t->Nelem[j], zz_d);
+     }
+     fclose(zz_d);
+
+     FILE *ra_d;
+     ra_d=fopen("ra_d.bin","wb");
+     fwrite(t->carr[ncl].ra, t->carr[ncl].N, sizeof(double), ra_d);
+     fclose(ra_d);
+
+     FILE *dec_d;
+     dec_d=fopen("dec_d.bin","wb");
+     fwrite(t->carr[ncl].dec, t->carr[ncl].N, sizeof(double), dec_d);
+     fclose(dec_d);
+
+     FILE *t_ph_ra0;
+     t_ph_ra0=fopen("t_ph_ra0.bin","wb");
+     fwrite((double *)&t->ph_ra0, 1, sizeof(double), t_ph_ra0);
+     fclose(t_ph_ra0);
+
+     FILE *t_ph_dec0;
+     t_ph_dec0=fopen("t_ph_dec0.bin","wb");
+     fwrite((double *)&t->ph_dec0, 1, sizeof(double), t_ph_dec0);
+     fclose(t_ph_dec0);
+
+     FILE *t_ph_freq0;
+     t_ph_freq0=fopen("t_ph_freq0.bin","wb");
+     fwrite((double *)&t->ph_freq0, 1, sizeof(double), t_ph_freq0);
+     fclose(t_ph_freq0);
 
      /* now calculate beam for all sources in this cluster */
      cudakernel_array_beam(t->N,t->tilesz,t->carr[ncl].N,t->Nf,freqsd,longd,latd,timed,Nelemd,xxd,yyd,zzd,rad,decd,(float)t->ph_ra0,(float)t->ph_dec0,(float)t->ph_freq0,beamd);
 
+     FILE *beam_d;
+     beam_d=fopen("beam_d.bin","wb");
+     err=cudaMemcpy((float*)tempbeam, beamd, t->N*t->tilesz*t->carr[ncl].N*t->Nf*sizeof(float), cudaMemcpyDeviceToHost);
+
+     for (j=0; j<t->N*t->tilesz*t->carr[ncl].N*t->Nf; j++){
+       fwrite(&tempbeam[j], sizeof(float), 1, beam_d); 
+     }
+     fclose(beam_d);
 
      /* calculate coherencies for all sources in this cluster, add them up */
      cudakernel_coherencies(t->Nbase,t->N,t->tilesz,t->carr[ncl].N,t->Nf,ud,vd,wd,barrd,freqsd,beamd,
@@ -387,6 +503,8 @@ precalcoh_threadfn(void *data) {
 /******************* end loop over clusters **************************/
 
   free(tempcoh);
+  free(tempbeam);
+  free(copyoftimed);
 
   /* free memory */
   err=cudaFree(ud);
