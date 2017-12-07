@@ -1,7 +1,9 @@
 CC=gcc
 CXX=g++
-#CFLAGS= -Wall -O3 -g #-pg
-CFLAGS= -Wall -O3 -fopt-info-optimized
+CFLAGS= -Wall -g -pg
+# Extra args for making callgraphs.
+# CFLAGS= -Wall -pg -O2 -ansi -fPIC -fpermissive -fno-omit-frame-pointer -DNDEBUG -fno-inline-functions -fno-inline-functions-called-once -fno-optimize-sibling-calls
+# CFLAGS= -Wall -O3 -fopt-info-optimized
 CLIBS= -lm -lpthread
 #LAPACK=-L/usr/lib/atlas/sse -llapack -lblas
 #LAPACK=-L/usr/local/GotoBLAS2/lib -lgoto2 -lpthread -lgfortran

@@ -1,15 +1,17 @@
-SAGECAL
-=======
+# SAGECAL
+
+
 Read INSTALL for installation. This file gives a brief guide to use SAGECal.
 Warning: this file may be obsolete. use sagecal -h to see up-to-date options.
 
 
-Step by Step Introduction:
-#######################################################################
+## Step by Step Introduction:
+
 1a)Calibrate data in the standard way using BBS/CASA or anything else. 
 Use NDPP to average the data in your MS to a few channels (also average in time to about 10sec). Also flag any spikes in the data.
 1b)For subtraction of the ATeam from raw data (CasA,CygA,...), no initial calibration is necessary. Just run sagecal on raw data, but it is better to scale the sky model to match the apparent flux of the sources that are being subtracted.
-#######################################################################
+
+
 2) Sky Model:
 3a)Make an image of your MS (using ExCon/casapy). 
 Use Duchamp to create a mask for the image. Use buildsky to create a sky model. (see the README file on top level directory). Also create a proper cluster file.
@@ -39,15 +41,15 @@ e.g.
 
 P1C1 0 12 42.996 85 43 21.514 0.030498 0 0 0 -5.713060 0 0 0 0 115039062.0
 P5C1 1 18 5.864 85 58 39.755 0.041839 0 0 0 -6.672879 0 0 0 0 115039062.0
-# A Gaussian mjor,minor 0.1375,0.0917 deg diameter -> radius(rad), PA 43.4772 deg (-> rad)
-# Position Angle: "West from North (counter-clockwise)" (0 deg = North, 90 deg = West). 
-# Note: PyBDSM and BBS use "North from East (counter-clockwise)" (0 deg = East, 90 deg = North). 
+#A Gaussian mjor,minor 0.1375,0.0917 deg diameter -> radius(rad), PA 43.4772 deg (-> rad)
+#Position Angle: "West from North (counter-clockwise)" (0 deg = North, 90 deg = West). 
+#Note: PyBDSM and BBS use "North from East (counter-clockwise)" (0 deg = East, 90 deg = North). 
 G0  5 34 31.75 22 00 52.86 100 0 0 0 0.00 0 0.0012  0.0008 -2.329615801 130.0e6
-# A Disk radius=0.041 deg
+#A Disk radius=0.041 deg
 D01 23 23 25.67 58 48 58 80 0 0 0 0 0 0.000715 0.000715 0 130e6
-# A Ring radius=0.031 deg
+#A Ring radius=0.031 deg
 R01 23 23 25.416 58 48 57 70 0 0 0 0 0 0.00052 0.00052 0 130e6
-# A shapelet ('S3C61MD.fits.modes' file must be in the current directory)
+#A shapelet ('S3C61MD.fits.modes' file must be in the current directory)
 S3C61MD 2 22 49.796414 86 18 55.913266 0.135 0 0 0 -6.6 0 1 1 0.0 115000000.0
 
 
