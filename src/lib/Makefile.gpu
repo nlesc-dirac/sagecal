@@ -1,14 +1,21 @@
 CC=gcc
 CXX=g++
+NVCC=nvcc
 CFLAGS= -Wall -O3 -g -DHAVE_CUDA -DHYBRID_CODE
 CLIBS= -lm -lpthread
-LAPACK=-L/usr/local/OpenBLAS/lib/ -lopenblas -lgfortran -lpthread
+# LAPACK=-L/usr/local/OpenBLAS/lib/ -lopenblas -lgfortran -lpthread
+LAPACK=-lopenblas -lgfortran -lpthread
 
-CUDAINC=/usr/local/cuda/include
-CUDALIB=-L/usr/local/cuda/lib64 -lcuda -lcudart
-NVCC=/usr/local/cuda/bin/nvcc
+# CUDAINC=/usr/local/cuda/include
+# CUDAINC=/usr/local/cuda/include
+# CUDALIB=-L/usr/local/cuda/lib64 -lcuda -lcudart
+CUDALIB=-lcuda -lcudart
+# NVCC=/usr/local/cuda/bin/nvcc
 #NVCFLAGS=-arch=sm_35 -g -G --ptxas-options=-v -O3
-NVCFLAGS=-arch=sm_35 --ptxas-options=-v -O3
+# NVCFLAGS=-arch=sm_35 --ptxas-options=-v -O3
+
+NVCFLAGS=-gencode arch=compute_35,code=sm_35 -gencode arch=compute_37,code=sm_37 -gencode arch=compute_50,code=sm_50 -gencode arch=compute_52,code=sm_52 -gencode arch=compute_60,code=sm_60 -gencode arch=compute_61,code=sm_61 -gencode arch=compute_62,code=sm_62 --ptxas-options=-v -O3
+
 
 #### glib
 GLIBI=-I/usr/include/glib-2.0 -I/usr/lib64/glib-2.0/include/
@@ -22,7 +29,7 @@ INCLUDES= -I. -I$(CUDAINC) -I$(NVML_INC)
 LIBPATH= $(CUDALIB)
 
 
-OBJECTS=readsky.o dataio.o predict.o lmfit.o lbfgs.o myblas.o mderiv.o clmfit.o clmfit_nocuda.o residual.o barrier.o robust.o robustlm.o oslmfit.o mderiv_fl.o clmfit_fl.o updatenu.o robust_lbfgs_nocuda.o robust_fl.o manifold_fl.o rtr_solve_cuda.o rtr_solve_robust_cuda.o diagnostics.o diag_fl.o manifold_average.o consensus_poly.o rtr_solve_robust_cuda_admm.o rtr_solve_robust_admm.o admm_solve.o load_balance.o transforms.o stationbeam.o predict_withbeam.o  predict_withbeam_gpu.o predict_model.o predict_model_device.omdl.o
+OBJECTS=readsky.o dataio.o predict.o lmfit.o lbfgs.o myblas.o mderiv.o clmfit.o clmfit_nocuda.o residual.o barrier.o robust.o robustlm.o oslmfit.o mderiv_fl.o clmfit_fl.o updatenu.o robust_lbfgs_nocuda.o robust_fl.o manifold_fl.o rtr_solve_cuda.o rtr_solve_robust_cuda.o diagnostics.o diag_fl.o manifold_average.o consensus_poly.o rtr_solve_robust_cuda_admm.o rtr_solve_robust_admm.o admm_solve.o load_balance.o transforms.o stationbeam.o predict_withbeam.o  predict_withbeam_gpu.o predict_model.o
 
 
 default:libsagecal.a
@@ -94,11 +101,8 @@ predict_withbeam.o:predict_withbeam.c
 	$(CC) $(CFLAGS) $(INCLUDES) $(GLIBI)  -c $<
 predict_withbeam_gpu.o:predict_withbeam_gpu.c
 	$(CC) $(CFLAGS) $(INCLUDES) $(GLIBI)  -c $<
-## for dynamic parallelism, two stage compilation
-predict_model.o:predict_model_device.o
-	$(NVCC) $(NVCFLAGS) -lineinfo -dlink $(INCLUDES) $(GLIBI) -o $@ $<
-predict_model_device.o:predict_model.cu
-	$(NVCC) $(NVCFLAGS) -lineinfo -rdc=true $(INCLUDES) $(GLIBI) -o $@ -c $<
+predict_model.o:predict_model.cu
+	$(NVCC) $(NVCFLAGS) $(INCLUDES) $(GLIBI) -c $<
 mdl.o:mdl.c
 	$(CC) $(CFLAGS) $(INCLUDES) $(GLIBI)  -c $<
 
