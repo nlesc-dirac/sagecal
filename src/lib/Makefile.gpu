@@ -25,7 +25,7 @@ GLIBL=-lglib-2.0 -L/usr/lib64
 NVML_INC=/usr/include/nvidia/gdk/
 NVML_LIB=-lnvidia-ml -L/usr/lib64/nvidia/
 
-INCLUDES= -I. -I$(CUDAINC) -I$(NVML_INC)
+INCLUDES= -I. -I$(NVML_INC)
 LIBPATH= $(CUDALIB)
 
 
