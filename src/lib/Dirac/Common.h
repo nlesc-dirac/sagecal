@@ -121,8 +121,8 @@ typedef struct thread_data_base_ {
 
   /* following for ignoring clusters in simulation */
   int *ignlist; /* Mx1 array, if any value 1, that cluster will not be simulated */
-  /* flag for adding model to data */
-  int add_to_data;
+  /* flag for adding/subtracting model to data */
+  int add_to_data; /* see SIMUL* defs */
 
   /* following used for multifrequency (channel) data */
   double *freqs;
