@@ -17,7 +17,7 @@ GLIBL=-lglib-2.0
 
 OBJECTS=readsky.o predict.o stationbeam.o predict_withbeam.o transforms.o
 
-default:libsagecal.a
+default:libradio.a
 readsky.o:readsky.c
 	$(CC) $(CFLAGS) $(INCLUDES) $(GLIBI)  -c $<
 predict.o:predict.c
@@ -31,7 +31,7 @@ transforms.o:transforms.c
 
 
 RANLIB=ranlib
-libsagecal.a:$(OBJECTS) Radio.h
+libradio.a:$(OBJECTS) Radio.h
 	ar rv $@ $(OBJECTS); \
 	$(RANLIB) $@;
 clean:
