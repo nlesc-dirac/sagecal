@@ -145,7 +145,7 @@ def read_lsm_sky(infilename):
         mdec=mysign*(abs(float(v.group('col5')))+float(v.group('col6'))/60.0+float(v.group('col7'))/3600.0)*math.pi/180.0
         SR[str(v.group('col1'))]=(v.group('col1'),mra,mdec,float(v.group('col8')))
 
-  print 'Read %d sources'%len(SR)
+  print('Read %d sources'%len(SR))
 
   return SR
 
@@ -217,13 +217,13 @@ def cluster_this(skymodel,Q,outfile,max_iterations):
    X=numpy.zeros([K,3])
    # iterate over sources
    ci=0;
-   for val in SKY.itervalues():
+   for val in SKY.values():
       X[ci,0]=val[1]
       X[ci,1]=val[2]
       X[ci,2]=val[3]
       ci=ci+1
    # source names
-   sources=SKY.keys()
+   sources=list(SKY.keys())
    # centroids of Q clusters
    C=numpy.zeros([Q,2])
    # 1: select the Q brightest sources, initialize cluster centroids as their locations
@@ -258,7 +258,7 @@ def cluster_this(skymodel,Q,outfile,max_iterations):
           #print "src %d closest %d"%(ci,closest)
           CL[ci]=closest
           # add this source to dict
-          if D.has_key(closest):
+          if closest in D:
               D[closest].append(ci)
           else:
               D[closest]=list()
@@ -272,7 +272,7 @@ def cluster_this(skymodel,Q,outfile,max_iterations):
       CLold=numpy.copy(CL)
   
       # 3: update the  cluster centroids
-      for (clusid,sourcelist) in D.items():
+      for (clusid,sourcelist) in list(D.items()):
         # update centroid of cluster id 'clusid'
         # project soure ra,dec coordinates to l,m with center of projection
         # taken as current centroid, then take the weighted average 
@@ -307,11 +307,11 @@ def cluster_this(skymodel,Q,outfile,max_iterations):
       niter=niter+1
    
    if no_more_cluster_changes:
-     print "Stopping after "+str(niter)+" iterations because cluster geometry did not change."
+     print("Stopping after "+str(niter)+" iterations because cluster geometry did not change.")
    # write output
    outF=open(outfile,'w+')
    outF.write('# Cluster file\n')
-   for (clusid,sourcelist) in D.items():
+   for (clusid,sourcelist) in list(D.items()):
      outF.write(str(clusid+1)+' 1')
      for sourceid in sourcelist:
        outF.write(' '+sources[sourceid])
