@@ -226,7 +226,7 @@ calculate_residuals_multifreq(double *u,double *v,double *w,double *p,double *x,
 
 /* 
   calculate visibilities for multiple channels, no solutions are used
-  note: output column x is set to 0 if add_to_data ==0, else model is added to data
+  note: output column x is set to 0 if add_to_data ==0, else model is added/subtracted (==1 or 2) to data
 */
 extern int
 predict_visibilities_multifreq(double *u,double *v,double *w,double *x,int N,int Nbase,int tilesz,baseline_t *barr, clus_source_t *carr, int M,double *freqs,int Nchan, double fdelta,double tdelta,double dec0,int Nt,int add_to_data);
@@ -1318,14 +1318,17 @@ setup_polynomials(double *B, int Npoly, int Nf, double *freqs, double freq0, int
 
 /* build matrix with polynomial terms
   B : Npoly x Nf, each row is one basis function
-  Bi: Npoly x Npoly pseudo inverse of sum( B(:,col) x B(:,col)' )
+  Bi: Npoly x Npoly pseudo inverse of sum( B(:,col) x B(:,col)' ) : M times
   Npoly : total basis functions
   Nf: frequencies
-  fratio: Nfx1 array of weighing factors depending on the flagged data of each freq
-  Sum taken is a weighted sum, using weights in fratio
+  M: clusters
+  rho: NfxM array of regularization factors (for each freq, M values)
+  Sum taken is a weighted sum, using weights in rho, rho is assumed to change for each freq,cluster pair 
+
+  Nt: no. of threads
 */
 extern int
-find_prod_inverse(double *B, double *Bi, int Npoly, int Nf, double *fratio);
+find_prod_inverse_full(double *B, double *Bi, int Npoly, int Nf, int M, double *rho, int Nt);
 
 /* update Z
    Z: 8NxNpoly x M double array (real and complex need to be updated separate)
@@ -1337,6 +1340,28 @@ find_prod_inverse(double *B, double *Bi, int Npoly, int Nf, double *fratio);
 */
 extern int
 update_global_z(double *Z,int N,int M,int Npoly,double *z,double *Bi);
+
+/* update Z
+   Z: 8N Npoly x M double array (real and complex need to be updated separate)
+   N : stations
+   M : clusters
+   Npoly: no of basis functions
+   z : right hand side 8NM Npoly x 1 (note the different ordering from Z)
+   Bi : M values of NpolyxNpoly matrices, Bi^T=Bi assumed
+
+   Nt: no. of threads
+*/
+extern int 
+update_global_z_multi(double *Z,int N,int M,int Npoly,double *z,double *Bi, int Nt);
+
+
+/* generate a random integer in the range 0,1,...,maxval */
+extern int
+random_int(int maxval);
+
+
+extern int
+update_rho_bb(double *rho, double *rhoupper, int N, int M, int Mt, clus_source_t *carr, double *Yhat, double *Yhat_k0, double *J, double *J_k0, int Nt);
 
 
 /****************************** admm_solve.c ****************************/
