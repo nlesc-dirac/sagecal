@@ -24,9 +24,10 @@ except AssertionError:
 tol_seconds_of_decl = 3600 * 10 
 tol_seconds_of_RA = tol_seconds_of_decl * 24/360
 
-RA_hours_3C196 = 8
-RA_minutes_3C196 = 13
-RA_seconds_3C196 = 35.981540
+# I'll pretend 3C196 is at RA=0, decl=90 for now, to accommodate for a MS that I am using.
+RA_hours_3C196 = 0
+RA_minutes_3C196 = 0
+RA_seconds_3C196 = 0
 
 RA_seconds_3C196 = (RA_hours_3C196 * 60 + RA_minutes_3C196) *60 + RA_seconds_3C196
 
@@ -38,9 +39,9 @@ RA_seconds_high = RA_seconds_3C196 + tol_seconds_of_RA
 RA_minutes_high, RA_seconds_high = divmod(RA_seconds_high, 60)
 RA_hours_high, RA_minutes_high = divmod(RA_minutes_high, 60)
 
-decl_degrees_3C196 = 48
-decl_minutes_3C196 = 12
-decl_seconds_3C196 = 59.174770
+decl_degrees_3C196 = 90
+decl_minutes_3C196 = 0
+decl_seconds_3C196 = 0
 
 decl_seconds_3C196 = (decl_degrees_3C196 * 60 + decl_minutes_3C196) *60 + decl_seconds_3C196
 
