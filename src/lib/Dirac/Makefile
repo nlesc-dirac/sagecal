@@ -52,3 +52,6 @@ RANLIB=ranlib
 libdirac.a:$(OBJECTS) Dirac.h
 	ar rv $@ $(OBJECTS); \
 	$(RANLIB) $@;
+
+clean:
+	rm *.o
