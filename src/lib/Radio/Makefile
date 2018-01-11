@@ -34,3 +34,5 @@ RANLIB=ranlib
 libsagecal.a:$(OBJECTS) Radio.h
 	ar rv $@ $(OBJECTS); \
 	$(RANLIB) $@;
+clean:
+	rm *.o
