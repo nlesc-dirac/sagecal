@@ -17,6 +17,9 @@ CUDALIB=-lcuda -lcudart -lcublas -lcusolver -lcudadevrt
 NVML_INC=/usr/include/nvidia/gdk/
 NVML_LIB=-lnvidia-ml -L/usr/lib64/nvidia/
 
+# I should be able to compile with cuda90, but it cannot find -lnvidia-ml.
+# However, that management library is in a system path, so it should be able to find it.
+# Possibly the rpath below makes it impossible to find it, even when a cuda90 path is used.
 LDFLAGS=-Wl,--rpath,$(CASA_LIBDIR),--rpath,/cm/shared/apps/cuda80/toolkit/8.0.44/lib64/
 #LDFLAGS=-Wl,-t,--rpath,/software/users/lofareor/SW/lib64
 # -Wl,--hash-style=both
