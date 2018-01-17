@@ -6,7 +6,7 @@ CASA_INCDIR=-I/cm/shared/package/casacore/v2.3.0-gcc-4.9.3/include -I/cm/shared/
 CASA_LIBS=-lcasa_casa -lcasa_tables -lcasa_measures -lcasa_ms -lcfitsio
 # LAPACK=-llapack -lblas
 LAPACK=-lopenblas -lgfortran -lpthread
-LAPACK_DIR=/cm/shared/apps/openblas/0.2.8/lib
+LAPACK_DIR=/cm/shared/package/openblas/0.2.17mt/lib
 #LAPACK_DIR=/usr/lib/atlas/sse/
 
 CUDAINC=-I/cm/shared/apps/cuda80/toolkit/8.0.44/include/
@@ -18,7 +18,7 @@ NVML_INC=/usr/include/nvidia/gdk/
 NVML_LIB=-lnvidia-ml -L/usr/lib64/nvidia/
 
 
-LDFLAGS=-Wl,--rpath,/usr/local/OpenBLAS/lib/,${CASA_LIBDIR}
+LDFLAGS=-Wl,--rpath,/cm/shared/package/openblas/0.2.17mt/lib,${CASA_LIBDIR}
 #LDFLAGS=-Wl,-t,--rpath,/software/users/lofareor/SW/lib64
 # -Wl,--hash-style=both
 
