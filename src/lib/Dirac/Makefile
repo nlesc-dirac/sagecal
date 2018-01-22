@@ -54,4 +54,4 @@ libdirac.a:$(OBJECTS) Dirac.h
 	$(RANLIB) $@;
 
 clean:
-	rm *.o
+	rm *.o libdirac.a

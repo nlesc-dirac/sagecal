@@ -35,4 +35,4 @@ libradio.a:$(OBJECTS) Radio.h
 	ar rv $@ $(OBJECTS); \
 	$(RANLIB) $@;
 clean:
-	rm *.o
+	rm *.o libradio.a
