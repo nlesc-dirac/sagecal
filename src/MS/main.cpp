@@ -24,7 +24,9 @@
 #include <string.h>
 #include <pthread.h>
 
-#include<sagecal.h>
+#include <Dirac.h>
+#include <Radio.h>
+
 #ifndef LMCUT
 #define LMCUT 40
 #endif
