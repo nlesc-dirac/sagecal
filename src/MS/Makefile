@@ -11,10 +11,10 @@ CASA_LIBS=-lcasa_casa -lcasa_tables -lcasa_measures -lcasa_ms -lcfitsio
 #LAPACK=-llapack -lblas
 LAPACK=-lopenblas -lgfortran -lpthread
 # LAPACK_DIR=/cm/shared/apps/openblas/0.2.8/lib
-LAPACK_DIR=/cm/shared/apps/openblas/0.2.15/lib
+LAPACK_DIR=/cm/shared/package/openblas/0.2.17mt/lib
 #LAPACK_DIR=/usr/lib/atlas/sse/
 
-LDFLAGS=-Wl,--rpath,/usr/local/OpenBLAS/lib/,${CASA_LIBDIR}
+LDFLAGS=-Wl,--rpath,/cm/shared/package/openblas/0.2.17mt/lib/,${CASA_LIBDIR}
 #LDFLAGS=-Wl,-t,--rpath,/software/users/lofareor/SW/lib64
 # -Wl,--hash-style=both
 

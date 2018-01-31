@@ -67,9 +67,9 @@ with warnings.catch_warnings():
              'pos_angle', 'freq0')
 
     formats = ['U6', 'i4', 'i4', 'f8', 'i4', 'i4', 'f8', 'f8', 'i4', 'i4', 'i4', 'f8', 'f8',
-               'i4', 'i4', 'i4', 'i4', 'f8', 'f8']
+               'f8', 'f8', 'f8', 'f8', 'f8', 'f8']
 
-    formats_reformatted = '%s  %d  %d  %f  %d  %d  %f  %f  %d  %d  %d  %f  %f  %d  %d  %d  %d  %f  %f'
+    formats_reformatted = '%s  %d  %d  %f  %d  %d  %f  %f  %d  %d  %d  %f  %f  %f  %f  %f  %f  %f  %f'
 
     sources_parameters = np.recarray((number_of_sources,), formats=formats,
                                      names=names)
@@ -122,7 +122,7 @@ with warnings.catch_warnings():
 
 # sources_parameters.tofile("extended_source_list_using_tofile.txt", sep='\n')
 
-with open("extended_source_list_centered_on_3C196.txt", 'wb') as f:
+with open("extended_source_list.txt", 'wb') as f:
     f.write(b"##  From Generate_sources.py by Hanno Spreeuw.\n")
     f.write(b"##  Generates point sources at random positions with random brighnesses within some range.\n")
     f.write(b"##  this is an LSM text (hms/dms) file\n")
@@ -136,5 +136,5 @@ with open("extended_source_list_centered_on_3C196.txt", 'wb') as f:
 # Now write the cluster file
 # First add '1' and '1' to indicate the cluster id and chunk size.
 cluster_array = np.concatenate((np.array(['1', '1']), sources_parameters.name))
-with open("extended_source_list_centered_on_3C196.txt.cluster", 'wb') as f:
+with open("extended_source_list.txt.cluster", 'wb') as f:
     np.savetxt(f, (cluster_array).reshape(1, cluster_array.shape[0]), fmt='%s', delimiter=' ')
