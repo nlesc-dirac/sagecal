@@ -1220,6 +1220,17 @@ setup_polynomials(double *B, int Npoly, int Nf, double *freqs, double freq0, int
 
 /* build matrix with polynomial terms
   B : Npoly x Nf, each row is one basis function
+  Bi: Npoly x Npoly pseudo inverse of sum( B(:,col) x B(:,col)' )
+  Npoly : total basis functions
+  Nf: frequencies
+  fratio: Nfx1 array of weighing factors depending on the flagged data of each freq
+  Sum taken is a weighted sum, using weights in fratio
+*/
+extern int
+find_prod_inverse(double *B, double *Bi, int Npoly, int Nf, double *fratio);
+
+/* build matrix with polynomial terms
+  B : Npoly x Nf, each row is one basis function
   Bi: Npoly x Npoly pseudo inverse of sum( B(:,col) x B(:,col)' ) : M times
   Npoly : total basis functions
   Nf: frequencies
