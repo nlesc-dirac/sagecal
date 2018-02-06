@@ -272,6 +272,62 @@ cudakernel_convert_time(int T, double *time_utc);
 */
 extern int
 minimum_description_length(int N, int M, int F, double *J, double *rho, double *freqs, double freq0, double *weight, int polytype, int Kstart, int Kfinish, int Nt);
+/****************************** residual.c ****************************/
+/* residual calculation, with/without linear interpolation */
+/* 
+  u,v,w: u,v,w coordinates (wavelengths) size Nbase*tilesz x 1 
+  u,v,w are ordered with baselines, timeslots
+  p0,p: parameter arrays 8*N*M x1 double values (re,img) for each station/direction
+  p0: old value, p new one, interpolate between the two
+  x: data to write size Nbase*8*tilesz x 1
+   ordered by XX(re,im),XY(re,im),YX(re,im), YY(re,im), baseline, timeslots
+  input: x is actual data, output: x is the residual
+  N: no of stations
+  Nbase: no of baselines
+  tilesz: tile size
+  barr: baseline to station map, size Nbase*tilesz x 1
+  carr: sky model/cluster info size Mx1 of clusters
+  coh: coherencies size Nbase*tilesz*4*M x 1
+  M: no of clusters
+  freq0: frequency
+  fdelta: bandwidth for freq smearing
+  tdelta: integration time for time smearing
+  dec0: declination for time smearing
+  Nt: no. of threads
+  ccid: which cluster to use as correction
+  rho: MMSE robust parameter J+rho I inverted
+
+  phase_only: if >0, and if there is any correction done, use only phase of diagonal elements for correction 
+*/
+extern int
+calculate_residuals(double *u,double *v,double *w,double *p,double *x,int N,int Nbase,int tilesz,baseline_t *barr, clus_source_t *carr, int M,double freq0,double fdelta,double tdelta,double dec0, int Nt, int ccid, double rho);
+
+/* 
+  residuals for multiple channels
+  data to write size Nbase*8*tilesz*Nchan x 1
+  ordered by XX(re,im),XY(re,im),YX(re,im), YY(re,im), baseline, timeslots, channels
+  input: x is actual data, output: x is the residual
+  freqs: Nchanx1 of frequency values
+  fdelta: total bandwidth, so divide by Nchan to get each channel bandwith
+  tdelta: integration time for time smearing
+  dec0: declination for time smearing
+*/
+extern int
+calculate_residuals_multifreq(double *u,double *v,double *w,double *p,double *x,int N,int Nbase,int tilesz,baseline_t *barr, clus_source_t *carr, int M,double *freqs,int Nchan, double fdelta,double tdelta,double dec0, int Nt, int ccid, double rho, int phase_only);
+
+/* 
+  calculate visibilities for multiple channels, no solutions are used
+  note: output column x is set to 0 if add_to_data ==0, else model is added/subtracted (==1 or 2) to data
+*/
+extern int
+predict_visibilities_multifreq(double *u,double *v,double *w,double *x,int N,int Nbase,int tilesz,baseline_t *barr, clus_source_t *carr, int M,double *freqs,int Nchan, double fdelta,double tdelta,double dec0,int Nt,int add_to_data);
+
+
+/* predict with solutions in p , ignore clusters flagged in ignorelist (Mx1) array
+ also correct final data with solutions for cluster ccid, if valid
+*/
+extern int
+predict_visibilities_multifreq_withsol(double *u,double *v,double *w,double *p,double *x,int *ignorelist,int N,int Nbase,int tilesz,baseline_t *barr, clus_source_t *carr, int M,double *freqs,int Nchan, double fdelta,double tdelta,double dec0,int Nt,int add_to_data, int ccid, double rho,int phase_only);
 
 #ifdef __cplusplus
      } /* extern "C" */

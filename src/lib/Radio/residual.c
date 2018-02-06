@@ -24,7 +24,7 @@
 #include <unistd.h>
 #include <stdlib.h>
 #include <pthread.h>
-#include "Dirac.h"
+#include "Radio.h"
 
 /* Jones matrix multiplication 
    C=A*B

@@ -181,62 +181,6 @@ lbfgs_fit_robust_cuda(
    double *p, double *x, int m, int n, int itmax, int lbfgs_m, int gpu_threads, void *adata);
 #endif
 
-/****************************** residual.c ****************************/
-/* residual calculation, with/without linear interpolation */
-/* 
-  u,v,w: u,v,w coordinates (wavelengths) size Nbase*tilesz x 1 
-  u,v,w are ordered with baselines, timeslots
-  p0,p: parameter arrays 8*N*M x1 double values (re,img) for each station/direction
-  p0: old value, p new one, interpolate between the two
-  x: data to write size Nbase*8*tilesz x 1
-   ordered by XX(re,im),XY(re,im),YX(re,im), YY(re,im), baseline, timeslots
-  input: x is actual data, output: x is the residual
-  N: no of stations
-  Nbase: no of baselines
-  tilesz: tile size
-  barr: baseline to station map, size Nbase*tilesz x 1
-  carr: sky model/cluster info size Mx1 of clusters
-  coh: coherencies size Nbase*tilesz*4*M x 1
-  M: no of clusters
-  freq0: frequency
-  fdelta: bandwidth for freq smearing
-  tdelta: integration time for time smearing
-  dec0: declination for time smearing
-  Nt: no. of threads
-  ccid: which cluster to use as correction
-  rho: MMSE robust parameter J+rho I inverted
-
-  phase_only: if >0, and if there is any correction done, use only phase of diagonal elements for correction 
-*/
-extern int
-calculate_residuals(double *u,double *v,double *w,double *p,double *x,int N,int Nbase,int tilesz,baseline_t *barr, clus_source_t *carr, int M,double freq0,double fdelta,double tdelta,double dec0, int Nt, int ccid, double rho);
-
-/* 
-  residuals for multiple channels
-  data to write size Nbase*8*tilesz*Nchan x 1
-  ordered by XX(re,im),XY(re,im),YX(re,im), YY(re,im), baseline, timeslots, channels
-  input: x is actual data, output: x is the residual
-  freqs: Nchanx1 of frequency values
-  fdelta: total bandwidth, so divide by Nchan to get each channel bandwith
-  tdelta: integration time for time smearing
-  dec0: declination for time smearing
-*/
-extern int
-calculate_residuals_multifreq(double *u,double *v,double *w,double *p,double *x,int N,int Nbase,int tilesz,baseline_t *barr, clus_source_t *carr, int M,double *freqs,int Nchan, double fdelta,double tdelta,double dec0, int Nt, int ccid, double rho, int phase_only);
-
-/* 
-  calculate visibilities for multiple channels, no solutions are used
-  note: output column x is set to 0 if add_to_data ==0, else model is added/subtracted (==1 or 2) to data
-*/
-extern int
-predict_visibilities_multifreq(double *u,double *v,double *w,double *x,int N,int Nbase,int tilesz,baseline_t *barr, clus_source_t *carr, int M,double *freqs,int Nchan, double fdelta,double tdelta,double dec0,int Nt,int add_to_data);
-
-
-/* predict with solutions in p , ignore clusters flagged in ignorelist (Mx1) array
- also correct final data with solutions for cluster ccid, if valid
-*/
-extern int
-predict_visibilities_multifreq_withsol(double *u,double *v,double *w,double *p,double *x,int *ignorelist,int N,int Nbase,int tilesz,baseline_t *barr, clus_source_t *carr, int M,double *freqs,int Nchan, double fdelta,double tdelta,double dec0,int Nt,int add_to_data, int ccid, double rho,int phase_only);
 /****************************** mderiv.cu ****************************/
 /* cuda driver for kernel */
 /* ThreadsPerBlock: keep <= 128
@@ -1224,48 +1168,6 @@ __attribute__ ((target(MIC)))
 #endif
 extern int*
 random_permutation(int n, int weighted_iter, double *w);
-
-/****************************** diagnostics.c ****************************/
-#ifdef HAVE_CUDA
-/*  Calculate St.Laurent-Cook Jacobian leverage
-x: input: residual, output: levarage
-  flags: 2 for flags based on uvcut, 1 for normal flags
-  coh: coherencies are calculated for all baselines, regardless of flag
-  diagmode: 1: replaces residual with Jacobian Leverage, 2: calculates (prints) fraction of leverage/noise
- */
-extern int
-calculate_diagnostics(double *u,double *v,double *w,double *p,double *x,int N,int Nbase,int tilesz,baseline_t *barr, clus_source_t *carr, complex double *coh, int M,int Mt,int diagmode,int Nt);
-#endif
-
-
-/****************************** diag_fl.cu ****************************/
-#ifdef HAVE_CUDA
-/* cuda driver for calculating Jacobian for leverage */
-/* p: params (Mx1), jac: jacobian (NxM), other data : coh, baseline->stat mapping, Nbase, Mclusters, Nstations */
-/* flags are always ignored */
-extern void
-cudakernel_jacf_fl2(float *p, float *jac, int M, int N, float *coh, short *bbh, int Nbase, int Mclus, int Nstations);
-
-/* invert sqrt(singular values)  Sd[]=1/sqrt(Sd[])  for Sd[]> eps */
-extern void
-cudakernel_sqrtdiv_fl(int ThreadsPerBlock, int BlocksPerGrid, int M, float eps, float *Sd);
-
-/* U <= U D, 
-   U : MxM
-   D : Mx1, diagonal matrix
-*/
-extern void
-cudakernel_diagmult_fl(int ThreadsPerBlock, int BlocksPerGrid, int M, float * U, float *D); 
-
-/* diag(J^T J)
-   d[i] = J[i,:] * J[i,:]
-   J: NxM (in row major order, so J[i,:] is actually J[:,i]
-   d: Nx1
-*/
-extern void
-cudakernel_jnorm_fl(int ThreadsPerBlock, int BlocksPerGrid, float *J, int N, int M, float *d);
-#endif
-
 
 /****************************** manifold_average.c ****************************/
 /* calculate manifold average of 2Nx2 solution blocks,

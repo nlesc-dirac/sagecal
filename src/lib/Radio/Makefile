@@ -16,7 +16,7 @@ LIBPATH=
 GLIBI=-I/usr/include/glib-2.0 -I/usr/lib/glib-2.0/include -I/usr/lib/x86_64-linux-gnu/glib-2.0/include/ -I/usr/lib64/glib-2.0/include
 GLIBL=-lglib-2.0
 
-OBJECTS=readsky.o predict.o stationbeam.o predict_withbeam.o transforms.o
+OBJECTS=readsky.o predict.o stationbeam.o predict_withbeam.o transforms.o residual.o
 
 default:libradio.a
 readsky.o:readsky.c
@@ -28,6 +28,8 @@ stationbeam.o:stationbeam.c
 predict_withbeam.o:predict_withbeam.c
 	$(CC) $(CFLAGS) $(INCLUDES) $(GLIBI)  -c $<
 transforms.o:transforms.c
+	$(CC) $(CFLAGS) $(INCLUDES) $(GLIBI)  -c $<
+residual.o:residual.c
 	$(CC) $(CFLAGS) $(INCLUDES) $(GLIBI)  -c $<
 
 
