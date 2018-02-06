@@ -28,6 +28,9 @@ tol_seconds_of_RA = tol_seconds_of_decl * 24/360
 RA_hours_3C196 = 0
 RA_minutes_3C196 = 0
 RA_seconds_3C196 = 0
+#RA_hours_3C196 = 8
+#RA_minutes_3C196 = 13
+#RA_seconds_3C196 = 35.981540
 
 RA_seconds_3C196 = (RA_hours_3C196 * 60 + RA_minutes_3C196) *60 + RA_seconds_3C196
 
@@ -42,6 +45,9 @@ RA_hours_high, RA_minutes_high = divmod(RA_minutes_high, 60)
 decl_degrees_3C196 = 90
 decl_minutes_3C196 = 0
 decl_seconds_3C196 = 0
+#decl_degrees_3C196 = 48
+#decl_minutes_3C196 = 12
+#decl_seconds_3C196 = 59.174770
 
 decl_seconds_3C196 = (decl_degrees_3C196 * 60 + decl_minutes_3C196) *60 + decl_seconds_3C196
 
@@ -68,9 +74,8 @@ with warnings.catch_warnings():
              'pos_angle', 'freq0')
 
     formats = ['U6', 'i4', 'i4', 'f8', 'i4', 'i4', 'f8', 'f8', 'i4', 'i4', 'i4', 'f8', 'f8',
-               'i4', 'i4', 'i4', 'i4', 'f8', 'f8']
-
-    formats_reformatted = '%s  %d  %d  %f  %d  %d  %f  %f  %d  %d  %d  %f  %f  %d  %d  %d  %d  %f  %f'
+      'f8', 'f8', 'f8', 'f8', 'f8', 'f8']
+    formats_reformatted = '%s  %d  %d  %f  %d  %d  %f  %f  %d  %d  %d  %f  %f  %f  %f  %f  %f  %f  %f'
 
     sources_parameters = np.recarray((number_of_sources,), formats=formats,
                                      names=names)

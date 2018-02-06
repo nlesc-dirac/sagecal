@@ -36,5 +36,4 @@ data.o:data.cpp data.h
 sagecal:$(OBJECTS) ../lib/Radio/libsagecal.a ../lib/Dirac/libdirac.a 
 	$(CXX) $(CXXFLAGS) $(LDFLAGS) $(INCLUDES) $(GLIBI) $(LIBPATH)  -o $@  $(OBJECTS) $(MY_LIBS) $(LAPACK) $(CASA_LIBS)  $(GLIBL)
 clean:
-	rm *.o 
-
+	rm *.o *.tmp *.fits *.swp *.swo *.o *.output

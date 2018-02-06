@@ -4,7 +4,6 @@ NVCC=nvcc
 CFLAGS= -Wall -O3 -g -DHAVE_CUDA -DHYBRID_CODE -pg
 CLIBS= -lm -lpthread
 LAPACK=-L/usr/local/OpenBLAS/lib/ -lopenblas -lgfortran -lpthread
-# LAPACK=-lblas -lgfortran -lpthread
 
 CUDAINC=/usr/local/cuda/include
 CUDALIB=-L/usr/local/cuda/lib64 -lcuda -lcudart

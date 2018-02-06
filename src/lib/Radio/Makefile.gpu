@@ -3,7 +3,8 @@ CXX=g++
 NVCC=nvcc
 CFLAGS= -Wall -O3 -g -DHAVE_CUDA -DHYBRID_CODE -pg
 CLIBS= -lm -lpthread
-LAPACK=-L/usr/local/OpenBLAS/lib/ -lopenblas -lgfortran -lpthread
+#LAPACK=-L/usr/local/OpenBLAS/lib/ -lopenblas -lgfortran -lpthread
+LAPACK=-L/cm/shared/package/openblas/0.2.17mt/lib -lopenblas -lgfortran -lpthread
 # LAPACK=-lblas -lgfortran -lpthread
 
 CUDAINC=/usr/local/cuda/include

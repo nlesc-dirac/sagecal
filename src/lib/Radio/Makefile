@@ -2,11 +2,12 @@ CC=gcc
 CXX=g++
 #CFLAGS= -Wall -O3 -g #-pg
 CFLAGS= -Wall -O3 -fopt-info-optimized
+# CFLAGS= -Wall -pg -O2 -ansi -fPIC -fpermissive -fno-omit-frame-pointer -DNDEBUG -fno-inline-functions -fno-inline-functions-called-once -fno-optimize-sibling-calls
 CLIBS= -lm -lpthread
 #LAPACK=-L/usr/lib/atlas/sse -llapack -lblas
 #LAPACK=-L/usr/local/GotoBLAS2/lib -lgoto2 -lpthread -lgfortran
-LAPACK=-L/usr/local/OpenBLAS/lib/ -lopenblas -lgfortran -lpthread
-
+#LAPACK=-L/usr/local/OpenBLAS/lib/ -lopenblas -lgfortran -lpthread
+LAPACK=-L/cm/shared/package/openblas/0.2.17mt/lib -lopenblas -lgfortran -lpthread
 
 INCLUDES= -I. -I../Dirac/ 
 LIBPATH=

@@ -23,6 +23,9 @@
 #include <stdio.h>
 #include <string.h>
 #include <pthread.h>
+#include <casacore/casa/Quanta/Quantum.h>
+
+#include "cuda_profiler_api.h"
 
 #include <Dirac.h>
 #include <Radio.h>
@@ -241,11 +244,7 @@ main(int argc, char **argv) {
      Data::readMSlist(Data::MSlist,&msnames);
     }
     if (Data::TableName) {
-     if (!doBeam) {
-      Data::readAuxData(Data::TableName,&iodata);
-     } else {
       Data::readAuxData(Data::TableName,&iodata,&beam);
-     }
      cout<<"Only one MS"<<endl;
     } else if (Data::MSlist) {
      Data::readAuxDataList(msnames,&iodata);
@@ -256,11 +255,12 @@ main(int argc, char **argv) {
      srand(time(0)); /* use different seed */
     }
 
-    openblas_set_num_threads(1);//Data::Nt;
+    // openblas_set_num_threads(1);//Data::Nt;
+    // export OMP_NUM_THREADS=1
     /**********************************************************/
      int M,Mt,ci,cj,ck;  
    /* parameters */
-   double *p,*pinit,*pfreq;
+   double *p,*pinit;
    double **pm;
    complex double *coh;
    FILE *sfp=0;
@@ -333,19 +333,6 @@ main(int argc, char **argv) {
     }
   }
 
-#ifdef USE_MIC
-  /* need for bitwise copyable parameter passing */
-  int *mic_pindex,*mic_chunks;
-  if ((mic_chunks=(int*)calloc((size_t)M,sizeof(int)))==0) {
-     fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
-     exit(1);
-  }
-  if ((mic_pindex=(int*)calloc((size_t)Mt,sizeof(int)))==0) {
-     fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
-     exit(1);
-  }
-  int cl=0;
-#endif
 
   /* update cluster array with correct pointers to parameters */
   cj=0;
@@ -354,14 +341,8 @@ main(int argc, char **argv) {
      fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
      exit(1);
     }
-#ifdef USE_MIC
-    mic_chunks[ci]=carr[ci].nchunk;
-#endif
     for (ck=0; ck<carr[ci].nchunk; ck++) {
       carr[ci].p[ck]=cj*8*iodata.N;
-#ifdef USE_MIC
-      mic_pindex[cl++]=carr[ci].p[ck];
-#endif
       cj++;
     }
   }
@@ -418,8 +399,8 @@ main(int argc, char **argv) {
 
     double res_0,res_1,res_00,res_01;   
    /* previous residual */
-   double res_prev=CLM_DBL_MAX;
-   double res_ratio=5; /* how much can the residual increase before resetting solutions */
+   // double res_prev=CLM_DBL_MAX;
+   // double res_ratio=5; /* how much can the residual increase before resetting solutions */
    res_0=res_1=res_00=res_01=0.0;
 
     /**********************************************************/
@@ -462,19 +443,18 @@ main(int argc, char **argv) {
 
 
     /* starting iterations are doubled */
-    int start_iter=1;
-    int sources_precessed=0;
+    // int start_iter=1;
+    // int sources_precessed=0;
 
     double inv_c=1.0/CONST_C;
 
+#ifdef HAVE_CUDA
+    cudaProfilerStart();
+#endif
     while (msitr[0]->more()) {
       start_time = time(0);
       if (iodata.Nms==1) {
-       if (!doBeam) {
-        Data::loadData(msitr[0]->table(),iodata,&iodata.fratio);
-       } else {
         Data::loadData(msitr[0]->table(),iodata,beam,&iodata.fratio);
-       }
       } else { 
        Data::loadDataList(msitr,iodata,&iodata.fratio);
       }
@@ -489,45 +469,16 @@ main(int argc, char **argv) {
     preset_flags_and_data(iodata.Nbase*iodata.tilesz,iodata.flag,barr,iodata.x,Data::Nt);
     /* if data is being whitened, whiten x here,
      no need for a copy because we use xo for residual calculation */
-    if (Data::whiten) {
-     whiten_data(iodata.Nbase*iodata.tilesz,iodata.x,iodata.u,iodata.v,iodata.freq0,Data::Nt);
-    }
     /* precess source locations (also beam pointing) from J2000 to JAPP if we do any beam predictions,
       using first time slot as epoch */
-    if (doBeam && !sources_precessed) {
-      precess_source_locations(beam.time_utc[iodata.tilesz/2],carr,M,&beam.p_ra0,&beam.p_dec0,Data::Nt);
-      sources_precessed=1;
-    }
+    // sources_precessed=1;
 
 
-#ifdef USE_MIC
-  double *mic_u,*mic_v,*mic_w,*mic_x;
-  mic_u=iodata.u;
-  mic_v=iodata.v;
-  mic_w=iodata.w;
-  mic_x=iodata.x;
-  int mic_Nbase=iodata.Nbase;
-  int mic_tilesz=iodata.tilesz;
-  int mic_N=iodata.N;
-  double mic_freq0=iodata.freq0;
-  double mic_deltaf=iodata.deltaf;
-  double mic_data_min_uvcut=Data::min_uvcut;
-  int mic_data_Nt=Data::Nt;
-  int mic_data_max_emiter=Data::max_emiter;
-  int mic_data_max_iter=Data::max_iter;
-  int mic_data_max_lbfgs=Data::max_lbfgs;
-  int mic_data_lbfgs_m=Data::lbfgs_m;
-  int mic_data_gpu_threads=Data::gpu_threads;
-  int mic_data_linsolv=Data::linsolv;
-  int mic_data_solver_mode=Data::solver_mode;
-  int mic_data_randomize=Data::randomize;
-  double mic_data_nulow=Data::nulow;
-  double mic_data_nuhigh=Data::nuhigh;
-#endif
 
    /* FIXME: uvmin is not needed in calibration, because its taken care of by flags */
     if (!Data::DoSim) {
     /****************** calibration **************************/
+<<<<<<< HEAD
 #ifndef HAVE_CUDA
     if (!doBeam) {
      precalculate_coherencies(iodata.u,iodata.v,iodata.w,coh,iodata.N,iodata.Nbase*iodata.tilesz,barr,carr,M,iodata.freq0,iodata.deltaf,iodata.deltat,iodata.dec0,Data::min_uvcut,Data::max_uvcut,Data::Nt);
@@ -685,15 +636,19 @@ beam.p_ra0,beam.p_dec0,iodata.freq0,beam.sx,beam.sy,beam.time_utc,beam.Nelem,bea
 #endif
 
     }
+=======
+#ifdef HAVE_CUDA
+     precalculate_coherencies_withbeam_gpu(iodata.u,iodata.v,iodata.w,coh,iodata.N,iodata.Nbase*iodata.tilesz,barr,carr,M,iodata.freq0,iodata.deltaf,iodata.deltat,iodata.dec0,Data::min_uvcut,Data::max_uvcut,
+  beam.p_ra0,beam.p_dec0,iodata.freq0,beam.sx,beam.sy,beam.time_utc,iodata.tilesz,beam.Nelem,beam.xx,beam.yy,beam.zz,doBeam,Data::Nt);
+#endif
+#ifndef HAVE_CUDA
+     precalculate_coherencies(iodata.u,iodata.v,iodata.w,coh,iodata.N,iodata.Nbase*iodata.tilesz,barr,carr,M,iodata.freq0,iodata.deltaf,iodata.deltat,iodata.dec0,Data::min_uvcut,Data::max_uvcut,Data::Nt);
+#endif
+>>>>>>> master
     /****************** end calibration **************************/
     /****************** begin diagnostics ************************/
-#ifdef HAVE_CUDA
-    if (Data::DoDiag) {
-     calculate_diagnostics(iodata.u,iodata.v,iodata.w,p,iodata.xo,iodata.N,iodata.Nbase,iodata.tilesz,barr,carr,coh,M,Mt,Data::DoDiag,Data::Nt);
-    }
-#endif /* HAVE_CUDA */
-    /****************** end diagnostics **************************/
    } else {
+<<<<<<< HEAD
     /************ simulation only mode ***************************/
     if (!solfile) {
 #ifndef HAVE_CUDA
@@ -724,6 +679,23 @@ beam.p_ra0,beam.p_dec0,iodata.freq0,beam.sx,beam.sy,beam.time_utc,beam.Nelem,bea
     }
     /************ end simulation only mode ***************************/
    }
+=======
+#ifdef HAVE_CUDA
+      predict_visibilities_multifreq_withbeam_gpu(iodata.u,iodata.v,iodata.w,iodata.xo,iodata.N,iodata.Nbase,iodata.tilesz,barr,carr,M,iodata.freqs,iodata.Nchan,iodata.deltaf,iodata.deltat,iodata.dec0,
+  beam.p_ra0,beam.p_dec0,iodata.freq0,beam.sx,beam.sy,beam.time_utc,beam.Nelem,beam.xx,beam.yy,beam.zz,doBeam,Data::Nt,(Data::DoSim>1?1:0));
+#endif
+#ifndef HAVE_CUDA
+     precalculate_coherencies_withbeam(iodata.u,iodata.v,iodata.w,coh,iodata.N,iodata.Nbase*iodata.tilesz,barr,carr,M,iodata.freq0,iodata.deltaf,iodata.deltat,iodata.dec0,Data::min_uvcut,Data::max_uvcut,
+  beam.p_ra0,beam.p_dec0,iodata.freq0,beam.sx,beam.sy,beam.time_utc,iodata.tilesz,beam.Nelem,beam.xx,beam.yy,beam.zz,Data::Nt);
+#endif    
+}
+
+#ifdef HAVE_CUDA
+    cudaDeviceSynchronize();
+    cudaProfilerStop();
+    exit(0);
+#endif
+>>>>>>> master
 
    tilex+=iodata.tilesz;
    /* print solutions to file */
@@ -740,33 +712,11 @@ beam.p_ra0,beam.p_dec0,iodata.freq0,beam.sx,beam.sy,beam.time_utc,beam.Nelem,bea
    }
 
     /**********************************************************/
-      /* also write back */
-    if (iodata.Nms==1) {
-     Data::writeData(msitr[0]->table(),iodata);
-    } else {
-     Data::writeDataList(msitr,iodata);
-    }
     for(int cm=0; cm<iodata.Nms; cm++) {
       (*msitr[cm])++;
     }
-   if (!Data::DoSim) {
-   /* if residual has increased too much, or all are flagged (0 residual)
-      or NaN
-      reset solutions to original
-      initial values */
-   if (res_1==0.0 || !isfinite(res_1) || res_1>res_ratio*res_prev) {
-     cout<<"Resetting Solution"<<endl;
-     /* reset solutions so next iteration has default initial values */
-     memcpy(p,pinit,(size_t)iodata.N*8*Mt*sizeof(double));
-     /* also assume iterations have restarted from scratch */
-     start_iter=1;
-     /* also forget min residual (otherwise will try to reset it always) */
-     res_prev=res_1;
-   } else if (res_1<res_prev) { /* only store the min value */
-    res_prev=res_1;
-   }
-   }
     end_time = time(0);
+
     elapsed_time = ((double) (end_time-start_time)) / 60.0;
     if (!Data::DoSim) {
     if (solver_mode==SM_OSLM_OSRLM_RLBFGS||solver_mode==SM_RLM_RLBFGS||solver_mode==SM_RTR_OSRLM_RLBFGS || solver_mode==SM_NSD_RLBFGS) { 
@@ -790,10 +740,6 @@ beam.p_ra0,beam.p_dec0,iodata.freq0,beam.sx,beam.sy,beam.time_utc,beam.Nelem,bea
     Data::freeData(iodata,beam);
    }
 
-#ifdef USE_MIC
-   free(mic_pindex);
-   free(mic_chunks);
-#endif
     /**********************************************************/
 
   exinfo_gaussian *exg;

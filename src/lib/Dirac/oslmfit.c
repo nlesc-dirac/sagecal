@@ -157,7 +157,7 @@ oslevmar_der_single_cuda(
 
   /* calculate no of cuda threads and blocks */
   int ThreadsPerBlock=DEFAULT_TH_PER_BK;
-  int BlocksPerGrid=(M+ThreadsPerBlock-1)/ThreadsPerBlock;
+  int BlocksPerGrid= 2*(M+ThreadsPerBlock-1)/ThreadsPerBlock;
 
 
   unsigned long int moff;
@@ -190,7 +190,7 @@ oslevmar_der_single_cuda(
   checkCudaError(err,__FILE__,__LINE__);
   err=cudaMalloc((void**)&ed, N*sizeof(double));
   checkCudaError(err,__FILE__,__LINE__);
-  /* memory allocation: different solvers */
+  /* memory allocation: different dirac */
   if (solve_axb==1) {
     err=cudaMalloc((void**)&taud, M*sizeof(double));
     checkCudaError(err,__FILE__,__LINE__);

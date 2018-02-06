@@ -102,7 +102,7 @@ pipeline_slave_code_b(void *data)
     checkCudaError(err,__FILE__,__LINE__);
   } else if (dp->status[tid]==PT_DO_CCOST) {
    /* divide total baselines by 2 */
-   int BlocksPerGrid=(dp->Nbase[tid]+dp->lmdata[tid]->ThreadsPerBlock-1)/dp->lmdata[tid]->ThreadsPerBlock;
+   int BlocksPerGrid= 2*(dp->Nbase[tid]+dp->lmdata[tid]->ThreadsPerBlock-1)/dp->lmdata[tid]->ThreadsPerBlock;
    int  boff=dp->boff[tid];
    /* copy the current solution to device */
    err=cudaMemcpy(dp->cpp[tid], dp->lmdata[tid]->p, m*sizeof(double), cudaMemcpyHostToDevice);
@@ -901,12 +901,12 @@ lbfgs_fit_common(
   /* parameters per thread (GPU) */
   int Nparm=(m+2-1)/2;
   /* find number of blocks */
-  int BlocksPerGrid = (Nparm+ThreadsPerBlock-1)/ThreadsPerBlock;
+  int BlocksPerGrid = 2* (Nparm+ThreadsPerBlock-1)/ThreadsPerBlock;
   ci=0;
   int nth;
   for (nth=0; nth<2; nth++) {
    threaddata[nth].ThreadsPerBlock=ThreadsPerBlock;
-   threaddata[nth].BlocksPerGrid=BlocksPerGrid;
+   threaddata[nth].BlocksPerGrid= 2*BlocksPerGrid;
    threaddata[nth].card=nth;
    threaddata[nth].Nbase=dp->Nbase;
    threaddata[nth].tilesz=dp->tilesz;
