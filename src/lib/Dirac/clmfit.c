@@ -146,7 +146,7 @@ clevmar_der_single(
 
   /* calculate no of cuda threads and blocks */
   int ThreadsPerBlock=DEFAULT_TH_PER_BK;
-  int BlocksPerGrid= 2*(M+ThreadsPerBlock-1)/ThreadsPerBlock;
+  int BlocksPerGrid=(M+ThreadsPerBlock-1)/ThreadsPerBlock;
 
   err=cudaSetDevice(card);
   checkCudaError(err,__FILE__,__LINE__);
@@ -199,7 +199,7 @@ clevmar_der_single(
   checkCudaError(err,__FILE__,__LINE__);
 
 
-  /* memory allocation: different dirac */
+  /* memory allocation: different solvers */
   int work_size=0;
   int *devInfo; 
   int devInfo_h=0;
@@ -709,7 +709,7 @@ clevmar_der_single_cuda(
 
   /* calculate no of cuda threads and blocks */
   int ThreadsPerBlock=DEFAULT_TH_PER_BK;
-  int BlocksPerGrid= 2*(M+ThreadsPerBlock-1)/ThreadsPerBlock;
+  int BlocksPerGrid=(M+ThreadsPerBlock-1)/ThreadsPerBlock;
 
 
   unsigned long int moff; /* make sure offsets are multiples of 4 */
@@ -742,7 +742,7 @@ clevmar_der_single_cuda(
   checkCudaError(err,__FILE__,__LINE__);
   err=cudaMalloc((void**)&ed, N*sizeof(double));
   checkCudaError(err,__FILE__,__LINE__);
-  /* memory allocation: different dirac */
+  /* memory allocation: different solvers */
   if (solve_axb==1) {
     err=cudaMalloc((void**)&taud, M*sizeof(double));
     checkCudaError(err,__FILE__,__LINE__);
@@ -1256,11 +1256,11 @@ attach_gpu_to_thread2(int card,  cublasHandle_t *cbhandle,  cusolverDnHandle_t *
   if (usecula) {
    status=cusolverDnCreate(solver_handle);
    if (status != CUSOLVER_STATUS_SUCCESS) {
-    fprintf(stderr,"%s: %d: CUSOLV create fail %d\n",__FILE__,__LINE__,status);
+    fprintf(stderr,"%s: %d: CUSOLV create fail card %d, %d\n",__FILE__,__LINE__,card,status);
     sleep(10);
     status=cusolverDnCreate(solver_handle);
     if (status != CUSOLVER_STATUS_SUCCESS) {
-     fprintf(stderr,"%s: %d: CUSOLV create fail %d\n",__FILE__,__LINE__,status);
+     fprintf(stderr,"%s: %d: CUSOLV create fail card %d, %d\n",__FILE__,__LINE__,card,status);
      exit(1);
     }
    }
@@ -1378,7 +1378,7 @@ mlm_der_single_cuda(
 
   /* calculate no of cuda threads and blocks */
   int ThreadsPerBlock=DEFAULT_TH_PER_BK;
-  int BlocksPerGrid= 2*(M+ThreadsPerBlock-1)/ThreadsPerBlock;
+  int BlocksPerGrid=(M+ThreadsPerBlock-1)/ThreadsPerBlock;
 
 
   if (opts) {
@@ -1435,7 +1435,7 @@ mlm_der_single_cuda(
   /* we need coherencies for only this cluster */
   err=cudaMalloc((void**) &cohd, Nbase*8*sizeof(double));
   checkCudaError(err,__FILE__,__LINE__);
-  /* memory allocation: different dirac */
+  /* memory allocation: different solvers */
   if (solve_axb==1) {
     /* QR solver ********************************/
     err=cudaMalloc((void**)&taud, M*sizeof(double));
