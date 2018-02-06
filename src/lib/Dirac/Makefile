@@ -17,7 +17,7 @@ LIBPATH=
 GLIBI=-I/usr/include/glib-2.0 -I/usr/lib/glib-2.0/include -I/usr/lib/x86_64-linux-gnu/glib-2.0/include/ -I/usr/lib64/glib-2.0/include
 GLIBL=-lglib-2.0
 
-OBJECTS= lmfit_nocuda.o clmfit_nocuda.o lbfgs_nocuda.o myblas.o residual.o robustlm.o updatenu.o robust_lbfgs_nocuda.o rtr_solve.o  rtr_solve_robust.o manifold_average.o consensus_poly.o rtr_solve_robust_admm.o admm_solve.o
+OBJECTS= lmfit_nocuda.o clmfit_nocuda.o lbfgs_nocuda.o myblas.o robustlm.o updatenu.o robust_lbfgs_nocuda.o rtr_solve.o  rtr_solve_robust.o manifold_average.o consensus_poly.o rtr_solve_robust_admm.o admm_solve.o
 
 default:libdirac.a
 lmfit_nocuda.o:lmfit_nocuda.c
@@ -27,8 +27,6 @@ clmfit_nocuda.o:clmfit_nocuda.c
 lbfgs_nocuda.o:lbfgs_nocuda.c
 	$(CC) $(CFLAGS) $(INCLUDES) $(GLIBI)  -c $<
 myblas.o:myblas.c
-	$(CC) $(CFLAGS) $(INCLUDES) $(GLIBI)  -c $<
-residual.o:residual.c
 	$(CC) $(CFLAGS) $(INCLUDES) $(GLIBI)  -c $<
 robustlm.o:robustlm.c
 	$(CC) $(CFLAGS) $(INCLUDES) $(GLIBI)  -c $<
