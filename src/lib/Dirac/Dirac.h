@@ -1177,10 +1177,11 @@ random_permutation(int n, int weighted_iter, double *w);
    M: no of directions
    Nf: no of frequencies
    Niter: everaging iterations
+   randomize: if >0, use random starting point
    Nt: threads
 */
 extern int
-calculate_manifold_average(int N,int M,int Nf,double *Y,int Niter,int Nt);
+calculate_manifold_average(int N,int M,int Nf,double *Y,int Niter,int randomize,int Nt);
 
 
 /* find U to  minimize 
