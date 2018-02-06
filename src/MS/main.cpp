@@ -478,7 +478,6 @@ main(int argc, char **argv) {
    /* FIXME: uvmin is not needed in calibration, because its taken care of by flags */
     if (!Data::DoSim) {
     /****************** calibration **************************/
-<<<<<<< HEAD
 #ifndef HAVE_CUDA
     if (!doBeam) {
      precalculate_coherencies(iodata.u,iodata.v,iodata.w,coh,iodata.N,iodata.Nbase*iodata.tilesz,barr,carr,M,iodata.freq0,iodata.deltaf,iodata.deltat,iodata.dec0,Data::min_uvcut,Data::max_uvcut,Data::Nt);
@@ -636,19 +635,9 @@ beam.p_ra0,beam.p_dec0,iodata.freq0,beam.sx,beam.sy,beam.time_utc,beam.Nelem,bea
 #endif
 
     }
-=======
-#ifdef HAVE_CUDA
-     precalculate_coherencies_withbeam_gpu(iodata.u,iodata.v,iodata.w,coh,iodata.N,iodata.Nbase*iodata.tilesz,barr,carr,M,iodata.freq0,iodata.deltaf,iodata.deltat,iodata.dec0,Data::min_uvcut,Data::max_uvcut,
-  beam.p_ra0,beam.p_dec0,iodata.freq0,beam.sx,beam.sy,beam.time_utc,iodata.tilesz,beam.Nelem,beam.xx,beam.yy,beam.zz,doBeam,Data::Nt);
-#endif
-#ifndef HAVE_CUDA
-     precalculate_coherencies(iodata.u,iodata.v,iodata.w,coh,iodata.N,iodata.Nbase*iodata.tilesz,barr,carr,M,iodata.freq0,iodata.deltaf,iodata.deltat,iodata.dec0,Data::min_uvcut,Data::max_uvcut,Data::Nt);
-#endif
->>>>>>> master
     /****************** end calibration **************************/
     /****************** begin diagnostics ************************/
    } else {
-<<<<<<< HEAD
     /************ simulation only mode ***************************/
     if (!solfile) {
 #ifndef HAVE_CUDA
@@ -679,23 +668,6 @@ beam.p_ra0,beam.p_dec0,iodata.freq0,beam.sx,beam.sy,beam.time_utc,beam.Nelem,bea
     }
     /************ end simulation only mode ***************************/
    }
-=======
-#ifdef HAVE_CUDA
-      predict_visibilities_multifreq_withbeam_gpu(iodata.u,iodata.v,iodata.w,iodata.xo,iodata.N,iodata.Nbase,iodata.tilesz,barr,carr,M,iodata.freqs,iodata.Nchan,iodata.deltaf,iodata.deltat,iodata.dec0,
-  beam.p_ra0,beam.p_dec0,iodata.freq0,beam.sx,beam.sy,beam.time_utc,beam.Nelem,beam.xx,beam.yy,beam.zz,doBeam,Data::Nt,(Data::DoSim>1?1:0));
-#endif
-#ifndef HAVE_CUDA
-     precalculate_coherencies_withbeam(iodata.u,iodata.v,iodata.w,coh,iodata.N,iodata.Nbase*iodata.tilesz,barr,carr,M,iodata.freq0,iodata.deltaf,iodata.deltat,iodata.dec0,Data::min_uvcut,Data::max_uvcut,
-  beam.p_ra0,beam.p_dec0,iodata.freq0,beam.sx,beam.sy,beam.time_utc,iodata.tilesz,beam.Nelem,beam.xx,beam.yy,beam.zz,Data::Nt);
-#endif    
-}
-
-#ifdef HAVE_CUDA
-    cudaDeviceSynchronize();
-    cudaProfilerStop();
-    exit(0);
-#endif
->>>>>>> master
 
    tilex+=iodata.tilesz;
    /* print solutions to file */
