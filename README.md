@@ -69,7 +69,6 @@ p3=q3/ln(10)^2
 ...
 
 
-#######################################################################
 3)Run sagecal
 Optionally: Make sure your machine has (1/2 working NVIDIA GPU cards or Intel Xeon Phi MICs) to use sagecal.
 Recommended usage: (with GPUs)
@@ -94,7 +93,6 @@ Eg. If you need to ignore cluster ids '-1', '10', '999', create a text file :
 and use it as the 'ignore_file'.
 
 
-##########################################################################
 4)Distributed calibration
 
 Use mpirun to run sagecal-mpi, example:
@@ -118,7 +116,6 @@ Note: the number of slaves (-np option) can be lower than the number of MS calib
 The rest of the options are similar to sagecal.
 
 
-##########################################################################
 5)Solution format
 All SAGECal solutions are stored as text files. Lines starting with '#' are comments.
 The first non-comment line includes some general information, i.e.
