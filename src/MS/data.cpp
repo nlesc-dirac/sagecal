@@ -19,6 +19,7 @@
 
 #include "data.h"
 #include "Radio.h"
+#include "Dirac.h"
 #include <measures/Measures/MDirection.h>
 #include <measures/Measures/UVWMachine.h>
 #include <casa/Quanta.h>

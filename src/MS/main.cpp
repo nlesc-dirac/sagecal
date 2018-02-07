@@ -25,8 +25,8 @@
 #include <pthread.h>
 #include <casacore/casa/Quanta/Quantum.h>
 
-#include <Dirac.h>
 #include <Radio.h>
+#include <Dirac.h>
 
 #ifndef LMCUT
 #define LMCUT 40
