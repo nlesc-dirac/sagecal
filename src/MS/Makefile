@@ -14,7 +14,7 @@ LAPACK=-lopenblas -lgfortran -lpthread
 LAPACK_DIR=/cm/shared/package/openblas/0.2.17mt/lib
 #LAPACK_DIR=/usr/lib/atlas/sse/
 
-LDFLAGS=-Wl,--rpath,/cm/shared/package/openblas/0.2.17mt/lib/,${CASA_LIBDIR}
+LDFLAGS=-Wl,--rpath,/cm/shared/package/openblas/0.2.17mt/lib/,--rpath,${CASA_LIBDIR}
 #LDFLAGS=-Wl,-t,--rpath,/software/users/lofareor/SW/lib64
 # -Wl,--hash-style=both
 

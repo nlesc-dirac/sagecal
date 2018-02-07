@@ -18,9 +18,9 @@ NVML_LIB=-lnvidia-ml -L/usr/lib64/nvidia/
 
 LDFLAGS=-Wl,--rpath,/home/users/yatawatta/extern/lib,--rpath,/software/users/lofarsoft/software_dawn/local/lib64,--rpath,/software/users/lofarsoft/software_dawn/local/casacore/lib,--rpath,/usr/local/cuda/lib64/
 
-MY_LIBS=-lm -lsagecal
-INCLUDES=-I. -I./lib $(CASA_INCDIR) -I/usr/include  $(CUDAINC) -I$(NVML_INC)
-LIBPATH=$(LAPACK_DIR) -L$(CASA_LIBDIR)  -L./lib 
+MY_LIBS=-lm -lradio -ldirac
+INCLUDES=-I. -I../lib/Dirac -I../lib/Radio $(CASA_INCDIR) -I/usr/include  $(CUDAINC) -I$(NVML_INC)
+LIBPATH=$(LAPACK_DIR) -L$(CASA_LIBDIR) -L../lib/Dirac -L../lib/Radio
 
 #### glib
 GLIBI=-I/usr/include/glib-2.0 -I/usr/lib64/glib-2.0/include/
@@ -36,7 +36,7 @@ sagecal_master.o:sagecal_master.cpp proto.h
 	$(CXX) $(CXXFLAGS) $(INCLUDES) $(GLIBI) -c $<
 sagecal_slave.o:sagecal_slave.cpp proto.h
 	$(CXX) $(CXXFLAGS) $(INCLUDES) $(GLIBI) -c $<
-sagecal-mpi:$(OBJECTS) ./lib/libsagecal.a
+sagecal-mpi:$(OBJECTS) ../lib/Radio/libradio.a ../lib/Dirac/libdirac.a
 	$(CXX) $(CXXFLAGS) $(LDFLAGS) $(INCLUDES) $(GLIBI) $(LIBPATH)  -o $@  $(OBJECTS) $(MY_LIBS) $(CASA_LIBS)  $(GLIBL) $(LAPACK) $(CUDALIB)  $(NVML_LIB)
 clean:
 	rm *.o *.tmp *.fits
