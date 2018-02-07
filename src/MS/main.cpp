@@ -710,7 +710,8 @@ beam.p_ra0,beam.p_dec0,iodata.freq0,beam.sx,beam.sy,beam.time_utc,beam.Nelem,bea
     /****************** begin diagnostics ************************/
 #ifdef HAVE_CUDA
     if (Data::DoDiag) {
-     calculate_diagnostics(iodata.u,iodata.v,iodata.w,p,iodata.xo,iodata.N,iodata.Nbase,iodata.tilesz,barr,carr,coh,M,Mt,Data::DoDiag,Data::Nt);
+     /* not enabled anymore */
+     //calculate_diagnostics(iodata.u,iodata.v,iodata.w,p,iodata.xo,iodata.N,iodata.Nbase,iodata.tilesz,barr,carr,coh,M,Mt,Data::DoDiag,Data::Nt);
     }
 #endif /* HAVE_CUDA */
     /****************** end diagnostics **************************/
