@@ -221,7 +221,7 @@ calculate_residuals_multifreq_withbeam_gpu(double *u,double *v,double *w,double 
     if model has n0>20 or so, try increasing this and recompiling
    the default GPU values is ~ 8MB */
 #ifndef GPU_HEAP_SIZE
-#define GPU_HEAP_SIZE 20 
+#define GPU_HEAP_SIZE 32 
 #endif
 
 extern void
