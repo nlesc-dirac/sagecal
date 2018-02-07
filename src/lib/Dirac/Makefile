@@ -1,6 +1,6 @@
 CC=gcc
 CXX=g++
-CFLAGS= -Wall -g -pg
+CFLAGS= -Wall -g #-pg
 # Extra args for making callgraphs.
 # CFLAGS= -Wall -pg -O2 -ansi -fPIC -fpermissive -fno-omit-frame-pointer -DNDEBUG -fno-inline-functions -fno-inline-functions-called-once -fno-optimize-sibling-calls
 # CFLAGS= -Wall -O3 -fopt-info-optimized
