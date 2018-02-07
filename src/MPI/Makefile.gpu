@@ -1,8 +1,10 @@
 OUTPUT=
 CXX=/software/users/yatawatta/openmpi/bin/mpic++
 CXXFLAGS=-O3 -Wall -g -DHAVE_CUDA
-CASA_LIBDIR=/software/users/lofarsoft/software_dawn/local/casacore/lib
-CASA_INCDIR=-I/software/users/lofarsoft/software_dawn/local/casacore/include/ -I/software/users/lofarsoft/software_dawn/local/casacore/include/casacore
+#CASA_LIBDIR=/software/users/lofarsoft/software_dawn/local/casacore/lib
+CASA_LIBDIR=/software/users/lofarsoft/dawn/software_06NOV2017/local/casacore/lib
+#CASA_INCDIR=-I/software/users/lofarsoft/software_dawn/local/casacore/include/ -I/software/users/lofarsoft/software_dawn/local/casacore/include/casacore
+CASA_INCDIR=-I/software/users/lofarsoft/dawn/software_06NOV2017/local/casacore/include/ -I/software/users/lofarsoft/dawn/software_06NOV2017/local/casacore/include/casacore
 CASA_LIBS=-lcasa_casa -lcasa_tables -lcasa_measures -lcasa_ms -lcfitsio -lhdf5 -lcasa_scimath_f -lcasa_scimath
 #LAPACK=-llapack -lblas
 #LAPACK=-lgoto2 -lgfortran -lpthread
@@ -16,7 +18,7 @@ CUDALIB=-L/usr/local/cuda/lib64 -lcuda -lcudart -lcublas -lcusolver
 NVML_INC=/usr/include/nvidia/gdk/
 NVML_LIB=-lnvidia-ml -L/usr/lib64/nvidia/
 
-LDFLAGS=-Wl,--rpath,/home/users/yatawatta/extern/lib,--rpath,/software/users/lofarsoft/software_dawn/local/lib64,--rpath,/software/users/lofarsoft/software_dawn/local/casacore/lib,--rpath,/usr/local/cuda/lib64/
+LDFLAGS=-Wl,--rpath,/home/users/yatawatta/extern/lib,--rpath,/software/users/lofarsoft/dawn/local/lib64,--rpath,/software/users/lofarsoft/dawn/software_06NOV2017/local/casacore/lib,--rpath,/usr/local/cuda/lib64/,--rpath,/software/users/lofarsoft/dawn/software_06NOV2017/local/lib
 
 MY_LIBS=-lm -lradio -ldirac
 INCLUDES=-I. -I../lib/Dirac -I../lib/Radio $(CASA_INCDIR) -I/usr/include  $(CUDAINC) -I$(NVML_INC)
