@@ -1935,32 +1935,6 @@ double ph_ra0, double ph_dec0, double ph_freq0, double *longitude, double *latit
 extern int
 precess_source_locations(double jd_tdb, clus_source_t *carr, int M, double *ra_beam, double *dec_beam, int Nt);
 
-/****************************** predict_withbeam_gpu.c ****************************/
-/* if dobeam==0, beam calculation is off */
-extern int
-precalculate_coherencies_withbeam_gpu(double *u, double *v, double *w, complex double *x, int N,
-   int Nbase, baseline_t *barr,  clus_source_t *carr, int M, double freq0, double fdelta, double tdelta, double dec0, double uvmin, double uvmax, 
- double ph_ra0, double ph_dec0, double ph_freq0, double *longitude, double *latitude, double *time_utc, int tileze, int *Nelem, double **xx, double **yy, double **zz, int dobeam, int Nt);
-
-extern int
-predict_visibilities_multifreq_withbeam_gpu(double *u,double *v,double *w,double *x,int N,int Nbase,int tilesz,baseline_t *barr, clus_source_t *carr, int M,double *freqs,int Nchan, double fdelta,double tdelta, double dec0,
- double ph_ra0, double ph_dec0, double ph_freq0, double *longitude, double *latitude, double *time_utc,int *Nelem, double **xx, double **yy, double **zz, int dobeam, int Nt, int add_to_data);
-
-
-
-/****************************** predict_model.cu ****************************/
-extern void
-cudakernel_array_beam(int N, int T, int K, int F, float *freqs, float *longitude, float *latitude,
- double *time_utc, int *Nelem, float **xx, float **yy, float **zz, float *ra, float *dec, float ph_ra0, float  ph_dec0, float ph_freq0, float *beam);
-
-
-extern void
-cudakernel_coherencies(int B, int N, int T, int K, int F, float *u, float *v, float *w,baseline_t *barr, float *freqs, float *beam, float *ll, float *mm, float *nn, float *sI,
-  unsigned char *stype, float *sI0, float *f0, float *spec_idx, float *spec_idx1, float *spec_idx2, int **exs, float deltaf, float deltat, float dec0, float *coh,int dobeam);
-
-
-extern void
-cudakernel_convert_time(int T, double *time_utc);
 #ifdef __cplusplus
      } /* extern "C" */
 #endif

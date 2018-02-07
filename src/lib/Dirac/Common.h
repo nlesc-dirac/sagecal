@@ -404,6 +404,35 @@ typedef struct thread_data_findsumprod_ {
   float sum2; /* y^T |x| */
 } thread_data_findsumprod_t;
 
+/******* some common routines that need to be moved - FIXME **********/
+/****************************** readsky.c ****************************/
+/* rearranges coherencies for GPU use later */
+/* barr: 2*Nbase x 1
+ *    coh: M*Nbase*4 x 1 complex
+ *       ddcoh: M*Nbase*8 x 1
+ *          ddbase: 2*Nbase x 1 (sta1,sta2) = -1 if flagged
+ *          */
+extern int
+rearrange_coherencies(int Nbase, baseline_t *barr, complex double *coh, double *ddcoh, short *ddbase, int M, int Nt);
+
+/* rearranges baselines for GPU use later */
+/* barr: 2*Nbase x 1
+ *    ddbase: 2*Nbase x 1
+ *    */
+extern int
+rearrange_baselines(int Nbase, baseline_t *barr, short *ddbase, int Nt);
+
+/* cont how many baselines contribute to each station */
+extern int
+count_baselines(int Nbase, int N, float *iw, short *ddbase, int Nt);
+
+/* initialize array b (size Nx1) to given value a */
+#ifdef USE_MIC
+__attribute__ ((target(MIC)))
+#endif
+extern void
+setweights(int N, double *b, double a, int Nt);
+
 #ifdef __cplusplus
      } /* extern "C" */
 #endif

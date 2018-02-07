@@ -26,13 +26,15 @@ INCLUDES= -I. -I$(CUDAINC) -I$(NVML_INC) -I../Dirac
 LIBPATH= $(CUDALIB)
 
 
-OBJECTS=readsky.o predict.o transforms.o stationbeam.o predict_withbeam.o predict_withbeam_gpu.o predict_model.o predict_model_device.o
+OBJECTS=readsky.o predict.o residual.o transforms.o stationbeam.o predict_withbeam.o predict_withbeam_gpu.o predict_model.o
 
 
 default:libradio.a
 readsky.o:readsky.c
 	$(CC) $(CFLAGS) $(INCLUDES) $(GLIBI)  -c $<
 predict.o:predict.c
+	$(CC) $(CFLAGS) $(INCLUDES) $(GLIBI)  -c $<
+residual.o:residual.c
 	$(CC) $(CFLAGS) $(INCLUDES) $(GLIBI)  -c $<
 transforms.o:transforms.c
 	$(CC) $(CFLAGS) $(INCLUDES) $(GLIBI)  -c $<
@@ -42,11 +44,8 @@ predict_withbeam.o:predict_withbeam.c
 	$(CC) $(CFLAGS) $(INCLUDES) $(GLIBI)  -c $<
 predict_withbeam_gpu.o:predict_withbeam_gpu.c
 	$(CC) $(CFLAGS) $(INCLUDES) $(GLIBI)  -c $<
-## for dynamic parallelism, two stage compilation
-predict_model.o:predict_model_device.o
-	$(NVCC) $(NVCFLAGS) -lineinfo -dlink $(INCLUDES) $(GLIBI) -o $@ $<
-predict_model_device.o:predict_model.cu
-	$(NVCC) $(NVCFLAGS) -lineinfo -rdc=true $(INCLUDES) $(GLIBI) -o $@ -c $<
+predict_model.o:predict_model.cu
+	$(NVCC) $(NVCFLAGS) $(INCLUDES) $(GLIBI) -o $@ -c $<
 
 
 RANLIB=ranlib

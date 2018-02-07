@@ -24,6 +24,7 @@
 #include <stdlib.h>
 #include <pthread.h>
 #include "Radio.h"
+#include "Dirac.h"
 
 /******************** shapalet stuff **********************/
 /* evaluate Hermite polynomial value using recursion

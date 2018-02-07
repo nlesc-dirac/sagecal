@@ -212,29 +212,9 @@ precalculate_coherencies(double *u, double *v, double *w, complex double *x, int
    ddcoh: M*Nbase*8 x 1
    ddbase: 2*Nbase x 1 (sta1,sta2) = -1 if flagged
 */
-extern int
-rearrange_coherencies(int Nbase, baseline_t *barr, complex double *coh, double *ddcoh, short *ddbase, int M, int Nt);
 /* ddbase: 3*Nbase x 1 (sta1,sta2,flag) */
 extern int
 rearrange_coherencies2(int Nbase, baseline_t *barr, complex double *coh, double *ddcoh, short *ddbase, int M, int Nt);
-
-/* rearranges baselines for GPU use later */
-/* barr: 2*Nbase x 1
-   ddbase: 2*Nbase x 1
-*/
-extern int
-rearrange_baselines(int Nbase, baseline_t *barr, short *ddbase, int Nt);
-
-/* cont how many baselines contribute to each station */
-extern int
-count_baselines(int Nbase, int N, float *iw, short *ddbase, int Nt);
-
-/* initialize array b (size Nx1) to given value a */
-#ifdef USE_MIC
-__attribute__ ((target(MIC)))
-#endif
-extern void
-setweights(int N, double *b, double a, int Nt);
 
 /* update baseline flags, also make data zero if flagged
   this is needed for solving (calculate error) ignore flagged data */
