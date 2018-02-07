@@ -30,7 +30,8 @@
 #include <cstring>
 #include <iostream>
 
-#include<sagecal.h>
+#include <Dirac.h>
+#include <Radio.h>
 #include <mpi.h>
 
 using namespace std;
@@ -175,7 +176,11 @@ cout<<"Master received all "<<totalfiles<<" files"<<endl;
         MPI_Send(&nperH,1,MPI_INT,PP[cmi][nslave],TAG_MSNAME,MPI_COMM_WORLD);
         //keep track of MS id ranges sent to each slave
         Sbegin[PP[cmi][nslave]-1]=chost;
-        Scurrent[PP[cmi][nslave]-1]=random_int(nperH-1); /* relative offset, randomly initialized in 0,1..,nperH-1 */
+        if (Data::randomize) {
+         Scurrent[PP[cmi][nslave]-1]=random_int(nperH-1); /* relative offset, randomly initialized in 0,1..,nperH-1 */
+        } else {
+         Scurrent[PP[cmi][nslave]-1]=0; /* relative offset, always 0 */
+        }
         Send[PP[cmi][nslave]-1]=chost+nperH-1;
         for (int ch=0; ch<nperH; ch++) {
           MPI_Send((*mp).c_str(),(*mp).length(),MPI_CHAR,PP[cmi][nslave],TAG_MSNAME,MPI_COMM_WORLD);
@@ -541,7 +546,7 @@ cout<<"Reference frequency (MHz)="<<iodata.freq0*1.0e-6<<endl;
          }
 
          if (admm==0) {
-           calculate_manifold_average(iodata.N,iodata.M,iodata.Nms,Y,20,Data::Nt);
+           calculate_manifold_average(iodata.N,iodata.M,iodata.Nms,Y,20,Data::randomize,Data::Nt);
           /* send updated Y back to each slave (for all MS) */
           for(int cm=0; cm<nslaves; cm++) {
            if (Sbegin[cm]>=0) {
