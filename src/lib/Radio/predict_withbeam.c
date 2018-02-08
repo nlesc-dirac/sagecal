@@ -23,7 +23,6 @@
 #include <unistd.h>
 #include <stdlib.h>
 #include <pthread.h>
-#include "Dirac.h" /* for extract_phases() */
 #include "Radio.h"
 
 /* worker thread function for precalculation*/
