@@ -29,6 +29,7 @@ typedef struct thread_data_manavg_ {
  int N;
  int M;
  int Nf;
+ int randomize;
 } thread_data_manavg_t;
 
 /* worker thread function for manifold average+projection */
@@ -94,7 +95,12 @@ manifold_average_threadfn(void *data) {
 
    }
    /* first averaging, select random block in [0,Nf-1] to project to */
-   int cr=rand()%(t->Nf); /* remainder always in [0,Nf-1] */
+   int cr; /* remainder always in [0,Nf-1] */
+   if (t->randomize) {
+    cr=rand()%(t->Nf); /* remainder always in [0,Nf-1] */
+   } else {
+    cr=0;
+   }
    /* J3 <= cr th  block */
    my_ccopy(t->N*4,&Yc[cr*t->N*4],1,J3,1);
    /* project the remainder */
@@ -194,7 +200,7 @@ manifold_average_threadfn(void *data) {
 }
 
 int
-calculate_manifold_average(int N,int M,int Nf,double *Y,int Niter,int Nt) {
+calculate_manifold_average(int N,int M,int Nf,double *Y,int Niter,int randomize,int Nt) {
  /* Y : each 2Nx2xM blocks belong to one freq,
    select one 2Nx2 from this, reorder to J format : Nf blocks
    and average */
@@ -233,6 +239,7 @@ calculate_manifold_average(int N,int M,int Nf,double *Y,int Niter,int Nt) {
     threaddata[nth].Niter=Niter;
     threaddata[nth].startM=ci;
     threaddata[nth].endM=ci+Nthb-1;
+    threaddata[nth].randomize=randomize;
     
     pthread_create(&th_array[nth],&attr,manifold_average_threadfn,(void*)(&threaddata[nth]));
     ci=ci+Nthb;

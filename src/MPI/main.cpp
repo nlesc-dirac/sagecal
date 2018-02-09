@@ -25,7 +25,8 @@
 #include <string.h>
 #include <pthread.h>
 
-#include<sagecal.h>
+#include <Dirac.h>
+#include <Radio.h>
 #include <mpi.h>
 
 using namespace std;
@@ -59,7 +60,9 @@ print_help(void) {
    cout << "-n no of worker threads : default "<<Data::Nt << endl;
    cout << "-t tile size : default " <<Data::TileSize<< endl;
    cout << "-B 0,1 : if 1, predict array beam: default " <<Data::doBeam<< endl;
-   cout << "-E 0,1 : if 1, use GPU for model computing: default " <<Data::GPUpredict<< endl;
+#ifdef HAVE_CUDA
+   cout << "-E 0,1 : if >0, use GPU for model computing: default " <<Data::GPUpredict<< endl;
+#endif
    cout << "-A ADMM iterations: default " <<Data::Nadmm<< endl;
    cout << "-P consensus polynomial terms: default " <<Data::Npoly<< endl;
    cout << "-Q consensus polynomial type (0,1,2,3): default " <<Data::PolyType<< endl;
@@ -77,6 +80,9 @@ print_help(void) {
    cout << "-H robust nu, upper bound: default "<<Data::nuhigh<< endl;
    cout << "-W pre-whiten data: default "<<Data::whiten<< endl;
    cout << "-R randomize iterations: default "<<Data::randomize<< endl;
+#ifdef HAVE_CUDA
+   cout << "-S GPU heap size (MB): default "<<Data::heapsize<< endl;
+#endif
    cout << "-T stop after this number of solutions (0 means no limit): default "<<Data::Nmaxtime<< endl;
    cout << "-K skip this number of solutions before starting calibration: default "<<Data::Nskip<< endl;
    cout << "Note: if -K a -T b, then calibration will start at 'a' and end at 'b', so b > a always."<<endl;
@@ -91,7 +97,7 @@ print_help(void) {
 void 
 ParseCmdLine(int ac, char **av) {
     char c;
-    while((c=getopt(ac, av, "c:e:f:g:j:k:l:m:n:o:p:q:r:s:t:x:y:A:B:C:E:F:I:J:K:L:O:P:Q:G:H:R:T:W:E:MVh"))!= -1)
+    while((c=getopt(ac, av, "c:e:f:g:j:k:l:m:n:o:p:q:r:s:t:x:y:A:B:C:E:F:I:J:K:L:O:P:Q:G:H:R:S:T:W:E:MVh"))!= -1)
     {
         switch(c)
         {
@@ -195,6 +201,11 @@ ParseCmdLine(int ac, char **av) {
             case 'C': 
                 aadmm= atoi(optarg);
                 break;
+#ifdef HAVE_CUDA
+            case 'S': 
+                heapsize= atoi(optarg);
+                break;
+#endif
             case 'x': 
                 Data::min_uvcut= atof(optarg);
                 break;
@@ -238,7 +249,6 @@ ParseCmdLine(int ac, char **av) {
      exit(1);
     }
 }
-
 
 /* real main program */
 int

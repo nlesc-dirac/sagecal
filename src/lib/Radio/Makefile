@@ -1,7 +1,7 @@
 CC=gcc
 CXX=g++
-#CFLAGS= -Wall -O3 -g #-pg
-CFLAGS= -Wall -O3 -fopt-info-optimized
+CFLAGS= -Wall -O3 -g #-pg
+#CFLAGS= -Wall -O3 -fopt-info-optimized
 # CFLAGS= -Wall -pg -O2 -ansi -fPIC -fpermissive -fno-omit-frame-pointer -DNDEBUG -fno-inline-functions -fno-inline-functions-called-once -fno-optimize-sibling-calls
 CLIBS= -lm -lpthread
 #LAPACK=-L/usr/lib/atlas/sse -llapack -lblas

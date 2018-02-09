@@ -1,6 +1,6 @@
 CC=gcc
 CXX=g++
-CFLAGS= -Wall -g -pg
+CFLAGS= -Wall -g #-pg
 # Extra args for making callgraphs.
 # CFLAGS= -Wall -pg -O2 -ansi -fPIC -fpermissive -fno-omit-frame-pointer -DNDEBUG -fno-inline-functions -fno-inline-functions-called-once -fno-optimize-sibling-calls
 # CFLAGS= -Wall -O3 -fopt-info-optimized
@@ -17,7 +17,7 @@ LIBPATH=
 GLIBI=-I/usr/include/glib-2.0 -I/usr/lib/glib-2.0/include -I/usr/lib/x86_64-linux-gnu/glib-2.0/include/ -I/usr/lib64/glib-2.0/include
 GLIBL=-lglib-2.0
 
-OBJECTS= lmfit_nocuda.o clmfit_nocuda.o lbfgs_nocuda.o myblas.o robustlm.o updatenu.o robust_lbfgs_nocuda.o rtr_solve.o  rtr_solve_robust.o manifold_average.o consensus_poly.o rtr_solve_robust_admm.o admm_solve.o
+OBJECTS= lmfit_nocuda.o clmfit_nocuda.o lbfgs_nocuda.o myblas.o robustlm.o updatenu.o robust_lbfgs_nocuda.o rtr_solve.o  rtr_solve_robust.o manifold_average.o consensus_poly.o rtr_solve_robust_admm.o admm_solve.o mdl.o
 
 default:libdirac.a
 lmfit_nocuda.o:lmfit_nocuda.c
@@ -45,6 +45,8 @@ consensus_poly.o:consensus_poly.c
 rtr_solve_robust_admm.o:rtr_solve_robust_admm.c
 	$(CC) $(CFLAGS) $(INCLUDES) $(GLIBI)  -c $<
 admm_solve.o:admm_solve.c
+	$(CC) $(CFLAGS) $(INCLUDES) $(GLIBI)  -c $<
+mdl.o:mdl.c
 	$(CC) $(CFLAGS) $(INCLUDES) $(GLIBI)  -c $<
 
 

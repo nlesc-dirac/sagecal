@@ -517,7 +517,7 @@ rtr_solve_cuda_robust_admm_fl(
 
   /* calculate no of cuda threads and blocks */
   int ThreadsPerBlock=DEFAULT_TH_PER_BK;
-  int BlocksPerGrid= 2*(M+ThreadsPerBlock-1)/ThreadsPerBlock;
+  int BlocksPerGrid=(M+ThreadsPerBlock-1)/ThreadsPerBlock;
 
 
   /* reshape x to make J: 2Nx2 complex double 
@@ -947,7 +947,7 @@ nsd_solve_cuda_robust_admm_fl(
 
   /* calculate no of cuda threads and blocks */
   int ThreadsPerBlock=DEFAULT_TH_PER_BK;
-  int BlocksPerGrid= 2*(M+ThreadsPerBlock-1)/ThreadsPerBlock;
+  int BlocksPerGrid=(M+ThreadsPerBlock-1)/ThreadsPerBlock;
 
 
   /* reshape x to make J: 2Nx2 complex double 

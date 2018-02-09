@@ -32,7 +32,8 @@
 #include <glob.h>
 
 
-#include<sagecal.h>
+#include <Dirac.h>
+#include <Radio.h>
 #include <mpi.h>
 
 #ifndef LMCUT
@@ -456,6 +457,17 @@ cout<<"Slave "<<myrank<<" has nothing to do"<<endl;
 
     double inv_c=1.0/CONST_C;
 
+#ifdef HAVE_CUDA
+   /* setup Heap of GPU,  only need to be done once, before any kernel is launched  */
+    if (GPUpredict>0) {
+     for (int gpuid=0; gpuid<=MAX_GPU_ID; gpuid++) {
+        cudaSetDevice(gpuid);
+        cudaDeviceSetLimit(cudaLimitMallocHeapSize, Data::heapsize*1024*1024);
+     }
+    }
+#endif
+
+
     while(1) {
      start_time = time(0);
      /* get start/end signal from master */
@@ -828,6 +840,17 @@ cout<<myrank<<" : "<<cm<<": downweight ratio ("<<iodata_vec[cm].fratio<<") based
       cout<<myrank<< ": Timeslot: "<<tilex<<" residual MS "<<cm<<": initial="<<res_00[cm]<<"/"<<res_0vec[cm]<<",final="<<res_01[cm]<<"/"<<res_1vec[cm]<<", Time spent="<<elapsed_time<<" minutes"<<endl;
      }
     }
+
+#ifdef HAVE_CUDA
+   /* if -E uses a large value ~say 100, at each multiple of this, clear GPU memory */
+   if (GPUpredict>1 && tilex>0 && !(tilex%GPUpredict)) {
+    for (int gpuid=0; gpuid<=MAX_GPU_ID; gpuid++) {
+       cudaSetDevice(gpuid);
+       cudaDeviceReset();
+       cudaDeviceSetLimit(cudaLimitMallocHeapSize, Data::heapsize*1024*1024);
+    }
+   }
+#endif
 
      /* now send to master signal that we are ready for next data chunk */
      if (start_iter==1) {

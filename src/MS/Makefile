@@ -14,11 +14,11 @@ LAPACK=-lopenblas -lgfortran -lpthread
 LAPACK_DIR=/cm/shared/package/openblas/0.2.17mt/lib
 #LAPACK_DIR=/usr/lib/atlas/sse/
 
-LDFLAGS=-Wl,--rpath,/cm/shared/package/openblas/0.2.17mt/lib/,${CASA_LIBDIR}
+LDFLAGS=-Wl,--rpath,/cm/shared/package/openblas/0.2.17mt/lib/,--rpath,${CASA_LIBDIR}
 #LDFLAGS=-Wl,-t,--rpath,/software/users/lofareor/SW/lib64
 # -Wl,--hash-style=both
 
-MY_LIBS=-lm -ldirac -lsagecal
+MY_LIBS=-lm -lradio -ldirac
 INCLUDES=-I. -I../lib/Dirac -I../lib/Radio $(CASA_INCDIR) -I/usr/include
 LIBPATH=-L$(LAPACK_DIR) $(CASA_LIBDIR)  -L../lib/Dirac -L../lib/Radio
 
@@ -33,7 +33,7 @@ main.o:main.cpp
 	$(CXX) $(CXXFLAGS) $(INCLUDES) $(GLIBI) -c $<
 data.o:data.cpp data.h
 	$(CXX) $(CXXFLAGS) $(INCLUDES) $(GLIBI) -c $<
-sagecal:$(OBJECTS) ../lib/Radio/libsagecal.a ../lib/Dirac/libdirac.a 
+sagecal:$(OBJECTS) ../lib/Radio/libradio.a ../lib/Dirac/libdirac.a 
 	$(CXX) $(CXXFLAGS) $(LDFLAGS) $(INCLUDES) $(GLIBI) $(LIBPATH)  -o $@  $(OBJECTS) $(MY_LIBS) $(LAPACK) $(CASA_LIBS)  $(GLIBL)
 clean:
 	rm *.o *.tmp *.fits *.swp *.swo *.o *.output

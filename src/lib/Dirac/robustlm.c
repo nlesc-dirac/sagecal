@@ -159,7 +159,7 @@ rlevmar_der_single_cuda(
   int ThreadsPerBlock=DEFAULT_TH_PER_BK;
   int ThreadsPerBlock1=DEFAULT_TH_PER_BK; /* DEFAULT_TH_PER_BK/8 for accessing each element of a baseline */
   int ThreadsPerBlock2=Nd/2; /* for evaluating nu */
-  int BlocksPerGrid= 2*(M+ThreadsPerBlock-1)/ThreadsPerBlock;
+  int BlocksPerGrid=(M+ThreadsPerBlock-1)/ThreadsPerBlock;
 
 
   unsigned long int moff;
@@ -196,7 +196,7 @@ rlevmar_der_single_cuda(
   checkCudaError(err,__FILE__,__LINE__);
   err=cudaMalloc((void**)&ed, N*sizeof(double));
   checkCudaError(err,__FILE__,__LINE__);
-  /* memory allocation: different dirac */
+  /* memory allocation: different solvers */
   if (solve_axb==1) {
     err=cudaMalloc((void**)&taud, M*sizeof(double));
     checkCudaError(err,__FILE__,__LINE__);
@@ -805,7 +805,7 @@ rlevmar_der_single_cuda_fl(
   /* FIXME: might need a large value for large no of baselines */
   int ThreadsPerBlock1=DEFAULT_TH_PER_BK; /* for accessing each element of a baseline */
   int ThreadsPerBlock2=Nd/2; /* for evaluating nu */
-  int BlocksPerGrid= 2*(M+ThreadsPerBlock-1)/ThreadsPerBlock;
+  int BlocksPerGrid=(M+ThreadsPerBlock-1)/ThreadsPerBlock;
 
 
   unsigned long int moff;
@@ -1382,7 +1382,7 @@ osrlevmar_der_single_cuda_fl(
   /* FIXME: might need a large value for large no of baselines */
   int ThreadsPerBlock1=DEFAULT_TH_PER_BK; /* for accessing each element of a baseline */
   int ThreadsPerBlock2=Nd/2; /* for evaluating nu */
-  int BlocksPerGrid= 2*(M+ThreadsPerBlock-1)/ThreadsPerBlock;
+  int BlocksPerGrid=(M+ThreadsPerBlock-1)/ThreadsPerBlock;
 
 
   unsigned long int moff;
@@ -2180,7 +2180,7 @@ rlevmar_der_single_nocuda(
   setweights(M,aones,1.0,lmdata->Nt);
   /*W set initial weights to 1 */
   setweights(N,wtd,1.0,lmdata->Nt);
-  /* memory allocation: different dirac */
+  /* memory allocation: different solvers */
   if (solve_axb==0) {
 
   } else if (solve_axb==1) {
@@ -2766,7 +2766,7 @@ osrlevmar_der_single_nocuda(
   /*W set initial weights to 1 */
   setweights(N,wtd,1.0,lmdata0->Nt);
 
-  /* memory allocation: different dirac */
+  /* memory allocation: different solvers */
   if (solve_axb==0) {
 
   } else if (solve_axb==1) {

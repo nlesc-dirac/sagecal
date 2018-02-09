@@ -17,8 +17,8 @@
  $Id$
  */
 
-#ifndef SAGECAL_H
-#define SAGECAL_H
+#ifndef RADIO_H
+#define RADIO_H
 #ifdef __cplusplus
         extern "C" {
 #endif
@@ -93,7 +93,195 @@
 #define CLM_DBL_MAX       1E12    /* max double value */
 
 #include <Common.h>
-// #include <Removed-from-Radio.h>
+
+/****************************** readsky.c ****************************/
+/* read sky/cluster files, 
+   carr:  return array size Mx1 of clusters
+   M : no of clusters
+   freq0: obs frequency Hz
+   ra0,dec0 : ra,dec of phase center (radians)
+   format: 0: LSM, 1: LSM with 3 order spec index
+   each element has source infor for that cluster */
+extern int
+read_sky_cluster(const char *skymodel, const char *clusterfile, clus_source_t **carr, int *M, double freq0, double ra0, double dec0,int format);
+
+/* read solution file, only a set of solutions and load to p
+  sfp: solution file pointer
+  p: solutions vector Mt x 1
+  carr: for getting correct offset in p
+  N : stations 
+  M : clusters
+*/
+extern int
+read_solutions(FILE *sfp,double *p,clus_source_t *carr,int N,int M);
+
+/* set ignlist[ci]=1 if 
+  cluster id 'cid' is mentioned in ignfile and carr[ci].id==cid
+*/
+extern int
+update_ignorelist(const char *ignfile, int *ignlist, int M, clus_source_t *carr);
+
+/* read ADMM regularization factor per cluster from text file, format:
+ cluster_id  hybrid_parameter admm_rho
+ ...
+ ...
+ (M values)
+ and store it in array arho : size Mtx1, taking into account the hybrid parameter
+ also in array arhoslave : size Mx1, without taking hybrid params into account
+
+ admm_rho : can be 0 to ignore consensus, just normal calibration
+*/
+
+extern int
+read_arho_fromfile(const char *admm_rho_file,int Mt,double *arho, int M, double *arhoslave);
+
+/****************************** predict.c ****************************/
+/************* extended source contributions ************/
+extern complex double
+shapelet_contrib(void*dd, double u, double v, double w);
+
+extern complex double
+gaussian_contrib(void*dd, double u, double v, double w);
+
+extern complex double
+ring_contrib(void*dd, double u, double v, double w);
+
+extern complex double
+disk_contrib(void*dd, double u, double v, double w);
+
+
+/* time smearing TMS eq. 6.80 for EW-array formula 
+  note u,v,w: meter/c so multiply by freq. to get wavelength 
+  ll,mm: source
+  dec0: phase center declination
+  tdelta: integration time */
+extern double
+time_smear(double ll,double mm,double dec0,double tdelta,double u,double v,double w,double freq0);
+
+/* predict visibilities
+  u,v,w: u,v,w coordinates (wavelengths) size Nbase*tilesz x 1 
+  u,v,w are ordered with baselines, timeslots
+  x: data to write size Nbase*8*tileze x 1
+   ordered by XX(re,im),XY(re,im),YX(re,im), YY(re,im), baseline, timeslots
+  N: no of stations
+  Nbase: no of baselines
+  tilesz: tile size
+  barr: baseline to station map, size Nbase*tilesz x 1
+  carr: sky model/cluster info size Mx1 of clusters
+  M: no of clusters
+  freq0: frequency
+  fdelta: bandwidth for freq smearing
+  tdelta: integration time for time smearing
+  dec0: declination for time smearing
+  Nt: no of threads
+*/
+extern int
+predict_visibilities(double *u, double *v, double *w, double *x, int N,
+   int Nbase, int tilesz,  baseline_t *barr, clus_source_t *carr, int M, double freq0, double fdelta, double tdelta, double dec0, int Nt);
+
+/* precalculate cluster coherencies
+  u,v,w: u,v,w coordinates (wavelengths) size Nbase*tilesz x 1 
+  u,v,w are ordered with baselines, timeslots
+  x: coherencies size Nbase*4*Mx 1
+   ordered by XX(re,im),XY(re,im),YX(re,im), YY(re,im), baseline, timeslots
+  N: no of stations
+  Nbase: no of baselines (including more than one tile)
+  barr: baseline to station map, size Nbase*tilesz x 1
+  carr: sky model/cluster info size Mx1 of clusters
+  M: no of clusters
+  freq0: frequency
+  fdelta: bandwidth for freq smearing
+  tdelta: integration time for time smearing
+  dec0: declination for time smearing
+  uvmin: baseline length sqrt(u^2+v^2) below which not to include in solution
+  uvmax: baseline length higher than this not included in solution
+  Nt: no of threads
+
+  NOTE: prediction is done for all baselines, even flagged ones
+  and flags are set to 2 for baselines lower than uvcut
+*/
+extern int
+precalculate_coherencies(double *u, double *v, double *w, complex double *x, int N,
+   int Nbase, baseline_t *barr,  clus_source_t *carr, int M, double freq0, double fdelta, double tdelta, double dec0, double uvmin, double uvmax, int Nt);
+
+
+
+/* rearranges coherencies for GPU use later */
+/* barr: 2*Nbase x 1
+   coh: M*Nbase*4 x 1 complex
+   ddcoh: M*Nbase*8 x 1
+   ddbase: 2*Nbase x 1 (sta1,sta2) = -1 if flagged
+*/
+/* ddbase: 3*Nbase x 1 (sta1,sta2,flag) */
+extern int
+rearrange_coherencies2(int Nbase, baseline_t *barr, complex double *coh, double *ddcoh, short *ddbase, int M, int Nt);
+
+/* update baseline flags, also make data zero if flagged
+  this is needed for solving (calculate error) ignore flagged data */
+/* Nbase: total actual data points = Nbasextilesz
+   flag: flag array Nbasex1
+   barr: baseline array Nbasex1
+   x: data Nbase*8 x 1 ( 8 value per baseline ) 
+   Nt: no of threads 
+*/
+extern int
+preset_flags_and_data(int Nbase, double *flag, baseline_t *barr, double *x, int Nt);
+
+/* generte baselines -> sta1,sta2 pairs for later use */
+/* barr: Nbasextilesz
+   N : stations
+   Nt : threads 
+*/
+extern int
+generate_baselines(int Nbase, int tilesz, int N, baseline_t *barr,int Nt);
+
+/****************************** transforms.c ****************************/
+#ifndef ASEC2RAD
+#define ASEC2RAD 4.848136811095359935899141e-6
+#endif
+
+/* 
+ convert xyz ITRF 2000 coords (m) to
+ long,lat, (rad) height (m)
+ References:
+*/
+extern int
+xyz2llh(double *x, double *y, double *z, double *longitude, double *latitude, double *height, int N);
+
+/* convert ra,dec to az,el
+   ra,dec: radians
+   longitude,latitude: rad,rad 
+   time_jd: JD days
+
+   az,el: output  rad,rad
+
+References: Darin C. Koblick MATLAB code, based on
+  % Fundamentals of Astrodynamics and Applications 
+ % D. Vallado, Second Edition
+ % Example 3-5. Finding Local Siderial Time (pg. 192) 
+ % Algorithm 28: AzElToRaDec (pg. 259)
+*/
+extern int
+radec2azel(double ra, double dec, double longitude, double latitude, double time_jd, double *az, double *el);
+
+/* convert time to Greenwitch Mean Sideral Angle (deg)
+   time_jd : JD days
+   thetaGMST : GMST angle (deg)
+*/
+extern int
+jd2gmst(double time_jd, double *thetaGMST);
+
+
+/* convert ra,dec to az,el
+   ra,dec: radians
+   longitude,latitude: rad,rad 
+   thetaGMST : GMST angle (deg)
+
+   az,el: output  rad,rad
+
+*/
+extern int
+radec2azel_gmst(double ra, double dec, double longitude, double latitude, double thetaGMST, double *az, double *el);
 
 /* given the epoch jd_tdb2, 
  calculate rotation matrix params needed to precess from J2000 
@@ -221,7 +409,7 @@ calculate_residuals_multifreq_withbeam_gpu(double *u,double *v,double *w,double 
     if model has n0>20 or so, try increasing this and recompiling
    the default GPU values is ~ 8MB */
 #ifndef GPU_HEAP_SIZE
-#define GPU_HEAP_SIZE 20 
+#define GPU_HEAP_SIZE 32 
 #endif
 
 extern void
@@ -332,4 +520,4 @@ predict_visibilities_multifreq_withsol(double *u,double *v,double *w,double *p,d
 #ifdef __cplusplus
      } /* extern "C" */
 #endif
-#endif /* SAGECAL_H */
+#endif /* RADIO_H */

@@ -22,9 +22,12 @@ Alternatively, create these files by hand according to the following formats.
 ###2b)Cluster file format:
 cluster_id chunk_size source1 source2 ...
 e.g.
+'''
 
 0 1 P0C1 P0C2
 2 3 P11C2 P11C1 P13C1
+
+'''
 
 Note: putting -ve values for cluster_id will not subtract them from data.
 chunk_size: find hybrid solutions during one solve run. Eg. if -t 120 is used 

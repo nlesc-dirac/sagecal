@@ -188,7 +188,7 @@ clevmar_der_single_nocuda(
   WORK=Ud=Sd=VTd=0;
   me_data_t *dt=(me_data_t*)adata;
   setweights(M,aones,1.0,dt->Nt);
-  /* memory allocation: different dirac */
+  /* memory allocation: different solvers */
   if (solve_axb==0) {
 
   } else if (solve_axb==1) {
@@ -739,7 +739,7 @@ mlm_der_single(
 #endif
       exit(1);
   }
-  /* memory allocation: different dirac */
+  /* memory allocation: different solvers */
   if (solve_axb==1) {
     /* QR solver ********************************/
     /* workspace query */
@@ -1221,7 +1221,7 @@ oslevmar_der_single_nocuda(
   me_data_t *dt=(me_data_t*)adata;
   setweights(M,aones,1.0,dt->Nt);
 
-  /* memory allocation: different dirac */
+  /* memory allocation: different solvers */
   if (solve_axb==0) {
 
   } else if (solve_axb==1) {

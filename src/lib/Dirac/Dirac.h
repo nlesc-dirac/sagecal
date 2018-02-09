@@ -17,8 +17,8 @@
  $Id$
  */
 
-#ifndef SAGECAL_H
-#define SAGECAL_H
+#ifndef DIRAC_H
+#define DIRAC_H
 #ifdef __cplusplus
         extern "C" {
 #endif
@@ -1177,10 +1177,11 @@ random_permutation(int n, int weighted_iter, double *w);
    M: no of directions
    Nf: no of frequencies
    Niter: everaging iterations
+   randomize: if >0, use random starting point
    Nt: threads
 */
 extern int
-calculate_manifold_average(int N,int M,int Nf,double *Y,int Niter,int Nt);
+calculate_manifold_average(int N,int M,int Nf,double *Y,int Niter,int randomize,int Nt);
 
 
 /* find U to  minimize 
@@ -1196,14 +1197,6 @@ project_procrustes(int N,double *J,double *J1);
 extern int
 project_procrustes_block(int N,complex double *J,complex double *J1);
 
-
-/* Extract only the phase of diagonal entries from solutions 
-   p: 8Nx1 solutions, orders as [(real,imag)vec(J1),(real,imag)vec(J2),...]
-   pout: 8Nx1 phases (exp(j*phase)) of solutions, after joint diagonalization of p
-   N: no. of 2x2 Jones matrices in p, having common unitary ambiguity
-   niter: no of iterations for Jacobi rotation */
-extern int
-extract_phases(double *p, double *pout, int N, int niter);
 /****************************** consensus_poly.c ****************************/
 /* build matrix with polynomial terms
   B : Npoly x Nf, each row is one basis function
@@ -1217,6 +1210,17 @@ extract_phases(double *p, double *pout, int N, int niter);
 */
 extern int
 setup_polynomials(double *B, int Npoly, int Nf, double *freqs, double freq0, int type);
+
+/* build matrix with polynomial terms
+  B : Npoly x Nf, each row is one basis function
+  Bi: Npoly x Npoly pseudo inverse of sum( B(:,col) x B(:,col)' )
+  Npoly : total basis functions
+  Nf: frequencies
+  fratio: Nfx1 array of weighing factors depending on the flagged data of each freq
+  Sum taken is a weighted sum, using weights in fratio
+*/
+extern int
+find_prod_inverse(double *B, double *Bi, int Npoly, int Nf, double *fratio);
 
 /* build matrix with polynomial terms
   B : Npoly x Nf, each row is one basis function
@@ -1296,13 +1300,197 @@ sagefit_visibilities_admm_dual_pt_flt(double *u, double *v, double *w, double *x
 extern void
 openblas_set_num_threads(int num_threads);
 
+/********* solver modes *********/
+#define SM_LM_LBFGS 1
+#define SM_OSLM_LBFGS 0
+#define SM_OSLM_OSRLM_RLBFGS 3
+#define SM_RLM_RLBFGS 2
+#define SM_RTR_OSLM_LBFGS 4
+#define SM_RTR_OSRLM_RLBFGS 5
+#define SM_NSD_RLBFGS 6
+/* fit visibilities
+  u,v,w: u,v,w coordinates (wavelengths) size Nbase*tilesz x 1 
+  u,v,w are ordered with baselines, timeslots
+  x: data to write size Nbase*8*tileze x 1
+   ordered by XX(re,im),XY(re,im),YX(re,im), YY(re,im), baseline, timeslots
+  N: no of stations
+  Nbase: no of baselines
+  tilesz: tile size
+  barr: baseline to station map, size Nbase*tilesz x 1
+  carr: sky model/cluster info size Mx1 of clusters
+  coh: coherencies size Nbase*tilesz*4*M x 1
+  M: no of clusters
+  Mt: actual no of cluster/parameters (for hybrid solutions) Mt>=M
+  freq0: frequency
+  fdelta: bandwidth for freq smearing
+  pp: parameter array 8*N*M x1 double values (re,img) for each station/direction
+  uvmin: baseline length sqrt(u^2+v^2) below which not to include in solution
+  Nt: no. of threads
+  max_emiter: EM iterations
+  max_iter: iterations within a single EM 
+  max_lbfgs: LBFGS iterations (if>0 outside minimization will be LBFGS)
+  lbfgs_m: memory size for LBFGS
+  gpu_threads: GPU threads per block (LBFGS)
+  linsolv: (GPU/CPU versions) 0: Cholesky, 1: QR, 2: SVD
+  solver_mode:  0: OS-LM, 1: LM , 2: OS-Robust LM, 3: Robust LM, 4: OS-LM + RTR, 5: OS-LM, RTR, OS-Robust LM
+  nulow,nuhigh: robust nu search range
+  randomize: if >0, randomize cluster selection in SAGE and OS subset selection
+
+  mean_nu: output mean value of nu
+  res_0,res_1: initial and final residuals (output)
+  return val=0 if final residual< initial residual
+  return val=-1 if final residual>initial residual
+*/
+#ifdef USE_MIC
+__attribute__ ((target(MIC)))
+#endif
 extern int
-get_precession_params(double jd_tdb2, double Tr[9]);
-/* precess  ra0,dec0 at J2000
-   to ra,dec at epoch given by transform Tr
- using NOVAS library */
+sagefit_visibilities(double *u, double *v, double *w, double *x, int N, 
+   int Nbase, int tilesz,  baseline_t *barr, clus_source_t *carr, complex double *coh, int M, int Mt, double freq0, double fdelta, double *pp, double uvmin, int Nt,int max_emiter, int max_iter, int max_lbfgs, int lbfgs_m, int gpu_threads, int linsolv, int solver_mode, double nulow, double nuhigh, int randomize, double *mean_nu, double *res_0, double *res_1); 
+
+/* same as above, but uses 2 GPUS in the LM stage */
 extern int
-precession(double ra0, double dec0, double Tr[9], double *ra, double *dec);
+sagefit_visibilities_dual(double *u, double *v, double *w, double *x, int N, 
+   int Nbase, int tilesz,  baseline_t *barr, clus_source_t *carr, complex double *coh, int M, int Mt, double freq0, double fdelta, double *pp, double uvmin, int Nt,int max_emiter, int max_iter, int max_lbfgs, int lbfgs_m, int gpu_threads, int linsolv, double nulow, double nuhigh, int randomize,  double *mean_nu, double *res_0, double *res_1); 
+
+
+
+#ifdef USE_MIC
+/* wrapper function with bitwise copyable carr[] for MIC */
+/* nchunks: Mx1 array of chunk sizes for each cluster */
+/* pindex: Mt x 1 array of index of solutions for each cluster  in pp */
+__attribute__ ((target(MIC)))
+extern int
+sagefit_visibilities_mic(double *u, double *v, double *w, double *x, int N,
+   int Nbase, int tilesz,  baseline_t *barr,  int *nchunks, int *pindex, complex double *coh, int M, int Mt, double freq0, double fdelta, double *pp, double uvmin, int Nt, int max_emiter, int max_iter, int max_lbfgs, int lbfgs_m, int gpu_threads, int linsolv,int solver_mode,double nulow, double nuhigh,int randomize, double *mean_nu, double *res_0, double *res_1);
+
+__attribute__ ((target(MIC)))
+extern int
+bfgsfit_visibilities_mic(double *u, double *v, double *w, double *x, int N,
+   int Nbase, int tilesz,  baseline_t *barr,  int *nchunks, int *pindex, complex double *coh, int M, int Mt, double freq0, double fdelta, double *pp, double uvmin, int Nt, int max_lbfgs, int lbfgs_m, int gpu_threads, int solver_mode,double nu_mean, double *res_0, double *res_1);
+#endif
+
+
+/* BFGS only fit for multi channel data, interface same as sagefit_visibilities_xxx 
+  NO EM iterations are taken  */
+#ifdef USE_MIC
+__attribute__ ((target(MIC)))
+#endif
+extern int
+bfgsfit_visibilities(double *u, double *v, double *w, double *x, int N, 
+   int Nbase, int tilesz,  baseline_t *barr, clus_source_t *carr, complex double *coh, int M, int Mt, double freq0, double fdelta, double *pp, double uvmin, int Nt, int max_lbfgs, int lbfgs_m, int gpu_threads, int solver_mode, double mean_nu, double *res_0, double *res_1); 
+
+
+extern int
+bfgsfit_visibilities_gpu(double *u, double *v, double *w, double *x, int N, 
+   int Nbase, int tilesz,  baseline_t *barr,  clus_source_t *carr, complex double *coh, int M, int Mt, double freq0, double fdelta, double *pp, double uvmin, int Nt, int max_lbfgs, int lbfgs_m, int gpu_threads, int solver_mode,  double mean_nu, double *res_0, double *res_1); 
+
+
+
+
+
+#ifdef HAVE_CUDA
+/* data struct shared by all threads */
+typedef struct gb_data_ {
+  int status[2]; /* 0: do nothing, 
+              1: allocate GPU  memory, attach GPU
+              2: free GPU memory, detach GPU 
+              3,4..: do work on GPU 
+              99: reset GPU memory (memest all memory) */
+  double *p[2]; /* pointer to parameters being solved by each thread */
+  double *x[2]; /* pointer to data being fit by each thread */
+  int M[2];
+  int N[2];
+  int itermax[2];
+  double *opts[2];
+  double *info[2];
+  int linsolv;
+  me_data_t *lmdata[2]; /* two for each thread */
+
+  /* GPU related info */
+  cublasHandle_t cbhandle[2]; /* CUBLAS handles */
+  cusolverDnHandle_t solver_handle[2]; /* solver handle */
+  double *gWORK[2]; /* GPU buffers */
+  int64_t data_size; /* size of buffer (bytes) */
+
+  double nulow,nuhigh; /* used only in robust version */
+  int randomize; /* >0 for randomization */
+} gbdata;
+
+/* same as above, but using floats */
+typedef struct gb_data_fl_ {
+  int status[2]; /* 0: do nothing, 
+              1: allocate GPU  memory, attach GPU
+              3: free GPU memory, detach GPU 
+              3,4..: do work on GPU 
+              99: reset GPU memory (memest all memory) */
+  float *p[2]; /* pointer to parameters being solved by each thread */
+  float *x[2]; /* pointer to data being fit by each thread */
+  int M[2];
+  int N[2];
+  int itermax[2];
+  double *opts[2];
+  double *info[2];
+  int linsolv;
+  me_data_t *lmdata[2]; /* two for each thread */
+
+  /* GPU related info */
+  cublasHandle_t cbhandle[2]; /* CUBLAS handles */
+  cusolverDnHandle_t solver_handle[2]; /* solver handle */
+  float *gWORK[2]; /* GPU buffers */
+  int64_t data_size; /* size of buffer (bytes) */
+
+  double nulow,nuhigh; /* used only in robust version */
+  int randomize; /* >0 for randomization */
+} gbdatafl;
+
+/* for ADMM solver */
+typedef struct gb_data_admm_fl_ {
+  int status[2]; /* 0: do nothing, 
+              1: allocate GPU  memory, attach GPU
+              3: free GPU memory, detach GPU 
+              3,4..: do work on GPU 
+              99: reset GPU memory (memest all memory) */
+  float *p[2]; /* pointer to parameters being solved by each thread */
+  float *Y[2]; /* pointer to Lagrange multiplier */
+  float *Z[2]; /* pointer to consensus term */
+  float admm_rho[2];
+  float *x[2]; /* pointer to data being fit by each thread */
+  int M[2];
+  int N[2];
+  int itermax[2];
+  double *opts[2];
+  double *info[2];
+  int linsolv;
+  me_data_t *lmdata[2]; /* two for each thread */
+
+  /* GPU related info */
+  cublasHandle_t cbhandle[2]; /* CUBLAS handles */
+  cusolverDnHandle_t solver_handle[2]; /* solver handle */
+  float *gWORK[2]; /* GPU buffers */
+  int64_t data_size; /* size of buffer (bytes) */
+
+  double nulow,nuhigh; /* used only in robust version */
+  int randomize; /* >0 for randomization */
+} gbdatafl_admm;
+
+
+#endif /* !HAVE_CUDA */
+
+/* with 2 GPUs */
+extern int
+sagefit_visibilities_dual_pt(double *u, double *v, double *w, double *x, int N, 
+   int Nbase, int tilesz,  baseline_t *barr, clus_source_t *carr, complex double *coh, int M, int Mt, double freq0, double fdelta, double *pp, double uvmin, int Nt,int max_emiter, int max_iter, int max_lbfgs, int lbfgs_m, int gpu_threads, int linsolv, int solver_mode, double nulow, double nuhigh, int randomize, double *mean_nu, double *res_0, double *res_1); 
+
+/* with 1 GPU and 1 CPU thread */
+extern int
+sagefit_visibilities_dual_pt_one_gpu(double *u, double *v, double *w, double *x, int N,
+   int Nbase, int tilesz,  baseline_t *barr,  clus_source_t *carr, complex double *coh, int M, int Mt, double freq0, double fdelta, double *pp, double uvmin, int Nt, int max_emiter, int max_iter, int max_lbfgs, int lbfgs_m, int gpu_threads, int linsolv,int solver_mode,  double nulow, double nuhigh, int randomize, double *mean_nu, double *res_0, double *res_1);
+
+/* with mixed precision */
+extern int
+sagefit_visibilities_dual_pt_flt(double *u, double *v, double *w, double *x, int N,
+   int Nbase, int tilesz,  baseline_t *barr,  clus_source_t *carr, complex double *coh, int M, int Mt, double freq0, double fdelta, double *pp, double uvmin, int Nt, int max_emiter, int max_iter, int max_lbfgs, int lbfgs_m, int gpu_threads, int linsolv,int solver_mode,  double nulow, double nuhigh, int randomize, double *mean_nu, double *res_0, double *res_1);
 
 /****************************** stationbeam.c ****************************/
 /* 
@@ -1374,33 +1562,7 @@ double ph_ra0, double ph_dec0, double ph_freq0, double *longitude, double *latit
 extern int
 precess_source_locations(double jd_tdb, clus_source_t *carr, int M, double *ra_beam, double *dec_beam, int Nt);
 
-/****************************** predict_withbeam_gpu.c ****************************/
-/* if dobeam==0, beam calculation is off */
-extern int
-precalculate_coherencies_withbeam_gpu(double *u, double *v, double *w, complex double *x, int N,
-   int Nbase, baseline_t *barr,  clus_source_t *carr, int M, double freq0, double fdelta, double tdelta, double dec0, double uvmin, double uvmax, 
- double ph_ra0, double ph_dec0, double ph_freq0, double *longitude, double *latitude, double *time_utc, int tileze, int *Nelem, double **xx, double **yy, double **zz, int dobeam, int Nt);
-
-extern int
-predict_visibilities_multifreq_withbeam_gpu(double *u,double *v,double *w,double *x,int N,int Nbase,int tilesz,baseline_t *barr, clus_source_t *carr, int M,double *freqs,int Nchan, double fdelta,double tdelta, double dec0,
- double ph_ra0, double ph_dec0, double ph_freq0, double *longitude, double *latitude, double *time_utc,int *Nelem, double **xx, double **yy, double **zz, int dobeam, int Nt, int add_to_data);
-
-
-
-/****************************** predict_model.cu ****************************/
-extern void
-cudakernel_array_beam(int N, int T, int K, int F, float *freqs, float *longitude, float *latitude,
- double *time_utc, int *Nelem, float **xx, float **yy, float **zz, float *ra, float *dec, float ph_ra0, float  ph_dec0, float ph_freq0, float *beam);
-
-
-extern void
-cudakernel_coherencies(int B, int N, int T, int K, int F, float *u, float *v, float *w,baseline_t *barr, float *freqs, float *beam, float *ll, float *mm, float *nn, float *sI,
-  unsigned char *stype, float *sI0, float *f0, float *spec_idx, float *spec_idx1, float *spec_idx2, int **exs, float deltaf, float deltat, float dec0, float *coh,int dobeam);
-
-
-extern void
-cudakernel_convert_time(int T, double *time_utc);
 #ifdef __cplusplus
      } /* extern "C" */
 #endif
-#endif /* SAGECAL_H */
+#endif /* DIRAC_H */

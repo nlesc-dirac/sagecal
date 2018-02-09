@@ -206,7 +206,7 @@ __attribute__ ((target(MIC)))
 }
 
 
-/* following routines used in LAPACK dirac */
+/* following routines used in LAPACK solvers */
 /* cholesky factorization: real symmetric */
 int
 my_dpotrf(char uplo, int N, double *A, int lda) {

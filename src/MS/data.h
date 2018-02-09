@@ -165,5 +165,10 @@ namespace Data
     extern int verbose; /* if >0, enable verbose output */
     extern int mdl; /* if given, calculate AIC/MDL for different poly configs and find minimum */
     extern int GPUpredict; /* if given, use GPU for model calculation */
+    extern int heapsize; /* heap size in GPU (MB), for using malloc() */
+    /* for client server mode */
+    extern int servermode; /* 0: client, 1: server, else default operation */
+    extern char *servername; /* server host name or ip address */
+    extern char *portnumber; /* which port number to use for communication */
 }
 #endif //__DATA_H__

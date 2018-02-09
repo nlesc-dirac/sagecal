@@ -23,7 +23,7 @@ INCLUDES= -I. -I$(CUDAINC) -I$(NVML_INC)
 LIBPATH= $(CUDALIB)
 
 
-OBJECTS=lmfit.o lbfgs.o myblas.o mderiv.o clmfit.o clmfit_nocuda.o residual.o barrier.o robust.o robustlm.o oslmfit.o mderiv_fl.o clmfit_fl.o updatenu.o robust_lbfgs_nocuda.o robust_fl.o manifold_fl.o rtr_solve_cuda.o rtr_solve_robust_cuda.o manifold_average.o consensus_poly.o rtr_solve_robust_cuda_admm.o rtr_solve_robust_admm.o admm_solve.o load_balance.o 
+OBJECTS=lmfit.o lbfgs.o myblas.o mderiv.o clmfit.o clmfit_nocuda.o barrier.o robust.o robustlm.o oslmfit.o mderiv_fl.o clmfit_fl.o updatenu.o robust_lbfgs_nocuda.o robust_fl.o manifold_fl.o rtr_solve_cuda.o rtr_solve_robust_cuda.o manifold_average.o consensus_poly.o rtr_solve_robust_cuda_admm.o rtr_solve_robust_admm.o admm_solve.o load_balance.o mdl.o 
 
 
 default:libdirac.a
@@ -38,8 +38,6 @@ mderiv.o:mderiv.cu
 clmfit.o:clmfit.c
 	$(CC) $(CFLAGS) $(INCLUDES) $(GLIBI) -c $<
 clmfit_nocuda.o:clmfit_nocuda.c
-	$(CC) $(CFLAGS) $(INCLUDES) $(GLIBI)  -c $<
-residual.o:residual.c
 	$(CC) $(CFLAGS) $(INCLUDES) $(GLIBI)  -c $<
 barrier.o:barrier.c
 	$(CC) $(CFLAGS) $(INCLUDES) $(GLIBI)  -c $<
@@ -77,6 +75,9 @@ admm_solve.o:admm_solve.c
 	$(CC) $(CFLAGS) $(INCLUDES) $(GLIBI)  -c $<
 load_balance.o:load_balance.c
 	$(CC) $(CFLAGS) $(INCLUDES) $(GLIBI)  -c $<
+mdl.o:mdl.c
+	$(CC) $(CFLAGS) $(INCLUDES) $(GLIBI)  -c $<
+
 
 RANLIB=ranlib
 libdirac.a:$(OBJECTS) Dirac.h

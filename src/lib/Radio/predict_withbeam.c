@@ -1114,7 +1114,7 @@ double ph_ra0, double ph_dec0, double ph_freq0, double *longitude, double *latit
     for (cj=0; cj<carr[cm].nchunk; cj++) {
       pm=&(p[carr[cm].p[cj]]); /* start of solutions */
       /* extract phase of pm, output to pphase */
-      // extract_phases(pm,pphase,N,10);
+      extract_phases(pm,pphase,N,10);
       /* invert N solutions */
       for (ci=0; ci<N; ci++) {
        mat_invert(&pphase[8*ci],&pinv[8*ci+8*N*cj], rho);
