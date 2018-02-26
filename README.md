@@ -19,7 +19,7 @@ Warning: this file may be obsolete. use sagecal -h to see up-to-date options.
 
 ## Step by Step Introduction:
 
-##1) Input
+##1) Input Data
 Input to sagecal must be in CASA MS format, make sure to create a column in the MS to write output data as well. The data can be in raw or averaged form, also initial calibration using other software can be also applied.
 
 
@@ -33,38 +33,44 @@ Alternatively, create these files by hand according to the following formats.
 ###2b)Cluster file format:
 cluster_id chunk_size source1 source2 ...
 e.g.
-'''
+```
 
 0 1 P0C1 P0C2
 2 3 P11C2 P11C1 P13C1
 
-'''
+```
 
 Note: putting -ve values for cluster_id will not subtract them from data.
 chunk_size: find hybrid solutions during one solve run. Eg. if -t 120 is used 
 to select 120 timeslots, cluster 0 will find a solution using the full 120 timeslots while cluster 2 will solve for every 120/3=40 timeslots.
 
 ###2c)Sky model format:
-\#name h m s d m s I Q U V spectral_index RM extent_X(rad) extent_Y(rad) pos_angle(rad) freq0
+```
+#name h m s d m s I Q U V spectral_index RM extent_X(rad) extent_Y(rad) pos_angle(rad) freq0
+```
 
 or
 
-\#name h m s d m s I Q U V spectral_index1 spectral_index2 spectral_index3 RM extent_X(rad) extent_Y(rad) pos_angle(rad) freq0
+```
+#name h m s d m s I Q U V spectral_index1 spectral_index2 spectral_index3 RM extent_X(rad) extent_Y(rad) pos_angle(rad) freq0
+```
 
-e.g.
+e.g.:
 
+```
 P1C1 0 12 42.996 85 43 21.514 0.030498 0 0 0 -5.713060 0 0 0 0 115039062.0
 P5C1 1 18 5.864 85 58 39.755 0.041839 0 0 0 -6.672879 0 0 0 0 115039062.0
-\#A Gaussian mjor,minor 0.1375,0.0917 deg diameter -> radius(rad), PA 43.4772 deg (-> rad)
-\#Position Angle: "West from North (counter-clockwise)" (0 deg = North, 90 deg = West). 
-\#Note: PyBDSM and BBS use "North from East (counter-clockwise)" (0 deg = East, 90 deg = North). 
+#A Gaussian mjor,minor 0.1375,0.0917 deg diameter -> radius(rad), PA 43.4772 deg (-> rad)
+#Position Angle: "West from North (counter-clockwise)" (0 deg = North, 90 deg = West). 
+#Note: PyBDSM and BBS use "North from East (counter-clockwise)" (0 deg = East, 90 deg = North). 
 G0  5 34 31.75 22 00 52.86 100 0 0 0 0.00 0 0.0012  0.0008 -2.329615801 130.0e6
-\#A Disk radius=0.041 deg
+#A Disk radius=0.041 deg
 D01 23 23 25.67 58 48 58 80 0 0 0 0 0 0.000715 0.000715 0 130e6
-\#A Ring radius=0.031 deg
+#A Ring radius=0.031 deg
 R01 23 23 25.416 58 48 57 70 0 0 0 0 0 0.00052 0.00052 0 130e6
-\#A shapelet ('S3C61MD.fits.modes' file must be in the current directory)
+#A shapelet ('S3C61MD.fits.modes' file must be in the current directory)
 S3C61MD 2 22 49.796414 86 18 55.913266 0.135 0 0 0 -6.6 0 1 1 0.0 115000000.0
+```
 
 
 Note: Comments starting with a '#' are allowed for both sky model and cluster files.
