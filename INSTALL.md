@@ -16,9 +16,21 @@ vr  2 dec 2016 23:07:19 CET
   -- Intel MKL and other libraries
  - Get the source for SAGECal : git clone git://git.code.sf.net/p/sagecal/code sagecal-code
 
+## Via Anaconda
+```
+    conda install -c conda-forge casacore==2.4.1
+```
+
+
+
 ## 2 The basic way to build is
   1.a) go to ./src/lib  and run make (which will create libsagecal.a)
   1.b) go to ./src/MS and run make (which will create the executable)
+
+```
+    mkdir build && cd build
+    cmake .. -DCASACORE_ROOT_DIR=/opt/soft/casacore/
+```
 
 
 ## 3 Build settings
