@@ -29,7 +29,7 @@ vr  2 dec 2016 23:07:19 CET
 
 ```
     mkdir build && cd build
-    cmake .. -DCASACORE_ROOT_DIR=/opt/soft/casacore/
+    cmake .. -DCASACORE_ROOT_DIR=/opt/soft/casacore/ -DENABLE_CUDA=OFF
 ```
 
 
