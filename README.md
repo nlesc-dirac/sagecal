@@ -24,13 +24,13 @@ Input to sagecal must be in CASA MS format, make sure to create a column in the 
 
 
 ### 2) Sky Model:
-#### 2a)Make an image of your MS (using ExCon/casapy). 
+#### 2a) Make an image of your MS (using ExCon/casapy). 
 Use Duchamp to create a mask for the image. Use buildsky to create a sky model. (see the README file on top level directory). Also create a proper cluster file.
 Special options to buildsky: -o 1 (NOTE: not -o 2)
 
 Alternatively, create these files by hand according to the following formats.
 
-#### 2b)Cluster file format:
+#### 2b) Cluster file format:
 cluster_id chunk_size source1 source2 ...
 e.g.
 ```
@@ -44,7 +44,7 @@ Note: putting -ve values for cluster_id will not subtract them from data.
 chunk_size: find hybrid solutions during one solve run. Eg. if -t 120 is used 
 to select 120 timeslots, cluster 0 will find a solution using the full 120 timeslots while cluster 2 will solve for every 120/3=40 timeslots.
 
-#### 2c)Sky model format:
+#### 2c) Sky model format:
 ```
 #name h m s d m s I Q U V spectral_index RM extent_X(rad) extent_Y(rad) pos_angle(rad) freq0
 ```
@@ -90,7 +90,7 @@ p3=q3/ln(10)^2
 ...
 ```
 
-### 3)Run sagecal
+### 3) Run sagecal
 Optionally: Make sure your machine has (1/2 working NVIDIA GPU cards or Intel Xeon Phi MICs) to use sagecal.
 Recommended usage: (with GPUs)
 
@@ -118,7 +118,7 @@ Eg. If you need to ignore cluster ids '-1', '10', '999', create a text file :
 and use it as the 'ignore_file'.
 
 
-### 4)Distributed calibration
+### 4) Distributed calibration
 
 Use mpirun to run sagecal-mpi, example:
 ```
@@ -143,7 +143,7 @@ Note: the number of slaves (-np option) can be lower than the number of MS calib
 The rest of the options are similar to sagecal.
 
 
-### 5)Solution format
+### 5) Solution format
 All SAGECal solutions are stored as text files. Lines starting with '#' are comments.
 The first non-comment line includes some general information, i.e.
 freq(MHz) bandwidth(MHz) time_interval(min) stations clusters effective_clusters
