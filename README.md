@@ -1,16 +1,16 @@
 # SAGECAL
 
-Features
+##Features
 
-    Levenberg-Marquardt, LBFGS, Riemannian Trust Region, Nesterov's accelerated gradient descent algorithms
-    GPU acceleration using CUDA
-    Fast and accurate interferometric calibration
-    Gaussian and Student's t noise models
-    Shapelet source models
-    CASA MS data format supported
-    Distributed calibration using MPI - consensus optimization with data multiplexing
-    Tools to build sky models and restore sky models to images
-    Adaptive update of ADMM penalty (Barzilai-Borwein a.k.a. Spectral method)
+- Levenberg-Marquardt, LBFGS, Riemannian Trust Region, Nesterov's accelerated gradient descent algorithms
+- GPU acceleration using CUDA
+- Fast and accurate interferometric calibration
+- Gaussian and Student's t noise models
+- Shapelet source models
+- CASA MS data format supported
+- Distributed calibration using MPI - consensus optimization with data multiplexing
+- Tools to build sky models and restore sky models to images
+- Adaptive update of ADMM penalty (Barzilai-Borwein a.k.a. Spectral method)
 
 
 Read INSTALL for installation. This file gives a brief guide to use SAGECal.
@@ -19,9 +19,8 @@ Warning: this file may be obsolete. use sagecal -h to see up-to-date options.
 
 ## Step by Step Introduction:
 
-###1a)Calibrate data in the standard way using BBS/CASA or anything else. 
-Use NDPP to average the data in your MS to a few channels (also average in time to about 10sec). Also flag any spikes in the data.
-###1b)For subtraction of the ATeam from raw data (CasA,CygA,...), no initial calibration is necessary. Just run sagecal on raw data, but it is better to scale the sky model to match the apparent flux of the sources that are being subtracted.
+##1) Input
+Input to sagecal must be in CASA MS format, make sure to create a column in the MS to write output data as well. The data can be in raw or averaged form, also initial calibration using other software can be also applied.
 
 
 ##2) Sky Model:
