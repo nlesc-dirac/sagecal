@@ -75,25 +75,28 @@ S3C61MD 2 22 49.796414 86 18 55.913266 0.135 0 0 0 -6.6 0 1 1 0.0 115000000.0
 
 Note: Comments starting with a '#' are allowed for both sky model and cluster files.
 Note: 3rd order spectral indices are also supported, use -F 1 option in sagecal.
-Note: Spectral indices use natural logarithm, exp(ln(I0) + p1*ln(f/f0) + p2*ln(f/f0)^2 + ..) so if you have a model with common logarithms like 10^(log(J0) + q1*log(f/f0) + q2*log(f/f0)^2 + ..) then, conversion is
+Note: Spectral indices use natural logarithm, ```exp(ln(I0) + p1 * ln(f/f0) + p2 * ln(f/f0)^2 + ..)``` so if you have a model with common logarithms like ```10^(log(J0) + q1*log(f/f0) + q2*log(f/f0)^2 + ..)``` then, conversion is
 
+```
 ln(I0)+p1*ln(f/f0)+p2*ln(f/f0)^2+... = ln(10)*(log(J0)+q1*log(f/f0)+q2*log(f/f0))^2)+...)
 =ln(10)*(ln(J0)/ln(10)+q1*ln(f/f0)/ln(10)+q2*ln(f/f0)^2/ln(10)^2+...)
-
+```
 so
-
+```
 I0=J0
 p1=q1
 p2=q2/ln(10)
 p3=q3/ln(10)^2
 ...
-
+```
 
 ### 3)Run sagecal
 Optionally: Make sure your machine has (1/2 working NVIDIA GPU cards or Intel Xeon Phi MICs) to use sagecal.
 Recommended usage: (with GPUs)
 
+```
 sagecal -d my_data.MS -s my_skymodel -c my_clustering -n no.of.threads -t 60 -p my_solutions -e 3 -g 2 -l 10 -m 7 -w 1 -b 1
+```
 
 Use your solution interval (-t 60) so that its big enough to get a decent solution and not too big to make the parameters vary too much. (about 20 minutes per solution is reasonable).
 
@@ -106,9 +109,11 @@ With -a 1 and -p 'solutions_file', simulation is done with the sky model corrupt
 With -a 1 and -p 'solutions_file' and -z 'ignore_file', simulation is done with the solutions in the 'solutions_file', but ignoring the cluster ids in the 'ignore_file'.
 Eg. If you need to ignore cluster ids '-1', '10', '999', create a text file :
 
+```
 -1
 10
 999
+```
 
 and use it as the 'ignore_file'.
 
@@ -116,10 +121,12 @@ and use it as the 'ignore_file'.
 ### 4)Distributed calibration
 
 Use mpirun to run sagecal-mpi, example:
+```
  mpirun  -np 11 -hostfile ./machines --map-by node --cpus-per-proc 8 
  --mca yield_when_idle 1 -mca orte_tmpdir_base /scratch/users/sarod 
  /full/path/to/sagecal-mpi -f 'MS*pattern' -A 30 -P 2 -r 5 
  -s sky.txt -c cluster.txt -n 16 -t 1 -e 3 -g 2 -l 10 -m 7 -x 10 -F 1 -j 5
+```
 
 Specific options : 
 -np 11 : 11 processes : starts 10 slaves + 1 master
@@ -145,7 +152,7 @@ The remaining lines contain solutions for each cluster as a single column, the f
 Let's say there are K effective clusters and N directions. Then there will be K+1 columns, the first column will start from 0 and increase to 8N-1, 
 which can be used to count the row number. It will keep repeating this, for each time interval.
 The rows 0 to 7 belong to the solutions for the 1st station. The rows 8 to 15 for the 2nd station and so on. 
-Each 8 rows of any given column represent the 8 values of a 2x2 Jones matrix. Lets say these are S0,S1,S2,S3,S4,S5,S6 and S7. Then the Jones matrix is [S0+j*S1, S4+j*S5; S2+j*S3, S6+j*S7] (the ';' denotes the 1st row of the 2x2 matrix).
+Each 8 rows of any given column represent the 8 values of a 2x2 Jones matrix. Lets say these are ```S0,S1,S2,S3,S4,S5,S6``` and ```S7```. Then the Jones matrix is ```[S0+j*S1, S4+j*S5; S2+j*S3, S6+j*S7]``` (the ';' denotes the 1st row of the 2x2 matrix).
 
 When a luster has a chunk size > 1, there will be more than 1 solution per given time interval. 
 So for this cluster, there will be more than 1 column in the solution file, the exact number of columns being equal to the chunk size.
