@@ -68,44 +68,36 @@ find_package(PkgConfig REQUIRED)
 message(STATUS "\n############################\n#   Searching Sagecal dependencies\n############################")
 # casacore
 find_package(CasaCore REQUIRED)
-message(STATUS "Found CasaCore: ${xtensor_INCLUDE_DIRS}")
 include_directories(${CASACORE_INCLUDE_DIR})
 
 #cfitsio
 find_package(CfitsIO REQUIRED)
-message(STATUS "Found CfitsIO: ${CFITSIO_INCLUDE_DIR}")
 include_directories(${CFITSIO_INCLUDE_DIR})
 
 #lapack
 find_package(LAPACK REQUIRED)
-message(STATUS "Found WCSLIB: ${LAPACK_INCLUDE_DIR}")
 include_directories(${LAPACK_INCLUDE_DIR})
 
 #wcslib
 find_package(WcsLib REQUIRED)
-message(STATUS "Found WCSLIB: ${WCSLIB_INCLUDE_DIR}")
 include_directories(${WCSLIB_INCLUDE_DIR})
 
 #OpenBlas
 find_package(OpenBLAS REQUIRED)
-message(STATUS "Found OpenBLAS: ${OpenBLAS_INCLUDE_DIR}")
 include_directories(${OpenBLAS_INCLUDE_DIR})
 
 ##blas
 #find_package(BLAS REQUIRED)
-#message(STATUS "Found BLAS: ${BLAS_INCLUDE_DIR}")
 #include_directories(${BLAS_INCLUDE_DIR})
 
 # FIXME: is this really needed?
 ##gfortran
 #find_package(GFortranLibs REQUIRED)
-#message(STATUS "Found GFORTRAN: ${GFORTRAN_INCLUDE_DIR}")
 #include_directories(${GFORTRAN_INCLUDE_DIR})
 
 #glib
 pkg_check_modules(GLIB_PKG glib-2.0)
 if (GLIB_PKG_FOUND)
-    message(STATUS "Found GLIB: ${GLIB_PKG_INCLUDE_DIRS}")
     include_directories(${GLIB_PKG_INCLUDE_DIRS})
 endif()
 
