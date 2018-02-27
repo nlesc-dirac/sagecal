@@ -102,6 +102,22 @@ if (GLIB_PKG_FOUND)
 endif()
 
 
+#--------------------------------------- check environment variables
+
+# Check pre-defined environment variables
+## CASACORE_LIB=/cm/shared/package/casacore/v2.3.0-gcc-4.9.3/lib
+## CASACORE_INCLUDE=/cm/shared/package/casacore/v2.3.0-gcc-4.9.3/include
+## CASACORE_ROOT_DIR=/cm/shared/package/casacore/v2.3.0-gcc-4.9.3
+
+
+if (NOT "$ENV{CASACORE_ROOT_DIR}" STREQUAL "")
+    set(CASACORE_ROOT_DIR "$ENV{CASACORE_ROOT_DIR}" CACHE INTERNAL "Copied from environment variable")
+    message("Using environment variable CASACORE_ROOT_DIR = ${CASACORE_ROOT_DIR}")
+endif()
+
+
+
+
 #--------------------------------------- summary
 message(STATUS "\n############################\n#   Package summary\n############################")
 message (STATUS "CMAKE_SYSTEM .......... = ${CMAKE_SYSTEM}")
@@ -125,10 +141,9 @@ message (STATUS "LAPACK-LIBS ........... = ${LAPACK_LIBRARIES}")
 #message (STATUS "GFORTRAN-LIBS ......... = ${LIBGFORTRAN_LIBRARIES}")
 message (STATUS "CFITSIO-INC  .......... = ${CFITSIO_INCLUDE_DIR}")
 message (STATUS "CFITSIO-LIBS .......... = ${CFITSIO_LIBRARIES}")
-
 message (STATUS "WCSLIB-INC  ........... = ${WCSLIB_INCLUDE_DIR}")
 message (STATUS "WCSLIB-LIBS ........... = ${WCSLIB_LIBRARIES}")
-
+# FIXME: add CasaCore info
 
 
 
