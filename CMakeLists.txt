@@ -18,13 +18,13 @@ include(CheckFunctionExists)
 
 
 #--------------------------------------- paths
-#SET(MAINFOLDER ${PROJECT_SOURCE_DIR})
-SET(MAINFOLDER ${CMAKE_CACHEFILE_DIR})
+SET(MAINFOLDER ${CMAKE_BINARY_DIR})
+
 SET(EXECUTABLE_OUTPUT_PATH "${MAINFOLDER}/dist/bin")
 file(MAKE_DIRECTORY ${EXECUTABLE_OUTPUT_PATH})
+
 SET(LIBRARY_OUTPUT_PATH "${MAINFOLDER}/dist/lib")
 file(MAKE_DIRECTORY ${LIBRARY_OUTPUT_PATH})
-
 
 # Load CMAKE configuration from environment variables
 set( CMAKE_MODULE_PATH $ENV{CMAKE_MODULE_PATH} )
