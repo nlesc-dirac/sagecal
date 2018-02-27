@@ -173,6 +173,7 @@ read_shapelet_modes_img(char *buff,int *n0,double *beta,double **modes, double *
   } 
   *eX=l_a; *eY=l_b; *eP=l_theta; *ltf=linear_tf;
 
+  fclose(cfp);
   free(input_modes);
   return 0;
 }
@@ -520,7 +521,7 @@ read_sky_model_withgain(const char *slistname, glist *slist, int format,const ch
      /* new cluster found */
      if ((clus=(clust_t*)malloc(sizeof(clust_t)))==0) {
             fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
-            return 1;
+            exit(1);
      }
      sscanf(buf,"%d",&clus->id);
      clus->slist=NULL;
@@ -549,11 +550,11 @@ read_sky_model_withgain(const char *slistname, glist *slist, int format,const ch
       /* source found for this cluster */
       if ((sclus= (clust_n*)malloc(sizeof(clust_n)))==0) {
             fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
-            return 1;
+            exit(1);
       }
       if ((sclus->name=(char*)malloc((size_t)(strlen(buf)+1)*sizeof(char)))==0) {
             fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
-            return 1;
+            exit(1);
       }
       strcpy(sclus->name,buf);
 #ifdef DEBUG
@@ -624,12 +625,12 @@ read_sky_model_withgain(const char *slistname, glist *slist, int format,const ch
      sclus=ln->data;
      if ((hkey=(char*)malloc((size_t)(strlen(sclus->name)+1)*sizeof(char)))==0) {
             fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
-            return 1;
+            exit(1);
      }
      strcpy(hkey,sclus->name);
      if ((cptr=(clust_t**)malloc((size_t)(1)*sizeof(clust_t*)))==0) {
             fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
-            return 1;
+            exit(1);
      }
      *cptr=clus;
      g_hash_table_insert(stable,(gpointer)hkey,(gpointer)cptr);
@@ -679,38 +680,38 @@ read_sky_model_withgain(const char *slistname, glist *slist, int format,const ch
   /* memory to store solutions */
   if ((JHJ=(complex double**)calloc((size_t)(4),sizeof(complex double*)))==0) {
      fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
-     return 1;
+     exit(1);
   }
   if ((JsHJ=(complex double**)calloc((size_t)(4),sizeof(complex double*)))==0) {
      fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
-     return 1;
+     exit(1);
   }
   for (ci=0; ci<4; ci++) {
    if ((JHJ[ci]=(complex double*)calloc((size_t)(Nc),sizeof(complex double)))==0) {
      fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
-     return 1;
+     exit(1);
    }
    if ((JsHJ[ci]=(complex double*)calloc((size_t)(Nc),sizeof(complex double)))==0) {
      fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
-     return 1;
+     exit(1);
    }
   }
   if ((Jf1=(double**)calloc((size_t)(8),sizeof(double*)))==0) {
      fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
-     return 1;
+     exit(1);
   }
   if ((Jf2=(double**)calloc((size_t)(8),sizeof(double*)))==0) {
      fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
-     return 1;
+     exit(1);
   }
   for (ci=0; ci<8; ci++) {
    if ((Jf1[ci]=(double*)calloc((size_t)(Nc),sizeof(double)))==0) {
      fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
-     return 1;
+     exit(1);
    }
    if ((Jf2[ci]=(double*)calloc((size_t)(Nc),sizeof(double)))==0) {
      fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
-     return 1;
+     exit(1);
    }
   }
 
@@ -720,7 +721,7 @@ read_sky_model_withgain(const char *slistname, glist *slist, int format,const ch
  */
   if ((cfp=fopen(solfile,"r"))==0) {
       fprintf(stderr,"%s: %d: no file\n",__FILE__,__LINE__);
-      return 1;
+      exit(1);
   }
   /* for new versions of sagecal, need to skip first 3 lines */
   for (ci=0; ci<3; ci++) {
@@ -843,7 +844,7 @@ read_sky_model_withgain(const char *slistname, glist *slist, int format,const ch
   /* read in the source list, parse each source info */
   if ((cfp=fopen(slistname,"r"))==0) {
       fprintf(stderr,"%s: %d: no file\n",__FILE__,__LINE__);
-      return 1;
+      exit(1);
   }
 
   c=skip_lines(cfp);

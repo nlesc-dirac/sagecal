@@ -177,6 +177,7 @@ read_shapelet_modes(char *buff,int *n0,double *beta,double **modes) {
    }
   }
 
+  fclose(cfp);
   free(input_modes);
   return 0;
 } 

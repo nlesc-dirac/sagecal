@@ -204,7 +204,7 @@ construct_boundary(pixellist *pixset)
   pixset->Nh=count(&sl)+count(&su)-1;
   if ((pixset->hull= (hpoint*)malloc((size_t)pixset->Nh*sizeof(hpoint)))==0) {
     fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
-    return 1;
+    exit(1);
   }
   
   i=0;
@@ -343,7 +343,7 @@ construct_boundary_f(pixellistf *pixset)
   pixset->Nh=count(&sl)+count(&su)-1;
   if ((pixset->hull= (hpoint*)malloc((size_t)pixset->Nh*sizeof(hpoint)))==0) {
     fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
-    return 1;
+    exit(1);
   }
   
   i=0;

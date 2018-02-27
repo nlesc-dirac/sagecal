@@ -350,27 +350,27 @@ read_fits_file_f(const char *fitsdir, const char *maskfile, GHashTable **pixtabl
     ncoord=g_list_length(val->pix);
   	if ((pixelc=(double*)calloc((size_t)ncoord*4,sizeof(double)))==0) {
 			fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
-			return 1;
+			exit(1);
 		}
   	if ((imgc=(double*)calloc((size_t)ncoord*4,sizeof(double)))==0) {
 			fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
-			return 1;
+			exit(1);
 		}
   	if ((worldc=(double*)calloc((size_t)ncoord*4,sizeof(double)))==0) {
 			fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
-			return 1;
+			exit(1);
 		}
 		if ((phic=(double*)calloc((size_t)ncoord,sizeof(double)))==0) {
 			fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
-			return 1;
+			exit(1);
 		}
 		if ((thetac=(double*)calloc((size_t)ncoord,sizeof(double)))==0) {
 			fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
-			return 1;
+			exit(1);
 		}
 		if ((statc=(int*)calloc((size_t)ncoord,sizeof(int)))==0) {
 			fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
-			return 1;
+			exit(1);
 		}
 
     kk=0;
@@ -463,27 +463,27 @@ read_fits_file_f(const char *fitsdir, const char *maskfile, GHashTable **pixtabl
  ncoord=1; /* memory for WCS, 1 pixel */
  if ((pixelc=(double*)calloc((size_t)ncoord*4,sizeof(double)))==0) {
 			fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
-			return 1;
+			exit(1);
  }
  if ((imgc=(double*)calloc((size_t)ncoord*4,sizeof(double)))==0) {
 			fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
-			return 1;
+			exit(1);
  }
  if ((worldc=(double*)calloc((size_t)ncoord*4,sizeof(double)))==0) {
 			fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
-			return 1;
+			exit(1);
  }
  if ((phic=(double*)calloc((size_t)ncoord,sizeof(double)))==0) {
 			fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
-			return 1;
+			exit(1);
  }
  if ((thetac=(double*)calloc((size_t)ncoord,sizeof(double)))==0) {
 			fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
-			return 1;
+			exit(1);
  }
  if ((statc=(int*)calloc((size_t)ncoord,sizeof(int)))==0) {
 			fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
-			return 1;
+			exit(1);
  }
  kk=0;
  pixelc[kk+0]=(double)1.0;
@@ -829,15 +829,15 @@ add_guard_pixels_f(GList *pixlist, int Nf, double threshold, hpixelf **parr, int
         /* insert this pixel to hash table */
         if ((xykey = (xyhash*)malloc(sizeof(xyhash)))==0) {
           fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
-          return 1;
+          exit(1);
         }
         if ((xkey = (uint32_t*)malloc(sizeof(int)))==0) {
           fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
-          return 1;
+          exit(1);
         }
         if ((ykey = (uint32_t*)malloc(sizeof(int)))==0) {
           fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
-          return 1;
+          exit(1);
         }
 
 
@@ -922,23 +922,23 @@ add_guard_pixels_f(GList *pixlist, int Nf, double threshold, hpixelf **parr, int
   deltav=((*mp-*lp)/(double)origx);
   if ((lv= (double*)malloc(sizeof(double)))==0) {
     fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
-    return 1;
+    exit(1);
   }
   *lv=*lp-deltav;
   if ((xkey = (uint32_t*)malloc(sizeof(int)))==0) {
     fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
-    return 1;
+    exit(1);
   }
   *xkey=xarr[0];
   g_hash_table_insert(xtol,(gpointer)xkey,(gpointer)lv);
   if ((lv= (double*)malloc(sizeof(double)))==0) {
     fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
-    return 1;
+    exit(1);
   }
   *lv=*mp+deltav;
   if ((xkey = (uint32_t*)malloc(sizeof(int)))==0) {
     fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
-    return 1;
+    exit(1);
   }
   *xkey=xarr[origx+1];
   g_hash_table_insert(xtol,(gpointer)xkey,(gpointer)lv);
@@ -956,7 +956,7 @@ add_guard_pixels_f(GList *pixlist, int Nf, double threshold, hpixelf **parr, int
   /* SORT */
   if ((yarr= (uint32_t*)malloc(sizeof(uint32_t)*(origy+2)))==0) {
           fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
-          return 1;
+          exit(1);
   }
   pixval0=pixval;
   ci=1;
@@ -983,23 +983,23 @@ add_guard_pixels_f(GList *pixlist, int Nf, double threshold, hpixelf **parr, int
   deltav=((*mp-*lp)/(double)origy);
   if ((lv= (double*)malloc(sizeof(double)))==0) {
     fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
-    return 1;
+    exit(1);
   }
   *lv=*lp-deltav;
   if ((xkey = (uint32_t*)malloc(sizeof(int)))==0) {
     fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
-    return 1;
+    exit(1);
   }
   *xkey=yarr[0];
   g_hash_table_insert(ytom,(gpointer)xkey,(gpointer)lv);
   if ((lv= (double*)malloc(sizeof(double)))==0) {
     fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
-    return 1;
+    exit(1);
   }
   *lv=*mp+deltav;
   if ((xkey = (uint32_t*)malloc(sizeof(int)))==0) {
     fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
-    return 1;
+    exit(1);
   }
   *xkey=yarr[origy+1];
   g_hash_table_insert(ytom,(gpointer)xkey,(gpointer)lv);
@@ -1016,7 +1016,7 @@ add_guard_pixels_f(GList *pixlist, int Nf, double threshold, hpixelf **parr, int
   *n=g_hash_table_size(xtol)*g_hash_table_size(ytom);
   if ((*parr=(hpixelf*)malloc(sizeof(hpixelf)*(*n)))==0) {
        fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
-       return 1;
+       exit(1);
   }
   minflux=1e6;
   ck=0;
@@ -1039,7 +1039,7 @@ add_guard_pixels_f(GList *pixlist, int Nf, double threshold, hpixelf **parr, int
         (*parr)[ck].Nf=Nf;
         if (((*parr)[ck].sI = (double*)malloc(sizeof(double)*Nf))==0) {
           fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
-          return 1;
+          exit(1);
         }
         memcpy((*parr)[ck].sI,ppix->sI,sizeof(double)*Nf);
         for (ci=0; ci<Nf; ci++) {
@@ -1056,15 +1056,15 @@ add_guard_pixels_f(GList *pixlist, int Nf, double threshold, hpixelf **parr, int
   /* now the guard pixels */
   if ((xykey = (xyhash*)malloc(sizeof(xyhash)))==0) {
     fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
-    return 1;
+    exit(1);
   }
   if ((xkey = (uint32_t*)malloc(sizeof(int)))==0) {
     fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
-    return 1;
+    exit(1);
   }
   if ((ykey = (uint32_t*)malloc(sizeof(int)))==0) {
     fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
-    return 1;
+    exit(1);
   }
 
   minflux*=threshold;
@@ -1088,7 +1088,7 @@ add_guard_pixels_f(GList *pixlist, int Nf, double threshold, hpixelf **parr, int
             (*parr)[ck].Nf=Nf;
             if (((*parr)[ck].sI= (double*)malloc(sizeof(double)*(Nf)))==0) {
               fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
-              return 1;
+              exit(1);
             }
             for (cl=0; cl<Nf; ++cl) {
             (*parr)[ck].sI[cl]=minflux;
@@ -1363,7 +1363,7 @@ write_world_coords_f(const char *imgfile, GHashTable *pixtable, double minpix, i
 		/* read FITS header */
 		if ((status = fits_hdr2str(fbuff.fptr, 1, NULL, 0, &header, &ncard, &status))) {
 		 fits_report_error(stderr, status);
-		 return 1;
+		 exit(1);
 		}
 
 /* try to Parse the primary header of the FITS file. */
@@ -1382,54 +1382,54 @@ write_world_coords_f(const char *imgfile, GHashTable *pixtable, double minpix, i
 
 		if ((status = wcsset(fbuff.wcs))) {
 		  fprintf(stderr, "wcsset ERROR %d:\n", status);
-		  return 1;
+		  //return 1; not something serious, just a warning is fine
 		}
 
     ncoord=1;
   	if ((pixell=(double*)calloc((size_t)ncoord,sizeof(double)))==0) {
 			fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
-			return 1;
+			exit(1);
 		}
   	if ((pixelm=(double*)calloc((size_t)ncoord,sizeof(double)))==0) {
 			fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
-			return 1;
+			exit(1);
 		}
   	if ((imgl=(double*)calloc((size_t)ncoord,sizeof(double)))==0) {
 			fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
-			return 1;
+			exit(1);
 		}
   	if ((imgm=(double*)calloc((size_t)ncoord,sizeof(double)))==0) {
 			fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
-			return 1;
+			exit(1);
 		}
   	if ((ra_c=(double*)calloc((size_t)ncoord,sizeof(double)))==0) {
 			fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
-			return 1;
+			exit(1);
 		}
   	if ((dec_c=(double*)calloc((size_t)ncoord,sizeof(double)))==0) {
 			fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
-			return 1;
+			exit(1);
 		}
   	if ((statc=(int*)calloc((size_t)ncoord,sizeof(int)))==0) {
 			fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
-			return 1;
+			exit(1);
 		}
 
 
     outf=fopen(textfile,"w+");
     if(!outf) {
     	fprintf(stderr,"%s: %d: unable to open file\n",__FILE__,__LINE__);
-			return 1;
+			exit(1);
     }
     regf=fopen(regionfile,"w+");
     if(!regf) {
     	fprintf(stderr,"%s: %d: unable to open file\n",__FILE__,__LINE__);
-			return 1;
+			exit(1);
     }
     flxf=fopen(fluxfile,"w+");
     if(!flxf) {
     	fprintf(stderr,"%s: %d: unable to open file\n",__FILE__,__LINE__);
-			return 1;
+			exit(1);
     }
     if (!outformat) {
      fprintf(outf,"# (Name, Type, Ra, Dec, I, Q, U, V, ReferenceFrequency='%12.7lg',  SpectralIndex='[0.0,0.0,0.0]', MajorAxis, MinorAxis, Orientation) = format\n",ref_freq);
@@ -1802,12 +1802,12 @@ filter_pixels_f(GHashTable *pixtable, double wcutoff) {
   /* A: size 2x2 */
   if ((A=(double*)malloc(sizeof(double)*(size_t)N*N))==0) {
      fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
-     return 1;
+     exit(1);
   }
   /* W: size 2x1 */
   if ((W=(double*)malloc(sizeof(double)*(size_t)N))==0) {
      fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
-     return 1;
+     exit(1);
   }
 
   printf("################## probable ignore list (%lf) ##############\n",wcutoff);
@@ -1825,15 +1825,15 @@ filter_pixels_f(GHashTable *pixtable, double wcutoff) {
       Npix=g_list_length(val->pix);
       if ((xpix=(double*)malloc(sizeof(double)*(size_t)Npix))==0) {
        fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
-       return 1;
+       exit(1);
       }
       if ((ypix=(double*)malloc(sizeof(double)*(size_t)Npix))==0) {
        fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
-       return 1;
+       exit(1);
       }
       if ((sI=(double*)malloc(sizeof(double)*(size_t)Npix))==0) {
        fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
-       return 1;
+       exit(1);
       }
       ci=0;
       xmean=ymean=0.0;
