@@ -1,5 +1,4 @@
-#cmake_minimum_required(VERSION 2.8)
-cmake_minimum_required(VERSION 3.1.3)
+cmake_minimum_required(VERSION 3.5.1)
 enable_language(CXX)
 
 #--------------------------------------- project
@@ -147,11 +146,7 @@ message (STATUS "WCSLIB-LIBS ........... = ${WCSLIB_LIBRARIES}")
 #--------------------------------------- build parameters for all targets
 set (CMAKE_CXX_FLAGS "-Wall -g -pg -Wextra -std=c++11 -W -Wpointer-arith -Woverloaded-virtual -Wwrite-strings -pedantic -Wno-long-long -O3 -ansi -fPIC -fpermissive -fno-omit-frame-pointer -DNDEBUG -fno-inline-functions -fno-inline-functions-called-once -fno-optimize-sibling-calls")
 
-
-
-
 #--------------------------------------- include directories
-# FIXME: add sub-cmake files
 add_subdirectory(src)
 
 
