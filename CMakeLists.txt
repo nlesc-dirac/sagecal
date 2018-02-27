@@ -122,7 +122,6 @@ message (STATUS "CMAKE_CXX_FLAGS ....... = ${CMAKE_CXX_FLAGS}")
 
 message (STATUS "ENABLE_MPI ............ = ${ENABLE_MPI}")
 message (STATUS "ENABLE_CUDA ........... = ${ENABLE_CUDA}")
-message (STATUS "ENABLE_OPENBLAS ....... = ${ENABLE_OPENBLAS}")
 
 message (STATUS "BLAS-LIBS ............. = ${BLAS_LIBRARIES}")
 message (STATUS "GLIB-INC .............. = ${GLIB_PKG_INCLUDE_DIRS}")
