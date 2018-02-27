@@ -3527,9 +3527,13 @@ If a memory error occurs, pslcluster returns NULL.
   free(vector);
   free(index);
 
-  result = realloc(result, nnodes*sizeof(Node));
 
-  return result;
+  //result = realloc(result, nnodes*sizeof(Node));
+  Node* result1 = malloc(nnodes*sizeof(Node)); /* nnodes = nlements -1 */
+  memcpy(result1,result,nnodes*sizeof(Node));
+  free(result);
+
+  return result1;
 }
 /* ******************************************************************** */
 
