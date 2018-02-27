@@ -36,7 +36,6 @@ list(INSERT CMAKE_MODULE_PATH 0 ${CMAKE_SOURCE_DIR}/CMakeModules)
 # TODO: check MPI and CUDA flags!
 option (ENABLE_MPI "Enable MPI support" OFF)
 option (ENABLE_CUDA "Enable CUDA support" OFF)
-option (ENABLE_OPENBLAS "Enable OPENBLAS support" OFF)
 
 
 #--------------------------------------- rpath setup for libraries
