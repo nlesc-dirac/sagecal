@@ -105,8 +105,6 @@ endif()
 #--------------------------------------- check environment variables
 
 # Check pre-defined environment variables
-## CASACORE_LIB=/cm/shared/package/casacore/v2.3.0-gcc-4.9.3/lib
-
 if (NOT "$ENV{CASACORE_ROOT_DIR}" STREQUAL "")
     set(CASACORE_ROOT_DIR "$ENV{CASACORE_ROOT_DIR}" CACHE INTERNAL "Copied from environment variable")
     message("Using environment variable CASACORE_ROOT_DIR = ${CASACORE_ROOT_DIR}")
@@ -124,7 +122,7 @@ set (CMAKE_CXX_FLAGS "-Wall -g -pg -Wextra -std=c++11 -W -Wpointer-arith -Woverl
 
 
 #--------------------------------------- summary
-message(STATUS "\n############################\n#   Package summary\n############################")
+message(STATUS "\n############################\n#   Configuration summary\n############################")
 message (STATUS "CMAKE_SYSTEM .......... = ${CMAKE_SYSTEM}")
 message (STATUS "CMAKE_BUILD_TYPE ...... = ${CMAKE_BUILD_TYPE}")
 message (STATUS "BUILD_SHARED_LIBS ..... = ${BUILD_SHARED_LIBS}")
@@ -147,9 +145,8 @@ message (STATUS "GLIB-LIBS ............. = ${GLIB_PKG_LIBRARIES}")
 message (STATUS "LAPACK-INC ............ = ${LAPACK_INCLUDE_DIR}")
 message (STATUS "LAPACK-LIBS ........... = ${LAPACK_LIBRARIES}")
 
-# FIXME: add if gfortranlibs is needed
-#message (STATUS "GFORTRAN-INC  ......... = ${GFORTRAN_INCLUDE_DIR}")
-#message (STATUS "GFORTRAN-LIBS ......... = ${LIBGFORTRAN_LIBRARIES}")
+message (STATUS "GFORTRAN-INC  ......... = ${GFORTRAN_INCLUDE_DIR}")
+message (STATUS "GFORTRAN-LIBS ......... = ${LIBGFORTRAN_LIBRARIES}")
 
 message (STATUS "CFITSIO-INC  .......... = ${CFITSIO_INCLUDE_DIR}")
 message (STATUS "CFITSIO-LIBS .......... = ${CFITSIO_LIBRARIES}")

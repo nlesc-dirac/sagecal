@@ -1,4 +1,4 @@
-message (STATUS "\n\n\nCompiling lib/Radio")
+message (STATUS "\n\n\nConfiguring lib/Radio")
 
 # Common objects
 set (objects
