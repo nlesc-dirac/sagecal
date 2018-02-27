@@ -88,32 +88,32 @@ calculate_contribution1(struct wcsprm *wcs, double ll, double mm, sinfo *ss, dou
   ncoord=1;
   if ((pixelra=(double*)calloc((size_t)ncoord,sizeof(double)))==0) {
       fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
-      return 1;
+      exit(1);
   }
   if ((pixeldec=(double*)calloc((size_t)ncoord,sizeof(double)))==0) {
       fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
-      return 1;
+      exit(1);
   }
   if ((imgphi=(double*)calloc((size_t)ncoord,sizeof(double)))==0) {
       fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
-      return 1;
+      exit(1);
   }
   if ((imgtheta=(double*)calloc((size_t)ncoord,sizeof(double)))==0) {
       fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
-      return 1;
+      exit(1);
   }
   if ((imgl=(double*)calloc((size_t)ncoord,sizeof(double)))==0) {
       fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
-      return 1;
+      exit(1);
   }
   if ((imgm=(double*)calloc((size_t)ncoord,sizeof(double)))==0) {
       fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
-      return 1;
+      exit(1);
   }
 
   if ((statc=(int*)calloc((size_t)ncoord,sizeof(int)))==0) {
       fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
-      return 1;
+      exit(1);
   }
   pixelra[0]=(double)(ss->ra)*180.0/M_PI;
   pixeldec[0]=(double)(ss->dec)*180.0/M_PI;
@@ -433,27 +433,27 @@ read_fits_file_restore(const char *filename, glist *slist, double bmaj,double bm
    		ncoord=1; 
   	  if ((pixelc=(double*)calloc((size_t)ncoord*4,sizeof(double)))==0) {
 		  	fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
-		  	return 1;
+		  	exit(1);
 		  }
   	  if ((imgc=(double*)calloc((size_t)ncoord*4,sizeof(double)))==0) {
 		  	fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
-		  	return 1;
+		  	exit(1);
 		  }
   	  if ((worldc=(double*)calloc((size_t)ncoord*4,sizeof(double)))==0) {
 		  	fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
-		  	return 1;
+		  	exit(1);
 		  }
 		  if ((phic=(double*)calloc((size_t)ncoord,sizeof(double)))==0) {
 		  	fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
-		  	return 1;
+		  	exit(1);
 		  }
 		  if ((thetac=(double*)calloc((size_t)ncoord,sizeof(double)))==0) {
 		  	fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
-		  	return 1;
+		  	exit(1);
 		  }
 		  if ((statc=(int*)calloc((size_t)ncoord,sizeof(int)))==0) {
 		  	fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
-		  	return 1;
+		  	exit(1);
 		  }
      /* if format==FORMAT_LM, convert l,m of source to ra,dec */
      if (format==FORMAT_LM) {
@@ -621,34 +621,34 @@ read_fits_file_restore(const char *filename, glist *slist, double bmaj,double bm
 		
 		if ((myarr=(double*)calloc((size_t)totalpix,sizeof(double)))==0) {
 			fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
-			return 1;
+			exit(1);
 		}
 
 		/* allocate memory for pixel/world coordinate arrays */
 		ncoord=new_naxis[0]*new_naxis[1]*1*1; /* consider only one plane fron freq, and stokes axes because RA,Dec will not change */
   	if ((pixelc=(double*)calloc((size_t)ncoord*4,sizeof(double)))==0) {
 			fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
-			return 1;
+			exit(1);
 		}
   	if ((imgc=(double*)calloc((size_t)ncoord*4,sizeof(double)))==0) {
 			fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
-			return 1;
+			exit(1);
 		}
   	if ((worldc=(double*)calloc((size_t)ncoord*4,sizeof(double)))==0) {
 			fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
-			return 1;
+			exit(1);
 		}
 		if ((phic=(double*)calloc((size_t)ncoord,sizeof(double)))==0) {
 			fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
-			return 1;
+			exit(1);
 		}
 		if ((thetac=(double*)calloc((size_t)ncoord,sizeof(double)))==0) {
 			fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
-			return 1;
+			exit(1);
 		}
 		if ((statc=(int*)calloc((size_t)ncoord,sizeof(int)))==0) {
 			fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
-			return 1;
+			exit(1);
 		}
 
 		/* fill up the pixel coordinate array */
@@ -763,11 +763,11 @@ read_fits_file_restore(const char *filename, glist *slist, double bmaj,double bm
   M=exs->n0*exs->n0-1; /* always less than */
   if ((x=(double*)calloc((size_t)new_naxis[0],sizeof(double)))==0) {
       fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
-      return 1;
+      exit(1);
   }
   if ((y=(double*)calloc((size_t)new_naxis[1],sizeof(double)))==0) {
       fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
-      return 1;
+      exit(1);
   }
   Nx=new_naxis[0];
   Ny=new_naxis[1];
