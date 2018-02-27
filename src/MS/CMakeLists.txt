@@ -27,9 +27,10 @@ target_link_libraries(sagecal
  ${WCSLIB_LIBRARIES}
  ${GLIB_PKG_LIBRARIES}
  ${LIBGFORTRAN_LIBRARIES}
+ -lopenblas
+ -lgfortran
  -lpthread
  -lcfitsio
- -lgfortran
  -lm
  -ldirac
  -lradio

@@ -2,6 +2,25 @@ vr  2 dec 2016 23:07:19 CET
 
 # SAGECal Installation
 
+## Cmake Build
+
+### Ubuntu 
+- Add KERN repository: http://kernsuite.info/
+```
+apt-get install -y git cmake g++ pkg-config libcfitsio-dev libcfitsio-bin libopenblas-dev libopenblas-base wcslib-dev wcslib-tools libglib2.0-dev
+```
+
+- Build SageCal
+```
+    mkdir build && cd build
+    cmake .. -DCASACORE_ROOT_DIR=/opt/soft/casacore/ -DENABLE_CUDA=OFF
+```
+### Via Anaconda (not complete)
+```
+    conda install -c conda-forge casacore==2.4.1
+```
+
+
 ## 1 Prerequsites:
  - CASACORE http://casacore.googlecode.com/
  - glib http://developer.gnome.org/glib
@@ -16,22 +35,11 @@ vr  2 dec 2016 23:07:19 CET
   -- Intel MKL and other libraries
  - Get the source for SAGECal : git clone git://git.code.sf.net/p/sagecal/code sagecal-code
 
-## Via Anaconda
-```
-    conda install -c conda-forge casacore==2.4.1
-```
-
 
 
 ## 2 The basic way to build is
   1.a) go to ./src/lib  and run make (which will create libsagecal.a)
   1.b) go to ./src/MS and run make (which will create the executable)
-
-```
-    mkdir build && cd build
-    cmake .. -DCASACORE_ROOT_DIR=/opt/soft/casacore/ -DENABLE_CUDA=OFF
-```
-
 
 ## 3 Build settings
 In ./src/lib and ./src/MS you MUST edit the Makefiles to suit your system. Some common items to edit are:
