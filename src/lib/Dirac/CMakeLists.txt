@@ -10,7 +10,6 @@ set (objects
     myblas
     robust_lbfgs_nocuda
     robustlm
-    rtr_solve_robust
     rtr_solve_robust_admm
     updatenu
 )
