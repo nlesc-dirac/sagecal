@@ -131,20 +131,26 @@ message (STATUS "CMAKE_CXX_FLAGS ....... = ${CMAKE_CXX_FLAGS}")
 message (STATUS "ENABLE_MPI ............ = ${ENABLE_MPI}")
 message (STATUS "ENABLE_CUDA ........... = ${ENABLE_CUDA}")
 
+message (STATUS "CASACORE_ROOT_DIR...... = ${CASACORE_ROOT_DIR}")
+message (STATUS "CASACORE_INC........... = ${CASACORE_INCLUDE_DIR}")
+
 message (STATUS "BLAS-LIBS ............. = ${BLAS_LIBRARIES}")
+
 message (STATUS "GLIB-INC .............. = ${GLIB_PKG_INCLUDE_DIRS}")
 message (STATUS "GLIB-LIBS ............. = ${GLIB_PKG_LIBRARIES}")
+
 message (STATUS "LAPACK-INC ............ = ${LAPACK_INCLUDE_DIR}")
 message (STATUS "LAPACK-LIBS ........... = ${LAPACK_LIBRARIES}")
+
 # FIXME: add if gfortranlibs is needed
 #message (STATUS "GFORTRAN-INC  ......... = ${GFORTRAN_INCLUDE_DIR}")
 #message (STATUS "GFORTRAN-LIBS ......... = ${LIBGFORTRAN_LIBRARIES}")
+
 message (STATUS "CFITSIO-INC  .......... = ${CFITSIO_INCLUDE_DIR}")
 message (STATUS "CFITSIO-LIBS .......... = ${CFITSIO_LIBRARIES}")
+
 message (STATUS "WCSLIB-INC  ........... = ${WCSLIB_INCLUDE_DIR}")
 message (STATUS "WCSLIB-LIBS ........... = ${WCSLIB_LIBRARIES}")
-# FIXME: add CasaCore info
-
 
 
 
