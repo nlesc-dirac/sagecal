@@ -80,12 +80,12 @@ include_directories(${CFITSIO_INCLUDE_DIR})
 
 #lapack
 find_package(LAPACK REQUIRED)
-message(STATUS "Found LAPACK: ${LAPACK_INCLUDE_DIR}")
+message(STATUS "Found WCSLIB: ${LAPACK_INCLUDE_DIR}")
 include_directories(${LAPACK_INCLUDE_DIR})
 
 #wcslib
 find_package(WcsLib REQUIRED)
-message(STATUS "Found LAPACK: ${WCSLIB_INCLUDE_DIR}")
+message(STATUS "Found WCSLIB: ${WCSLIB_INCLUDE_DIR}")
 include_directories(${WCSLIB_INCLUDE_DIR})
 
 #OpenBlas
@@ -137,7 +137,8 @@ message (STATUS "LAPACK-LIBS ........... = ${LAPACK_LIBRARIES}")
 message (STATUS "CFITSIO-INC  .......... = ${CFITSIO_INCLUDE_DIR}")
 message (STATUS "CFITSIO-LIBS .......... = ${CFITSIO_LIBRARIES}")
 
-
+message (STATUS "WCSLIB-INC  ........... = ${WCSLIB_INCLUDE_DIR}")
+message (STATUS "WCSLIB-LIBS ........... = ${WCSLIB_LIBRARIES}")
 
 
 
