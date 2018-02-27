@@ -106,13 +106,15 @@ endif()
 
 # Check pre-defined environment variables
 ## CASACORE_LIB=/cm/shared/package/casacore/v2.3.0-gcc-4.9.3/lib
-## CASACORE_INCLUDE=/cm/shared/package/casacore/v2.3.0-gcc-4.9.3/include
-## CASACORE_ROOT_DIR=/cm/shared/package/casacore/v2.3.0-gcc-4.9.3
-
 
 if (NOT "$ENV{CASACORE_ROOT_DIR}" STREQUAL "")
     set(CASACORE_ROOT_DIR "$ENV{CASACORE_ROOT_DIR}" CACHE INTERNAL "Copied from environment variable")
     message("Using environment variable CASACORE_ROOT_DIR = ${CASACORE_ROOT_DIR}")
+endif()
+
+if (NOT "$ENV{CASACORE_INCLUDE}" STREQUAL "")
+    set(CASACORE_INCLUDE_DIR "$ENV{CASACORE_INCLUDE}" CACHE INTERNAL "Copied from environment variable")
+    message("Using environment variable CASACORE_INCLUDE_DIR = ${CASACORE_INCLUDE_DIR}")
 endif()
 
 
