@@ -403,7 +403,7 @@ cout<<"Reference frequency (MHz)="<<iodata.freq0*1.0e-6<<endl;
     FILE *dfp;
     if ((dfp=fopen("debug.m","w+"))==0) {
       fprintf(stderr,"%s: %d: no file\n",__FILE__,__LINE__);
-      return 1;
+      exit(1);
     }
     fprintf(dfp,"%% timeslot admmIter dir1 dir2 (reversed) ...; (each row=freq)\n");  
     fprintf(dfp,"rhoK=[\n");

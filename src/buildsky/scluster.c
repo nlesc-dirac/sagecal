@@ -114,24 +114,24 @@ fit_two_to_one(GList *pixlist, double bmaj, double bmin, double bpa, double *lva
 
  if ((pixell=(double*)calloc((size_t)npix,sizeof(double)))==0) {
    fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
-   return 1;
+   exit(1);
  }
  if ((pixelm=(double*)calloc((size_t)npix,sizeof(double)))==0) {
    fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
-   return 1;
+   exit(1);
  }
 
  if ((p=(double*)calloc((size_t)m,sizeof(double)))==0) {
    fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
-   return 1;
+   exit(1);
  }
  if ((x=(double*)calloc((size_t)n,sizeof(double)))==0) {
    fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
-   return 1;
+   exit(1);
  }
  if ((x1=(double*)calloc((size_t)n,sizeof(double)))==0) {
    fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
-   return 1;
+   exit(1);
  }
  ci=0;
  for(pli=pixlist; pli!=NULL; pli=g_list_next(pli)) {
@@ -267,24 +267,24 @@ fit_two_to_one_f(GList *pixlist, int Nf, double *freqs, double *bmaj, double *bm
 
  if ((pixell=(double*)calloc((size_t)npix,sizeof(double)))==0) {
    fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
-   return 1;
+   exit(1);
  }
  if ((pixelm=(double*)calloc((size_t)npix,sizeof(double)))==0) {
    fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
-   return 1;
+   exit(1);
  }
 
  if ((p=(double*)calloc((size_t)m,sizeof(double)))==0) {
    fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
-   return 1;
+   exit(1);
  }
  if ((x=(double*)calloc((size_t)n,sizeof(double)))==0) {
    fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
-   return 1;
+   exit(1);
  }
  if ((x1=(double*)calloc((size_t)n,sizeof(double)))==0) {
    fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
-   return 1;
+   exit(1);
  }
  ci=0;
  for(pli=pixlist; pli!=NULL; pli=g_list_next(pli)) {
@@ -389,12 +389,12 @@ cluster_sources(double r, GList *inlist, GList *pixlist, double bmaj, double bmi
  for (li=inlist; li!=NULL; li=g_list_next(li)) {
    if((qnode= (pqsrc*)malloc(sizeof(pqsrc)))==0) {
       fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
-      return 1;
+      exit(1);
    }
    qnode->rd=0.0;
    if((qnode->src= (extsrc*)malloc(sizeof(extsrc)))==0) {
       fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
-      return 1;
+      exit(1);
    }
   
    memcpy((void*)qnode->src,(void*)li->data,sizeof(extsrc)); /* copy source data */
@@ -541,12 +541,12 @@ cluster_sources_f(double r, GList *inlist, GList *pixlist, int Nf, double *freqs
  for (li=inlist; li!=NULL; li=g_list_next(li)) {
    if((qnode= (pqsrcf*)malloc(sizeof(pqsrcf)))==0) {
       fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
-      return 1;
+      exit(1);
    }
    qnode->rd=0.0;
    if((qnode->src=(extsrcf*)malloc(sizeof(extsrcf)))==0) {
       fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
-      return 1;
+      exit(1);
    }
   
    memcpy((void*)qnode->src,(void*)li->data,sizeof(extsrcf)); /* copy source data */
@@ -887,12 +887,12 @@ cluster_sky(const char *imgfile, GList *skylist, int ncluster) {
   cfilep=fopen(clusterfile,"w+");
   if(!cfilep) {
       fprintf(stderr,"%s: %d: unable to open file\n",__FILE__,__LINE__);
-      return 1;
+      exit(1);
   }
   annfp=fopen(clusterann,"w+");
   if(!annfp) {
       fprintf(stderr,"%s: %d: unable to open file\n",__FILE__,__LINE__);
-      return 1;
+      exit(1);
   }
 
   /* print header info in the files */
