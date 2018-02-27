@@ -262,7 +262,7 @@ cout<<"Slave "<<myrank<<" has nothing to do"<<endl;
       FILE *sfq;
       if ((sfq=fopen(initsolfile,"r"))==0) {
        fprintf(stderr,"%s: %d: no solution file present\n",__FILE__,__LINE__);
-       return 1;
+       exit(1);
       }
       /* remember to skip first 3 lines from solution file */
       char chr;
