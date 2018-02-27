@@ -118,6 +118,9 @@ if (NOT "$ENV{CASACORE_INCLUDE}" STREQUAL "")
 endif()
 
 
+#--------------------------------------- build parameters for all targets
+set (CMAKE_CXX_FLAGS "-Wall -g -pg -Wextra -std=c++11 -W -Wpointer-arith -Woverloaded-virtual -Wwrite-strings -pedantic -Wno-long-long -O3 -ansi -fPIC -fpermissive -fno-omit-frame-pointer -DNDEBUG -fno-inline-functions -fno-inline-functions-called-once -fno-optimize-sibling-calls")
+
 
 
 #--------------------------------------- summary
@@ -155,9 +158,6 @@ message (STATUS "WCSLIB-INC  ........... = ${WCSLIB_INCLUDE_DIR}")
 message (STATUS "WCSLIB-LIBS ........... = ${WCSLIB_LIBRARIES}")
 
 
-
-#--------------------------------------- build parameters for all targets
-set (CMAKE_CXX_FLAGS "-Wall -g -pg -Wextra -std=c++11 -W -Wpointer-arith -Woverloaded-virtual -Wwrite-strings -pedantic -Wno-long-long -O3 -ansi -fPIC -fpermissive -fno-omit-frame-pointer -DNDEBUG -fno-inline-functions -fno-inline-functions-called-once -fno-optimize-sibling-calls")
 
 #--------------------------------------- include directories
 add_subdirectory(src)
