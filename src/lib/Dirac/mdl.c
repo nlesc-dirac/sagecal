@@ -63,7 +63,7 @@ minimum_description_length(int N, int M, int F, double *J, double *rho, double *
     int m,q;
     if ((dfp=fopen("debug.m","w+"))==0) {
       fprintf(stderr,"%s: %d: no file\n",__FILE__,__LINE__);
-      return 1;
+      exit(1);
     }
 
          for(cm=0; cm<F; cm++) {
@@ -234,7 +234,9 @@ minimum_description_length(int N, int M, int F, double *J, double *rho, double *
     /* MDL =  F/2 log(RSS/F) + Npoly/2 log(F) */
     mdl[idx++]=(0.5*(double)F)*log(RSS/(double)(F))+0.5*(double)(Npoly)*log((double)F);
 
-
+#ifdef DEBUG
+   fclose(dfp);
+#endif
 
    free(Z);
    free(z);
