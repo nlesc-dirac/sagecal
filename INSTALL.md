@@ -5,15 +5,22 @@ vr  2 dec 2016 23:07:19 CET
 ## Cmake Build
 
 ### Ubuntu 
-- Add KERN repository. Intructions can be found at [http://kernsuite.info/](http://kernsuite.info/)
+- Add KERN repository. Intructions can also be found at [http://kernsuite.info/](http://kernsuite.info/)
+```
+    sudo apt-get install software-properties-common
+    sudo add-apt-repository -s ppa:kernsuite/kern-3
+    sudo apt-add-repository multiverse
+    sudo apt-get update
+```
+
 - Install following packages:
 ```
-apt-get install -y git cmake g++ pkg-config libcfitsio-dev libcfitsio-bin libopenblas-dev libopenblas-base wcslib-dev wcslib-tools libglib2.0-dev
+    sudo apt-get install -y git cmake g++ pkg-config libcfitsio-dev libcfitsio-bin libopenblas-dev libopenblas-base wcslib-dev wcslib-tools libglib2.0-dev
 ```
 
 - Clone the repository
 ```
-git clone -b sprint_cmake https://git@github.com/nlesc-dirac/sagecal.git
+    git clone -b sprint_cmake https://git@github.com/nlesc-dirac/sagecal.git
 
 ```
 
