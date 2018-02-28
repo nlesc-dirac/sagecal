@@ -6,7 +6,7 @@ matrix:
   include:
     # works on Precise and Trusty
     - os: linux
-      dist: xenial
+      dist: trusty
       addons:
         apt:
           sources:
