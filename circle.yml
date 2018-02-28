@@ -1,0 +1,18 @@
+dependencies:
+  pre:
+    - sudo add-apt-repository ppa:ubuntu-toolchain-r/test -y
+    - sudo add-apt-repository ppa:kernsuite/kern-3 -y
+    - sudo apt-get update 
+    - sudo apt-get install g++-7 cmake git pkg-config libcfitsio-bin libcfitsio-dev libopenblas-base libopenblas-dev wcslib-dev wcslib-tools libglib2.0-dev libcasa-casa2 casacore-dev casacore-data casacore-tools
+    - sudo apt-get install cmake --only-upgrade -y
+  override:
+    - mkdir build
+    - cd build && CXX=g++-7 cmake -DCMAKE_BUILD_TYPE=Release -DENABLE_CUDA=OFF ..
+    - make -j 4
+    - ls -alsrt ./dist/bin
+    - ./dist/bin/sagecal -h
+      #- sudo /sbin/ldconfig
+      #test:
+      #    override:
+      #        - LD_LIBRARY_PATH=$PWD make test
+      
