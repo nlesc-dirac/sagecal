@@ -134,19 +134,19 @@ message (STATUS "CMAKE_CXX_FLAGS ....... = ${CMAKE_CXX_FLAGS}")
 message (STATUS "ENABLE_MPI ............ = ${ENABLE_MPI}")
 message (STATUS "ENABLE_CUDA ........... = ${ENABLE_CUDA}")
 
-message (STATUS "CASACORE_ROOT_DIR...... = ${CASACORE_ROOT_DIR}")
 message (STATUS "CASACORE_INC........... = ${CASACORE_INCLUDE_DIR}")
+message (STATUS "CASACORE_LIB........... = ${CASACORE_LIBRARIES}")
 
-message (STATUS "OpenBLAS-LIB ............. = ${OpenBLAS_LIB}")
+message (STATUS "OpenBLAS-LIB .......... = ${OpenBLAS_LIB}")
 
 message (STATUS "GLIB-INC .............. = ${GLIB_PKG_INCLUDE_DIRS}")
 message (STATUS "GLIB-LIBS ............. = ${GLIB_PKG_LIBRARIES}")
 
-message (STATUS "LAPACK-INC ............ = ${LAPACK_INCLUDE_DIR}")
+#message (STATUS "LAPACK-INC ............ = ${LAPACK_INCLUDE_DIR}")
 message (STATUS "LAPACK-LIBS ........... = ${LAPACK_LIBRARIES}")
 
-message (STATUS "GFORTRAN-INC  ......... = ${GFORTRAN_INCLUDE_DIR}")
-message (STATUS "GFORTRAN-LIBS ......... = ${LIBGFORTRAN_LIBRARIES}")
+#message (STATUS "GFORTRAN-INC  ......... = ${GFORTRAN_INCLUDE_DIR}")
+#message (STATUS "GFORTRAN-LIBS ......... = ${LIBGFORTRAN_LIBRARIES}")
 
 message (STATUS "CFITSIO-INC  .......... = ${CFITSIO_INCLUDE_DIR}")
 message (STATUS "CFITSIO-LIBS .......... = ${CFITSIO_LIBRARIES}")
