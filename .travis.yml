@@ -22,8 +22,7 @@ before_install:
   - eval "${MATRIX_EVAL}"
   - sudo add-apt-repository -s ppa:kernsuite/kern-3 -y
   - sudo apt-add-repository multiverse
-  - sudo apt-get -qq update
-  - sudo apt-get install -y git cmake g++ pkg-config libcfitsio-bin libcfitsio-dev libopenblas-base libopenblas-dev wcslib-dev wcslib-tools libglib2.0-dev libcasa-casa2 casacore-dev casacore-data casacore-tools
+  - sudo apt-get -qq update && sudo apt-get install -y git cmake g++ pkg-config libcfitsio-bin libcfitsio-dev libopenblas-base libopenblas-dev wcslib-dev wcslib-tools libglib2.0-dev libcasa-casa2 casacore-dev casacore-data casacore-tools
   - |
       # Configure build variables
       if [[ "$TRAVIS_OS_NAME" == "linux" ]]; then
