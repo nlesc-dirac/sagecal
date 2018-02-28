@@ -121,7 +121,7 @@ endif()
 
 
 #--------------------------------------- build parameters for all targets
-set (CMAKE_CXX_FLAGS "-O3 -Wall -Wextra -std=c++11 -W -pedantic -ansi -fPIC -fpermissive -fno-omit-frame-pointer -fno-inline-functions -fno-inline-functions-called-once -fno-optimize-sibling-calls")
+set (CMAKE_CXX_FLAGS "-g -O3 -Wall -Wextra -std=c++11 -W -pedantic -ansi -fPIC -fpermissive -fno-omit-frame-pointer -fno-inline-functions -fno-inline-functions-called-once -fno-optimize-sibling-calls")
 # FIXME: add debug build option
 #set (CMAKE_CXX_FLAGS_DEBUG "-g -pg -pedantic -Wall -DNDEBUG -Wextra -Wcast-align -Wpointer-arith -Woverloaded-virtual -Wwrite-strings -Wcast-qual -Wctor-dtor-privacy -Wno-long-long-Wdisabled-optimization -Wformat=2 -Winit-self -Wlogical-op -Wmissing-declarations -Wmissing-include-dirs -Wnoexcept -Wold-style-cast -Woverloaded-virtual -Wredundant-decls -Wshadow -Wsign-conversion -Wsign-promo -Wstrict-null-sentinel -Wstrict-overflow=5 -Wswitch-default -Wundef -Werror -Wno-unused")
 
