@@ -4,7 +4,8 @@ vr  2 dec 2016 23:07:19 CET
 
 ## Cmake Build
 
-### Ubuntu (tested with 16.04)
+### Requirements
+#### Ubuntu (tested with 16.04)
 - Add KERN repository. Intructions can also be found at [http://kernsuite.info/](http://kernsuite.info/)
 ```
     sudo apt-get install software-properties-common
@@ -17,7 +18,20 @@ vr  2 dec 2016 23:07:19 CET
 ```
     sudo apt-get install -y git cmake g++ pkg-config libcfitsio-bin libcfitsio-dev libopenblas-base libopenblas-dev wcslib-dev wcslib-tools libglib2.0-dev libcasa-casa2 casacore-dev casacore-data casacore-tools
 ```
+#### Other systems
 
+- Install equivalent packages for your distribution
+    - g++
+    - cmake
+    - git
+    - pkg-config
+    - openblas
+    - libglib2.0-dev
+    - follow the instructions at 
+[https://github.com/casacore/casacore](https://github.com/casacore/casacore) to install casacore.
+
+
+### Building
 - Clone the repository
 ```
     git clone -b sprint_cmake https://git@github.com/nlesc-dirac/sagecal.git
@@ -30,7 +44,8 @@ vr  2 dec 2016 23:07:19 CET
     cmake .. -DENABLE_CUDA=OFF
 ```
 
-&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;**OPTIONAL:** You can also define a custon casacore path:
+**OPTIONAL:** You can also define a custon casacore path:
+
 ```
     cmake .. -DCASACORE_ROOT_DIR=/opt/soft/casacore/ -DENABLE_CUDA=OFF
 ```
@@ -46,10 +61,13 @@ vr  2 dec 2016 23:07:19 CET
 
 
 
-### Via Anaconda (not complete)
+### Via Anaconda (WIP)
 ```
-    conda install -c conda-forge casacore==2.4.1
+    conda install -c sagecal=0.6.0
 ```
+
+
+<!---
 
 
 ## 1 Prerequsites:
@@ -67,10 +85,10 @@ vr  2 dec 2016 23:07:19 CET
  - Get the source for SAGECal : git clone git://git.code.sf.net/p/sagecal/code sagecal-code
 
 
-
 ## 2 The basic way to build is
   1.a) go to ./src/lib  and run make (which will create libsagecal.a)
   1.b) go to ./src/MS and run make (which will create the executable)
+
 
 ## 3 Build settings
 In ./src/lib and ./src/MS you MUST edit the Makefiles to suit your system. Some common items to edit are:
@@ -112,3 +130,7 @@ In ./src/lib and ./src/MS you MUST edit the Makefiles to suit your system. Some 
 ## RESTORE Installation
 
   - See INSTALL in ./src/restore
+  
+  
+
+-->
