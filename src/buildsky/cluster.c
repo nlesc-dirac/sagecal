@@ -2654,7 +2654,7 @@ number of clusters is larger than the number of elements being clustered,
   int* mapping = NULL;
   double** cdata;
   int** cmask;
-  int* counts;
+  int* counts=0;
 
   if (nelements < nclusters)
   { *ifound = 0;
@@ -2691,6 +2691,7 @@ number of clusters is larger than the number of elements being clustered,
   else ok = makedatamask(ndata, nclusters, &cdata, &cmask);
   if(!ok)
   { free(counts);
+    counts=0;
     if(npass>1)
     { free(tclusterid);
       free(mapping);
@@ -2720,8 +2721,7 @@ number of clusters is larger than the number of elements being clustered,
 
   if (transpose==0) freedatamask(nclusters, cdata, cmask);
   else freedatamask(ndata, cdata, cmask);
-
-  free(counts);
+  if (counts) free(counts);
 }
 
 /* *********************************************************************** */
@@ -2990,6 +2990,7 @@ when microarrays are being clustered.
   if (i < n) /* break condition encountered */
   { j = i;
     for (i = 1; i < j; i++) free(matrix[i]);
+    free(matrix);
     return NULL;
   }
 
@@ -3526,9 +3527,13 @@ If a memory error occurs, pslcluster returns NULL.
   free(vector);
   free(index);
 
-  result = realloc(result, nnodes*sizeof(Node));
 
-  return result;
+  //result = realloc(result, nnodes*sizeof(Node));
+  Node* result1 = malloc(nnodes*sizeof(Node)); /* nnodes = nlements -1 */
+  memcpy(result1,result,nnodes*sizeof(Node));
+  free(result);
+
+  return result1;
 }
 /* ******************************************************************** */
 

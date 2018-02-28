@@ -190,7 +190,7 @@ setup_polynomials(double *B, int Npoly, int Nf, double *freqs, double freq0, int
 int
 find_prod_inverse(double *B, double *Bi, int Npoly, int Nf, double *fratio) {
 
-  int ci,status,lwork=0;
+  int ci,status,lwork=1;
   double w[1],*WORK,*U,*S,*VT;
   /* set Bi to zero */
   memset(Bi,0,sizeof(double)*Npoly*Npoly);
@@ -301,7 +301,7 @@ sum_inv_threadfn(void *data) {
  thread_data_prod_inv_t *t=(thread_data_prod_inv_t*)data;
  double w[1],*WORK,*U,*S,*VT;
 
- int k,ci,status,lwork=0;
+ int k,ci,status,lwork=1;
  int Np2=t->Npoly*t->Npoly;
  /* allocate memory for the SVD here */
   if ((U=(double*)calloc((size_t)Np2,sizeof(double)))==0) {

@@ -878,7 +878,7 @@ mlm_der_single(
         printf("Singular matrix info=%d\n",status);
 #endif
        }
-     } else {
+     } else if (solve_axb==2) { 
        /* SVD solver *********************************/
        /* U S VT = A */
        status=my_dgesvd('A','A',M,M,JkTJk,M,Sd,Ud,M,VTd,M,WORK,lwork);
@@ -940,7 +940,7 @@ mlm_der_single(
          printf("Singular matrix info=%d\n",status);
 #endif
        }
-     } else {
+     } else  if (solve_axb==2) {
        /* SVD solver *********************************/
        /* dhatk <= U^T jacTed */
        my_dgemv('T',M,M,1.0,Ud,M,JkTe,1,0.0,dhatk,1);

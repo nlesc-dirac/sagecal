@@ -1472,7 +1472,7 @@ itrr(int N,complex double *x,complex double *eta, complex double *Heta, double *
      sigma=delta_0;
    }
    /* radius update */
-   double beta_1,beta_2,beta_i;
+   double beta_1,beta_2,beta_i=0.0;
    beta_1=0.0;
    beta_2=0.0;
    if (m<MK) {

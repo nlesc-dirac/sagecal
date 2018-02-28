@@ -274,7 +274,7 @@ itrr(int ThreadsPerBlock, int BlocksPerGrid, int N, int M, cuFloatComplex *x, cu
      sigma=delta_0;
    }
    /* radius update */
-   float beta_1,beta_2,beta_i;
+   float beta_1,beta_2,beta_i=0.0f;
    beta_1=0.0f;
    beta_2=0.0f;
    

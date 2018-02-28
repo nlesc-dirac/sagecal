@@ -310,6 +310,7 @@ int main(int argc, char **argv) {
     }
     /* if filter is on, quit now */
     printf("quitting. re-run without filter\n");
+    free(unistr);
     return 0;
    }
    if (!multifits) {

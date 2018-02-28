@@ -177,6 +177,7 @@ read_shapelet_modes(char *buff,int *n0,double *beta,double **modes) {
    }
   }
 
+  fclose(cfp);
   free(input_modes);
   return 0;
 } 
@@ -685,8 +686,10 @@ printf("Nc=%d\n",Nc);
     memset(buf,0,buff_len);
     c=read_next_string(&buf,&buff_len,cfp);
     if (c!=1) {
-     /* first column is solution number (int) 1..8N */
+     /* first column is solution number (int) 0..8N-1 */
      sscanf(buf,"%d",&cn);
+     /* also do a sanity check */
+     if ( cn<0 || cn>Nc ) cn=0;
     }
 #ifdef DEBUG
     printf("%d ",cn);
