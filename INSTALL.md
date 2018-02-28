@@ -27,7 +27,16 @@ vr  2 dec 2016 23:07:19 CET
 - Build SageCal
 ```
     mkdir build && cd build
+    cmake .. -DENABLE_CUDA=OFF
+```
+
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;**OPTIONAL:** You can also define a custon casacore path:
+```
     cmake .. -DCASACORE_ROOT_DIR=/opt/soft/casacore/ -DENABLE_CUDA=OFF
+```
+
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Compile with:
+```
     make -j4
 ```
 
