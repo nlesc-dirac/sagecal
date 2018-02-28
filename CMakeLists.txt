@@ -95,6 +95,10 @@ include_directories(${OpenBLAS_INCLUDE_DIR})
 #find_package(GFortranLibs REQUIRED)
 #include_directories(${GFORTRAN_INCLUDE_DIR})
 
+#hdf5
+find_package(HDF5 REQUIRED)
+
+
 #glib
 pkg_check_modules(GLIB_PKG glib-2.0)
 if (GLIB_PKG_FOUND)
@@ -153,6 +157,9 @@ message (STATUS "CFITSIO-LIBS .......... = ${CFITSIO_LIBRARIES}")
 
 message (STATUS "WCSLIB-INC  ........... = ${WCSLIB_INCLUDE_DIR}")
 message (STATUS "WCSLIB-LIBS ........... = ${WCSLIB_LIBRARIES}")
+
+message (STATUS "HDF5-INC  ........... = ${HDF5_INCLUDE_DIRS}")
+message (STATUS "HDF5-LIBS ........... = ${HDF5_LIBRARIES}")
 
 
 
