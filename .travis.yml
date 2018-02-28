@@ -6,7 +6,7 @@ matrix:
   include:
     # works on Precise and Trusty
     - os: linux
-      dist: trusty
+      dist: xenial
       addons:
         apt:
           sources:
@@ -20,7 +20,6 @@ env:
 
 before_install:
   - eval "${MATRIX_EVAL}"
-  - sudo add-apt-repository ppa:beineri/opt-qt487-trusty -y
   - sudo add-apt-repository -s ppa:kernsuite/kern-3 -y
   - sudo apt-add-repository multiverse
   - sudo apt-get -qq update
