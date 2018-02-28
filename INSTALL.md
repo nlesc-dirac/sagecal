@@ -28,7 +28,9 @@ vr  2 dec 2016 23:07:19 CET
 ```
     mkdir build && cd build
     cmake .. -DCASACORE_ROOT_DIR=/opt/soft/casacore/ -DENABLE_CUDA=OFF
+    make -j4
 ```
+
 
 - The sagecal executable can be found in
     **dist/bin** folder. All the libraries will be stored in **dist/lib** folder. 
