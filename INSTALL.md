@@ -4,7 +4,7 @@ vr  2 dec 2016 23:07:19 CET
 
 ## Cmake Build
 
-### Ubuntu 
+### Ubuntu (tested with 16.04)
 - Add KERN repository. Intructions can also be found at [http://kernsuite.info/](http://kernsuite.info/)
 ```
     sudo apt-get install software-properties-common
