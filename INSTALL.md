@@ -67,10 +67,9 @@ vr  2 dec 2016 23:07:19 CET
 ```
 
 
-<!---
 
-
-## 1 Prerequsites:
+## Manual installation
+### 1 Prerequsites:
  - CASACORE http://casacore.googlecode.com/
  - glib http://developer.gnome.org/glib
  - BLAS/LAPACK
@@ -85,12 +84,12 @@ vr  2 dec 2016 23:07:19 CET
  - Get the source for SAGECal : git clone git://git.code.sf.net/p/sagecal/code sagecal-code
 
 
-## 2 The basic way to build is
+### 2 The basic way to build is
   1.a) go to ./src/lib  and run make (which will create libsagecal.a)
   1.b) go to ./src/MS and run make (which will create the executable)
 
 
-## 3 Build settings
+### 3 Build settings
 In ./src/lib and ./src/MS you MUST edit the Makefiles to suit your system. Some common items to edit are:
  - LAPACK: directory where LAPACK/OpenBLAS is installed
  - GLIBI/GLIBL: include/lib files for glib
@@ -107,6 +106,7 @@ In ./src/lib and ./src/MS you MUST edit the Makefiles to suit your system. Some 
    Makefile.gpu: with GPU support
    Note: Edit sagecal.h MAX_GPU_ID to match the number of available GPUs
    Makefile.MIC : with Intel Xeon Phi support
+
 
 
 
@@ -133,4 +133,3 @@ In ./src/lib and ./src/MS you MUST edit the Makefiles to suit your system. Some 
   
   
 
--->
