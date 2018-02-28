@@ -5,7 +5,8 @@ vr  2 dec 2016 23:07:19 CET
 ## Cmake Build
 
 ### Ubuntu 
-- Add KERN repository: http://kernsuite.info/
+- Add KERN repository. Intructions can be found at [http://kernsuite.info/](http://kernsuite.info/)
+- Install following packages:
 ```
 apt-get install -y git cmake g++ pkg-config libcfitsio-dev libcfitsio-bin libopenblas-dev libopenblas-base wcslib-dev wcslib-tools libglib2.0-dev
 ```
@@ -21,6 +22,12 @@ git clone -b sprint_cmake https://git@github.com/nlesc-dirac/sagecal.git
     mkdir build && cd build
     cmake .. -DCASACORE_ROOT_DIR=/opt/soft/casacore/ -DENABLE_CUDA=OFF
 ```
+
+- The sagecal executable can be found in
+    **dist/bin** folder. All the libraries will be stored in **dist/lib** folder. 
+
+
+
 ### Via Anaconda (not complete)
 ```
     conda install -c conda-forge casacore==2.4.1
