@@ -22,7 +22,7 @@ add_executable(sagecal ${SRCFILES})
 target_link_libraries(sagecal
  ${CASACORE_LIBRARIES}
  ${CFITSIO_LIBRARIES}
- ${BLAS_LIBRARIES}
+ ${OpenBLAS_LIB}
  ${LAPACK_LIBRARIES}
  ${WCSLIB_LIBRARIES}
  ${GLIB_PKG_LIBRARIES}

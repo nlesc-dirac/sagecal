@@ -137,7 +137,7 @@ message (STATUS "ENABLE_CUDA ........... = ${ENABLE_CUDA}")
 message (STATUS "CASACORE_ROOT_DIR...... = ${CASACORE_ROOT_DIR}")
 message (STATUS "CASACORE_INC........... = ${CASACORE_INCLUDE_DIR}")
 
-message (STATUS "BLAS-LIBS ............. = ${BLAS_LIBRARIES}")
+message (STATUS "OpenBLAS-LIB ............. = ${OpenBLAS_LIB}")
 
 message (STATUS "GLIB-INC .............. = ${GLIB_PKG_INCLUDE_DIRS}")
 message (STATUS "GLIB-LIBS ............. = ${GLIB_PKG_LIBRARIES}")
