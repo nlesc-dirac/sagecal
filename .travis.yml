@@ -4,21 +4,16 @@ addons:
     packages:
 matrix:
   include:
+    # works on Precise and Trusty
     - os: linux
-      dist: trusty
-      sudo: required
-      compiler: gcc
-      env:
       addons:
         apt:
           sources:
-            -
+            - ubuntu-toolchain-r-test
           packages:
             - g++-4.9
-      env: COMPILER=gcc GCC=4
-    #- os: osx
-    #  osx_image: xcode9.1
-    #  compiler: clang
+      env:
+         - MATRIX_EVAL="CC=gcc-4.9 && CXX=g++-4.9"
 env:
   global:
 
