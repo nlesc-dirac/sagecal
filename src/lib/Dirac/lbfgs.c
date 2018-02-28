@@ -225,7 +225,7 @@ mult_hessian(int m, double *pk, double *gk, double *s, double *y, double *rho, i
      fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
      exit(1);
  }
- if ((idx=(int*)calloc((size_t)M,sizeof(double)))==0) {
+ if ((idx=(int*)calloc((size_t)M,sizeof(int)))==0) {
      fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
      exit(1);
  }
