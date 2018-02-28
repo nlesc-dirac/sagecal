@@ -10,6 +10,12 @@ vr  2 dec 2016 23:07:19 CET
 apt-get install -y git cmake g++ pkg-config libcfitsio-dev libcfitsio-bin libopenblas-dev libopenblas-base wcslib-dev wcslib-tools libglib2.0-dev
 ```
 
+- Clone the repository
+```
+git clone -b sprint_cmake https://git@github.com/nlesc-dirac/sagecal.git
+
+```
+
 - Build SageCal
 ```
     mkdir build && cd build
