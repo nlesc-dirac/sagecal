@@ -1,0 +1,61 @@
+language: cpp
+addons:
+  apt:
+    packages:
+matrix:
+  include:
+    - os: linux
+      dist: trusty
+      sudo: required
+      compiler: gcc
+      env:
+      addons:
+        apt:
+          sources:
+            -
+          packages:
+            - g++-4.9
+      env: COMPILER=gcc GCC=4
+    #- os: osx
+    #  osx_image: xcode9.1
+    #  compiler: clang
+env:
+  global:
+
+before_install:
+  - sudo add-apt-repository ppa:beineri/opt-qt487-trusty -y
+  - sudo add-apt-repository -s ppa:kernsuite/kern-3 -y
+  - sudo apt-add-repository multiverse
+  - sudo apt-get -qq update
+  - sudo apt-get install -y git cmake g++ pkg-config libcfitsio-bin libcfitsio-dev libopenblas-base libopenblas-dev wcslib-dev wcslib-tools libglib2.0-dev libcasa-casa2 casacore-dev casacore-data casacore-tools
+    - |
+      # Configure build variables
+      if [[ "$TRAVIS_OS_NAME" == "linux" ]]; then
+        if [[ "$COMPILER" == "gcc" ]]; then
+          export CXX=g++-$GCC CC=gcc-$GCC;
+        fi
+        if [[ "$COMPILER" == "clang" ]]; then
+          export CXX=clang++-$CLANG CC=clang-$CLANG;
+        fi
+      elif [[ "$TRAVIS_OS_NAME" == "osx" ]]; then
+        export CXX=clang++ CC=clang;
+      fi
+install:
+    - |
+      if [[ "$TRAVIS_OS_NAME" == "linux" ]]; then
+          echo "Building SageCal"
+          cd $TRAVIS_HOME
+          git clone -b sprint_cmake https://github.com/nlesc-dirac/sagecal.git
+          cd sagecal
+          mkdir build && cd build
+          cmake .. -DENABLE_CUDA=OFF
+          make -j4
+          #cd $TRAVIS_BUILD_DIR
+          ls -alsrt ./dist/bin
+          ./dist/bin/sagecal
+      fi
+script:
+    -
+
+after_success:
+- echo "Yay!"
