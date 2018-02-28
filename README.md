@@ -156,3 +156,8 @@ Each 8 rows of any given column represent the 8 values of a 2x2 Jones matrix. Le
 
 When a luster has a chunk size > 1, there will be more than 1 solution per given time interval. 
 So for this cluster, there will be more than 1 column in the solution file, the exact number of columns being equal to the chunk size.
+
+
+
+### Additional Info
+See [LOFAR Cookbook Chapter](https://support.astron.nl/LOFARImagingCookbook/sagecal.html).

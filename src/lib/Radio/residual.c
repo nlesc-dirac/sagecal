@@ -1714,6 +1714,7 @@ predict_visibilities_multifreq_withsol(double *u,double *v,double *w,double *p,d
 
  pthread_attr_destroy(&attr);
 
+ if (pinv) free(pinv);
  free(th_array);
  free(threaddata);
 

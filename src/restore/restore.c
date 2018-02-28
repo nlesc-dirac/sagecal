@@ -55,9 +55,10 @@ zero_image(long totalrows, long offset, long firstrow, long nrows,
        charp= (float *)  fits_iter_get_array(&cols[0]);
 		}
 
-
+    /*  NOTE: 1st element of array is the null pixel value!  */
+    /*  Loop from 1 to nrows, not 0 to nrows - 1.  */
     for (ii = 1; ii <= nrows; ii++) {
-			    charp[ii]=0.0;
+			    charp[ii]=0.0; 
     }
 
 		return 0;
@@ -1038,6 +1039,12 @@ int main(int argc, char **argv) {
   free(clusterfile);
   glist_delete(&slist);
   free(ignfile);
+ } else {
+  if (ffile) free(ffile);
+  if (slistname) free(slistname);
+  if (solfile) free(solfile);
+  if (clusterfile) free(clusterfile);
+  if (ignfile) free(ignfile);
  }
  return 0;
 }
