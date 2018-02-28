@@ -15,7 +15,7 @@ vr  2 dec 2016 23:07:19 CET
 
 - Install following packages:
 ```
-    sudo apt-get install -y git cmake g++ pkg-config libcfitsio-dev libcfitsio-bin libopenblas-dev libopenblas-base wcslib-dev wcslib-tools libglib2.0-dev
+    sudo apt-get install -y git cmake g++ pkg-config libcfitsio-bin libcfitsio-dev libopenblas-base libopenblas-dev wcslib-dev wcslib-tools libglib2.0-dev libcasa-casa2 casacore-dev casacore-data casacore-tools
 ```
 
 - Clone the repository
