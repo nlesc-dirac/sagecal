@@ -27,7 +27,8 @@ script:
     docker exec --env BRANCH=$BRANCH ubuntu-build \
         echo "Building SageCal" && \ 
         echo "Branch --> $BRANCH" && \
-        cd / && \
+        cd ~/ && \
+        mkdir test && cd test && \
         git clone -b $BRANCH https://github.com/nlesc-dirac/sagecal.git && \
         cd sagecal && \
         mkdir build && cd build && \
