@@ -95,8 +95,8 @@ include_directories(${OpenBLAS_INCLUDE_DIR})
 #find_package(GFortranLibs REQUIRED)
 #include_directories(${GFORTRAN_INCLUDE_DIR})
 
-#hdf5
-find_package(HDF5 REQUIRED)
+##hdf5
+#find_package(HDF5 REQUIRED)
 
 
 #glib

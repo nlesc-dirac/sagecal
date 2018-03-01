@@ -1,5 +1,5 @@
 include_directories(${CASACORE_INCLUDE_DIR}/casacore)
-include_directories(${HDF5_INCLUDE_DIRS})
+#include_directories(${HDF5_INCLUDE_DIRS})
 
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/../lib/Dirac)
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/../lib/Radio)
@@ -28,7 +28,6 @@ target_link_libraries(sagecal
  ${WCSLIB_LIBRARIES}
  ${GLIB_PKG_LIBRARIES}
  ${LIBGFORTRAN_LIBRARIES}
- ${HDF5_LIBRARIES}
  -lopenblas
  -lgfortran
  -lpthread
