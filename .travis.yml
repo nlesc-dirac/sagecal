@@ -15,6 +15,9 @@ before_install:
   - docker run -itd --name ubuntu-build ubuntu:xenial
 
 script:
+  - export BRANCH=$(if [ "$TRAVIS_PULL_REQUEST" == "false" ]; then echo $TRAVIS_BRANCH; else echo $TRAVIS_PULL_REQUEST_BRANCH; fi)
+  - echo "TRAVIS_BRANCH=$TRAVIS_BRANCH, PR=$PR, BRANCH=$BRANCH"
+  - docker exec ubuntu-build export BRANCH=$BRANCH
   - docker exec ubuntu-build apt-get update -y
   - docker exec ubuntu-build apt-get install software-properties-common -y
   - docker exec ubuntu-build add-apt-repository -s ppa:kernsuite/kern-3 -y
@@ -24,8 +27,8 @@ script:
   - |
     docker exec ubuntu-build \
         echo "Building SageCal" && \ 
-        cd $TRAVIS_HOME && \
-        git clone -b master https://github.com/nlesc-dirac/sagecal.git && \
+        cd /home && \
+        git clone -b $BRANCH https://github.com/nlesc-dirac/sagecal.git && \
         cd sagecal && \
         mkdir build && cd build && \
         cmake .. -DENABLE_CUDA=OFF && \
