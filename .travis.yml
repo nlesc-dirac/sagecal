@@ -3,12 +3,7 @@ services:
   - docker
 language: cpp
 
-env:
-   - CC=gcc-4.9
-   - CXX=g++-4.9"
-   - CMAKE_CXX_COMPILER=g++-4.9
-   - CMAKE_BUILD_TYPE=Release
-
+#env:
 
 before_install:
   - docker pull ubuntu:xenial
