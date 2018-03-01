@@ -28,9 +28,10 @@ before_install:
   - docker run -itd --name ubuntu-build ubuntu:xenial
 
 script:
+  - docker exec ubuntu-build apt-get install software-properties-common -y
   - docker exec ubuntu-build add-apt-repository -s ppa:kernsuite/kern-3 -y
   - docker exec ubuntu-build apt-add-repository multiverse
-  - docker exec ubuntu-build apt-get -qq update && sudo apt-get install -y git cmake g++ pkg-config libcfitsio-bin libcfitsio-dev libopenblas-base libopenblas-dev wcslib-dev wcslib-tools libglib2.0-dev libcasa-casa2 casacore-dev casacore-data casacore-tools
+  - docker exec ubuntu-build apt-get -qq update && apt-get install -y git cmake g++ pkg-config libcfitsio-bin libcfitsio-dev libopenblas-base libopenblas-dev wcslib-dev wcslib-tools libglib2.0-dev libcasa-casa2 casacore-dev casacore-data casacore-tools
   - |
     docker exec ubuntu-build \
         echo "Building SageCal" && \ 
