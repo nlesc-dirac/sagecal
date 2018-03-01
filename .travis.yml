@@ -12,7 +12,7 @@ env:
 
 before_install:
   - docker pull ubuntu:xenial
-  - docker run -itd --name ubuntu-build ubuntu:xenial
+  - docker run -itd -v "${TRAVIS_BUILD_DIR}:/travis/workdir" --name ubuntu-build ubuntu:xenial
 
 script:
   - export BRANCH=$(if [ "$TRAVIS_PULL_REQUEST" == "false" ]; then echo $TRAVIS_BRANCH; else echo $TRAVIS_PULL_REQUEST_BRANCH; fi)
@@ -24,16 +24,5 @@ script:
   - docker exec ubuntu-build apt-get update -y
   - docker exec ubuntu-build apt-get install -y git cmake g++ pkg-config libcfitsio-bin libcfitsio-dev libopenblas-base libopenblas-dev wcslib-dev wcslib-tools libglib2.0-dev libcasa-casa2 casacore-dev casacore-data casacore-tools
   - |
-    docker exec --env BRANCH=$BRANCH ubuntu-build \
-        echo "Building SageCal" && \ 
-        echo "Branch --> $BRANCH" && \
-        cd ~/ && \
-        mkdir test && cd test && \
-        git clone -b $BRANCH https://github.com/nlesc-dirac/sagecal.git && \
-        cd sagecal && \
-        mkdir build && cd build && \
-        cmake .. -DENABLE_CUDA=OFF && \
-        make -j4 && \
-        ls -alsrt ./dist/bin && \
-        ./dist/bin/sagecal
+    docker exec --env BRANCH=$BRANCH /bin/bash -c "/travis/workdir/test-builds/test-ubuntu.sh"
 
