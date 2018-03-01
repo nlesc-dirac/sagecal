@@ -24,5 +24,5 @@ script:
   - docker exec ubuntu-build apt-get update -y
   - docker exec ubuntu-build apt-get install -y git cmake g++ pkg-config libcfitsio-bin libcfitsio-dev libopenblas-base libopenblas-dev wcslib-dev wcslib-tools libglib2.0-dev libcasa-casa2 casacore-dev casacore-data casacore-tools
   - |
-    docker exec --env BRANCH=$BRANCH /bin/bash -c "/travis/workdir/test-builds/test-ubuntu.sh"
+    docker exec --env BRANCH=$BRANCH ubuntu-build /bin/bash -c "/travis/workdir/test-builds/test-ubuntu.sh"
 
