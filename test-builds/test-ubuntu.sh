@@ -1,6 +1,6 @@
 #!/bin/bash
 
-echo "Building SageCal" && \ 
+echo "Building SageCal" && \
 echo "Branch --> $BRANCH" && \
 cd /travis/workdir && \
 mkdir build && cd build && \
