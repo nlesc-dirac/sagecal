@@ -1,3 +1,6 @@
+
+[![Build Status](https://travis-ci.org/nlesc-dirac/sagecal.svg?branch=master)](https://travis-ci.org/nlesc-dirac/sagecal)
+
 # SAGECAL
 
 ## Features
