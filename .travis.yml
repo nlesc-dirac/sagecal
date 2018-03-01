@@ -1,0 +1,44 @@
+sudo: required
+services:
+  - docker
+language: cpp
+
+#matrix:
+#  include:
+#    # works on Precise and Trusty
+#    - os: linux
+#      dist: xenial
+#      addons:
+#        apt:
+#          sources:
+#            - ubuntu-toolchain-r-test
+#          packages:
+#            - g++-4.9
+#            - cmake
+
+env:
+   - CC=gcc-4.9
+   - CXX=g++-4.9"
+   - CMAKE_CXX_COMPILER=g++-4.9
+   - CMAKE_BUILD_TYPE=Release
+
+
+before_install:
+  - docker pull ubuntu:xenial
+  - docker run -itd --name ubuntu-build ubuntu:xenial
+
+script:
+  - docker exec ubuntu-build add-apt-repository -s ppa:kernsuite/kern-3 -y
+  - docker exec ubuntu-build apt-add-repository multiverse
+  - docker exec ubuntu-build apt-get -qq update && sudo apt-get install -y git cmake g++ pkg-config libcfitsio-bin libcfitsio-dev libopenblas-base libopenblas-dev wcslib-dev wcslib-tools libglib2.0-dev libcasa-casa2 casacore-dev casacore-data casacore-tools
+  - docker exec ubuntu-build \
+        echo "Building SageCal" && \ 
+        cd $TRAVIS_HOME && \
+        git clone -b sprint_cmake https://github.com/nlesc-dirac/sagecal.git && \
+        cd sagecal && \
+        mkdir build && cd build && \
+        cmake .. -DENABLE_CUDA=OFF && \
+        make -j4 && \
+        #cd $TRAVIS_BUILD_DIR && \
+        ls -alsrt ./dist/bin && \
+        ./dist/bin/sagecal
