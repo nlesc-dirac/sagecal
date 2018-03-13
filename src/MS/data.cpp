@@ -20,17 +20,17 @@
 #include "data.h"
 #include "Radio.h"
 #include "Dirac.h"
-#include <measures/Measures/MDirection.h>
-#include <measures/Measures/UVWMachine.h>
-#include <casa/Quanta.h>
-#include <casa/Quanta/Quantum.h>
+#include <casacore/measures/Measures/MDirection.h>
+#include <casacore/measures/Measures/UVWMachine.h>
+#include <casacore/casa/Quanta.h>
+#include <casacore/casa/Quanta/Quantum.h>
 
 /* speed of light */
 #ifndef CONST_C
 #define CONST_C 299792458.0
 #endif
 
-using namespace casa;
+using namespace casacore;
 
 int Data::numChannels=1;
 unsigned long int Data::numRows;
