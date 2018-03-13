@@ -22,22 +22,22 @@
 #include <unistd.h>
 #include <stdio.h>
 #include <iostream>
-#include <ms/MeasurementSets/MSIter.h>
-#include <tables/Tables/Table.h>
-#include <tables/Tables/TableVector.h>
-#include <tables/Tables/TableRecord.h>
-#include <tables/Tables/TableColumn.h>
-#include <tables/Tables/TableIter.h>
-#include <tables/Tables/ScalarColumn.h>
-#include <tables/Tables/ArrayColumn.h>
-#include <casa/Arrays/Array.h>
-#include <casa/Arrays/Cube.h>
+#include <casacore/ms/MeasurementSets/MSIter.h>
+#include <casacore/tables/Tables/Table.h>
+#include <casacore/tables/Tables/TableVector.h>
+#include <casacore/tables/Tables/TableRecord.h>
+#include <casacore/tables/Tables/TableColumn.h>
+#include <casacore/tables/Tables/TableIter.h>
+#include <casacore/tables/Tables/ScalarColumn.h>
+#include <casacore/tables/Tables/ArrayColumn.h>
+#include <casacore/casa/Arrays/Array.h>
+#include <casacore/casa/Arrays/Cube.h>
 #include <fstream>
 #include <math.h>
 #include <complex>
 
 
-using namespace casa;
+using namespace casacore;
 
 namespace Data
 {
@@ -121,8 +121,8 @@ namespace Data
     extern float min_uvcut;
     extern float max_uvcut;
     extern float max_uvtaper;
-    extern casa::String DataField; /* input column DATA/CORRECTED_DATA */
-    extern casa::String OutField; /* output column DATA/CORRECTED_DATA */
+    extern casacore::String DataField; /* input column DATA/CORRECTED_DATA */
+    extern casacore::String OutField; /* output column DATA/CORRECTED_DATA */
     extern int TileSize; //Tile size
     extern int Nt; /* no of worker threads */
     extern char *SkyModel; /* sky model file */
