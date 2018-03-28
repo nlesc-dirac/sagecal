@@ -2,9 +2,10 @@
 --- 
 authors: 
   - 
-    affiliation: "ASTRON"
+    affiliation: "ASTRON, The Netherlands Institute for Radio Astronomy"
     family-names: Yatawatta
     given-names: Sarod
+    orcid: "https://orcid.org/0000-0001-5619-4017"
   - 
     affiliation: "Netherlands eScience Center"
     family-names: Diblen
@@ -24,8 +25,8 @@ commit: 1e2c24b31ada7e46d65b9f8b6e98c48e4845c724
 date-released: 2017-11-16
 doi: 10.5281/zenodo.1051169
 keywords: 
-  - "radio astronomy"
-  - "calibration"
+  - "Radio Astronomy"
+  - "Calibration"
   - "GPU"
   - "Spark"
 license: Apache-2.0

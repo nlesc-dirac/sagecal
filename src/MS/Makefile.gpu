@@ -23,7 +23,7 @@ LDFLAGS=-Wl,--rpath,/cm/shared/package/openblas/0.2.17mt/lib,${CASA_LIBDIR}
 # -Wl,--hash-style=both
 
 # with multithread FFTW
-MY_LIBS=-lm -lsagecal -ldirac 
+MY_LIBS=-lm -lradio -ldirac 
 INCLUDES=-I. -I../lib/Dirac/ -I../lib/Radio/ $(CASA_INCDIR) -I/usr/include $(CUDAINC) -I$(NVML_INC)
 LIBPATH=-L$(LAPACK_DIR) -L$(CASA_LIBDIR) -L../lib/Dirac/ -L../lib/Radio/
 
