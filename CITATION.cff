@@ -5,7 +5,7 @@ authors:
     affiliation: "ASTRON, The Netherlands Institute for Radio Astronomy"
     family-names: Yatawatta
     given-names: Sarod
-    orcid: "0000-0001-5619-4017"
+    orcid: "https://orcid.org/0000-0001-5619-4017"
   - 
     affiliation: "Netherlands eScience Center"
     family-names: Diblen
@@ -14,10 +14,11 @@ authors:
     affiliation: "Netherlands eScience Center"
     family-names: Spreeuw
     given-names: Hanno
-    orcid: "0000-0002-5057-0322"
+    orcid: "https://orcid.org/0000-0002-5057-0322"
   - 
     affiliation: "Netherlands eScience Center"
-    family-names: Van Werkhoven 
+    family-names: Werkhoven 
+    name-particle: van
     given-names: Ben
 
 cff-version: "1.0.3"
