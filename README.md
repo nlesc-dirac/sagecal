@@ -136,13 +136,27 @@ Use mpirun to run sagecal-mpi, example:
 ```
 
 Specific options : 
--np 11 : 11 processes : starts 10 slaves + 1 master
-./machines : will list the host names of the 11 nodes used ( 1st name is the master ) : normally the node where you invoke mpirun
-/scratch/users/sarod : this is where MPI stores temp files (default /tmp)
--f 'MS*pattern' : Search MS names that match this pattern and calibrate all of them together
--A 30 : 30 C-ADMM iterations
--P 2 : polynomial in frequency has 2 terms
--r 5 : regularization factor is 5.0
+```-np 11``` : 11 processes : starts 10 slaves + 1 master
+
+```./machines``` : will list the host names of the 11 (or fewer) nodes used ( 1st name is the master ) : normally the node where you invoke mpirun
+
+```-f 'MS*pattern'``` : Search MS names that match this pattern and calibrate all of them together. The total number of MS being calibrated can be higher than the actual number of slaves (multiplexing).
+
+```-A 30``` : 30 ADMM iterations.
+
+```-P 2``` : polynomial in frequency has 2 terms.
+
+```-Q``` : can change the type of polynomial used (```-Q 2``` gives Bernstein polynomials).
+
+```-r 5``` : regularization factor is 5.0.
+
+```-G textfile```: each cluster can have a different regularization factor, instead of using ```-r``` option when the regularization is the same for all clusters.
+
+MPI specific options:
+
+```/scratch/users/sarod``` : this is where MPI stores temp files (default is probably ```/tmp```).
+
+```--mca*```: various options to tune the networking and scheduling.
 
 Note: the number of slaves (-np option) can be lower than the number of MS calibrated. The program will divide the workload among the number of available slaves.
 

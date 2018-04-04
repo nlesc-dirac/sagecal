@@ -1,5 +1,4 @@
-vr  2 dec 2016 23:07:19 CET
-
+wo  4 apr 2018 13:36:14 CEST
 # SAGECal Installation
 
 ## Cmake Build
