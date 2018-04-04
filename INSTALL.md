@@ -103,9 +103,7 @@ In ./src/lib and ./src/MS you MUST edit the Makefiles to suit your system. Some 
  Example makefiles: 
    Makefile : plain build
    Makefile.gpu: with GPU support
-   Note: Edit sagecal.h MAX_GPU_ID to match the number of available GPUs
-   Makefile.MIC : with Intel Xeon Phi support
-
+   Note: Edit ./lib/Radio/Radio.h MAX_GPU_ID to match the number of available GPUs, e.g., for 2 GPUs, MAX_GPU_ID=1
 
 
 
