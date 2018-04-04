@@ -3,7 +3,7 @@
 echo "Building SageCal" && \
 echo "Branch --> $BRANCH" && \
 cd /travis/workdir && \
-mkdir build && cd build && \
+mkdir build-ubuntu && cd build-ubuntu && \
 cmake .. -DENABLE_CUDA=OFF && \
 make -j4 && \
 ls -alsrt ./dist/bin && \
