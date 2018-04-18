@@ -38,7 +38,7 @@ main.o:main.cpp
 	$(CXX) $(CXXFLAGS) $(INCLUDES) $(GLIBI) -c $<
 data.o:data.cpp data.h
 	$(CXX) $(CXXFLAGS) $(INCLUDES) $(GLIBI) -c $<
-sagecal:$(OBJECTS) ../lib/Radio/libsagecal.a ../lib/Dirac/libdirac.a 
+sagecal:$(OBJECTS) ../lib/Radio/libradio.a ../lib/Dirac/libdirac.a 
 	$(CXX) $(CXXFLAGS) $(LDFLAGS) $(INCLUDES) $(GLIBI) $(LIBPATH)  -o $@  $(OBJECTS) $(MY_LIBS) $(CASA_LIBS)  $(GLIBL) $(LAPACK)  $(CUDALIB) $(CULALIB) $(NVML_LIB)
 clean:
 	rm *.o *.tmp *.fits
