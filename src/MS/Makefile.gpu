@@ -10,7 +10,7 @@ LAPACK_DIR=/cm/shared/package/openblas/0.2.17mt/lib
 #LAPACK_DIR=/usr/lib/atlas/sse/
 
 CUDAINC=-I/cm/shared/apps/cuda80/toolkit/8.0.44/include/
-CUDALIB=-lcublas -lcusolver -lcudadevrt
+CUDALIB=-lcuda -lcudart  -lcublas -lcusolver -lcudadevrt
 
 # CULALIB=-lcublas -lcusolver -lcudadevrt
 # NVML
