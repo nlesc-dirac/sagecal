@@ -10,12 +10,12 @@ LAPACK_DIR=/cm/shared/package/openblas/0.2.17mt/lib
 #LAPACK_DIR=/usr/lib/atlas/sse/
 
 CUDAINC=-I/cm/shared/apps/cuda80/toolkit/8.0.44/include/
-CUDALIB=-lcuda -lcudart  -lcublas -lcusolver -lcudadevrt
+CUDALIB=-lcuda -lcudart -lcublas -lcusolver -lcudadevrt
 
 # CULALIB=-lcublas -lcusolver -lcudadevrt
 # NVML
 NVML_INC=/usr/include/nvidia/gdk/
-NVML_LIB=-lnvidia-ml -L/usr/lib64/nvidia/
+NVML_LIB=-lnvidia-ml -L/cm/shared/package/cuda80/toolkit/8.0.61/lib64/stubs
 
 
 LDFLAGS=-Wl,--rpath,/cm/shared/package/openblas/0.2.17mt/lib,${CASA_LIBDIR}
