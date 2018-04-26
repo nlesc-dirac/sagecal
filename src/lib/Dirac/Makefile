@@ -9,7 +9,7 @@ CLIBS= -lm -lpthread
 #LAPACK=-L/usr/local/GotoBLAS2/lib -lgoto2 -lpthread -lgfortran
 LAPACK=-L/cm/shared/package/openblas/0.2.17mt/lib -lopenblas -lgfortran -lpthread
 
-INCLUDES= -I. 
+INCLUDES=-I. 
 LIBPATH=
 
 #### glib
