@@ -9,7 +9,6 @@ LAPACK=-lopenblas -lgfortran -lpthread
 LAPACK_DIR=/cm/shared/package/openblas/0.2.17mt/lib
 #LAPACK_DIR=/usr/lib/atlas/sse/
 
-CUDAINC=-I/cm/shared/apps/cuda80/toolkit/8.0.44/include/
 CUDALIB=-lcuda -lcudart -lcublas -lcusolver -lcudadevrt
 
 # CULALIB=-lcublas -lcusolver -lcudadevrt
@@ -24,7 +23,7 @@ LDFLAGS=-Wl,--rpath,/cm/shared/package/openblas/0.2.17mt/lib,${CASA_LIBDIR}
 
 # with multithread FFTW
 MY_LIBS=-lm -lradio -ldirac 
-INCLUDES=-I. -I../lib/Dirac/ -I../lib/Radio/ $(CASA_INCDIR) -I/usr/include $(CUDAINC) -I$(NVML_INC)
+INCLUDES=-I. -I../lib/Dirac/ -I../lib/Radio/ $(CASA_INCDIR) -I/usr/include -I$(NVML_INC)
 LIBPATH=-L$(LAPACK_DIR) -L$(CASA_LIBDIR) -L../lib/Dirac/ -L../lib/Radio/
 
 #### glib
