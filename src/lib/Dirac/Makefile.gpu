@@ -15,10 +15,9 @@ GLIBI=-I/usr/include/glib-2.0 -I/usr/lib64/glib-2.0/include/
 GLIBL=-lglib-2.0 -L/usr/lib64
 
 # NVML
-NVML_INC=/usr/include/nvidia/gdk/
 NVML_LIB=-lnvidia-ml
 
-INCLUDES= -I. -I$(NVML_INC)
+INCLUDES=-I. 
 LIBPATH= $(CUDALIB)
 
 
