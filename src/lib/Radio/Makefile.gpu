@@ -20,7 +20,7 @@ GLIBL=-lglib-2.0 -L/usr/lib64
 # NVML
 NVML_LIB=-lnvidia-ml
 
-INCLUDES= -I. -I$(CUDAINC) -I$(NVML_INC) -I../Dirac
+INCLUDES= -I. -I../Dirac
 LIBPATH= $(CUDALIB)
 
 
