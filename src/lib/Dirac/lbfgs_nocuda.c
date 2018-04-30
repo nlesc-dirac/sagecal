@@ -677,6 +677,14 @@ linesearch(
 #ifdef DEBUG
   printf("mu=%lf, alpha1=%lf\n",mu,alpha1);
 #endif
+  /* catch if not finite (deltaphi=0 or nan) */
+  if (!isnormal(mu)) {
+    free(xp);
+#ifdef DEBUG
+    printf("line interval too small\n");
+#endif
+    return mu;
+  }
 
   ci=1;
   alphai=alpha1; /* initial value for alpha(i) : check if 0<alphai<=mu */
@@ -852,7 +860,7 @@ lbfgs_fit(
   cm=0;
   ci=0;
   
-  while (ck<itmax) {
+  while (ck<itmax && isnormal(gradnrm) && gradnrm>CLM_STOP_THRESH) {
    /* mult with hessian  pk=-H_k*gk */
    if (ck<M) {
     mult_hessian(m,pk,gk,s,y,rho,ck,ci);
