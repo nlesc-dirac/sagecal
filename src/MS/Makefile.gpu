@@ -1,6 +1,6 @@
 OUTPUT=
 CXX=g++
-CXXFLAGS=-O3 -Wall -g -DHAVE_CUDA -pg -std=c++11
+CXXFLAGS=-O3 -Wall -g -DHAVE_CUDA -std=c++11
 CASA_LIBDIR=-L/cm/shared/package/casacore/v2.4.1-gcc-6.3.0/lib -L/cm/shared/package/cfitsio/3380-gcc-4.9.3/lib -L/cm/shared/package/lapack/3.6.0-gcc-4.9.3/lib64
 CASA_INCDIR=-I/cm/shared/package/casacore/v2.4.1-gcc-6.3.0/include -I/cm/shared/package/casacore/v2.4.1-gcc-6.3.0/include/casacore
 CASA_LIBS=-lcasa_casa -lcasa_tables -lcasa_measures -lcasa_ms -lcfitsio
@@ -10,11 +10,10 @@ LAPACK_DIR=/cm/shared/package/openblas/0.2.17mt/lib
 #LAPACK_DIR=/usr/lib/atlas/sse/
 
 CUDALIB=-lcuda -lcudart -lcublas -lcusolver -lcudadevrt
-
 # CULALIB=-lcublas -lcusolver -lcudadevrt
+
 # NVML
-NVML_INC=/usr/include/nvidia/gdk/
-NVML_LIB=-lnvidia-ml -L/cm/shared/package/cuda80/toolkit/8.0.61/lib64/stubs
+NVML_LIB=-lnvidia-ml -L/cm/shared/package/cuda91/toolkit/9.1.85/lib64/stubs
 
 
 LDFLAGS=-Wl,--rpath,/cm/shared/package/openblas/0.2.17mt/lib,${CASA_LIBDIR}
@@ -23,7 +22,7 @@ LDFLAGS=-Wl,--rpath,/cm/shared/package/openblas/0.2.17mt/lib,${CASA_LIBDIR}
 
 # with multithread FFTW
 MY_LIBS=-lm -lradio -ldirac 
-INCLUDES=-I. -I../lib/Dirac/ -I../lib/Radio/ $(CASA_INCDIR) -I/usr/include -I$(NVML_INC)
+INCLUDES=-I. -I../lib/Dirac/ -I../lib/Radio/ $(CASA_INCDIR) -I/usr/include
 LIBPATH=-L$(LAPACK_DIR) -L$(CASA_LIBDIR) -L../lib/Dirac/ -L../lib/Radio/
 
 #### glib
