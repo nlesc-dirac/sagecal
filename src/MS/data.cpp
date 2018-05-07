@@ -243,7 +243,14 @@ Data::readAuxData(const char *fname, Data::IOData *data, Data::LBeam *binfo) {
    binfo->yy=new double*[data->N];
    binfo->zz=new double*[data->N];
 
-   Table antfield = Table(_t.keywordSet().asTable("LOFAR_ANTENNA_FIELD"));
+   Table antfield;
+   if(_t.keywordSet().fieldNumber("LOFAR_ANTENNA_FIELD") != -1) {
+    antfield = Table(_t.keywordSet().asTable("LOFAR_ANTENNA_FIELD"));
+   } else {
+    char buff[2048]={0};
+    sprintf(buff, "%s/LOFAR_ANTENNA_FIELD", fname);
+    antfield=Table(buff);
+   }
    ROArrayColumn<double> position(antfield, "POSITION"); 
    ROArrayColumn<double> offset(antfield, "ELEMENT_OFFSET"); 
    ROArrayColumn<double> coord(antfield, "COORDINATE_AXES"); 
