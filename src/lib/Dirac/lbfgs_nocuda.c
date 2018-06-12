@@ -421,8 +421,9 @@ cubic_interp(
   p02=my_dnrm2(n,x);
   f0d=(p01*p01-p02*p02)/(2.0*step);
 
-  my_dcopy(m,xk,1,xp,1); /* xp<=xk */
-  my_daxpy(m,pk,b,xp); /* xp<=xp+(b)*pk */
+  //my_dcopy(m,xk,1,xp,1); /* xp<=xk: NOT NEEDED because already xp=xk+(a-step)*pk */
+  //my_daxpy(m,pk,b,xp); /* xp<=xp+(b)*pk */
+  my_daxpy(m,pk,-a+step+b,xp); /* xp<=xp+(b)*pk */
   func(xp,x,m,n,adata);
   my_daxpy(n,xo,-1.0,x);
   f1=my_dnrm2(n,x);
@@ -458,8 +459,9 @@ cubic_interp(
     fz0=f0+f1;
    } else {
     /* evaluate function for this root */
-    my_dcopy(m,xk,1,xp,1); /* xp<=xk */
-    my_daxpy(m,pk,a+z0*(b-a),xp); /* xp<=xp+(z0)*pk */
+    //my_dcopy(m,xk,1,xp,1); /* xp<=xk: NOT NEEDED because already xp=xk+(b-step)*pk */
+    //my_daxpy(m,pk,a+z0*(b-a),xp); /* xp<=xp+(z0)*pk */
+    my_daxpy(m,pk,-b+step+a+z0*(b-a),xp); /* xp<=xp+(z0)*pk */
     func(xp,x,m,n,adata);
     my_daxpy(n,xo,-1.0,x);
     fz0=my_dnrm2(n,x);
@@ -540,8 +542,9 @@ linesearch_zoom(
     phi_j*=phi_j;
 
     /* evaluate phi(aj) */
-    my_dcopy(m,xk,1,xp,1); /* xp<=xk */
-    my_daxpy(m,pk,aj,xp); /* xp<=xp+(alphaj)*pk */
+    //my_dcopy(m,xk,1,xp,1); /* xp<=xk: NOT NEEDED because already xp = xk+alphaj*pk */
+    //my_daxpy(m,pk,aj,xp); /* xp<=xp+(aj)*pk */
+    my_daxpy(m,pk,-alphaj+aj,xp); /* xp<=xp+(aj)*pk */
     func(xp,x,m,n,adata);
     /* calculate x<=x-xo */
     my_daxpy(n,xo,-1.0,x);
@@ -553,8 +556,9 @@ linesearch_zoom(
       bj=alphaj; /* aj unchanged */
     } else {
      /* evaluate grad(alphaj) */
-     my_dcopy(m,xk,1,xp,1); /* xp<=xk */
-     my_daxpy(m,pk,alphaj+step,xp); /* xp<=xp+(alphaj+step)*pk */
+     //my_dcopy(m,xk,1,xp,1); /* xp<=xk: NOT NEEDED because already xp = xk+aj*pk */
+     //my_daxpy(m,pk,alphaj+step,xp); /* xp<=xp+(alphaj+step)*pk */
+     my_daxpy(m,pk,-aj+alphaj+step,xp); /* xp<=xp+(alphaj+step)*pk */
      func(xp,x,m,n,adata);
      /* calculate x<=x-xo */
      my_daxpy(n,xo,-1.0,x);
@@ -718,8 +722,9 @@ linesearch(
    } 
 
    /* evaluate grad(phi(alpha(i))) */
-   my_dcopy(m,xk,1,xp,1); /* NOT NEEDED here?? xp<=xk */
-   my_daxpy(m,pk,alphai+step,xp); /* xp<=xp+(alphai+step)*pk */
+   //my_dcopy(m,xk,1,xp,1); /* NOT NEEDED here because already xp=xk+alphai*pk */
+   //my_daxpy(m,pk,alphai+step,xp); /* xp<=xp+(alphai+step)*pk */
+   my_daxpy(m,pk,step,xp); /* xp<=xp+(alphai+step)*pk */
    func(xp,x,m,n,adata);
    /* calculate x<=x-xo */
    my_daxpy(n,xo,-1.0,x);
