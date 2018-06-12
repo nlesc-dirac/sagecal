@@ -683,6 +683,7 @@ linesearch(
 #endif
   /* catch if not finite (deltaphi=0 or nan) */
   if (!isnormal(mu)) {
+    free(x);
     free(xp);
 #ifdef DEBUG
     printf("line interval too small\n");
