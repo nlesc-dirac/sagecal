@@ -1023,6 +1023,11 @@ lbfgs_fit_robust(
    /* parameters c1=1e-4 c2=0.9, alpha1=1.0, alphamax=10.0, step (for alpha)=1e-4*/
    //alphak=linesearch_nw(func_robust,xk,pk,1.0,10.0,1e-4,0.9,x,m,n,1e-4,adata);
    //alphak=1.0;
+   /* check if step size is too small, or nan, then stop */
+   if (!isnormal(alphak) || fabs(alphak)<CLM_EPSILON) {
+    break;
+   }
+
    /* update parameters xk1=xk+alpha_k *pk */
    my_dcopy(m,xk,1,xk1,1);
    my_daxpy(m,pk,alphak,xk1);
