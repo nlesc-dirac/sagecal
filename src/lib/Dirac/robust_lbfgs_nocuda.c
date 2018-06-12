@@ -314,8 +314,8 @@ cubic_interp(
    } else {
     /* evaluate function for this root */
     //my_dcopy(m,xk,1,xp,1); /* xp<=xk: NOT NEEDED because already xp=xk+(b-step)*pk */
-    //my_daxpy(m,pk,a+z0*(b-a),xp); /* xp<=xp+(z0)*pk */
-    my_daxpy(m,pk,-b+step+a+z0*(b-a),xp); /* xp<=xp+(z0)*pk */
+    //my_daxpy(m,pk,a+z0*(b-a),xp); /* xp<=xp+(a+z0(b-a))*pk */
+    my_daxpy(m,pk,-b+step+a+z0*(b-a),xp); /* xp<=xp+(a+z0(b-a))*pk */
     func(xp,x,m,n,adata);
     //my_daxpy(n,xo,-1.0,x);
     //fz0=my_dnrm2(n,x);
