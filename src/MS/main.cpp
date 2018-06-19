@@ -38,7 +38,7 @@ using namespace Data;
 
 void
 print_copyright(void) {
-  cout<<"SAGECal 0.5.0 (C) 2011-2018 Sarod Yatawatta"<<endl;
+  cout<<"SAGECal 0.5.1 (C) 2011-2018 Sarod Yatawatta"<<endl;
 }
 
 
@@ -62,7 +62,7 @@ print_help(void) {
    cout << "-m LBFGS memory size : default " <<Data::lbfgs_m<< endl;
    cout << "-n no of worker threads : default "<<Data::Nt << endl;
    cout << "-t tile size : default " <<Data::TileSize<< endl;
-   cout << "-a 0,1,2,3 : if "<<SIMUL_ONLY<<", only simulate, if "<<SIMUL_ADD<<", simulate and add to input, if "<<SIMUL_SUB<<", simulate and subtract from input (multiplied by solutions if solutions file is also given): default " <<Data::DoSim<< endl;
+   cout << "-a 0,1,2,3 : if "<<SIMUL_ONLY<<", only simulate, if "<<SIMUL_ADD<<", simulate and add to input, if "<<SIMUL_SUB<<", simulate and subtract from input (For a>0, multiplied by solutions if solutions file is also given): default " <<Data::DoSim<< endl;
    cout << "-z ignore_clusters: if only doing a simulation, ignore the cluster ids listed in this file" << endl;
    cout << "-b 0,1 : if 1, solve for each channel: default " <<Data::doChan<< endl;
    cout << "-B 0,1 : if 1, predict array beam: default " <<Data::doBeam<< endl;
