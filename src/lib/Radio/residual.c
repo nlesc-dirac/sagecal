@@ -1369,7 +1369,7 @@ predictwithgain_threadfn_multifreq(void *data) {
        so given bindex,  right p[] is bindex/((Nbase*tilesz+nchunk-1)/nchunk)
        */
      px=(ci+t->boff)/((Ntilebase+t->carr[cm].nchunk-1)/t->carr[cm].nchunk);
-     //printf("base %d, cluster %d, parm off %d abs %d\n",t->bindex[ci],cm,px,t->carr[cm].p[px]);
+     //printf("base %d, cluster %d, parm off %d abs %d\n",t->boff+ci,cm,px,t->carr[cm].p[px]);
      pm=&(t->p[t->carr[cm].p[px]]);
      G1[0]=(pm[sta1*8])+_Complex_I*(pm[sta1*8+1]);
      G1[1]=(pm[sta1*8+2])+_Complex_I*(pm[sta1*8+3]);

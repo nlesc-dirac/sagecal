@@ -645,7 +645,7 @@ read_sky_cluster(const char *skymodel, const char *clusterfile, clus_source_t **
   }
 
 
-
+  /* FIXME: free source info for sources that were not part of the clusters */
   /* free cluster data */
   for(li=clusters; li!=NULL; li=g_list_next(li)) {
     clus=li->data;
@@ -689,7 +689,7 @@ printf("Nc=%d\n",Nc);
      /* first column is solution number (int) 0..8N-1 */
      sscanf(buf,"%d",&cn);
      /* also do a sanity check */
-     if ( cn<0 || cn>Nc ) cn=0;
+     if ( cn<0 || cn>8*N-1 ) cn=0;
     }
 #ifdef DEBUG
     printf("%d ",cn);
