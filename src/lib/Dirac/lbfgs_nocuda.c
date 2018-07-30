@@ -21,282 +21,6 @@
 #include "Dirac.h"
 #include <pthread.h>
 
-
-/**** repeated code here ********************/
-/* Jones matrix multiplication 
-   C=A*B
-*/
-#ifdef USE_MIC
-__attribute__ ((target(MIC)))
-#endif
-static void
-amb(complex double * __restrict a, complex double * __restrict b, complex double * __restrict c) {
- c[0]=a[0]*b[0]+a[1]*b[2];
- c[1]=a[0]*b[1]+a[1]*b[3];
- c[2]=a[2]*b[0]+a[3]*b[2];
- c[3]=a[2]*b[1]+a[3]*b[3];
-}
-
-/* Jones matrix multiplication 
-   C=A*B^H
-*/
-#ifdef USE_MIC
-__attribute__ ((target(MIC)))
-#endif
-static void
-ambt(complex double * __restrict a, complex double * __restrict b, complex double * __restrict c) {
- c[0]=a[0]*conj(b[0])+a[1]*conj(b[1]);
- c[1]=a[0]*conj(b[2])+a[1]*conj(b[3]);
- c[2]=a[2]*conj(b[0])+a[3]*conj(b[1]);
- c[3]=a[2]*conj(b[2])+a[3]*conj(b[3]);
-}
-
-/**** end repeated code ********************/
-
-/* worker thread for a cpu */
-#ifdef USE_MIC
-__attribute__ ((target(MIC)))
-#endif
-static void *
-cpu_calc_deriv(void *adata) {
- thread_data_grad_t *t=(thread_data_grad_t*)adata;
-
- int ci,nb;
- int stc,stoff,stm,sta1,sta2;
- int N=t->N; /* stations */
- int M=t->M; /* clusters */
- int Nbase=(t->Nbase)*(t->tilesz);
-
-
- complex double xr[4]; /* residuals */
- complex double G1[4],G2[4],C[4],T1[4],T2[4];
- double pp[8];
- complex double csum;
- int cli,tpchunk,pstart,nchunk,tilesperchunk,stci,ttile,tptile,poff;
-
- /* iterate over each paramter */
- for (ci=t->g_start; ci<=t->g_end; ++ci) {
-    t->g[ci]=0.0;
-    /* find station and parameter corresponding to this value of ci */
-    /* this parameter should correspond to the right baseline (x tilesz)
-        to contribute to the derivative */
-    cli=0;
-    while((cli<M) && (ci<t->carr[cli].p[0] || ci>t->carr[cli].p[0]+8*N*t->carr[cli].nchunk-1)) {
-     cli++;
-    }
-   /* now either cli>=M: cluster not found 
-       or cli<M and cli is the right cluster */
-   if (cli==M && ci>=t->carr[cli-1].p[0] && ci<=t->carr[cli-1].p[0]+8*N*t->carr[cli-1].nchunk-1) {
-    cli--;
-   }
-
-   if (cli<M) {
-    /* right parameter offset */
-    stci=ci-t->carr[cli].p[0];
- 
-    stc=(stci%(8*N))/8; /* 0..N-1 */
-    /* make sure this baseline contribute to this parameter */
-    tpchunk=stci/(8*N);
-    nchunk=t->carr[cli].nchunk;
-    pstart=t->carr[cli].p[0];
-    tilesperchunk=(t->tilesz+nchunk-1)/nchunk;
-
-
-    /* iterate over all baselines and accumulate sum */
-    for (nb=0; nb<Nbase; ++nb) {
-     /* which tile is this ? */
-     ttile=nb/t->Nbase;
-     /* which chunk this tile belongs to */
-     tptile=ttile/tilesperchunk;
-     /* now tptile has to match tpchunk, otherwise ignore calculation */
-     if (tptile==tpchunk) {
-
-     sta1=t->barr[nb].sta1;
-     sta2=t->barr[nb].sta2;
-    
-     if (((stc==sta1)||(stc==sta2))&& !t->barr[nb].flag) {
-      /* this baseline has a contribution */
-      /* which paramter of this station */
-      stoff=(stci%(8*N))%8; /* 0..7 */
-      /* which cluster */
-      stm=cli; /* 0..M-1 */
-
-      /* exact expression for derivative 
-         2 real( vec^H(residual_this_baseline) 
-            * vec(-J_{pm}C_{pqm} J_{qm}^H)
-        where m: chosen cluster
-        J_{pm},J_{qm} Jones matrices for baseline p-q
-        depending on the parameter, J ==> E 
-        E: zero matrix, except 1 at location of m
-   
-       residual : in x[8*nb:8*nb+7]
-       C coh: in coh[8*M*nb+m*8:8*M*nb+m*8+7] (double storage)
-           coh[4*M*nb+4*m:4*M*nb+4*m+3] (complex storage)
-       J_p,J_q: in p[sta1*8+m*8*N: sta1*8+m*8*N+7]
-        and p[sta2*8+m*8*N: sta2*8+m*8*N+ 7]
-     */
-     /* read in residual vector, conjugated */
-     xr[0]=(t->x[nb*8])-_Complex_I*(t->x[nb*8+1]);
-     xr[1]=(t->x[nb*8+2])-_Complex_I*(t->x[nb*8+3]);
-     xr[2]=(t->x[nb*8+4])-_Complex_I*(t->x[nb*8+5]);
-     xr[3]=(t->x[nb*8+6])-_Complex_I*(t->x[nb*8+7]);
-
-     /* read in coherency */
-     C[0]=t->coh[4*M*nb+4*stm];
-     C[1]=t->coh[4*M*nb+4*stm+1];
-     C[2]=t->coh[4*M*nb+4*stm+2];
-     C[3]=t->coh[4*M*nb+4*stm+3];
-
-     memset(pp,0,sizeof(double)*8); 
-     if (stc==sta1) {
-       /* this station parameter gradient */
-       pp[stoff]=1.0;
-       memset(G1,0,sizeof(complex double)*4); 
-       G1[0]=pp[0]+_Complex_I*pp[1];
-       G1[1]=pp[2]+_Complex_I*pp[3];
-       G1[2]=pp[4]+_Complex_I*pp[5];
-       G1[3]=pp[6]+_Complex_I*pp[7];
-       poff=pstart+tpchunk*8*N+sta2*8;
-       G2[0]=(t->p[poff])+_Complex_I*(t->p[poff+1]);
-       G2[1]=(t->p[poff+2])+_Complex_I*(t->p[poff+3]);
-       G2[2]=(t->p[poff+4])+_Complex_I*(t->p[poff+4]);
-       G2[3]=(t->p[poff+6])+_Complex_I*(t->p[poff+7]);
-
-     } else if (stc==sta2) {
-       memset(G2,0,sizeof(complex double)*4); 
-       pp[stoff]=1.0;
-       G2[0]=pp[0]+_Complex_I*pp[1];
-       G2[1]=pp[2]+_Complex_I*pp[3];
-       G2[2]=pp[4]+_Complex_I*pp[5];
-       G2[3]=pp[6]+_Complex_I*pp[7];
-       poff=pstart+tpchunk*8*N+sta1*8;
-       G1[0]=(t->p[poff])+_Complex_I*(t->p[poff+1]);
-       G1[1]=(t->p[poff+2])+_Complex_I*(t->p[poff+3]);
-       G1[2]=(t->p[poff+4])+_Complex_I*(t->p[poff+5]);
-       G1[3]=(t->p[poff+6])+_Complex_I*(t->p[poff+7]);
-     }
-
-     /* T1=G1*C */
-     amb(G1,C,T1);
-     /* T2=T1*G2' */
-     ambt(T1,G2,T2);
-
-     /* calculate product xr*vec(J_p C J_q^H ) */
-     csum=xr[0]*T2[0];
-     csum+=xr[1]*T2[1];
-     csum+=xr[2]*T2[2];
-     csum+=xr[3]*T2[3];
-
-     /* accumulate sum */
-     t->g[ci]+=-2.0*creal(csum);
-     }
-     }
-    }
-   }
- }
-
-
- return NULL;
-}
-
-#ifdef USE_MIC
-__attribute__ ((target(MIC)))
-#endif
-static int
-func_grad(
-   void (*func)(double *p, double *hx, int m, int n, void *adata),
-   double *p, double *g, double *xo, int m, int n, double step, void *adata) {
-  /* gradient for each parameter is
-     (||func(p+step*e_i)-x||^2-||func(p-step*e_i)-x||^2)/2*step
-    i=0,...,m-1 for all parameters
-    e_i: unit vector, 1 only at i-th location
-  */
-
-  double *x; /* array to store residual */
-  int ci;
-  me_data_t *dp=(me_data_t*)adata;
-
-  int Nt=dp->Nt;
-
-  pthread_attr_t attr;
-  pthread_t *th_array;
-  thread_data_grad_t *threaddata;
-
-
-  if ((x=(double*)calloc((size_t)n,sizeof(double)))==0) {
-#ifndef USE_MIC
-     fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
-#endif
-     exit(1);
-  }
-  /* evaluate func once, store in x, and create threads */
-  /* and calculate the residual x=xo-func */
-  func(p,x,m,n,adata);
-  /* calculate x<=x-xo */
-  my_daxpy(n,xo,-1.0,x);
-
-  /* setup threads */
-  pthread_attr_init(&attr);
-  pthread_attr_setdetachstate(&attr,PTHREAD_CREATE_JOINABLE);
-
-  if ((th_array=(pthread_t*)malloc((size_t)Nt*sizeof(pthread_t)))==0) {
-#ifndef USE_MIC
-   fprintf(stderr,"%s: %d: No free memory\n",__FILE__,__LINE__);
-#endif
-   exit(1);
-  }
-  if ((threaddata=(thread_data_grad_t*)malloc((size_t)Nt*sizeof(thread_data_grad_t)))==0) {
-#ifndef USE_MIC
-    fprintf(stderr,"%s: %d: No free memory\n",__FILE__,__LINE__);
-#endif
-    exit(1);
-  }
-
-  int nth,nth1,Nparm;
-
-  /* parameters per thread */
-  Nparm=(m+Nt-1)/Nt;
-
-  /* each thread will calculate derivative of part of 
-     parameters */
-  ci=0;
-  for (nth=0;  nth<Nt; nth++) {
-   threaddata[nth].Nbase=dp->Nbase;
-   threaddata[nth].tilesz=dp->tilesz;
-   threaddata[nth].barr=dp->barr;
-   threaddata[nth].carr=dp->carr;
-   threaddata[nth].M=dp->M;
-   threaddata[nth].N=dp->N;
-   threaddata[nth].coh=dp->coh;
-   threaddata[nth].m=m;
-   threaddata[nth].n=n;
-   threaddata[nth].x=x;
-   threaddata[nth].p=p;
-   threaddata[nth].g=g;
-   threaddata[nth].g_start=ci;
-   threaddata[nth].g_end=ci+Nparm-1;
-   if (threaddata[nth].g_end>=m) {
-    threaddata[nth].g_end=m-1;
-   }
-   ci=ci+Nparm;
-   pthread_create(&th_array[nth],&attr,cpu_calc_deriv,(void*)(&threaddata[nth]));
-  }
-
-  /* now wait for threads to finish */
-  for(nth1=0; nth1<nth; nth1++) {
-   pthread_join(th_array[nth1],NULL);
-  }
-
-  pthread_attr_destroy(&attr);
-
-  free(th_array);
-  free(threaddata);
-
-  free(x);
-  return 0;
-}
-
-
 /* use algorithm 9.1 to compute pk=Hk gk */
 /* pk,gk: size m x 1
    s, y: size mM x 1 
@@ -381,24 +105,18 @@ mult_hessian(int m, double *pk, double *gk, double *s, double *y, double *rho, i
 
 /* cubic interpolation in interval [a,b] (a>b is possible)
    to find step that minimizes cost function */
-/* func: vector function
+/* func: scalar function
    xk: parameter values size m x 1 (at which step is calculated)
    pk: step direction size m x 1 (x(k+1)=x(k)+alphak * pk)
    a/b:  interval for interpolation
-   x: size n x 1 (storage)
    xp: size m x 1 (storage)
-   xo: observed data size n x 1
-   n: size of vector function
    step: step size for differencing 
    adata:  additional data passed to the function
 */
-#ifdef USE_MIC
-__attribute__ ((target(MIC)))
-#endif
 static double 
 cubic_interp(
-   void (*func)(double *p, double *hx, int m, int n, void *adata),
-   double *xk, double *pk, double a, double b, double *x, double *xp,  double *xo, int m, int n, double step, void *adata) {
+   double (*func)(double *p, int m, void *adata),
+   double *xk, double *pk, double a, double b, double *xp,  int m, double step, void *adata) {
 
   double f0,f1,f0d,f1d; /* function values and derivatives at a,b */
   double p01,p02,z0,fz0;
@@ -406,38 +124,24 @@ cubic_interp(
 
   my_dcopy(m,xk,1,xp,1); /* xp<=xk */
   my_daxpy(m,pk,a,xp); /* xp<=xp+(a)*pk */
-  func(xp,x,m,n,adata);
-  my_daxpy(n,xo,-1.0,x);
-  f0=my_dnrm2(n,x);
-  f0*=f0;
+  f0=func(xp,m,adata);
   /* grad(phi_0): evaluate at -step and +step */
   my_daxpy(m,pk,step,xp); /* xp<=xp+(a+step)*pk */
-  func(xp,x,m,n,adata);
-  my_daxpy(n,xo,-1.0,x);
-  p01=my_dnrm2(n,x);
+  p01=func(xp,m,adata);
   my_daxpy(m,pk,-2.0*step,xp); /* xp<=xp+(a-step)*pk */
-  func(xp,x,m,n,adata);
-  my_daxpy(n,xo,-1.0,x);
-  p02=my_dnrm2(n,x);
-  f0d=(p01*p01-p02*p02)/(2.0*step);
+  p02=func(xp,m,adata);
+  f0d=(p01-p02)/(2.0*step);
 
-  //my_dcopy(m,xk,1,xp,1); /* xp<=xk: NOT NEEDED because already xp=xk+(a-step)*pk */
-  //my_daxpy(m,pk,b,xp); /* xp<=xp+(b)*pk */
+  //FIXME my_dcopy(m,xk,1,xp,1); /* not necessary because xp=xk+(a-step)*pk */
+  //FIXME my_daxpy(m,pk,b,xp); /* xp<=xp+(b)*pk */
   my_daxpy(m,pk,-a+step+b,xp); /* xp<=xp+(b)*pk */
-  func(xp,x,m,n,adata);
-  my_daxpy(n,xo,-1.0,x);
-  f1=my_dnrm2(n,x);
-  f1*=f1;
+  f1=func(xp,m,adata);
   /* grad(phi_1): evaluate at -step and +step */
   my_daxpy(m,pk,step,xp); /* xp<=xp+(b+step)*pk */
-  func(xp,x,m,n,adata);
-  my_daxpy(n,xo,-1.0,x);
-  p01=my_dnrm2(n,x);
+  p01=func(xp,m,adata);
   my_daxpy(m,pk,-2.0*step,xp); /* xp<=xp+(b-step)*pk */
-  func(xp,x,m,n,adata);
-  my_daxpy(n,xo,-1.0,x);
-  p02=my_dnrm2(n,x);
-  f1d=(p01*p01-p02*p02)/(2.0*step);
+  p02=func(xp,m,adata);
+  f1d=(p01-p02)/(2.0*step);
 
 
   //printf("Interp a,f(a),f'(a): (%lf,%lf,%lf) (%lf,%lf,%lf)\n",a,f0,f0d,b,f1,f1d);
@@ -459,13 +163,10 @@ cubic_interp(
     fz0=f0+f1;
    } else {
     /* evaluate function for this root */
-    //my_dcopy(m,xk,1,xp,1); /* xp<=xk: NOT NEEDED because already xp=xk+(b-step)*pk */
-    //my_daxpy(m,pk,a+z0*(b-a),xp); /* xp<=xp+(a+z0(b-a))*pk */
-    my_daxpy(m,pk,-b+step+a+z0*(b-a),xp); /* xp<=xp+(a+z0(b-a))*pk */
-    func(xp,x,m,n,adata);
-    my_daxpy(n,xo,-1.0,x);
-    fz0=my_dnrm2(n,x);
-    fz0*=fz0;
+    //FIXME my_dcopy(m,xk,1,xp,1); /* not necessary because xp=xk+(b-step)*pk */
+    //my_daxpy(m,pk,a+z0*(b-a),xp); /* xp<=xp+(z0)*pk */
+    my_daxpy(m,pk,-b+step+a+z0*(b-a),xp); /* xp<=xp+(a+z0*(b-a))*pk */
+    fz0=func(xp,m,adata);
    }
 
    /* now choose between f0,f1,fz0,fz1 */
@@ -496,26 +197,21 @@ cubic_interp(
 
 /*************** Fletcher line search **********************************/
 /* zoom function for line search */
-/* func: vector function
+/* func: scalar function
    xk: parameter values size m x 1 (at which step is calculated)
    pk: step direction size m x 1 (x(k+1)=x(k)+alphak * pk)
    a/b: bracket interval [a,b] (a>b) is possible
-   x: size n x 1 (storage)
    xp: size m x 1 (storage)
    phi_0: phi(0)
    gphi_0: grad(phi(0))
-   xo: observed data size n x 1
-   n: size of vector function
+   sigma,rho,t1,t2,t3: line search parameters (from Fletcher) 
    step: step size for differencing 
    adata:  additional data passed to the function
 */
-#ifdef USE_MIC
-__attribute__ ((target(MIC)))
-#endif
 static double 
 linesearch_zoom(
-   void (*func)(double *p, double *hx, int m, int n, void *adata),
-   double *xk, double *pk, double a, double b, double *x, double *xp,  double phi_0, double gphi_0, double sigma, double rho, double t1, double t2, double t3, double *xo, int m, int n, double step, void *adata) {
+   double (*func)(double *p, int m, void *adata),
+   double *xk, double *pk, double a, double b, double *xp, double phi_0, double gphi_0, double sigma, double rho, double t1, double t2, double t3, int m, double step, void *adata) {
 
   double alphaj,phi_j,phi_aj;
   double gphi_j,p01,p02,aj,bj;
@@ -529,46 +225,31 @@ linesearch_zoom(
     /* choose alphaj from [a+t2(b-a),b-t3(b-a)] */
     p01=aj+t2*(bj-aj);
     p02=bj-t3*(bj-aj);
-    alphaj=cubic_interp(func,xk,pk,p01,p02,x,xp,xo,m,n,step,adata);
+    alphaj=cubic_interp(func,xk,pk,p01,p02,xp,m,step,adata);
     //printf("cubic intep [%lf,%lf]->%lf\n",p01,p02,alphaj);
 
     /* evaluate phi(alphaj) */
     my_dcopy(m,xk,1,xp,1); /* xp<=xk */
     my_daxpy(m,pk,alphaj,xp); /* xp<=xp+(alphaj)*pk */
-    func(xp,x,m,n,adata);
-    /* calculate x<=x-xo */
-    my_daxpy(n,xo,-1.0,x);
-    phi_j=my_dnrm2(n,x);
-    phi_j*=phi_j;
+    phi_j=func(xp,m,adata);
 
     /* evaluate phi(aj) */
-    //my_dcopy(m,xk,1,xp,1); /* xp<=xk: NOT NEEDED because already xp = xk+alphaj*pk */
-    //my_daxpy(m,pk,aj,xp); /* xp<=xp+(aj)*pk */
+    //FIXME my_dcopy(m,xk,1,xp,1); /* xp<=xk : not necessary because already copied */
+    //FIXME my_daxpy(m,pk,aj,xp); /* xp<=xp+(aj)*pk */
     my_daxpy(m,pk,-alphaj+aj,xp); /* xp<=xp+(aj)*pk */
-    func(xp,x,m,n,adata);
-    /* calculate x<=x-xo */
-    my_daxpy(n,xo,-1.0,x);
-    phi_aj=my_dnrm2(n,x);
-    phi_aj*=phi_aj;
-
+    phi_aj=func(xp,m,adata);
 
     if ((phi_j>phi_0+rho*alphaj*gphi_0) || phi_j>=phi_aj) {
       bj=alphaj; /* aj unchanged */
     } else {
      /* evaluate grad(alphaj) */
-     //my_dcopy(m,xk,1,xp,1); /* xp<=xk: NOT NEEDED because already xp = xk+aj*pk */
-     //my_daxpy(m,pk,alphaj+step,xp); /* xp<=xp+(alphaj+step)*pk */
+     //FIXME my_dcopy(m,xk,1,xp,1); /* xp<=xk */
+     //FIXME my_daxpy(m,pk,alphaj+step,xp); /* xp<=xp+(alphaj+step)*pk */
      my_daxpy(m,pk,-aj+alphaj+step,xp); /* xp<=xp+(alphaj+step)*pk */
-     func(xp,x,m,n,adata);
-     /* calculate x<=x-xo */
-     my_daxpy(n,xo,-1.0,x);
-     p01=my_dnrm2(n,x);
+     p01=func(xp,m,adata);
      my_daxpy(m,pk,-2.0*step,xp); /* xp<=xp+(alphaj-step)*pk */
-     func(xp,x,m,n,adata);
-     /* calculate x<=x-xo */
-     my_daxpy(n,xo,-1.0,x);
-     p02=my_dnrm2(n,x);
-     gphi_j=(p01*p01-p02*p02)/(2.0*step);
+     p02=func(xp,m,adata);
+     gphi_j=(p01-p02)/(2.0*step);
 
      /* termination due to roundoff/other errors pp. 38, Fletcher */
      if ((aj-alphaj)*gphi_j<=step) {
@@ -605,29 +286,25 @@ linesearch_zoom(
  
 
 /* line search */
-/* func: vector function
+/* func: scalar function
    xk: parameter values size m x 1 (at which step is calculated)
    pk: step direction size m x 1 (x(k+1)=x(k)+alphak * pk)
    alpha1: initial value for step
    sigma,rho,t1,t2,t3: line search parameters (from Fletcher) 
-   xo: observed data size n x 1
-   n: size of vector function
+   m: size or parameter vector
    step: step size for differencing 
    adata:  additional data passed to the function
 */
-#ifdef USE_MIC
-__attribute__ ((target(MIC)))
-#endif
-static double 
+double 
 linesearch(
-   void (*func)(double *p, double *hx, int m, int n, void *adata),
-   double *xk, double *pk, double alpha1, double sigma, double rho, double t1, double t2, double t3, double *xo, int m, int n, double step, void *adata) {
+   double (*func)(double *p, int m, void *adata),
+   double *xk, double *pk, double alpha1, double sigma, double rho, double t1, double t2, double t3, int m, double step, void *adata) {
  
  /* phi(alpha)=f(xk+alpha pk)
   for vector function func 
    f(xk) =||func(xk)||^2 */
   
-  double *x,*xp;
+  double *xp;
   double alphai,alphai1;
   double phi_0,phi_alphai,phi_alphai1;
   double p01,p02;
@@ -639,54 +316,36 @@ linesearch(
 
   int ci;
 
-  if ((x=(double*)calloc((size_t)n,sizeof(double)))==0) {
-#ifndef USE_MIC
-     fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
-#endif
-     exit(1);
-  }
   if ((xp=(double*)calloc((size_t)m,sizeof(double)))==0) {
-#ifndef USE_MIC
      fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
-#endif
      exit(1);
   }
 
   alphak=1.0;
   /* evaluate phi_0 and grad(phi_0) */
-  func(xk,x,m,n,adata);
-  my_daxpy(n,xo,-1.0,x);
-  phi_0=my_dnrm2(n,x);
-  phi_0*=phi_0;
+  phi_0=func(xk,m,adata);
   /* select tolarance 1/100 of current function value */
   tol=MIN(0.01*phi_0,1e-6);
 
   /* grad(phi_0): evaluate at -step and +step */
   my_dcopy(m,xk,1,xp,1); /* xp<=xk */
   my_daxpy(m,pk,step,xp); /* xp<=xp+(0.0+step)*pk */
-  func(xp,x,m,n,adata);
-  /* calculate x<=x-xo */
-  my_daxpy(n,xo,-1.0,x);
-  p01=my_dnrm2(n,x);
+  p01=func(xp,m,adata);
   my_daxpy(m,pk,-2.0*step,xp); /* xp<=xp+(0.0-step)*pk */
-  func(xp,x,m,n,adata);
-  /* calculate x<=x-xo */
-  my_daxpy(n,xo,-1.0,x);
-  p02=my_dnrm2(n,x);
-  gphi_0=(p01*p01-p02*p02)/(2.0*step);
+  p02=func(xp,m,adata);
+  gphi_0=(p01-p02)/(2.0*step);
 
   /* estimate for mu */
   /* mu = (tol-phi_0)/(rho gphi_0) */
   mu=(tol-phi_0)/(rho*gphi_0);
 #ifdef DEBUG
-  printf("mu=%lf, alpha1=%lf\n",mu,alpha1);
+  printf("deltaphi=%lf, mu=%lf, alpha1=%lf\n",gphi_0,mu,alpha1);
 #endif
   /* catch if not finite (deltaphi=0 or nan) */
   if (!isnormal(mu)) {
-    free(x);
     free(xp);
 #ifdef DEBUG
-    printf("line interval too small\n");
+  printf("line interval too small\n");
 #endif
     return mu;
   }
@@ -699,11 +358,7 @@ linesearch(
    /* evalualte phi(alpha(i))=f(xk+alphai pk) */
    my_dcopy(m,xk,1,xp,1); /* xp<=xk */
    my_daxpy(m,pk,alphai,xp); /* xp<=xp+alphai*pk */
-   func(xp,x,m,n,adata);
-   /* calculate x<=x-xo */
-   my_daxpy(n,xo,-1.0,x);
-   phi_alphai=my_dnrm2(n,x);
-   phi_alphai*=phi_alphai;
+   phi_alphai=func(xp,m,adata);
 
    if (phi_alphai<tol) {
      alphak=alphai;
@@ -715,7 +370,7 @@ linesearch(
 
    if ((phi_alphai>phi_0+alphai*gphi_0) || (ci>1 && phi_alphai>=phi_alphai1)) {
       /* ai=alphai1, bi=alphai bracket */
-      alphak=linesearch_zoom(func,xk,pk,alphai1,alphai,x,xp,phi_0,gphi_0,sigma,rho,t1,t2,t3,xo,m,n,step,adata);
+      alphak=linesearch_zoom(func,xk,pk,alphai1,alphai,xp,phi_0,gphi_0,sigma,rho,t1,t2,t3,m,step,adata);
 #ifdef DEBUG
       printf("Linesearch : Condition 1 met\n");
 #endif
@@ -723,19 +378,14 @@ linesearch(
    } 
 
    /* evaluate grad(phi(alpha(i))) */
-   //my_dcopy(m,xk,1,xp,1); /* NOT NEEDED here because already xp=xk+alphai*pk */
-   //my_daxpy(m,pk,alphai+step,xp); /* xp<=xp+(alphai+step)*pk */
+   //FIXME my_dcopy(m,xk,1,xp,1); /* NOT NEEDED here?? xp<=xk */
+   //FIXME my_daxpy(m,pk,alphai+step,xp); /* xp<=xp+(alphai+step)*pk */
+   /* note that xp  already is xk+alphai. pk, so only add the missing term */
    my_daxpy(m,pk,step,xp); /* xp<=xp+(alphai+step)*pk */
-   func(xp,x,m,n,adata);
-   /* calculate x<=x-xo */
-   my_daxpy(n,xo,-1.0,x);
-   p01=my_dnrm2(n,x);
+   p01=func(xp,m,adata);
    my_daxpy(m,pk,-2.0*step,xp); /* xp<=xp+(alphai-step)*pk */
-   func(xp,x,m,n,adata);
-   /* calculate x<=x-xo */
-   my_daxpy(n,xo,-1.0,x);
-   p02=my_dnrm2(n,x);
-   gphi_i=(p01*p01-p02*p02)/(2.0*step);
+   p02=func(xp,m,adata);
+   gphi_i=(p01-p02)/(2.0*step);
 
    if (fabs(gphi_i)<=-sigma*gphi_0) {
      alphak=alphai;
@@ -747,7 +397,7 @@ linesearch(
 
    if (gphi_i>=0) {
      /* ai=alphai, bi=alphai1 bracket */
-     alphak=linesearch_zoom(func,xk,pk,alphai,alphai1,x,xp,phi_0,gphi_0,sigma,rho,t1,t2,t3,xo,m,n,step,adata);
+     alphak=linesearch_zoom(func,xk,pk,alphai,alphai1,xp,phi_0,gphi_0,sigma,rho,t1,t2,t3,m,step,adata);
 #ifdef DEBUG
      printf("Linesearch : Condition 3 met\n");
 #endif
@@ -763,7 +413,7 @@ linesearch(
      /* choose by interpolation in [2*alphai-alphai1,min(mu,alphai+t1*(alphai-alphai1)] */
      p01=2.0*alphai-alphai1;
      p02=MIN(mu,alphai+t1*(alphai-alphai1));
-     alphai=cubic_interp(func,xk,pk,p01,p02,x,xp,xo,m,n,step,adata);
+     alphai=cubic_interp(func,xk,pk,p01,p02,xp,m,step,adata);
      //printf("cubic interp [%lf,%lf]->%lf\n",p01,p02,alphai);
    }
    phi_alphai1=phi_alphai;
@@ -773,7 +423,6 @@ linesearch(
 
 
 
-  free(x);
   free(xp);
 #ifdef DEBUG
   printf("Step size=%g\n",alphak);
@@ -782,10 +431,26 @@ linesearch(
 }
 /*************** END Fletcher line search **********************************/
 
+
+
+/* cost function : return a scalar cost, input : p (mx1) parameters, m: no. of params, adata: additional data
+   grad function: return gradient (mx1): input : p (mx1) parameters, g (mx1) gradient vector, m: no. of params, adata: additional data
+*/ 
+/*
+   p: parameters m x 1 (used as initial value, output final value)
+   itmax: max iterations
+   M: BFGS memory size
+   adata: additional data
+*/
+
 int
 lbfgs_fit(
-   void (*func)(double *p, double *hx, int m, int n, void *adata),
-   double *p, double *x, int m, int n, int itmax, int M, int gpu_threads, void *adata) {
+   double (*cost_func)(double *p, int m, void *adata),
+   void (*grad_func)(double *p, double *g, int m, void *adata),
+   /* the following is the mini batch function, called per eath iteration
+      to change the input/output data used for the next iteration, if =NULL, full batch mode */
+   void (*change_batch)(int iter, void *adata), /* iter= iteration number */
+   double *p, int m, int itmax, int M, void *adata) {
 
   double *gk; /* gradients at both k+1 and k iter */
   double *xk1,*xk; /* parameters at k+1 and k iter */
@@ -799,56 +464,45 @@ lbfgs_fit(
   
 
   if ((gk=(double*)calloc((size_t)m,sizeof(double)))==0) {
-#ifndef USE_MIC
      fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
-#endif
      exit(1);
   }
   if ((xk1=(double*)calloc((size_t)m,sizeof(double)))==0) {
-#ifndef USE_MIC
      fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
-#endif
      exit(1);
   }
   if ((xk=(double*)calloc((size_t)m,sizeof(double)))==0) {
-#ifndef USE_MIC
      fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
-#endif
      exit(1);
   }
 
   if ((pk=(double*)calloc((size_t)m,sizeof(double)))==0) {
-#ifndef USE_MIC
      fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
-#endif
      exit(1);
   }
 
 
   /* storage size mM x 1*/
   if ((s=(double*)calloc((size_t)m*M,sizeof(double)))==0) {
-#ifndef USE_MIC
      fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
-#endif
      exit(1);
   }
   if ((y=(double*)calloc((size_t)m*M,sizeof(double)))==0) {
-#ifndef USE_MIC
      fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
-#endif
      exit(1);
   }
   if ((rho=(double*)calloc((size_t)M,sizeof(double)))==0) {
-#ifndef USE_MIC
      fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
-#endif
      exit(1);
   }
 
   /* initial value for params xk=p */
   my_dcopy(m,p,1,xk,1);
+  if (change_batch) {
+   change_batch(0,adata);
+  }
   /*  gradient gk=grad(f)_k */
-  func_grad(func,xk,gk,x,m,n,step,adata);
+  grad_func(xk,gk,m,adata);
   double gradnrm=my_dnrm2(m,gk);
   /* if gradient is too small, no need to solve, so stop */
   if (gradnrm<CLM_STOP_THRESH) {
@@ -877,15 +531,14 @@ lbfgs_fit(
 
    /* linesearch to find step length */
    /* parameters alpha1=10.0,sigma=0.1, rho=0.01, t1=9, t2=0.1, t3=0.5 */
-   alphak=linesearch(func,xk,pk,10.0,0.1,0.01,9,0.1,0.5,x,m,n,step,adata);
-   /* parameters c1=1e-4 c2=0.9, alpha1=1.0, alphamax=10.0, step (for alpha)=1e-4*/
-   //alphak=linesearch_nw(func,xk,pk,1.0,10.0,1e-4,0.9,x,m,n,1e-4,adata);
-   //alphak=1.0;
+   alphak=linesearch(cost_func,xk,pk,10.0,0.1,0.01,9,0.1,0.5,m,step,adata);
+   
+   /* Armijo line search */
+   ///alphak=linesearch_backtrack(cost_func,xk,pk,gk,m,1.0,adata);
    /* check if step size is too small, or nan, then stop */
    if (!isnormal(alphak) || fabs(alphak)<CLM_EPSILON) {
     break;
    }
-
    /* update parameters xk1=xk+alpha_k *pk */
    my_dcopy(m,xk,1,xk1,1);
    my_daxpy(m,pk,alphak,xk1);
@@ -900,7 +553,12 @@ lbfgs_fit(
    my_dscal(m,-1.0,&y[cm]);
 
    /* update gradient */
-   func_grad(func,xk1,gk,x,m,n,step,adata);
+   if (change_batch) {
+    change_batch(ck+1,adata);
+   }
+
+   grad_func(xk1,gk,m,adata);
+   gradnrm=my_dnrm2(m,gk);
    /* yk=yk+gk1 */
    my_daxpy(m,gk,1.0,&y[cm]);
 
@@ -920,15 +578,21 @@ lbfgs_fit(
    } else {
     cm=ci=0;
    }
+
+#ifdef DEBUG
+  printf("iter %d alpha=%g ||grad||=%g\n",ck,alphak,gradnrm);
+#endif
   }
 
 
  /* copy back solution to p */
  my_dcopy(m,xk,1,p,1);
 
- /* for (ci=0; ci<m; ci++) {
+#ifdef DEBUG
+  for (ci=0; ci<m; ci++) {
    printf("grad %d=%lf\n",ci,gk[ci]);
-  } */
+  } 
+#endif
 
   free(gk);
   free(xk1);

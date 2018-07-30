@@ -688,7 +688,7 @@ predict_threadfn_withgain_full(void *data) {
 #ifdef USE_MIC
 __attribute__ ((target(MIC)))
 #endif
-static void
+void
 minimize_viz_full_pth(double *p, double *x, int m, int n, void *data) {
 
   me_data_t *dp=(me_data_t*)data;
@@ -1023,9 +1023,9 @@ printf("residual init=%lf final=%lf\n\n",init_res,final_res);
   /* use LBFGS */
    if (solver_mode==SM_OSLM_OSRLM_RLBFGS || solver_mode==SM_RLM_RLBFGS ||  solver_mode==SM_RTR_OSRLM_RLBFGS || solver_mode==SM_NSD_RLBFGS) {
     lmdata.robust_nu=robust_nu0;
-    lbfgs_fit_robust(minimize_viz_full_pth, p, x, m, n, max_lbfgs, lbfgs_m, gpu_threads, (void*)&lmdata);
+    lbfgs_fit_robust_wrapper(p, x, m, n, max_lbfgs, lbfgs_m, gpu_threads, (void*)&lmdata);
    } else {
-    lbfgs_fit(minimize_viz_full_pth, p, x, m, n, max_lbfgs, lbfgs_m, gpu_threads, (void*)&lmdata);
+    lbfgs_fit_wrapper(p, x, m, n, max_lbfgs, lbfgs_m, gpu_threads, (void*)&lmdata);
    }
 #ifdef USE_MIC
   lmdata.Nt=Nt; /* reset threads for MIC */
@@ -1181,9 +1181,9 @@ bfgsfit_visibilities(double *u, double *v, double *w, double *x, int N,
   /* use LBFGS */
    if (solver_mode==2 || solver_mode==3) {
     lmdata.robust_nu=mean_nu;
-    lbfgs_fit_robust(minimize_viz_full_pth, p, x, m, n, max_lbfgs, lbfgs_m, gpu_threads, (void*)&lmdata); 
+    lbfgs_fit_robust_wrapper(p, x, m, n, max_lbfgs, lbfgs_m, gpu_threads, (void*)&lmdata); 
    } else {
-    lbfgs_fit(minimize_viz_full_pth, p, x, m, n, max_lbfgs, lbfgs_m, gpu_threads, (void*)&lmdata);
+    lbfgs_fit_wrapper(p, x, m, n, max_lbfgs, lbfgs_m, gpu_threads, (void*)&lmdata);
    }
 #ifdef USE_MIC
   lmdata.Nt=Nt; /* reset threads for MIC */

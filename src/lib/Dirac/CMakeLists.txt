@@ -8,7 +8,6 @@ set (objects
     manifold_average
     mdl
     myblas
-    robust_lbfgs_nocuda
     robustlm
     rtr_solve_robust_admm
     updatenu
@@ -50,6 +49,7 @@ else()
         lmfit_nocuda
         consensus_poly
         lbfgs_nocuda
+        robust_lbfgs_nocuda
         rtr_solve
         rtr_solve_robust
     )

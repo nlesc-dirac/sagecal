@@ -331,9 +331,9 @@ predict_threadfn_withgain_full(void *data) {
 
 /* minimization function (multithreaded) */
 /* p: size mx1 parameters
-   x: size nx1 data calculated
+   x: size nx1 model being calculated
    data: extra info needed */
-static void
+void
 minimize_viz_full_pth(double *p, double *x, int m, int n, void *data) {
 
   me_data_t *dp=(me_data_t*)data;
@@ -985,10 +985,10 @@ sagefit_visibilities_dual_pt(double *u, double *v, double *w, double *x, int N,
   /* use LBFGS */
    if (solver_mode==2) {
     lmdata0.robust_nu=robust_nu0;
-    lbfgs_fit_robust_cuda(minimize_viz_full_pth, p, x, m, n, max_lbfgs, lbfgs_m, gpu_threads, (void*)&lmdata0);
+    lbfgs_fit_robust_cuda(p, x, m, n, max_lbfgs, lbfgs_m, gpu_threads, (void*)&lmdata0);
     /* also print robust nu to output */
    } else {
-    lbfgs_fit(minimize_viz_full_pth, p, x, m, n, max_lbfgs, lbfgs_m, gpu_threads, (void*)&lmdata0);
+    lbfgs_fit(p, x, m, n, max_lbfgs, lbfgs_m, gpu_threads, (void*)&lmdata0);
    }
   } 
 
@@ -1380,9 +1380,9 @@ sagefit_visibilities_dual_pt_one_gpu(double *u, double *v, double *w, double *x,
    /* use LBFGS */
    if (solver_mode==2 || solver_mode==3) {
     lmdata.robust_nu=robust_nu0;
-    lbfgs_fit_robust_cuda(minimize_viz_full_pth, p, x, m, n, max_lbfgs, lbfgs_m, gpu_threads, (void*)&lmdata);
+    lbfgs_fit_robust_cuda(p, x, m, n, max_lbfgs, lbfgs_m, gpu_threads, (void*)&lmdata);
    } else {
-    lbfgs_fit(minimize_viz_full_pth, p, x, m, n, max_lbfgs, lbfgs_m, gpu_threads, (void*)&lmdata);
+    lbfgs_fit(p, x, m, n, max_lbfgs, lbfgs_m, gpu_threads, (void*)&lmdata);
    }
   }
   /* final residual calculation */
@@ -1457,9 +1457,9 @@ bfgsfit_visibilities_gpu(double *u, double *v, double *w, double *x, int N,
    /* use LBFGS */
    if (solver_mode==2 || solver_mode==3) {
     lmdata.robust_nu=mean_nu;
-    lbfgs_fit_robust_cuda(minimize_viz_full_pth, p, x, m, n, max_lbfgs, lbfgs_m, gpu_threads, (void*)&lmdata);
+    lbfgs_fit_robust_cuda(p, x, m, n, max_lbfgs, lbfgs_m, gpu_threads, (void*)&lmdata);
    } else {
-    lbfgs_fit(minimize_viz_full_pth, p, x, m, n, max_lbfgs, lbfgs_m, gpu_threads, (void*)&lmdata);
+    lbfgs_fit(p, x, m, n, max_lbfgs, lbfgs_m, gpu_threads, (void*)&lmdata);
    }
   }
   /* final residual calculation */
@@ -2145,13 +2145,13 @@ printf("1: %lf -> %lf\n\n\n",info0[0],info0[1]);
   /* use LBFGS */
    if (solver_mode==SM_RLM_RLBFGS || solver_mode==SM_OSLM_OSRLM_RLBFGS || solver_mode==SM_RTR_OSRLM_RLBFGS || solver_mode==SM_NSD_RLBFGS) {
     lmdata0.robust_nu=robust_nu0;
-    lbfgs_fit_robust_cuda(minimize_viz_full_pth, p, x, m, n, max_lbfgs, lbfgs_m, gpu_threads, (void*)&lmdata0);
+    lbfgs_fit_robust_cuda(p, x, m, n, max_lbfgs, lbfgs_m, gpu_threads, (void*)&lmdata0);
    } else {
-    lbfgs_fit(minimize_viz_full_pth, p, x, m, n, max_lbfgs, lbfgs_m, gpu_threads, (void*)&lmdata0);
+    lbfgs_fit(p, x, m, n, max_lbfgs, lbfgs_m, gpu_threads, (void*)&lmdata0);
    }
   } 
 
-  /* final residual calculation */
+  /* final residual calculation: FIXME: possible GPU accel here? */
   minimize_viz_full_pth(p, xsub, m, n, (void*)&lmdata0);
   my_daxpy(n, xsub, -1.0, x);
 
