@@ -777,8 +777,10 @@ read_arho_fromfile(const char *admm_rho_file,int Mt,double *arho, int M, double 
   c=skip_lines(cfp);
   ci=0; /* store it in reverse order */
   cj=0;
-  while(c>=0) {
+//printf("Mt=%d M=%d\n",Mt,M);
+  while(c>=0 && cj<M) {
     c=fscanf(cfp,"%d %d %lf",&cluster_id,&hybrid,&admm_rho);
+//printf("c=%d ci=%d cj=%d\n",c,ci,cj);
     /* add this value to arho array */
     if (c!=EOF && c>0) {
       /* found a valid line */
@@ -804,8 +806,9 @@ read_arho_fromfile(const char *admm_rho_file,int Mt,double *arho, int M, double 
     c=skip_restof_line(cfp);
     c=skip_lines(cfp);
   }
+//printf("c=%d ci=%d cj=%d\n",c,ci,cj);
   /* report any errors */
-  if (!(c==EOF && ci==Mt-1)) {
+  if (!(c==EOF && ci==Mt-1 && cj=M)) {
     fprintf(stderr,"%s: %d: Error: cluster numbers in cluster file and regularization file do not match up.\n",__FILE__,__LINE__);
     exit(1);
   }

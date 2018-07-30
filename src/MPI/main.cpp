@@ -34,7 +34,7 @@ using namespace Data;
 
 void
 print_copyright(void) {
-  cout<<"SAGECal-MPI 0.5.0 (C) 2011-2018 Sarod Yatawatta"<<endl;
+  cout<<"SAGECal-MPI 0.5.1 (C) 2011-2018 Sarod Yatawatta"<<endl;
 }
 
 
@@ -67,7 +67,7 @@ print_help(void) {
    cout << "-P consensus polynomial terms: default " <<Data::Npoly<< endl;
    cout << "-Q consensus polynomial type (0,1,2,3): default " <<Data::PolyType<< endl;
    cout << "-r regularization factor: default " <<Data::admm_rho<< endl;
-   cout << "-G regularization factor of each cluster (text file instead of -r, has to match exactly the cluster file first 2 columns): default : None" << endl;
+   cout << "-G regularization factor of each cluster (text file instead of -r, has to match _exactly_ the cluster file's first 2 columns): default : None" << endl;
    cout << "-C if >0, adaptive update of regularization factor: default "<<Data::aadmm<< endl;
    cout << "-x exclude baselines length (lambda) lower than this in calibration : default "<<Data::min_uvcut << endl;
    cout << "-y exclude baselines length (lambda) higher than this in calibration : default "<<Data::max_uvcut << endl;
