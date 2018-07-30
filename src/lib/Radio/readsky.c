@@ -808,7 +808,7 @@ read_arho_fromfile(const char *admm_rho_file,int Mt,double *arho, int M, double 
   }
 //printf("c=%d ci=%d cj=%d\n",c,ci,cj);
   /* report any errors */
-  if (!(c==EOF && ci==Mt-1 && cj=M)) {
+  if (!(c==EOF && ci==Mt-1 && cj==M)) {
     fprintf(stderr,"%s: %d: Error: cluster numbers in cluster file and regularization file do not match up.\n",__FILE__,__LINE__);
     exit(1);
   }
