@@ -967,6 +967,13 @@ typedef struct global_data_rtr_ {
   pthread_attr_t attr;
 } global_data_rtr_t;
 
+/* function to count how many baselines contribute to the calculation of
+   grad and hess, so normalization can be made */
+#ifdef USE_MIC
+__attribute__ ((target(MIC)))
+#endif
+extern void
+fns_fcount(global_data_rtr_t *gdata);
 
 /* RTR (ICASSP 2013) */
 #ifdef USE_MIC
