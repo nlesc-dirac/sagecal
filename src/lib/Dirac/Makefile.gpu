@@ -21,7 +21,7 @@ INCLUDES=-I.
 LIBPATH= $(CUDALIB)
 
 
-OBJECTS=lmfit.o lbfgs.o myblas.o mderiv.o clmfit.o clmfit_nocuda.o barrier.o robust.o robustlm.o oslmfit.o mderiv_fl.o clmfit_fl.o updatenu.o robust_lbfgs_nocuda.o robust_fl.o manifold_fl.o rtr_solve_cuda.o rtr_solve_robust_cuda.o manifold_average.o consensus_poly.o rtr_solve_robust_cuda_admm.o rtr_solve_robust_admm.o admm_solve.o load_balance.o mdl.o 
+OBJECTS=lmfit.o lbfgs.o myblas.o mderiv.o clmfit.o clmfit_nocuda.o barrier.o robust.o robustlm.o oslmfit.o mderiv_fl.o clmfit_fl.o updatenu.o robust_fl.o manifold_fl.o rtr_solve_cuda.o rtr_solve_robust_cuda.o manifold_average.o consensus_poly.o rtr_solve_robust_cuda_admm.o rtr_solve_robust_admm.o admm_solve.o load_balance.o mdl.o 
 
 
 default:libdirac.a
@@ -46,8 +46,6 @@ robust.o:robust.cu
 robust_fl.o:robust_fl.cu
 	$(NVCC) $(NVCFLAGS) $(INCLUDES) $(GLIBI) -c $<
 oslmfit.o:oslmfit.c
-	$(CC) $(CFLAGS) $(INCLUDES) $(GLIBI)  -c $<
-robust_lbfgs_nocuda.o:robust_lbfgs_nocuda.c
 	$(CC) $(CFLAGS) $(INCLUDES) $(GLIBI)  -c $<
 clmfit_fl.o:clmfit_fl.c
 	$(CC) $(CFLAGS) $(INCLUDES) $(GLIBI)  -c $<

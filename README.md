@@ -175,7 +175,7 @@ which can be used to count the row number. It will keep repeating this, for each
 The rows 0 to 7 belong to the solutions for the 1st station. The rows 8 to 15 for the 2nd station and so on. 
 Each 8 rows of any given column represent the 8 values of a 2x2 Jones matrix. Lets say these are ```S0,S1,S2,S3,S4,S5,S6``` and ```S7```. Then the Jones matrix is ```[S0+j*S1, S4+j*S5; S2+j*S3, S6+j*S7]``` (the ';' denotes the 1st row of the 2x2 matrix).
 
-When a luster has a chunk size > 1, there will be more than 1 solution per given time interval. 
+When a cluster has a chunk size > 1, there will be more than 1 solution per given time interval. 
 So for this cluster, there will be more than 1 column in the solution file, the exact number of columns being equal to the chunk size.
 
 

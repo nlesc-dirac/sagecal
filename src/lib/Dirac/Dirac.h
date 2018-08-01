@@ -139,8 +139,27 @@ find_sumproduct(int N, float *x, float *y, float *sum1, float *sum2, int Nt);
 /****************************** lbfgs.c ****************************/
 /****************************** lbfgs_nocuda.c ****************************/
 /* LBFGS routines */
-/* func: vector function to minimize, actual cost minimized is ||func-x||^2
-   NOTE: gradient function given seperately
+
+#ifndef HAVE_CUDA
+/* line search */
+/* func: scalar function
+   xk: parameter values size m x 1 (at which step is calculated)
+   pk: step direction size m x 1 (x(k+1)=x(k)+alphak * pk)
+   alpha1: initial value for step
+   sigma,rho,t1,t2,t3: line search parameters (from Fletcher) 
+   m: size or parameter vector
+   step: step size for differencing 
+   adata:  additional data passed to the function
+*/
+extern double 
+linesearch(
+   double (*func)(double *p, int m, void *adata),
+   double *xk, double *pk, double alpha1, double sigma, double rho, double t1, double t2, double t3, int m, double step, void *adata);
+ 
+/* cost function : return a scalar cost, input : p (mx1) parameters, m: no. of params, adata: additional data
+   grad function: return gradient (mx1): input : p (mx1) parameters, g (mx1) gradient vector, m: no. of params, adata: additional data
+*/
+/* 
    p: parameters m x 1 (used as initial value, output final value)
    x: data  n x 1
    itmax: max iterations
@@ -153,9 +172,21 @@ __attribute__ ((target(MIC)))
 #endif
 extern int
 lbfgs_fit(
-   void (*func)(double *p, double *hx, int m, int n, void *adata),
+   double (*cost_func)(double *p, int m, void *adata),
+   void (*grad_func)(double *p, double *g, int m, void *adata),
+   void (*change_batch)(int iter, void *adata),
+   double *p, int m, int itmax, int M, void *adata);
+#endif /* !HAVE_CUDA */
+
+#ifdef HAVE_CUDA
+extern int
+lbfgs_fit(
+   double *p, double *x, int m, int n, int itmax, int M, int gpu_threads, void *adata);
+extern int
+lbfgs_fit_robust_cuda(
    double *p, double *x, int m, int n, int itmax, int lbfgs_m, int gpu_threads, void *adata);
- 
+#endif /* HAVE_CUDA */
+
 /****************************** robust_lbfgs_nocuda.c ****************************/
 typedef struct thread_data_logf_t_ {
   double *f;
@@ -164,22 +195,21 @@ typedef struct thread_data_logf_t_ {
   int start,end;
   double sum;
 } thread_data_logf_t;
-
 /* robust_nu: nu in T distribution */
+
 #ifdef USE_MIC
 __attribute__ ((target(MIC)))
 #endif
 extern int
-lbfgs_fit_robust(
-   void (*func)(double *p, double *hx, int m, int n, void *adata),
+lbfgs_fit_robust_wrapper(
    double *p, double *x, int m, int n, int itmax, int lbfgs_m, int gpu_threads,
  void *adata);
-#ifdef HAVE_CUDA
+
 extern int
-lbfgs_fit_robust_cuda(
-   void (*func)(double *p, double *hx, int m, int n, void *adata),
-   double *p, double *x, int m, int n, int itmax, int lbfgs_m, int gpu_threads, void *adata);
-#endif
+lbfgs_fit_wrapper(
+   double *p, double *x, int m, int n, int itmax, int lbfgs_m, int gpu_threads,
+ void *adata);
+
 
 /****************************** mderiv.cu ****************************/
 /* cuda driver for kernel */
@@ -937,6 +967,13 @@ typedef struct global_data_rtr_ {
   pthread_attr_t attr;
 } global_data_rtr_t;
 
+/* function to count how many baselines contribute to the calculation of
+   grad and hess, so normalization can be made */
+#ifdef USE_MIC
+__attribute__ ((target(MIC)))
+#endif
+extern void
+fns_fcount(global_data_rtr_t *gdata);
 
 /* RTR (ICASSP 2013) */
 #ifdef USE_MIC
@@ -1300,6 +1337,15 @@ sagefit_visibilities_admm_dual_pt_flt(double *u, double *v, double *w, double *x
 extern void
 openblas_set_num_threads(int num_threads);
 
+/****************************** lmfit.c ****************************/
+/****************************** lmfit_nocuda.c ****************************/
+/* minimization (or vector cost) function (multithreaded) */
+/* p: size mx1 parameters
+   x: size nx1 model being calculated
+   data: extra info needed */
+extern void
+minimize_viz_full_pth(double *p, double *x, int m, int n, void *data);
+
 /********* solver modes *********/
 #define SM_LM_LBFGS 1
 #define SM_OSLM_LBFGS 0
@@ -1381,15 +1427,13 @@ bfgsfit_visibilities(double *u, double *v, double *w, double *x, int N,
    int Nbase, int tilesz,  baseline_t *barr, clus_source_t *carr, complex double *coh, int M, int Mt, double freq0, double fdelta, double *pp, double uvmin, int Nt, int max_lbfgs, int lbfgs_m, int gpu_threads, int solver_mode, double mean_nu, double *res_0, double *res_1); 
 
 
+
+#ifdef HAVE_CUDA
 extern int
 bfgsfit_visibilities_gpu(double *u, double *v, double *w, double *x, int N, 
    int Nbase, int tilesz,  baseline_t *barr,  clus_source_t *carr, complex double *coh, int M, int Mt, double freq0, double fdelta, double *pp, double uvmin, int Nt, int max_lbfgs, int lbfgs_m, int gpu_threads, int solver_mode,  double mean_nu, double *res_0, double *res_1); 
 
 
-
-
-
-#ifdef HAVE_CUDA
 /* data struct shared by all threads */
 typedef struct gb_data_ {
   int status[2]; /* 0: do nothing, 
@@ -1492,75 +1536,6 @@ extern int
 sagefit_visibilities_dual_pt_flt(double *u, double *v, double *w, double *x, int N,
    int Nbase, int tilesz,  baseline_t *barr,  clus_source_t *carr, complex double *coh, int M, int Mt, double freq0, double fdelta, double *pp, double uvmin, int Nt, int max_emiter, int max_iter, int max_lbfgs, int lbfgs_m, int gpu_threads, int linsolv,int solver_mode,  double nulow, double nuhigh, int randomize, double *mean_nu, double *res_0, double *res_1);
 
-/****************************** stationbeam.c ****************************/
-/* 
-  ra,dec: source direction (rad)
-  ra0,dec0: beam center (rad)
-  f: frequency (Hz)
-  f0: beam forming frequency (Hz)
-  
-  longitude,latitude : Nx1 array of station positions (rad,rad)
-  time_jd: JD (day) time
-  Nelem : Nx1 array, no. of elements used in each station
-  x,y,z: Nx1 pointer arrays to station positions, each station has Nelem[]x1 arrays
-
-  beamgain: Nx1 array of station beam gain along the source direction
-*/ 
-extern int
-arraybeam(double ra, double dec, double ra0, double dec0, double f, double f0, int N, double *longitude, double *latitude, double time_jd, int *Nelem, double **x, double **y, double **z, double *beamgain);
-
-
-/****************************** predict_withbeam.c ****************************/
-/* precalculate cluster coherencies
-  u,v,w: u,v,w coordinates (wavelengths) size Nbase*tilesz x 1 
-  u,v,w are ordered with baselines, timeslots
-  x: coherencies size Nbase*4*Mx 1
-   ordered by XX(re,im),XY(re,im),YX(re,im), YY(re,im), baseline, timeslots
-  N: no of stations
-  Nbase: total no of baselines (including more than one tile or timeslot)
-  barr: baseline to station map, size Nbase*tilesz x 1
-  carr: sky model/cluster info size Mx1 of clusters
-  M: no of clusters
-  freq0: frequency
-  fdelta: bandwidth for freq smearing
-  tdelta: integration time for time smearing
-  dec0: declination for time smearing
-  uvmin: baseline length sqrt(u^2+v^2) below which not to include in solution
-  uvmax: baseline length higher than this not included in solution
-
-  Station beam specific parameters
-  ph_ra0,ph_dec0: beam pointing rad,rad
-  ph_freq0: beam reference freq
-  longitude,latitude: Nx1 arrays (rad,rad) station locations
-  time_utc: JD (day) : tilesz x 1 
-  tilesz: how many tiles: == unique time_utc
-  Nelem: Nx1 array, size of stations (elements)
-  xx,yy,zz: Nx1 arrays of station element locations arrays xx[],yy[],zz[]
-  Nt: no of threads
-
-  NOTE: prediction is done for all baselines, even flagged ones
-  and flags are set to 2 for baselines lower than uvcut
-*/
-
-extern int
-precalculate_coherencies_withbeam(double *u, double *v, double *w, complex double *x, int N,
-   int Nbase, baseline_t *barr,  clus_source_t *carr, int M, double freq0, double fdelta, double tdelta, double dec0, double uvmin, double uvmax, 
- double ph_ra0, double ph_dec0, double ph_freq0, double *longitude, double *latitude, double *time_utc, int tileze, int *Nelem, double **xx, double **yy, double **zz, int Nt);
-
-
-extern int
-predict_visibilities_multifreq_withbeam(double *u,double *v,double *w,double *x,int N,int Nbase,int tilesz,baseline_t *barr, clus_source_t *carr, int M,double *freqs,int Nchan, double fdelta,double tdelta, double dec0,
- double ph_ra0, double ph_dec0, double ph_freq0, double *longitude, double *latitude, double *time_utc,int *Nelem, double **xx, double **yy, double **zz, int Nt, int add_to_data);
-
-extern int
-calculate_residuals_multifreq_withbeam(double *u,double *v,double *w,double *p,double *x,int N,int Nbase,int tilesz,baseline_t *barr, clus_source_t *carr, int M,double *freqs,int Nchan, double fdelta,double tdelta,double dec0,
-double ph_ra0, double ph_dec0, double ph_freq0, double *longitude, double *latitude, double *time_utc,int *Nelem, double **xx, double **yy, double **zz, int Nt, int ccid, double rho, int phase_only);
-
-
-/* change epoch of soure ra,dec from J2000 to JAPP */
-/* also the beam pointing ra_beam,dec_beam */
-extern int
-precess_source_locations(double jd_tdb, clus_source_t *carr, int M, double *ra_beam, double *dec_beam, int Nt);
 
 #ifdef __cplusplus
      } /* extern "C" */

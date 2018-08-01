@@ -81,13 +81,9 @@ threadfn_fns_fcount(void *data) {
    sta1=t->barr[ci+t->boff].sta1;
    sta2=t->barr[ci+t->boff].sta2;
 
-   pthread_mutex_lock(&t->mx_array[sta1]);
    t->bcount[sta1]+=1;
-   pthread_mutex_unlock(&t->mx_array[sta1]);
 
-   pthread_mutex_lock(&t->mx_array[sta2]);
    t->bcount[sta2]+=1;
-   pthread_mutex_unlock(&t->mx_array[sta2]);
    }
  }
 
@@ -100,7 +96,7 @@ threadfn_fns_fcount(void *data) {
 #ifdef USE_MIC
 __attribute__ ((target(MIC)))
 #endif
-static void
+void
 fns_fcount(global_data_rtr_t *gdata) {
 
   me_data_t *dp=(me_data_t*)gdata->medata;
@@ -146,7 +142,12 @@ fns_fcount(global_data_rtr_t *gdata) {
     threaddata[nth].boff=ci+boff;
     threaddata[nth].Nb=Nthb;
     threaddata[nth].barr=dp->barr;
-    threaddata[nth].bcount=bcount; /* note this should be 0 first */
+    /* note bcount[] should be 0 first */
+    if ((threaddata[nth].bcount=(int*)calloc((size_t)dp->N,sizeof(int)))==0) {
+     fprintf(stderr,"%s: %d: No free memory\n",__FILE__,__LINE__);
+     exit(1);
+    }
+
     threaddata[nth].mx_array=gdata->mx_array;
     
     pthread_create(&gdata->th_array[nth],&gdata->attr,threadfn_fns_fcount,(void*)(&threaddata[nth]));
@@ -157,6 +158,11 @@ fns_fcount(global_data_rtr_t *gdata) {
   /* now wait for threads to finish */
   for(nth1=0; nth1<nth; nth1++) {
    pthread_join(gdata->th_array[nth1],NULL);
+   /* add all thread bcount[] arrays into bcount[] */
+   for (ci=0; ci<dp->N; ci++) {
+    bcount[ci]+=threaddata[nth1].bcount[ci];
+   }
+   free(threaddata[nth1].bcount);
   }
  free(threaddata);
 

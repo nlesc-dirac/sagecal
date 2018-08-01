@@ -286,7 +286,7 @@ mult_hessian(int m, double *pk, double *gk, double *s, double *y, double *rho, i
 
 /* cubic interpolation in interval [a,b] (a>b is possible)
    to find step that minimizes cost function */
-/* func: vector function
+/*
    xk: parameter values size m x 1 (at which step is calculated)
    pk: step direction size m x 1 (x(k+1)=x(k)+alphak * pk)
    a/b:  interval for interpolation
@@ -299,7 +299,6 @@ mult_hessian(int m, double *pk, double *gk, double *s, double *y, double *rho, i
 */
 static double 
 cubic_interp(
-   void (*func)(double *p, double *hx, int m, int n, void *adata),
    double *xk, double *pk, double a, double b, double *x, double *xp,  double *xo, int m, int n, double step, void *adata,  th_pipeline *tp, gbdata_b *tpg) {
 
   double f0,f1,f0d,f1d; /* function values and derivatives at a,b */
@@ -308,10 +307,6 @@ cubic_interp(
 
   my_dcopy(m,xk,1,xp,1); /* xp<=xk */
   my_daxpy(m,pk,a,xp); /* xp<=xp+(a)*pk */
-//  func(xp,x,m,n,adata);
-//  my_daxpy(n,xo,-1.0,x);
-//  f0=my_dnrm2(n,x);
-//  f0*=f0;
   sync_barrier(&(tp->gate1));
   tpg->lmdata[0]->p=tpg->lmdata[1]->p=xp;
   tpg->status[0]=tpg->status[1]=PT_DO_CCOST;
@@ -323,9 +318,6 @@ cubic_interp(
 
   /* grad(phi_0): evaluate at -step and +step */
   my_daxpy(m,pk,step,xp); /* xp<=xp+(a+step)*pk */
-//  func(xp,x,m,n,adata);
-//  my_daxpy(n,xo,-1.0,x);
-//  p01=my_dnrm2(n,x);
   sync_barrier(&(tp->gate1));
   tpg->status[0]=tpg->status[1]=PT_DO_CCOST;
   sync_barrier(&(tp->gate2));
@@ -336,9 +328,6 @@ cubic_interp(
 
 
   my_daxpy(m,pk,-2.0*step,xp); /* xp<=xp+(a-step)*pk */
-//  func(xp,x,m,n,adata);
-//  my_daxpy(n,xo,-1.0,x);
-//  p02=my_dnrm2(n,x);
   sync_barrier(&(tp->gate1));
   tpg->status[0]=tpg->status[1]=PT_DO_CCOST;
   sync_barrier(&(tp->gate2));
@@ -348,16 +337,9 @@ cubic_interp(
   sync_barrier(&(tp->gate2));
 
 
-//  f0d=(p01*p01-p02*p02)/(2.0*step);
   f0d=(p01-p02)/(2.0*step);
 
-  //my_dcopy(m,xk,1,xp,1); /* xp<=xk: NOT NEEDED because already xp=xk+(a-step)*pk */
-  //my_daxpy(m,pk,b,xp); /* xp<=xp+(b)*pk */
   my_daxpy(m,pk,-a+step+b,xp); /* xp<=xp+(b)*pk */
-//  func(xp,x,m,n,adata);
-//  my_daxpy(n,xo,-1.0,x);
-//  f1=my_dnrm2(n,x);
-//  f1*=f1;
   sync_barrier(&(tp->gate1));
   tpg->status[0]=tpg->status[1]=PT_DO_CCOST;
   sync_barrier(&(tp->gate2));
@@ -369,9 +351,6 @@ cubic_interp(
 
   /* grad(phi_1): evaluate at -step and +step */
   my_daxpy(m,pk,step,xp); /* xp<=xp+(b+step)*pk */
-//  func(xp,x,m,n,adata);
-//  my_daxpy(n,xo,-1.0,x);
-//  p01=my_dnrm2(n,x);
   sync_barrier(&(tp->gate1));
   tpg->status[0]=tpg->status[1]=PT_DO_CCOST;
   sync_barrier(&(tp->gate2));
@@ -382,9 +361,6 @@ cubic_interp(
 
 
   my_daxpy(m,pk,-2.0*step,xp); /* xp<=xp+(b-step)*pk */
-//  func(xp,x,m,n,adata);
-//  my_daxpy(n,xo,-1.0,x);
-//  p02=my_dnrm2(n,x);
   sync_barrier(&(tp->gate1));
   tpg->status[0]=tpg->status[1]=PT_DO_CCOST;
   sync_barrier(&(tp->gate2));
@@ -394,7 +370,6 @@ cubic_interp(
   sync_barrier(&(tp->gate2));
 
 
-//  f1d=(p01*p01-p02*p02)/(2.0*step);
   f1d=(p01-p02)/(2.0*step);
 
 
@@ -417,13 +392,7 @@ cubic_interp(
     fz0=f0+f1;
    } else {
     /* evaluate function for this root */
-    //my_dcopy(m,xk,1,xp,1); /* xp<=xk: NOT NEEDED because already xp=xk+(b-step)*pk */
-    //my_daxpy(m,pk,a+z0*(b-a),xp); /* xp<=xp+(a+z0(b-a))*pk */
     my_daxpy(m,pk,-b+step+a+z0*(b-a),xp); /* xp<=xp+(a+z0(b-a))*pk */
-//    func(xp,x,m,n,adata);
-//    my_daxpy(n,xo,-1.0,x);
-//    fz0=my_dnrm2(n,x);
-//    fz0*=fz0;
     sync_barrier(&(tp->gate1));
     tpg->status[0]=tpg->status[1]=PT_DO_CCOST;
     sync_barrier(&(tp->gate2));
@@ -460,7 +429,7 @@ cubic_interp(
 
 /*************** Fletcher line search **********************************/
 /* zoom function for line search */
-/* func: vector function
+/* 
    xk: parameter values size m x 1 (at which step is calculated)
    pk: step direction size m x 1 (x(k+1)=x(k)+alphak * pk)
    a/b: bracket interval [a,b] (a>b) is possible
@@ -475,7 +444,6 @@ cubic_interp(
 */
 static double 
 linesearch_zoom(
-   void (*func)(double *p, double *hx, int m, int n, void *adata),
    double *xk, double *pk, double a, double b, double *x, double *xp,  double phi_0, double gphi_0, double sigma, double rho, double t1, double t2, double t3, double *xo, int m, int n, double step, void *adata,  th_pipeline *tp, gbdata_b *tpg) {
 
   double alphaj,phi_j,phi_aj;
@@ -490,17 +458,12 @@ linesearch_zoom(
     /* choose alphaj from [a+t2(b-a),b-t3(b-a)] */
     p01=aj+t2*(bj-aj);
     p02=bj-t3*(bj-aj);
-    alphaj=cubic_interp(func,xk,pk,p01,p02,x,xp,xo,m,n,step,adata,tp,tpg);
+    alphaj=cubic_interp(xk,pk,p01,p02,x,xp,xo,m,n,step,adata,tp,tpg);
     //printf("cubic intep [%lf,%lf]->%lf\n",p01,p02,alphaj);
 
     /* evaluate phi(alphaj) */
     my_dcopy(m,xk,1,xp,1); /* xp<=xk */
     my_daxpy(m,pk,alphaj,xp); /* xp<=xp+(alphaj)*pk */
-//    func(xp,x,m,n,adata);
-    /* calculate x<=x-xo */
-//    my_daxpy(n,xo,-1.0,x);
-//    phi_j=my_dnrm2(n,x);
-//    phi_j*=phi_j;
     sync_barrier(&(tp->gate1));
     tpg->lmdata[0]->p=tpg->lmdata[1]->p=xp;
     tpg->status[0]=tpg->status[1]=PT_DO_CCOST;
@@ -512,14 +475,7 @@ linesearch_zoom(
 
 
     /* evaluate phi(aj) */
-    //my_dcopy(m,xk,1,xp,1); /* xp<=xk: NOT NEEDED because already xp = xk+alphaj*pk */
-    //my_daxpy(m,pk,aj,xp); /* xp<=xp+(aj)*pk */
     my_daxpy(m,pk,-alphaj+aj,xp); /* xp<=xp+(aj)*pk */
-//    func(xp,x,m,n,adata);
-    /* calculate x<=x-xo */
-//    my_daxpy(n,xo,-1.0,x);
-//    phi_aj=my_dnrm2(n,x);
-//    phi_aj*=phi_aj;
     sync_barrier(&(tp->gate1));
     tpg->status[0]=tpg->status[1]=PT_DO_CCOST;
     sync_barrier(&(tp->gate2));
@@ -533,13 +489,7 @@ linesearch_zoom(
       bj=alphaj; /* aj unchanged */
     } else {
      /* evaluate grad(alphaj) */
-     //my_dcopy(m,xk,1,xp,1); /* xp<=xk: NOT NEEDED because already xp = xk+aj*pk */
-     //my_daxpy(m,pk,alphaj+step,xp); /* xp<=xp+(alphaj+step)*pk */
      my_daxpy(m,pk,-aj+alphaj+step,xp); /* xp<=xp+(alphaj+step)*pk */
-//     func(xp,x,m,n,adata);
-     /* calculate x<=x-xo */
-//     my_daxpy(n,xo,-1.0,x);
-//     p01=my_dnrm2(n,x);
      sync_barrier(&(tp->gate1));
      tpg->status[0]=tpg->status[1]=PT_DO_CCOST;
      sync_barrier(&(tp->gate2));
@@ -550,10 +500,6 @@ linesearch_zoom(
 
 
      my_daxpy(m,pk,-2.0*step,xp); /* xp<=xp+(alphaj-step)*pk */
-//     func(xp,x,m,n,adata);
-     /* calculate x<=x-xo */
-//     my_daxpy(n,xo,-1.0,x);
-//     p02=my_dnrm2(n,x);
      sync_barrier(&(tp->gate1));
      tpg->status[0]=tpg->status[1]=PT_DO_CCOST;
      sync_barrier(&(tp->gate2));
@@ -563,7 +509,6 @@ linesearch_zoom(
      sync_barrier(&(tp->gate2));
 
 
-//     gphi_j=(p01*p01-p02*p02)/(2.0*step);
      gphi_j=(p01-p02)/(2.0*step);
 
      /* termination due to roundoff/other errors pp. 38, Fletcher */
@@ -601,7 +546,7 @@ linesearch_zoom(
  
 
 /* line search */
-/* func: vector function
+/* 
    xk: parameter values size m x 1 (at which step is calculated)
    pk: step direction size m x 1 (x(k+1)=x(k)+alphak * pk)
    alpha1: initial value for step
@@ -613,7 +558,6 @@ linesearch_zoom(
 */
 static double 
 linesearch(
-   void (*func)(double *p, double *hx, int m, int n, void *adata),
    double *xk, double *pk, double alpha1, double sigma, double rho, double t1, double t2, double t3, double *xo, int m, int n, double step, void *adata, th_pipeline *tp, gbdata_b *tpg) {
  /* phi(alpha)=f(xk+alpha pk)
   for vector function func 
@@ -642,11 +586,6 @@ linesearch(
 
   alphak=1.0;
   /* evaluate phi_0 and grad(phi_0) */
-//func(xk,x,m,n,adata);
-//my_daxpy(n,xo,-1.0,x);
-//phi_0=my_dnrm2(n,x);
-//phi_0*=phi_0;
-//printf("CPU cost=%lf\n",phi_0);
   sync_barrier(&(tp->gate1));
   tpg->lmdata[0]->p=tpg->lmdata[1]->p=xk;
   tpg->status[0]=tpg->status[1]=PT_DO_CCOST;
@@ -663,10 +602,6 @@ linesearch(
   my_dcopy(m,xk,1,xp,1); /* xp<=xk */
   my_daxpy(m,pk,step,xp); /* xp<=xp+(0.0+step)*pk */
 
-//func(xp,x,m,n,adata);
-  /* calculate x<=x-xo */
-//my_daxpy(n,xo,-1.0,x);
-//p01=my_dnrm2(n,x);
   sync_barrier(&(tp->gate1));
   tpg->lmdata[0]->p=tpg->lmdata[1]->p=xp;
   tpg->status[0]=tpg->status[1]=PT_DO_CCOST;
@@ -677,10 +612,6 @@ linesearch(
   sync_barrier(&(tp->gate2));
 
   my_daxpy(m,pk,-2.0*step,xp); /* xp<=xp+(0.0-step)*pk */
-//func(xp,x,m,n,adata);
-  /* calculate x<=x-xo */
-//my_daxpy(n,xo,-1.0,x);
-//p02=my_dnrm2(n,x);
   sync_barrier(&(tp->gate1));
   tpg->status[0]=tpg->status[1]=PT_DO_CCOST;
   sync_barrier(&(tp->gate2));
@@ -690,7 +621,6 @@ linesearch(
   sync_barrier(&(tp->gate2));
 
 
-//  gphi_0=(p01*p01-p02*p02)/(2.0*step);
   gphi_0=(p01-p02)/(2.0*step);
 
 
@@ -719,11 +649,6 @@ linesearch(
    /* evalualte phi(alpha(i))=f(xk+alphai pk) */
    my_dcopy(m,xk,1,xp,1); /* xp<=xk */
    my_daxpy(m,pk,alphai,xp); /* xp<=xp+alphai*pk */
-//   func(xp,x,m,n,adata);
-   /* calculate x<=x-xo */
-//   my_daxpy(n,xo,-1.0,x);
-//   phi_alphai=my_dnrm2(n,x);
-//   phi_alphai*=phi_alphai;
    sync_barrier(&(tp->gate1));
    tpg->status[0]=tpg->status[1]=PT_DO_CCOST;
    sync_barrier(&(tp->gate2));
@@ -743,7 +668,7 @@ linesearch(
 
    if ((phi_alphai>phi_0+alphai*gphi_0) || (ci>1 && phi_alphai>=phi_alphai1)) {
       /* ai=alphai1, bi=alphai bracket */
-      alphak=linesearch_zoom(func,xk,pk,alphai1,alphai,x,xp,phi_0,gphi_0,sigma,rho,t1,t2,t3,xo,m,n,step,adata,tp,tpg);
+      alphak=linesearch_zoom(xk,pk,alphai1,alphai,x,xp,phi_0,gphi_0,sigma,rho,t1,t2,t3,xo,m,n,step,adata,tp,tpg);
 #ifdef DEBUG
       printf("Linesearch : Condition 1 met\n");
 #endif
@@ -751,13 +676,7 @@ linesearch(
    } 
 
    /* evaluate grad(phi(alpha(i))) */
-   //my_dcopy(m,xk,1,xp,1); /* NOT NEEDED here because already xp=xk+alphai*pk */
-   //my_daxpy(m,pk,alphai+step,xp); /* xp<=xp+(alphai+step)*pk */
    my_daxpy(m,pk,step,xp); /* xp<=xp+(alphai+step)*pk */
-//   func(xp,x,m,n,adata);
-   /* calculate x<=x-xo */
-//   my_daxpy(n,xo,-1.0,x);
-//   p01=my_dnrm2(n,x);
    sync_barrier(&(tp->gate1));
    tpg->status[0]=tpg->status[1]=PT_DO_CCOST;
    sync_barrier(&(tp->gate2));
@@ -767,10 +686,6 @@ linesearch(
    sync_barrier(&(tp->gate2));
 
    my_daxpy(m,pk,-2.0*step,xp); /* xp<=xp+(alphai-step)*pk */
-//   func(xp,x,m,n,adata);
-   /* calculate x<=x-xo */
-//   my_daxpy(n,xo,-1.0,x);
-//   p02=my_dnrm2(n,x);
    sync_barrier(&(tp->gate1));
    tpg->status[0]=tpg->status[1]=PT_DO_CCOST;
    sync_barrier(&(tp->gate2));
@@ -780,7 +695,6 @@ linesearch(
    sync_barrier(&(tp->gate2));
 
 
-//   gphi_i=(p01*p01-p02*p02)/(2.0*step);
    gphi_i=(p01-p02)/(2.0*step);
 
    if (fabs(gphi_i)<=-sigma*gphi_0) {
@@ -793,7 +707,7 @@ linesearch(
 
    if (gphi_i>=0) {
      /* ai=alphai, bi=alphai1 bracket */
-     alphak=linesearch_zoom(func,xk,pk,alphai,alphai1,x,xp,phi_0,gphi_0,sigma,rho,t1,t2,t3,xo,m,n,step,adata,tp,tpg);
+     alphak=linesearch_zoom(xk,pk,alphai,alphai1,x,xp,phi_0,gphi_0,sigma,rho,t1,t2,t3,xo,m,n,step,adata,tp,tpg);
 #ifdef DEBUG
      printf("Linesearch : Condition 3 met\n");
 #endif
@@ -809,7 +723,7 @@ linesearch(
      /* choose by interpolation in [2*alphai-alphai1,min(mu,alphai+t1*(alphai-alphai1)] */
      p01=2.0*alphai-alphai1;
      p02=MIN(mu,alphai+t1*(alphai-alphai1));
-     alphai=cubic_interp(func,xk,pk,p01,p02,x,xp,xo,m,n,step,adata,tp,tpg);
+     alphai=cubic_interp(xk,pk,p01,p02,x,xp,xo,m,n,step,adata,tp,tpg);
      //printf("cubic interp [%lf,%lf]->%lf\n",p01,p02,alphai);
    }
    phi_alphai1=phi_alphai;
@@ -832,7 +746,6 @@ linesearch(
 /* note M here  is LBFGS memory size */
 static int
 lbfgs_fit_common(
-   void (*func)(double *p, double *hx, int m, int n, void *adata),
    double *p, double *x, int m, int n, int itmax, int M, int gpu_threads, int do_robust, void *adata) {
 
   double *gk; /* gradients at both k+1 and k iter */
@@ -987,14 +900,6 @@ lbfgs_fit_common(
   sync_barrier(&(tp.gate1));
   tpg.status[0]=tpg.status[1]=PT_DO_NOTHING;
   sync_barrier(&(tp.gate2));
-//  for (ci=0; ci<20; ci++) {
-//   printf("GPU %d %lf\n",ci,gk[ci]);
-//  } 
-  /*  gradient gk=grad(f)_k */
-//  func_grad(func,xk,gk,x,m,n,step,gpu_threads,adata);
-//  for (ci=0; ci<20; ci++) {
-//   printf("CPU %d %lf\n",ci,gk[ci]);
-//  } 
   
   double gradnrm=my_dnrm2(m,gk);
   /* if gradient is too small, no need to solve, so stop */
@@ -1025,7 +930,7 @@ lbfgs_fit_common(
    /* linesearch to find step length */
    /* parameters alpha1=10.0,sigma=0.1, rho=0.01, t1=9, t2=0.1, t3=0.5 */
    /* FIXME: update paramters for GPU gradient */
-   alphak=linesearch(func,xk,pk,10.0,0.1,0.01,9,0.1,0.5,x,m,n,step,adata,&tp, &tpg);
+   alphak=linesearch(xk,pk,10.0,0.1,0.01,9,0.1,0.5,x,m,n,step,adata,&tp, &tpg);
    /* check if step size is too small, or nan, then stop */
    if (!isnormal(alphak) || fabs(alphak)<CLM_EPSILON) {
     break;
@@ -1053,7 +958,6 @@ lbfgs_fit_common(
   tpg.status[0]=tpg.status[1]=PT_DO_NOTHING;
   sync_barrier(&(tp.gate2));
 
-//   func_grad(func,xk1,gk,x,m,n,step,gpu_threads,adata);
    /* yk=yk+gk1 */
    my_daxpy(m,gk,1.0,&y[cm]);
 
@@ -1107,16 +1011,15 @@ lbfgs_fit_common(
 
 
 
+/* wrapper functions */
 int
 lbfgs_fit(
-   void (*func)(double *p, double *hx, int m, int n, void *adata),
    double *p, double *x, int m, int n, int itmax, int M, int gpu_threads, void *adata) {
-  return lbfgs_fit_common(func, p, x, m, n, itmax, M, gpu_threads, 0, adata);
+  return lbfgs_fit_common(p, x, m, n, itmax, M, gpu_threads, 0, adata);
 }
 
 int
 lbfgs_fit_robust_cuda(
-   void (*func)(double *p, double *hx, int m, int n, void *adata),
    double *p, double *x, int m, int n, int itmax, int M, int gpu_threads, void *adata) {
-  return lbfgs_fit_common(func, p, x, m, n, itmax, M, gpu_threads, 1, adata);
+  return lbfgs_fit_common(p, x, m, n, itmax, M, gpu_threads, 1, adata);
 }
