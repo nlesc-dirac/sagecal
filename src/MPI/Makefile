@@ -19,7 +19,7 @@ LDFLAGS=-Wl,--rpath,/cm/shared/package/openblas/0.2.17mt/lib/,--rpath,${CASA_LIB
 
 MY_LIBS=-lm -lradio -ldirac
 INCLUDES=-I. -I../lib/Dirac -I../lib/Radio $(CASA_INCDIR) -I/usr/include
-LIBPATH=-L$(LAPACK_DIR) -L$(CASA_LIBDIR) -L../lib/Dirac -L../lib/Radio
+LIBPATH=-L$(LAPACK_DIR) $(CASA_LIBDIR) -L../lib/Dirac -L../lib/Radio
 
 #### glib
 # GLIBI=-I/usr/include/glib-2.0 -I/usr/lib/glib-2.0/include -I/usr/lib/x86_64-linux-gnu/glib-2.0/include/
