@@ -1,4 +1,4 @@
-CC=gcc
+CC=mpicc
 CXX=g++
 CFLAGS= -Wall -O3 -g #-pg
 #CFLAGS= -Wall -O3 -fopt-info-optimized
