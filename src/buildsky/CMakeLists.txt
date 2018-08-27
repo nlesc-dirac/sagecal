@@ -20,3 +20,6 @@ target_link_libraries(buildsky
  -lcfitsio
  -lm
 )
+
+install(TARGETS buildsky DESTINATION bin)
+

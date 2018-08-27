@@ -34,3 +34,6 @@ target_link_libraries(sagecal-mpi
  -ldirac
  -lradio
 )
+
+install(TARGETS sagecal-mpi DESTINATION bin)
+

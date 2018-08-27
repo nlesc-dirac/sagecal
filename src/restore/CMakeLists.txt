@@ -23,3 +23,5 @@ target_link_libraries(restore
  -lcfitsio
  -lm
 )
+
+install(TARGETS restore DESTINATION bin)

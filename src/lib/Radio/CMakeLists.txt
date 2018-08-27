@@ -44,9 +44,13 @@ include_directories(${GLIB_PKG_INCLUDE_DIRS})
 
 foreach (object ${objects})
     add_library(${object} ${object}.c)
+    SET_TARGET_PROPERTIES(${object} PROPERTIES SOVERSION 0.0)
 endforeach (object)
 
 add_library(radio ${objects} Radio.h)
+SET_TARGET_PROPERTIES(radio PROPERTIES SOVERSION 0.0)
+## disable install of lib* files
+##install(TARGETS ${objects} radio DESTINATION lib)
 
 target_link_libraries(radio
 ${CASACORE_LIBRARIES}
