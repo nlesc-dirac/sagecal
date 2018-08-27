@@ -1,3 +1,4 @@
+include_directories(${CASACORE_INCLUDE_DIR})
 include_directories(${CASACORE_INCLUDE_DIR}/casacore)
 #include_directories(${HDF5_INCLUDE_DIRS})
 
