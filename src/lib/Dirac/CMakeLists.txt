@@ -62,6 +62,11 @@ message (STATUS "lib/Dirac objects --> ${objects}")
 include_directories(./)
 foreach (object ${objects})
     add_library(${object} SHARED ${object}.c)
+    SET_TARGET_PROPERTIES(${object} PROPERTIES SOVERSION 0.0)
 endforeach (object)
 
 add_library(dirac ${objects} Dirac.h)
+SET_TARGET_PROPERTIES(dirac PROPERTIES SOVERSION 0.0)
+
+install(TARGETS ${objects} dirac DESTINATION lib)
+

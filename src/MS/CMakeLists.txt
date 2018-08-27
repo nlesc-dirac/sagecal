@@ -36,3 +36,7 @@ target_link_libraries(sagecal
  -ldirac
  -lradio
 )
+
+
+install(TARGETS sagecal DESTINATION bin)
+
