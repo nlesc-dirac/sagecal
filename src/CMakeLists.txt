@@ -1,3 +1,10 @@
 add_subdirectory(lib/Dirac)
 add_subdirectory(lib/Radio)
 add_subdirectory(MS)
+
+find_package(MPI)
+if(MPI_FOUND)
+ add_subdirectory(MPI)
+else()
+ message(STATUS "\n MPI not found, so skipping MPI version")
+endif()
