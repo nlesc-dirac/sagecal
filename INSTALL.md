@@ -33,7 +33,7 @@ wo  4 apr 2018 13:36:14 CEST
 ### Building
 - Clone the repository
 ```
-    git clone -b sprint_cmake https://git@github.com/nlesc-dirac/sagecal.git
+    git clone -b master https://git@github.com/nlesc-dirac/sagecal.git
 
 ```
 
