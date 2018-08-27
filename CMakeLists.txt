@@ -142,28 +142,28 @@ message (STATUS "CMAKE_CXX_FLAGS ....... = ${CMAKE_CXX_FLAGS}")
 message (STATUS "ENABLE_MPI ............ = ${ENABLE_MPI}")
 message (STATUS "ENABLE_CUDA ........... = ${ENABLE_CUDA}")
 
-message (STATUS "CASACORE_INC........... = ${CASACORE_INCLUDE_DIR}")
-message (STATUS "CASACORE_LIB........... = ${CASACORE_LIBRARIES}")
+message (STATUS "CASACORE_INCLUDE_DIR........... = ${CASACORE_INCLUDE_DIR}")
+message (STATUS "CASACORE_LIBRARIES........... = ${CASACORE_LIBRARIES}")
 
-message (STATUS "OpenBLAS-LIB .......... = ${OpenBLAS_LIB}")
+message (STATUS "OpenBLAS_LIB .......... = ${OpenBLAS_LIB}")
 
-message (STATUS "GLIB-INC .............. = ${GLIB_PKG_INCLUDE_DIRS}")
-message (STATUS "GLIB-LIBS ............. = ${GLIB_PKG_LIBRARIES}")
+message (STATUS "GLIB_PKG_INCLUDE_DIRS.............. = ${GLIB_PKG_INCLUDE_DIRS}")
+message (STATUS "GLIB_PKG_LIBRARIES............. = ${GLIB_PKG_LIBRARIES}")
 
 #message (STATUS "LAPACK-INC ............ = ${LAPACK_INCLUDE_DIR}")
-message (STATUS "LAPACK-LIBS ........... = ${LAPACK_LIBRARIES}")
+message (STATUS "LAPACK_LIBRARIES........... = ${LAPACK_LIBRARIES}")
 
 #message (STATUS "GFORTRAN-INC  ......... = ${GFORTRAN_INCLUDE_DIR}")
 #message (STATUS "GFORTRAN-LIBS ......... = ${LIBGFORTRAN_LIBRARIES}")
 
-message (STATUS "CFITSIO-INC  .......... = ${CFITSIO_INCLUDE_DIR}")
-message (STATUS "CFITSIO-LIBS .......... = ${CFITSIO_LIBRARIES}")
+message (STATUS "CFITSIO_INCLUDE_DIR.......... = ${CFITSIO_INCLUDE_DIR}")
+message (STATUS "CFITSIO_LIBRARIES.......... = ${CFITSIO_LIBRARIES}")
 
-message (STATUS "WCSLIB-INC  ........... = ${WCSLIB_INCLUDE_DIR}")
-message (STATUS "WCSLIB-LIBS ........... = ${WCSLIB_LIBRARIES}")
+message (STATUS "WCSLIB_INCLUDE_DIR........... = ${WCSLIB_INCLUDE_DIR}")
+message (STATUS "WCSLIB_LIBRARIES ........... = ${WCSLIB_LIBRARIES}")
 
-message (STATUS "HDF5-INC  ........... = ${HDF5_INCLUDE_DIRS}")
-message (STATUS "HDF5-LIBS ........... = ${HDF5_LIBRARIES}")
+message (STATUS "HDF5_INCLUDE_DIR........... = ${HDF5_INCLUDE_DIRS}")
+message (STATUS "HDF5_LIBRARIES........... = ${HDF5_LIBRARIES}")
 
 
 
