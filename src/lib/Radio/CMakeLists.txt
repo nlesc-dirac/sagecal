@@ -49,6 +49,7 @@ endforeach (object)
 
 add_library(radio ${objects} Radio.h)
 SET_TARGET_PROPERTIES(radio PROPERTIES SOVERSION 0.0)
+
 ## disable install of lib* files
 ##install(TARGETS ${objects} radio DESTINATION lib)
 
@@ -59,3 +60,4 @@ ${LAPACK_LIBRARIES}
 ${WCSLIB_LIBRARIES}
 ${GLIB_PKG_LIBRARIES}
 )
+
