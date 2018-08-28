@@ -7,6 +7,10 @@
 
 # SAGECAL
 
+Please cite this code using the DOI.
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.1289316.svg)](https://doi.org/10.5281/zenodo.1289316)
+
+
 ## Features
 
 - Levenberg-Marquardt, LBFGS, Riemannian Trust Region, Nesterov's accelerated gradient descent algorithms
