@@ -18,7 +18,7 @@ cd casacore_install
 cd /travis/workdir
 mkdir -p casacore/build
 cd casacore/build
-cmake -DUSE_FFTW3=ON -DCMAKE_INSTALL_PREFIX=/opt/soft/casacore -DDATA_DIR=/opt/soft/casacore/data -DUSE_OPENMP=ON \
+cmake3 -DUSE_FFTW3=ON -DCMAKE_INSTALL_PREFIX=/opt/soft/casacore -DDATA_DIR=/opt/soft/casacore/data -DUSE_OPENMP=ON \
     -DUSE_HDF5=ON -DBUILD_PYTHON=ON -DUSE_THREADS=ON ..
 make -j4
 make install
@@ -27,7 +27,7 @@ make install
 cd /travis/workdir && \
 mkdir build-sl && cd build-sl
 
-cmake .. -DENABLE_CUDA=OFF && \
+cmake3 .. -DENABLE_CUDA=OFF && \
 make -j4 && \
 ls -alsrt ./dist/bin && \
 ./dist/bin/sagecal
