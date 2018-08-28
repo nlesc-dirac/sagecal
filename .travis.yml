@@ -10,7 +10,7 @@ before_install:
   - docker run -itd -v "${TRAVIS_BUILD_DIR}:/travis/workdir" --name ubuntu-build ubuntu:xenial
   - docker pull base/archlinux
   - docker run -itd -v "${TRAVIS_BUILD_DIR}:/travis/workdir" --name arch-build base/archlinux
-  - docker pull docker pull scientificlinux/sl:7
+  - docker pull scientificlinux/sl:7
   - docker run -itd -v "${TRAVIS_BUILD_DIR}:/travis/workdir" --name sl-build scientificlinux/sl:7
 
 script:
