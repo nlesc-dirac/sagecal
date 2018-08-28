@@ -101,7 +101,7 @@ For expert users, and for custom architectures (GPU), the manual install is reco
 
 
 ### 3 Build settings
-In ./src/lib and ./src/MS you MUST edit the Makefiles to suit your system. Some common items to edit are:
+In ./src/lib/Dirac and ./src/lib/Radio and ./src/MS you MUST edit the Makefiles to suit your system. Some common items to edit are:
  - LAPACK: directory where LAPACK/OpenBLAS is installed
  - GLIBI/GLIBL: include/lib files for glib
  - CASA_LIBDIR/CASA_INCDIR/CASA_LIBS : casacore include/library location and files:
@@ -125,7 +125,7 @@ This is for manually installing the distributed version of sagecal (sagecal-mpi)
  - Same as for SAGECal.
  - MPI (e.g. OpenMPI)
 
-## 2 Build ./src/lib as above (using mpicc -DMPI_BUILD)
+## 2 Build ./src/lib/Dirac ./src/lib/Radio as above (using mpicc -DMPI_BUILD)
 
 ## 3 Build ./src/MPI using mpicc++
 
