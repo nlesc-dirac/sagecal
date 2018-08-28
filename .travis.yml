@@ -8,16 +8,18 @@ language: cpp
 before_install:
   - docker pull ubuntu:xenial
   - docker run -itd -v "${TRAVIS_BUILD_DIR}:/travis/workdir" --name ubuntu-build ubuntu:xenial
+#  - docker pull base/archlinux
+#  - docker run -itd -v "${TRAVIS_BUILD_DIR}:/travis/workdir" --name arch-build base/archlinux
+#  - docker pull scientificlinux/sl:7
+#  - docker run -itd -v "${TRAVIS_BUILD_DIR}:/travis/workdir" --name sl-build scientificlinux/sl:7
 
 script:
   - export BRANCH=$(if [ "$TRAVIS_PULL_REQUEST" == "false" ]; then echo $TRAVIS_BRANCH; else echo $TRAVIS_PULL_REQUEST_BRANCH; fi)
   - echo "TRAVIS_BRANCH=$TRAVIS_BRANCH, PR=$PR, BRANCH=$BRANCH"
-  - docker exec ubuntu-build apt-get update -y
-  - docker exec ubuntu-build apt-get install software-properties-common -y
-  - docker exec ubuntu-build add-apt-repository -s ppa:kernsuite/kern-3 -y
-  - docker exec ubuntu-build apt-add-repository multiverse
-  - docker exec ubuntu-build apt-get update -y
-  - docker exec ubuntu-build apt-get install -y git cmake g++ pkg-config libcfitsio-bin libcfitsio-dev libopenblas-base libopenblas-dev wcslib-dev wcslib-tools libglib2.0-dev libcasa-casa2 casacore-dev casacore-data casacore-tools
-  - |
-    docker exec --env BRANCH=$BRANCH ubuntu-build /bin/bash -c "/travis/workdir/test-builds/test-ubuntu.sh"
+  - docker exec --env BRANCH=$BRANCH ubuntu-build /bin/bash -c "/travis/workdir/build-tests/ubuntu/prepare-ubuntu.sh"
+  - docker exec --env BRANCH=$BRANCH ubuntu-build /bin/bash -c "/travis/workdir/build-tests/ubuntu/compile-ubuntu.sh"
+#  - docker exec --env BRANCH=$BRANCH arch-build /bin/bash -c "/travis/workdir/build-tests/arch/prepare-arch.sh"
+#  - docker exec --env BRANCH=$BRANCH arch-build /bin/bash -c "/travis/workdir/build-tests/arch/compile-arch.sh"
+#  - docker exec --env BRANCH=$BRANCH sl-build /bin/bash -c "/travis/workdir/build-tests/sl/prepare-sl.sh"
+#  - docker exec --env BRANCH=$BRANCH sl-build /bin/bash -c "/travis/workdir/build-tests/sl/compile-sl.sh"
 

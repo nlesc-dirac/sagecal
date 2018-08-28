@@ -10,6 +10,7 @@ set(PROJECT_VERSION_REVISION 1)
 set(PROJECT_VERSION
   "${PROJECT_VERSION_MAJOR}.${PROJECT_VERSION_MINOR}.${PROJECT_VERSION_PATCH}")
 
+message(STATUS "\n############################\n#   HOST SYSTEM v${CMAKE_HOST_SYSTEM_NAME}\n############################")
 message(STATUS "\n############################\n#   Building SageCal v${PROJECT_VERSION}\n############################")
 
 include(CheckCXXCompilerFlag)
