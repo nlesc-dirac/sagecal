@@ -65,7 +65,7 @@ di 28 aug 2018  9:37:58 CEST
     make DEST=/path/to/sagecal/dir install
 ```
 
-- The sagecal executable can be found in **/path/to/sagecal/dir/bin**, also sagecal-mpi,buildsky and restore might be installed depending on the availability of MPI and WCSLIB/FFTW.
+- The sagecal executable can be found in **/path/to/sagecal/dir/usr/local/bin**, also **sagecal-mpi**,**buildsky** and **restore** might be installed depending on the availability of MPI and WCSLIB/FFTW.
 
 
 
@@ -77,6 +77,7 @@ di 28 aug 2018  9:37:58 CEST
 
 
 ## Manual installation
+For expert users, and for custom architectures (GPU), the manual install is recommended.
 ### 1 Prerequisites:
  - CASACORE http://casacore.googlecode.com/
  - glib http://developer.gnome.org/glib
@@ -89,11 +90,13 @@ di 28 aug 2018  9:37:58 CEST
   -- NVML Nvidia management library
  - If you are using Intel Xeon Phi MICs.
   -- Intel MKL and other libraries
- - Get the source for SAGECal : git clone git://git.code.sf.net/p/sagecal/code sagecal-code
-
+ - Get the source for SAGECal 
+```
+    git clone -b master https://git@github.com/nlesc-dirac/sagecal.git
+```
 
 ### 2 The basic way to build is
-  1.a) go to ./src/lib  and run make (which will create libsagecal.a)
+  1.a) go to ./src/lib/Dirac and ./src/lib/Radio  and run make (which will create libdirac.a and libradio.a)
   1.b) go to ./src/MS and run make (which will create the executable)
 
 
@@ -116,10 +119,10 @@ In ./src/lib and ./src/MS you MUST edit the Makefiles to suit your system. Some 
 
 
 
-# SAGECAL-MPI Installation
-
+## SAGECAL-MPI Manual Installation 
+This is for manually installing the distributed version of sagecal (sagecal-mpi), the cmake build will will work for most cases.
 ## 1 Prerequsites:
- - Same as above 
+ - Same as for SAGECal.
  - MPI (e.g. OpenMPI)
 
 ## 2 Build ./src/lib as above (using mpicc -DMPI_BUILD)
