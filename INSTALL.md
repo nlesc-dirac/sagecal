@@ -1,11 +1,11 @@
-wo  4 apr 2018 13:36:14 CEST
+di 28 aug 2018  9:37:58 CEST
 # SAGECal Installation
 
 ## Cmake Build
 
 ### Requirements
 #### Ubuntu (tested with 16.04)
-- Add KERN repository. Intructions can also be found at [http://kernsuite.info/](http://kernsuite.info/)
+- Add KERN repository. Instructions can also be found at [http://kernsuite.info/](http://kernsuite.info/)
 ```
     sudo apt-get install software-properties-common
     sudo add-apt-repository -s ppa:kernsuite/kern-3
@@ -28,35 +28,44 @@ wo  4 apr 2018 13:36:14 CEST
     - libglib2.0-dev
     - follow the instructions at 
 [https://github.com/casacore/casacore](https://github.com/casacore/casacore) to install casacore.
+    - Additional packages (not essential, but recommended): MPI (openmpi), FFTW 
+		 
 
 
 ### Building
 - Clone the repository
 ```
-    git clone -b sprint_cmake https://git@github.com/nlesc-dirac/sagecal.git
+    git clone -b master https://git@github.com/nlesc-dirac/sagecal.git
 
 ```
 
-- Build SageCal
+- Build SAGECal
 ```
     mkdir build && cd build
     cmake .. -DENABLE_CUDA=OFF
 ```
 
-**OPTIONAL:** You can also define a custon casacore path:
+**OPTIONAL:** You can also define a custom casacore path:
 
 ```
     cmake .. -DCASACORE_ROOT_DIR=/opt/soft/casacore/ -DENABLE_CUDA=OFF
 ```
+**OPTIONAL:** You can also define a custom paths to everything:
 
-&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Compile with:
 ```
-    make -j4
+    cmake -DCFITSIO_ROOT_DIR=/cm/shared/package/cfitsio/3380-gcc-4.9.3 -DCASACORE_ROOT_DIR=/cm/shared/package/casacore/v2.3.0-gcc-4.9.3 -DWCSLIB_INCLUDE_DIR=/cm/shared/package/wcslib/5.13-gcc-4.9.3/include -DWCSLIB_LIBRARY=/cm/shared/package/wcslib/5.13-gcc-4.9.3/lib/libwcs.so -DCMAKE_VERBOSE_MAKEFILE:BOOL=ON -DCMAKE_LINKER=/cm/shared/package/gcc/4.9.3/bin/gcc -DCMAKE_CXX_FLAGS=-L/cm/shared/package/cfitsio/3380-gcc-4.9.3/lib -DCMAKE_C_FLAGS=-L/cm/shared/package/cfitsio/3380-gcc-4.9.3/lib ..
 ```
 
+    Compile with:
+```
+    make 
+```
+    Install at your favorite place
+```
+    make DEST=/path/to/sagecal/dir install
+```
 
-- The sagecal executable can be found in
-    **dist/bin** folder. All the libraries will be stored in **dist/lib** folder. 
+- The sagecal executable can be found in **/path/to/sagecal/dir/usr/local/bin**, also **sagecal-mpi**,**buildsky** and **restore** might be installed depending on the availability of MPI and WCSLIB/FFTW.
 
 
 
@@ -68,7 +77,8 @@ wo  4 apr 2018 13:36:14 CEST
 
 
 ## Manual installation
-### 1 Prerequsites:
+For expert users, and for custom architectures (GPU), the manual install is recommended.
+### 1 Prerequisites:
  - CASACORE http://casacore.googlecode.com/
  - glib http://developer.gnome.org/glib
  - BLAS/LAPACK
@@ -80,16 +90,18 @@ wo  4 apr 2018 13:36:14 CEST
   -- NVML Nvidia management library
  - If you are using Intel Xeon Phi MICs.
   -- Intel MKL and other libraries
- - Get the source for SAGECal : git clone git://git.code.sf.net/p/sagecal/code sagecal-code
-
+ - Get the source for SAGECal 
+```
+    git clone -b master https://git@github.com/nlesc-dirac/sagecal.git
+```
 
 ### 2 The basic way to build is
-  1.a) go to ./src/lib  and run make (which will create libsagecal.a)
+  1.a) go to ./src/lib/Dirac and ./src/lib/Radio  and run make (which will create libdirac.a and libradio.a)
   1.b) go to ./src/MS and run make (which will create the executable)
 
 
 ### 3 Build settings
-In ./src/lib and ./src/MS you MUST edit the Makefiles to suit your system. Some common items to edit are:
+In ./src/lib/Dirac and ./src/lib/Radio and ./src/MS you MUST edit the Makefiles to suit your system. Some common items to edit are:
  - LAPACK: directory where LAPACK/OpenBLAS is installed
  - GLIBI/GLIBL: include/lib files for glib
  - CASA_LIBDIR/CASA_INCDIR/CASA_LIBS : casacore include/library location and files:
@@ -107,13 +119,13 @@ In ./src/lib and ./src/MS you MUST edit the Makefiles to suit your system. Some 
 
 
 
-# SAGECAL-MPI Installation
-
+## SAGECAL-MPI Manual Installation 
+This is for manually installing the distributed version of sagecal (sagecal-mpi), the cmake build will will work for most cases.
 ## 1 Prerequsites:
- - Same as above 
+ - Same as for SAGECal.
  - MPI (e.g. OpenMPI)
 
-## 2 Build ./src/lib as above (using mpicc -DMPI_BUILD)
+## 2 Build ./src/lib/Dirac ./src/lib/Radio as above (using mpicc -DMPI_BUILD)
 
 ## 3 Build ./src/MPI using mpicc++
 

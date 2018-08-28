@@ -68,5 +68,5 @@ endforeach (object)
 add_library(dirac ${objects} Dirac.h)
 SET_TARGET_PROPERTIES(dirac PROPERTIES SOVERSION 0.0)
 
-install(TARGETS ${objects} dirac DESTINATION lib)
-
+## disable install of lib* files
+##install(TARGETS ${objects} dirac DESTINATION lib)
