@@ -8,8 +8,8 @@ language: cpp
 before_install:
   - docker pull ubuntu:xenial
   - docker run -itd -v "${TRAVIS_BUILD_DIR}:/travis/workdir" --name ubuntu-build ubuntu:xenial
-  - docker pull base/archlinux
-  - docker run -itd -v "${TRAVIS_BUILD_DIR}:/travis/workdir" --name arch-build base/archlinux
+#  - docker pull base/archlinux
+#  - docker run -itd -v "${TRAVIS_BUILD_DIR}:/travis/workdir" --name arch-build base/archlinux
   - docker pull scientificlinux/sl:7
   - docker run -itd -v "${TRAVIS_BUILD_DIR}:/travis/workdir" --name sl-build scientificlinux/sl:7
 
@@ -18,8 +18,8 @@ script:
   - echo "TRAVIS_BRANCH=$TRAVIS_BRANCH, PR=$PR, BRANCH=$BRANCH"
   - docker exec --env BRANCH=$BRANCH ubuntu-build /bin/bash -c "/travis/workdir/build-tests/ubuntu/prepare-ubuntu.sh"
   - docker exec --env BRANCH=$BRANCH ubuntu-build /bin/bash -c "/travis/workdir/build-tests/ubuntu/compile-ubuntu.sh"
-  - docker exec --env BRANCH=$BRANCH arch-build /bin/bash -c "/travis/workdir/build-tests/arch/prepare-arch.sh"
-  - docker exec --env BRANCH=$BRANCH arch-build /bin/bash -c "/travis/workdir/build-tests/arch/compile-arch.sh"
+#  - docker exec --env BRANCH=$BRANCH arch-build /bin/bash -c "/travis/workdir/build-tests/arch/prepare-arch.sh"
+#  - docker exec --env BRANCH=$BRANCH arch-build /bin/bash -c "/travis/workdir/build-tests/arch/compile-arch.sh"
   - docker exec --env BRANCH=$BRANCH sl-build /bin/bash -c "/travis/workdir/build-tests/sl/prepare-sl.sh"
   - docker exec --env BRANCH=$BRANCH sl-build /bin/bash -c "/travis/workdir/build-tests/sl/compile-sl.sh"
 
