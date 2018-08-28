@@ -16,7 +16,7 @@ git clone --progress --verbose https://github.com/casacore/casacore.git casacore
 cd casacore_install
 
 cd /travis/workdir
-mkdir casacore/build
+mkdir -p casacore/build
 cd casacore/build
 cmake -DUSE_FFTW3=ON -DCMAKE_INSTALL_PREFIX=/opt/soft/casacore -DDATA_DIR=/opt/soft/casacore/data -DUSE_OPENMP=ON \
     -DUSE_HDF5=ON -DBUILD_PYTHON=ON -DUSE_THREADS=ON ..
