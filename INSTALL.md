@@ -5,7 +5,7 @@ di 28 aug 2018  9:37:58 CEST
 
 ### Requirements
 #### Ubuntu (tested with 16.04)
-- Add KERN repository. Intructions can also be found at [http://kernsuite.info/](http://kernsuite.info/)
+- Add KERN repository. Instructions can also be found at [http://kernsuite.info/](http://kernsuite.info/)
 ```
     sudo apt-get install software-properties-common
     sudo add-apt-repository -s ppa:kernsuite/kern-3
@@ -39,16 +39,21 @@ di 28 aug 2018  9:37:58 CEST
 
 ```
 
-- Build SageCal
+- Build SAGECal
 ```
     mkdir build && cd build
     cmake .. -DENABLE_CUDA=OFF
 ```
 
-**OPTIONAL:** You can also define a custon casacore path:
+**OPTIONAL:** You can also define a custom casacore path:
 
 ```
     cmake .. -DCASACORE_ROOT_DIR=/opt/soft/casacore/ -DENABLE_CUDA=OFF
+```
+**OPTIONAL:** You can also define a custom paths to everything:
+
+```
+    cmake -DCFITSIO_ROOT_DIR=/cm/shared/package/cfitsio/3380-gcc-4.9.3 -DCASACORE_ROOT_DIR=/cm/shared/package/casacore/v2.3.0-gcc-4.9.3 -DWCSLIB_INCLUDE_DIR=/cm/shared/package/wcslib/5.13-gcc-4.9.3/include -DWCSLIB_LIBRARY=/cm/shared/package/wcslib/5.13-gcc-4.9.3/lib/libwcs.so -DCMAKE_VERBOSE_MAKEFILE:BOOL=ON -DCMAKE_LINKER=/cm/shared/package/gcc/4.9.3/bin/gcc -DCMAKE_CXX_FLAGS=-L/cm/shared/package/cfitsio/3380-gcc-4.9.3/lib -DCMAKE_C_FLAGS=-L/cm/shared/package/cfitsio/3380-gcc-4.9.3/lib ..
 ```
 
     Compile with:
@@ -72,7 +77,7 @@ di 28 aug 2018  9:37:58 CEST
 
 
 ## Manual installation
-### 1 Prerequsites:
+### 1 Prerequisites:
  - CASACORE http://casacore.googlecode.com/
  - glib http://developer.gnome.org/glib
  - BLAS/LAPACK
