@@ -1,4 +1,4 @@
-wo  4 apr 2018 13:36:14 CEST
+di 28 aug 2018  9:37:58 CEST
 # SAGECal Installation
 
 ## Cmake Build
@@ -28,6 +28,8 @@ wo  4 apr 2018 13:36:14 CEST
     - libglib2.0-dev
     - follow the instructions at 
 [https://github.com/casacore/casacore](https://github.com/casacore/casacore) to install casacore.
+    - Additional packages (not essential, but recommended): MPI (openmpi), FFTW 
+		 
 
 
 ### Building
@@ -49,14 +51,16 @@ wo  4 apr 2018 13:36:14 CEST
     cmake .. -DCASACORE_ROOT_DIR=/opt/soft/casacore/ -DENABLE_CUDA=OFF
 ```
 
-&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Compile with:
+    Compile with:
 ```
-    make -j4
+    make 
+```
+    Install at your favorite place
+```
+    make DEST=/path/to/sagecal/dir install
 ```
 
-
-- The sagecal executable can be found in
-    **dist/bin** folder. All the libraries will be stored in **dist/lib** folder. 
+- The sagecal executable can be found in **/path/to/sagecal/dir/bin**, also sagecal-mpi,buildsky and restore might be installed depending on the availability of MPI and WCSLIB/FFTW.
 
 
 
