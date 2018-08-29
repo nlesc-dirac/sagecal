@@ -9,7 +9,7 @@ FILE(GLOB SRCFILES *.c)
 add_executable(restore ${SRCFILES})
 
 target_link_libraries(restore
- ${CFITSIO_LIBRARIES}
+ ${CFITSIO_LIB}
  ${OpenBLAS_LIB}
  ${LAPACK_LIBRARIES}
  ${WCSLIB_LIBRARIES}

@@ -8,7 +8,7 @@ FILE(GLOB SRCFILES *.c)
 add_executable(buildsky ${SRCFILES})
 
 target_link_libraries(buildsky
- ${CFITSIO_LIBRARIES}
+ ${CFITSIO_LIB}
  ${OpenBLAS_LIB}
  ${LAPACK_LIBRARIES}
  ${WCSLIB_LIBRARIES}

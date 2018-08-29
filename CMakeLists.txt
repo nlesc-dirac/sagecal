@@ -73,7 +73,7 @@ include_directories(${CASACORE_INCLUDE_DIR})
 
 #cfitsio
 find_package(CfitsIO REQUIRED)
-include_directories(${CFITSIO_INCLUDE_DIR})
+include_directories(${CFITSIO_INCLUDE})
 
 #lapack
 find_package(LAPACK REQUIRED)
@@ -158,8 +158,8 @@ message (STATUS "LAPACK_LIBRARIES........... = ${LAPACK_LIBRARIES}")
 #message (STATUS "GFORTRAN-INC  ......... = ${GFORTRAN_INCLUDE_DIR}")
 #message (STATUS "GFORTRAN-LIBS ......... = ${LIBGFORTRAN_LIBRARIES}")
 
-message (STATUS "CFITSIO_INCLUDE_DIR.......... = ${CFITSIO_INCLUDE_DIR}")
-message (STATUS "CFITSIO_LIBRARIES.......... = ${CFITSIO_LIBRARIES}")
+message (STATUS "CFITSIO_INCLUDE.......... = ${CFITSIO_INCLUDE}")
+message (STATUS "CFITSIO_LIB.......... = ${CFITSIO_LIB}")
 
 message (STATUS "WCSLIB_INCLUDE_DIR........... = ${WCSLIB_INCLUDE_DIR}")
 message (STATUS "WCSLIB_LIBRARIES ........... = ${WCSLIB_LIBRARIES}")

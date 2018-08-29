@@ -18,7 +18,7 @@ add_executable(sagecal-mpi ${SRCFILES})
 
 target_link_libraries(sagecal-mpi
  ${CASACORE_LIBRARIES}
- ${CFITSIO_LIBRARIES}
+ ${CFITSIO_LIB}
  ${OpenBLAS_LIB}
  ${LAPACK_LIBRARIES}
  ${WCSLIB_LIBRARIES}
