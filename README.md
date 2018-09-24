@@ -7,9 +7,6 @@
 
 # SAGECAL
 
-Please cite this code using the DOI.
-[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.1289316.svg)](https://doi.org/10.5281/zenodo.1289316)
-
 
 ## Features
 
@@ -186,3 +183,6 @@ So for this cluster, there will be more than 1 column in the solution file, the 
 
 ### Additional Info
 See [LOFAR Cookbook Chapter](https://support.astron.nl/LOFARImagingCookbook/sagecal.html).
+
+Please cite this code using the DOI.
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.1289316.svg)](https://doi.org/10.5281/zenodo.1289316)
