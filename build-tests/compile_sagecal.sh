@@ -5,9 +5,6 @@ echo 'script: ' $0
 echo "Building SageCal" && \
 echo "Branch --> $BRANCH" && \
 echo "Image --> $IMAGE"
-echo 'pwd: ' $PWD
-ls -asl /travis/workdir
-
 
 BUILD_DIR=$IMAGE'-build'
 
@@ -43,7 +40,16 @@ esac
 echo 'CMAKE_EXE: ' $CMAKE_EXE
 echo 'CMake options: ' $OPTS
 echo 'pwd: ' $PWD
+
+echo 'ls -asl: '
 ls -asl
+
+echo 'ls -asl /travis/workdir: '
+ls -asl /travis/workdir
+
+echo 'ls -asl /travis/workdir/$BUILD_DIR: '
+ls -asl /travis/workdir/$BUILD_DIR
+
 
 $CMAKE_EXE /travis/workdir -DCMAKE_INSTALL_PREFIX=/opt/sagecal \
     $OPTS
