@@ -16,10 +16,12 @@ OPTS=''
 
 case $IMAGE in
     ubuntu)
+        echo 'Building for Ubuntu'
         CMAKE_EXE=$(which cmake)
         OPTS=''
         ;;
     sl7)
+        echo 'Building for Scientific Linux'
         CMAKE_EXE=$(which cmake3)
         OPTS='-DUSE_FFTW3=ON \
               -DCMAKE_INSTALL_PREFIX=/opt/casacore \
@@ -51,8 +53,7 @@ echo 'ls -asl /travis/workdir/$BUILD_DIR: '
 ls -asl /travis/workdir/$BUILD_DIR
 
 
-$CMAKE_EXE /travis/workdir -DCMAKE_INSTALL_PREFIX=/opt/sagecal \
-    $OPTS
+$CMAKE_EXE /travis/workdir -DCMAKE_INSTALL_PREFIX=/opt/sagecal $OPTS
 
 make -j4 && \
 make install && \
