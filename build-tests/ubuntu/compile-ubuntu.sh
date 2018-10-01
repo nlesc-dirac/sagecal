@@ -4,8 +4,9 @@ echo "Building SageCal" && \
 echo "Branch --> $BRANCH" && \
 cd /travis/workdir && \
 mkdir build-ubuntu && cd build-ubuntu && \
-cmake .. -DENABLE_CUDA=OFF && \
+cmake .. -DCMAKE_INSTALL_PREFIX=/opt/sagecal && \
 make -j4 && \
-ls -alsrt ./dist/bin && \
-./dist/bin/sagecal
+make install \
+ls -alsrt /opt/sagecal && \
+/opt/sagecal/bin/sagecal
 

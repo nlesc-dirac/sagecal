@@ -146,6 +146,7 @@ set (CMAKE_CXX_FLAGS "-std=c++0x -g -O3 -Wall")
 #--------------------------------------- summary
 message(STATUS "\n############################\n#   Configuration summary\n############################")
 message (STATUS "CMAKE_SYSTEM .......... = ${CMAKE_SYSTEM}")
+message (STATUS "CMAKE_INSTALL_PREFIX .. = ${CMAKE_INSTALL_PREFIX}")
 message (STATUS "CMAKE_BUILD_TYPE ...... = ${CMAKE_BUILD_TYPE}")
 message (STATUS "BUILD_SHARED_LIBS ..... = ${BUILD_SHARED_LIBS}")
 message (STATUS "CMAKE_INSTALL_NAME_DIR  = ${CMAKE_INSTALL_NAME_DIR}")
@@ -182,6 +183,10 @@ message (STATUS "HDF5_INCLUDE_DIR........= ${HDF5_INCLUDE_DIRS}")
 message (STATUS "HDF5_LIBRARIES..........= ${HDF5_LIBRARIES}")
 
 
+message (STATUS "CMAKE_CURRENT_BINARY_DIR..........= ${CMAKE_CURRENT_BINARY_DIR}")
+message (STATUS "CMAKE_CURRENT_LIST_DIR..........= ${CMAKE_CURRENT_LIST_DIR}")
+message (STATUS "CMAKE_INSTALL_PREFIX..........= ${CMAKE_INSTALL_PREFIX}")
+
 
 #--------------------------------------- include directories
 add_subdirectory(src)
@@ -192,3 +197,5 @@ add_subdirectory(src)
 # FIXME: this will be the final step for testing
 #file(COPY ${PROJECT_SOURCE_DIR}/test DESTINATION ${MAINFOLDER}/dist/test)
 
+
+install(DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/dist/ DESTINATION ${CMAKE_INSTALL_PREFIX})
