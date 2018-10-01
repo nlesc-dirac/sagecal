@@ -27,6 +27,6 @@ mkdir build-sl && cd build-sl
 cmake3 .. -DCMAKE_INSTALL_PREFIX=/opt/sagecal && \
     -DCASACORE_ROOT_DIR=/opt/soft/casacore -DCASACORE_INCLUDE=/opt/soft/casacore/include/casacore
 make -j4 && \
-make install \
+make install && \
 ls -alsrt /opt/sagecal && \
 /opt/sagecal/bin/sagecal
