@@ -24,9 +24,9 @@ make install
 cd /travis/workdir && \
 mkdir build-sl && cd build-sl
 
-cmake3 .. -DENABLE_CUDA=OFF && \
+cmake3 .. -DCMAKE_INSTALL_PREFIX=/opt/sagecal && \
     -DCASACORE_ROOT_DIR=/opt/soft/casacore -DCASACORE_INCLUDE=/opt/soft/casacore/include/casacore
 make -j4 && \
-ls -alsrt ./dist/bin && \
-./dist/bin/sagecal
-
+make install \
+ls -alsrt /opt/sagecal && \
+/opt/sagecal/bin/sagecal

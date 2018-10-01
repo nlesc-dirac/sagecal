@@ -20,6 +20,6 @@ script:
   - docker exec --env BRANCH=$BRANCH ubuntu-build /bin/bash -c "/travis/workdir/build-tests/ubuntu/compile-ubuntu.sh"
 #  - docker exec --env BRANCH=$BRANCH arch-build /bin/bash -c "/travis/workdir/build-tests/arch/prepare-arch.sh"
 #  - docker exec --env BRANCH=$BRANCH arch-build /bin/bash -c "/travis/workdir/build-tests/arch/compile-arch.sh"
-#  - docker exec --env BRANCH=$BRANCH sl-build /bin/bash -c "/travis/workdir/build-tests/sl/prepare-sl.sh"
-#  - docker exec --env BRANCH=$BRANCH sl-build /bin/bash -c "/travis/workdir/build-tests/sl/compile-sl.sh"
+  - docker exec --env BRANCH=$BRANCH sl-build /bin/bash -c "/travis/workdir/build-tests/sl/prepare-sl.sh"
+  - docker exec --env BRANCH=$BRANCH sl-build /bin/bash -c "/travis/workdir/build-tests/sl/compile-sl.sh"
 
