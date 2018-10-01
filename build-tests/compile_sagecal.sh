@@ -5,6 +5,9 @@ echo 'script: ' $0
 echo "Building SageCal" && \
 echo "Branch --> $BRANCH" && \
 echo "Image --> $IMAGE"
+echo 'pwd: ' $PWD
+ls -asl /travis/workdir
+
 
 BUILD_DIR=$IMAGE'-build'
 
