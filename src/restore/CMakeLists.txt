@@ -1,6 +1,7 @@
 find_package(WcsLib REQUIRED)
 find_package(FFTW REQUIRED)
 include_directories(${WCSLIB_INCLUDE_DIRS}/wcslib)
+include_directories(${WCSLIB_INCLUDE_DIRS})
 include_directories(./)
 
 link_directories(${LIBRARY_OUTPUT_PATH})
