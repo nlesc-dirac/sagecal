@@ -29,7 +29,6 @@ target_link_libraries(sagecal-mpi
  -lopenblas
  -lgfortran
  -lpthread
- -lcfitsio
  -lm
  -ldirac
  -lradio

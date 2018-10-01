@@ -32,7 +32,6 @@ target_link_libraries(sagecal
  -lopenblas
  -lgfortran
  -lpthread
- -lcfitsio
  -lm
  -ldirac
  -lradio
