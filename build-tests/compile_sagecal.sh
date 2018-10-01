@@ -11,11 +11,12 @@ BUILD_DIR=$IMAGE'-build'
 cd /travis/workdir && \
     mkdir $BUILD_DIR && cd $BUILD_DIR
 
-CMAKE_EXE=$(which cmake)
+CMAKE_EXE=''
 OPTS=''
 
 case $IMAGE in
     ubuntu)
+        CMAKE_EXE=$(which cmake)
         OPTS=''
         ;;
     sl7)
