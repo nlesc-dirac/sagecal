@@ -9,6 +9,7 @@ echo "Image --> $IMAGE"
 cd /travis/workdir && \
     mkdir build && cd build
 
+CMAKE_EXE=$(which cmake)
 OPTS=''
 
 case $IMAGE in
@@ -16,6 +17,7 @@ case $IMAGE in
         OPTS=''
         ;;
     sl7)
+        CMAKE_EXE=$(which cmake3)
         OPTS='-DUSE_FFTW3=ON \
               -DCMAKE_INSTALL_PREFIX=/opt/casacore \
               -DDATA_DIR=/opt/casacore/data -DUSE_OPENMP=ON \
@@ -35,7 +37,7 @@ esac
 
 echo 'CMake options: ' $OPTS
 
-cmake .. -DCMAKE_INSTALL_PREFIX=/opt/sagecal \
+$CMAKE_EXE .. -DCMAKE_INSTALL_PREFIX=/opt/sagecal \
     $OPTS
 
 make -j4 && \
