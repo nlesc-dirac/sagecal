@@ -6,8 +6,10 @@ echo "Building SageCal" && \
 echo "Branch --> $BRANCH" && \
 echo "Image --> $IMAGE"
 
+BUILD_DIR=$IMAGE'-build'
+
 cd /travis/workdir && \
-    mkdir build && cd build
+    mkdir $BUILD_DIR && cd $BUILD_DIR
 
 CMAKE_EXE=$(which cmake)
 OPTS=''
