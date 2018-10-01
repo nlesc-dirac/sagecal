@@ -37,8 +37,10 @@ case $IMAGE in
         ;;
 esac
 
-
+echo 'CMAKE_EXE: ' $CMAKE_EXE
 echo 'CMake options: ' $OPTS
+echo 'pwd: ' $PWD
+ls -asl
 
 $CMAKE_EXE .. -DCMAKE_INSTALL_PREFIX=/opt/sagecal \
     $OPTS
