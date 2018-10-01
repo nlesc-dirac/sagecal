@@ -45,7 +45,7 @@ echo 'CMake options: ' $OPTS
 echo 'pwd: ' $PWD
 ls -asl
 
-$CMAKE_EXE .. -DCMAKE_INSTALL_PREFIX=/opt/sagecal \
+$CMAKE_EXE /travis/workdir -DCMAKE_INSTALL_PREFIX=/opt/sagecal \
     $OPTS
 
 make -j4 && \
