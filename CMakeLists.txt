@@ -50,14 +50,15 @@ IF("${isSystemDir}" STREQUAL "-1")
    SET(CMAKE_INSTALL_RPATH "${CMAKE_INSTALL_PREFIX}/lib")
 ENDIF("${isSystemDir}" STREQUAL "-1")
 
-# libsynthesis has mix of C++ and Fortran which is not handled well by
-# versions before 2.8.
-if(${CMAKE_MAJOR_VERSION}.${CMAKE_MINOR_VERSION} LESS 2.8)
-  if(NOT LIB_EXTRA_SYNTHESIS)
-    set(LIB_EXTRA_SYNTHESIS gfortran)
-  endif(NOT LIB_EXTRA_SYNTHESIS)
-endif(${CMAKE_MAJOR_VERSION}.${CMAKE_MINOR_VERSION} LESS 2.8)
 
+# # libsynthesis has mix of C++ and Fortran which is not handled well by
+# # versions before 2.8.
+# if(${CMAKE_MAJOR_VERSION}.${CMAKE_MINOR_VERSION} LESS 2.8)
+#   if(NOT LIB_EXTRA_SYNTHESIS)
+#     set(LIB_EXTRA_SYNTHESIS gfortran)
+#   endif(NOT LIB_EXTRA_SYNTHESIS)
+# endif(${CMAKE_MAJOR_VERSION}.${CMAKE_MINOR_VERSION} LESS 2.8)
+#
 
 
 #--------------------------------------- SageCal dependencies
@@ -91,10 +92,21 @@ include_directories(${OpenBLAS_INCLUDE_DIR})
 #find_package(BLAS REQUIRED)
 #include_directories(${BLAS_INCLUDE_DIR})
 
-# FIXME: is this really needed?
-##gfortran
+# ##gfortran
+enable_language(Fortran)
 #find_package(GFortranLibs REQUIRED)
-#include_directories(${GFORTRAN_INCLUDE_DIR})
+# include_directories(${GFORTRAN_INCLUDE_DIR})
+
+
+
+
+
+# enable_language(Fortran)
+# # get_filename_component (Fortran_COMPILER_NAME ${CMAKE_Fortran_COMPILER} NAME)
+# set(FC "$ENV{FC}" CACHE INTERNAL "Got from environment variable")
+# set(CMAKE_Fortran_COMPILER "$ENV{FC}" CACHE INTERNAL "Got from environment variable")
+#
+
 
 ##hdf5
 #find_package(HDF5 REQUIRED)
@@ -144,28 +156,30 @@ message (STATUS "CMAKE_CXX_FLAGS ....... = ${CMAKE_CXX_FLAGS}")
 message (STATUS "ENABLE_MPI ............ = ${ENABLE_MPI}")
 message (STATUS "ENABLE_CUDA ........... = ${ENABLE_CUDA}")
 
-message (STATUS "CASACORE_INCLUDE_DIR........... = ${CASACORE_INCLUDE_DIR}")
-message (STATUS "CASACORE_LIBRARIES........... = ${CASACORE_LIBRARIES}")
+message (STATUS "CASACORE_INCLUDE_DIR....= ${CASACORE_INCLUDE_DIR}")
+message (STATUS "CASACORE_LIBRARIES......= ${CASACORE_LIBRARIES}")
 
 message (STATUS "OpenBLAS_LIB .......... = ${OpenBLAS_LIB}")
 
-message (STATUS "GLIB_PKG_INCLUDE_DIRS.............. = ${GLIB_PKG_INCLUDE_DIRS}")
-message (STATUS "GLIB_PKG_LIBRARIES............. = ${GLIB_PKG_LIBRARIES}")
+message (STATUS "GLIB_PKG_INCLUDE_DIRS...= ${GLIB_PKG_INCLUDE_DIRS}")
+message (STATUS "GLIB_PKG_LIBRARIES......= ${GLIB_PKG_LIBRARIES}")
 
 #message (STATUS "LAPACK-INC ............ = ${LAPACK_INCLUDE_DIR}")
-message (STATUS "LAPACK_LIBRARIES........... = ${LAPACK_LIBRARIES}")
+message (STATUS "LAPACK_LIBRARIES........= ${LAPACK_LIBRARIES}")
 
-#message (STATUS "GFORTRAN-INC  ......... = ${GFORTRAN_INCLUDE_DIR}")
-#message (STATUS "GFORTRAN-LIBS ......... = ${LIBGFORTRAN_LIBRARIES}")
+# message (STATUS "GFORTRAN-INC  ......... = ${GFORTRAN_INCLUDE_DIR}")
+# message (STATUS "GFORTRAN-LIBS ......... = ${LIBGFORTRAN_LIBRARIES}")
+message (STATUS "CMAKE_Fortran_COMPILER  = ${CMAKE_Fortran_COMPILER}")
 
-message (STATUS "CFITSIO_INCLUDE.......... = ${CFITSIO_INCLUDE}")
-message (STATUS "CFITSIO_LIB.......... = ${CFITSIO_LIB}")
+message (STATUS "CFITSIO_ROOT_DIR........= ${CFITSIO_ROOT_DIR}")
+message (STATUS "CFITSIO_INCLUDE.........= ${CFITSIO_INCLUDE}")
+message (STATUS "CFITSIO_LIB.............= ${CFITSIO_LIB}")
 
-message (STATUS "WCSLIB_INCLUDE_DIR........... = ${WCSLIB_INCLUDE_DIR}")
-message (STATUS "WCSLIB_LIBRARIES ........... = ${WCSLIB_LIBRARIES}")
+message (STATUS "WCSLIB_INCLUDE_DIRS.....= ${WCSLIB_INCLUDE_DIRS}")
+message (STATUS "WCSLIB_LIBRARIES .......= ${WCSLIB_LIBRARIES}")
 
-message (STATUS "HDF5_INCLUDE_DIR........... = ${HDF5_INCLUDE_DIRS}")
-message (STATUS "HDF5_LIBRARIES........... = ${HDF5_LIBRARIES}")
+message (STATUS "HDF5_INCLUDE_DIR........= ${HDF5_INCLUDE_DIRS}")
+message (STATUS "HDF5_LIBRARIES..........= ${HDF5_LIBRARIES}")
 
 
 

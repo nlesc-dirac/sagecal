@@ -33,6 +33,11 @@
 
 if(NOT CFITSIO_FOUND)
 
+  if (NOT "$ENV{CFITSIO_ROOT_DIR}" STREQUAL "")
+  set(CFITSIO_ROOT_DIR "$ENV{CFITSIO_ROOT_DIR}" CACHE INTERNAL "Got from environment variable")
+  endif()
+
+
   find_path(CFITSIO_INCLUDE fitsio.h
     HINTS ${CFITSIO_ROOT_DIR} PATH_SUFFIXES include include/cfitsio
              include/libcfitsio0)

@@ -32,20 +32,28 @@
 #  WCSLIB_LIBRARIES    - the WCSLIB libraries
 #                        (identical to WCSLIB_LIBRARY)
 
+# find paths
 if(NOT WCSLIB_FOUND)
 
-  find_path(WCSLIB_INCLUDE_DIR wcslib/wcs.h
-    HINTS ${WCSLIB_ROOT_DIR} PATH_SUFFIXES include)
-  find_library(WCSLIB_LIBRARY wcs
-    HINTS ${WCSLIB_ROOT_DIR} PATH_SUFFIXES lib)
+  if (NOT "$ENV{WCSLIB_ROOT_DIR}" STREQUAL "")
+  set(WCSLIB_ROOT "$ENV{WCSLIB_ROOT_DIR}" CACHE INTERNAL "Got from environment variable")
+  endif()
+
+  find_path(WCSLIB_INCLUDE wcslib/wcs.h
+    HINTS ${WCSLIB_ROOT} PATH_SUFFIXES include)
+  find_library(WCSLIB_LIB wcs
+    HINTS ${WCSLIB_ROOT} PATH_SUFFIXES lib)
   find_library(M_LIBRARY m)
-  mark_as_advanced(WCSLIB_INCLUDE_DIR WCSLIB_LIBRARY M_LIBRARY)
+  mark_as_advanced(WCSLIB_INCLUDE WCSLIB_LIB M_LIBRARY)
 
   include(FindPackageHandleStandardArgs)
   find_package_handle_standard_args(WCSLIB DEFAULT_MSG
-    WCSLIB_LIBRARY M_LIBRARY WCSLIB_INCLUDE_DIR)
+    WCSLIB_LIB M_LIBRARY WCSLIB_INCLUDE)
 
-  set(WCSLIB_INCLUDE_DIRS ${WCSLIB_INCLUDE_DIR})
-  set(WCSLIB_LIBRARIES ${WCSLIB_LIBRARY} ${M_LIBRARY})
+  set(WCSLIB_INCLUDE_DIRS ${WCSLIB_INCLUDE})
+  set(WCSLIB_LIBRARIES ${WCSLIB_LIB} ${M_LIBRARY})
+
+  set(WCSLIB_INCLUDE ${WCSLIB_INCLUDE})
+  set(WCSLIB_LIB ${WCSLIB_LIB} ${M_LIBRARY})
 
 endif(NOT WCSLIB_FOUND)
