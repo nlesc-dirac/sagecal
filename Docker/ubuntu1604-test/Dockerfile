@@ -13,7 +13,9 @@ RUN apt-get install -y \
     libopenblas-base libopenblas-dev \
     wcslib-dev wcslib-tools \
     libglib2.0-dev \
-    libcasa-casa2 casacore-dev casacore-data casacore-tools
+    libcasa-casa2 casacore-dev casacore-data casacore-tools \
+    mpich \
+    fftw-dev libfftw3-mpi3 libfftw3-bin
 
 
 ## compile sagecal
