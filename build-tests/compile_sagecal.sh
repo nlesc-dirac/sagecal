@@ -23,7 +23,7 @@ case $IMAGE in
     sl7)
         echo 'Building for Scientific Linux'
         CMAKE_EXE=$(which cmake3)
-        OPTS='-DCASACORE_ROOT_DIR=/opt/casacore -DCASACORE_INCLUDE=/opt/casacore/include/casacore'
+        OPTS='-DCASACORE_ROOT_DIR=/opt/casacore'
         ;;
     arch)
         OPTS=''
