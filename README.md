@@ -4,6 +4,7 @@
 | ------------- | ------------- |
 | [![Build Status](https://travis-ci.org/nlesc-dirac/sagecal.svg?branch=master)](https://travis-ci.org/nlesc-dirac/sagecal)  | [![Build Status](https://travis-ci.org/nlesc-dirac/sagecal.svg?branch=dev)](https://travis-ci.org/nlesc-dirac/sagecal)  |
 
+[![Documentation](https://codedocs.xyz/nlesc-dirac/sagecal.svg)](https://codedocs.xyz/nlesc-dirac/sagecal/)
 
 # SAGECAL
 
@@ -23,6 +24,9 @@
 
 Read INSTALL for installation. This file gives a brief guide to use SAGECal.
 Warning: this file may be obsolete. use sagecal -h to see up-to-date options.
+
+## Code documentation
+Code documentation can be found [here](https://codedocs.xyz/nlesc-dirac/sagecal).
 
 
 ## Step by Step Introduction:
