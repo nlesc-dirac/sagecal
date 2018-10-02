@@ -71,7 +71,15 @@
 # directly fed to the linker.
 #
 #   Usage: casacore_resolve_dependencies(result components...)
-#
+
+
+if (NOT "$ENV{CASACORE_ROOT_DIR}" STREQUAL "")
+set(CASACORE_ROOT_DIR "$ENV{CASACORE_ROOT_DIR}" CACHE INTERNAL "Got from environment variable")
+endif()
+
+
+
+
 macro(casacore_resolve_dependencies _result)
   set(${_result} ${ARGN})
   set(_index 0)
