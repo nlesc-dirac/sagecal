@@ -3,6 +3,13 @@ enable_language(CXX)
 
 #--------------------------------------- project
 project (SageCal)
+
+if (NOT EXISTS ${CMAKE_BINARY_DIR}/CMakeCache.txt)
+  if (NOT CMAKE_BUILD_TYPE)
+    set(CMAKE_BUILD_TYPE "Release" CACHE STRING "Choose the type of build, options are: Debug Release" FORCE)
+  endif()
+endif()
+
 set(PROJECT_VERSION_MAJOR 0)
 set(PROJECT_VERSION_MINOR 6)
 set(PROJECT_VERSION_PATCH 0)
@@ -27,7 +34,6 @@ SET(LIBRARY_OUTPUT_PATH "${MAINFOLDER}/dist/lib")
 # Load CMAKE configuration from environment variables
 set( CMAKE_MODULE_PATH $ENV{CMAKE_MODULE_PATH} )
 set( CMAKE_PREFIX_PATH $ENV{CMAKE_PREFIX_PATH} )
-
 
 #--------------------------------------- cmake modules
 list(INSERT CMAKE_MODULE_PATH 0 ${CMAKE_SOURCE_DIR}/CMakeModules)
@@ -134,11 +140,9 @@ endif()
 
 
 #--------------------------------------- build parameters for all targets
-#set (CMAKE_CXX_FLAGS "-g -O3 -Wall -Wextra -std=c++11 -W -pedantic -ansi -fPIC -fpermissive -fno-omit-frame-pointer -fno-inline-functions -fno-inline-functions-called-once -fno-optimize-sibling-calls")
-# set (CMAKE_CXX_FLAGS "-std=c++0x -g -O3 -Wall -Wextra -W -pedantic -ansi -fPIC -fpermissive")
-set (CMAKE_CXX_FLAGS "-std=c++0x -g -O3 -Wall")
-# FIXME: add debug build option
-#set (CMAKE_CXX_FLAGS_DEBUG "-g -pg -pedantic -Wall -DNDEBUG -Wextra -Wcast-align -Wpointer-arith -Woverloaded-virtual -Wwrite-strings -Wcast-qual -Wctor-dtor-privacy -Wno-long-long-Wdisabled-optimization -Wformat=2 -Winit-self -Wlogical-op -Wmissing-declarations -Wmissing-include-dirs -Wnoexcept -Wold-style-cast -Woverloaded-virtual -Wredundant-decls -Wshadow -Wsign-conversion -Wsign-promo -Wstrict-null-sentinel -Wstrict-overflow=5 -Wswitch-default -Wundef -Werror -Wno-unused")
+set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -std=c++0x -g -O3")
+set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -g -pg -Wall -DNDEBUG -Wextra -Wcast-align -Wpointer-arith -Woverloaded-virtual -Wwrite-strings -Wcast-qual -Wctor-dtor-privacy -Wno-long-long-Wdisabled-optimization -Wformat=2 -Winit-self -Wlogical-op -Wmissing-declarations -Wmissing-include-dirs -Wnoexcept -Wold-style-cast -Woverloaded-virtual -Wredundant-decls -Wshadow -Wsign-conversion -Wsign-promo -Wstrict-null-sentinel -Wstrict-overflow=5 -Wswitch-default -Wundef -Werror -Wno-unused")
+
 
 
 
