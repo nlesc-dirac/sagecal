@@ -30,12 +30,7 @@ if(ENABLE_CUDA)
         consensus_poly
         lbfgs
         load_balance
-        manifold_fl
-        mderiv
-        mderiv_fl
         oslmfit
-        robust
-        robust_fl
         rtr_solve_cuda
         rtr_solve_robust_cuda
         rtr_solve_robust_cuda_admm
@@ -49,7 +44,6 @@ if(ENABLE_CUDA)
         robust
         robust_fl
     )
-
 
 
     set(objects ${objects} ${extra_objects})
@@ -71,9 +65,10 @@ if(ENABLE_CUDA)
     endforeach (object)
 
     foreach (object ${extra_objects_cuda})
-        add_library(${object} SHARED ${object}.cu)
-        SET_TARGET_PROPERTIES(${object} PROPERTIES SOVERSION 0.0)
-        SET_TARGET_PROPERTIES(${object} PROPERTIES CUDA_SEPARABLE_COMPILATION ON)
+        CUDA_ADD_LIBRARY(${object}_cu SHARED ${object}.cu)
+        # FIXME: are these properties necassary for CUDA?
+        # SET_TARGET_PROPERTIES(${object} PROPERTIES SOVERSION 0.0)
+        # SET_TARGET_PROPERTIES(${object} PROPERTIES CUDA_SEPARABLE_COMPILATION ON)
     endforeach (object)
 
     add_library(dirac ${objects} Dirac.h)
