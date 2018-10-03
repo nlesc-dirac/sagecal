@@ -4,8 +4,10 @@
 | ------------- | ------------- |
 | [![Build Status](https://travis-ci.org/nlesc-dirac/sagecal.svg?branch=master)](https://travis-ci.org/nlesc-dirac/sagecal)  | [![Build Status](https://travis-ci.org/nlesc-dirac/sagecal.svg?branch=dev)](https://travis-ci.org/nlesc-dirac/sagecal)  |
 
+[![Documentation](https://codedocs.xyz/nlesc-dirac/sagecal.svg)](https://codedocs.xyz/nlesc-dirac/sagecal/)
 
 # SAGECAL
+
 
 ## Features
 
@@ -22,6 +24,9 @@
 
 Read INSTALL for installation. This file gives a brief guide to use SAGECal.
 Warning: this file may be obsolete. use sagecal -h to see up-to-date options.
+
+## Code documentation
+Code documentation can be found [here](https://codedocs.xyz/nlesc-dirac/sagecal).
 
 
 ## Step by Step Introduction:
@@ -182,3 +187,6 @@ So for this cluster, there will be more than 1 column in the solution file, the 
 
 ### Additional Info
 See [LOFAR Cookbook Chapter](https://support.astron.nl/LOFARImagingCookbook/sagecal.html).
+
+Please cite this code using the DOI.
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.1289316.svg)](https://doi.org/10.5281/zenodo.1289316)

@@ -1,6 +1,32 @@
 di 28 aug 2018  9:37:58 CEST
 # SAGECal Installation
 
+
+## das5
+
+Load the modules below before compiling SageCal.
+```
+module load cmake/3.8.2
+module load mpich/ge/gcc/64/3.2
+module load gcc/4.9.3
+module load casacore/2.3.0-gcc-4.9.3
+module load wcslib/5.13-gcc-4.9.3
+module load wcslib/5.16-gcc-4.9.3
+module load cfitsio/3.410-gcc-4.9.3
+```
+
+checkout the source code and compile it with the instructions below(in source folder):
+```
+git clone https://github.com/nlesc-dirac/sagecal.git
+
+cd sagecal && mkdir build && cd build
+cmake .. -DCMAKE_INSTALL_PREFIX=$INSTALL_PATH
+make
+make install
+```
+$INSTALL_PATH is where you want to install SageCal.
+
+
 ## Cmake Build
 
 ### Requirements

@@ -187,8 +187,8 @@ cubic_interp(
     return b;
    }
   }
-
-  return 0;
+  /* fallback value */
+  return (a+b)*0.5;
 }
 
 

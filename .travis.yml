@@ -6,18 +6,17 @@ language: cpp
 #env:
 
 before_install:
-  - docker pull ubuntu:xenial
-  - docker run -itd -v "${TRAVIS_BUILD_DIR}:/travis/workdir" --name ubuntu-build ubuntu:xenial
+  - docker pull fdiblen/ubuntu1604-test:latest
+  - docker run -itd -v "${TRAVIS_BUILD_DIR}:/travis/workdir" --name ubuntu-build fdiblen/ubuntu1604-test:latest
+  - docker pull fdiblen/sl7-test:latest
+  - docker run -itd -v "${TRAVIS_BUILD_DIR}:/travis/workdir" --name sl-build fdiblen/sl7-test:latest
+#  - docker pull base/archlinux
+#  - docker run -itd -v "${TRAVIS_BUILD_DIR}:/travis/workdir" --name arch-build base/archlinux
 
 script:
   - export BRANCH=$(if [ "$TRAVIS_PULL_REQUEST" == "false" ]; then echo $TRAVIS_BRANCH; else echo $TRAVIS_PULL_REQUEST_BRANCH; fi)
   - echo "TRAVIS_BRANCH=$TRAVIS_BRANCH, PR=$PR, BRANCH=$BRANCH"
-  - docker exec ubuntu-build apt-get update -y
-  - docker exec ubuntu-build apt-get install software-properties-common -y
-  - docker exec ubuntu-build add-apt-repository -s ppa:kernsuite/kern-3 -y
-  - docker exec ubuntu-build apt-add-repository multiverse
-  - docker exec ubuntu-build apt-get update -y
-  - docker exec ubuntu-build apt-get install -y git cmake g++ pkg-config libcfitsio-bin libcfitsio-dev libopenblas-base libopenblas-dev wcslib-dev wcslib-tools libglib2.0-dev libcasa-casa2 casacore-dev casacore-data casacore-tools
-  - |
-    docker exec --env BRANCH=$BRANCH ubuntu-build /bin/bash -c "/travis/workdir/test-builds/test-ubuntu.sh"
-
+  - docker exec -e BRANCH=$BRANCH -e IMAGE='ubuntu' ubuntu-build /bin/bash -c "/travis/workdir/build-tests/compile_sagecal.sh"
+  - docker exec -e BRANCH=$BRANCH -e IMAGE='sl7' sl-build /bin/bash -c "/travis/workdir/build-tests/compile_sagecal.sh"
+#  - docker exec --env BRANCH=$BRANCH arch-build /bin/bash -c "/travis/workdir/build-tests/arch/prepare-arch.sh"
+#  - docker exec --env BRANCH=$BRANCH arch-build /bin/bash -c "/travis/workdir/build-tests/arch/compile-arch.sh"

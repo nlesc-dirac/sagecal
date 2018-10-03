@@ -3,11 +3,11 @@
 #  CFITSIO_ROOT_DIR     - CFITSIO root directory
 # Variables defined by this module:
 #  CFITSIO_FOUND        - system has CFITSIO
-#  CFITSIO_INCLUDE_DIR  - the CFITSIO include directory (cached)
-#  CFITSIO_INCLUDE_DIRS - the CFITSIO include directories
-#                         (identical to CFITSIO_INCLUDE_DIR)
+#  CFITSIO_INCLUDE  - the CFITSIO include directory (cached)
+#  CFITSIO_INCLUDES - the CFITSIO include directories
+#                         (identical to CFITSIO_INCLUDE)
 #  CFITSIO_LIBRARY      - the CFITSIO library (cached)
-#  CFITSIO_LIBRARIES    - the CFITSIO libraries
+#  CFITSIO_LIB    - the CFITSIO libraries
 #                         (identical to CFITSIO_LIBRARY)
 #  CFITSIO_VERSION_STRING the found version of CFITSIO, padded to 3 digits
 
@@ -33,12 +33,17 @@
 
 if(NOT CFITSIO_FOUND)
 
-  find_path(CFITSIO_INCLUDE_DIR fitsio.h
+  if (NOT "$ENV{CFITSIO_ROOT_DIR}" STREQUAL "")
+  set(CFITSIO_ROOT_DIR "$ENV{CFITSIO_ROOT_DIR}" CACHE INTERNAL "Got from environment variable")
+  endif()
+
+
+  find_path(CFITSIO_INCLUDE fitsio.h
     HINTS ${CFITSIO_ROOT_DIR} PATH_SUFFIXES include include/cfitsio
              include/libcfitsio0)
 
-  if(CFITSIO_INCLUDE_DIR)
-    FILE(READ "${CFITSIO_INCLUDE_DIR}/fitsio.h" CFITSIO_H)
+  if(CFITSIO_INCLUDE)
+    FILE(READ "${CFITSIO_INCLUDE}/fitsio.h" CFITSIO_H)
     set(CFITSIO_VERSION_REGEX ".*#define CFITSIO_VERSION[^0-9]*([0-9]+)\\.([0-9]+).*")
     if ("${CFITSIO_H}" MATCHES ${CFITSIO_VERSION_REGEX})
       # Pad CFITSIO minor version to three digit because 3.181 is older than 3.35
@@ -51,24 +56,24 @@ if(NOT CFITSIO_FOUND)
     else ()
       set(CFITSIO_VERSION_STRING "Unknown")
     endif()
-  endif(CFITSIO_INCLUDE_DIR)
+  endif(CFITSIO_INCLUDE)
 
   find_library(CFITSIO_LIBRARY cfitsio
     HINTS ${CFITSIO_ROOT_DIR} PATH_SUFFIXES lib)
   find_library(M_LIBRARY m)
-  mark_as_advanced(CFITSIO_INCLUDE_DIR CFITSIO_LIBRARY M_LIBRARY)
+  mark_as_advanced(CFITSIO_INCLUDE CFITSIO_LIBRARY M_LIBRARY)
 
   if(CMAKE_VERSION VERSION_LESS "2.8.3")
     find_package_handle_standard_args(CFITSIO DEFAULT_MSG
-      CFITSIO_LIBRARY M_LIBRARY CFITSIO_INCLUDE_DIR)
+      CFITSIO_LIBRARY M_LIBRARY CFITSIO_INCLUDE)
   else ()
     include(FindPackageHandleStandardArgs)
     find_package_handle_standard_args(CFITSIO
-      REQUIRED_VARS CFITSIO_LIBRARY M_LIBRARY CFITSIO_INCLUDE_DIR
+      REQUIRED_VARS CFITSIO_LIBRARY M_LIBRARY CFITSIO_INCLUDE
       VERSION_VAR CFITSIO_VERSION_STRING)
   endif ()
 
-  set(CFITSIO_INCLUDE_DIRS ${CFITSIO_INCLUDE_DIR})
-  set(CFITSIO_LIBRARIES ${CFITSIO_LIBRARY} ${M_LIBRARY})
+  set(CFITSIO_INCLUDES ${CFITSIO_INCLUDE})
+  set(CFITSIO_LIB ${CFITSIO_LIBRARY} ${M_LIBRARY})
 
 endif(NOT CFITSIO_FOUND)
