@@ -1,5 +1,6 @@
 cmake_minimum_required(VERSION 3.5.1)
 enable_language(CXX)
+enable_language(Fortran)
 
 #--------------------------------------- project
 project (SageCal)
@@ -98,21 +99,9 @@ include_directories(${OpenBLAS_INCLUDE_DIR})
 #find_package(BLAS REQUIRED)
 #include_directories(${BLAS_INCLUDE_DIR})
 
-# ##gfortran
-enable_language(Fortran)
+##gfortran
 #find_package(GFortranLibs REQUIRED)
 # include_directories(${GFORTRAN_INCLUDE_DIR})
-
-
-
-
-
-# enable_language(Fortran)
-# # get_filename_component (Fortran_COMPILER_NAME ${CMAKE_Fortran_COMPILER} NAME)
-# set(FC "$ENV{FC}" CACHE INTERNAL "Got from environment variable")
-# set(CMAKE_Fortran_COMPILER "$ENV{FC}" CACHE INTERNAL "Got from environment variable")
-#
-
 
 ##hdf5
 #find_package(HDF5 REQUIRED)
@@ -144,19 +133,15 @@ set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -std=c++0x -g -O3")
 set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -g -pg -Wall -DNDEBUG -Wextra -Wcast-align -Wpointer-arith -Woverloaded-virtual -Wwrite-strings -Wcast-qual -Wctor-dtor-privacy -Wno-long-long-Wdisabled-optimization -Wformat=2 -Winit-self -Wlogical-op -Wmissing-declarations -Wmissing-include-dirs -Wnoexcept -Wold-style-cast -Woverloaded-virtual -Wredundant-decls -Wshadow -Wsign-conversion -Wsign-promo -Wstrict-null-sentinel -Wstrict-overflow=5 -Wswitch-default -Wundef -Werror -Wno-unused")
 
 
-
-
-
 #--------------------------------------- summary
 message(STATUS "\n############################\n#   Configuration summary\n############################")
 message (STATUS "CMAKE_SYSTEM .......... = ${CMAKE_SYSTEM}")
 message (STATUS "CMAKE_INSTALL_PREFIX .. = ${CMAKE_INSTALL_PREFIX}")
 message (STATUS "CMAKE_BUILD_TYPE ...... = ${CMAKE_BUILD_TYPE}")
-message (STATUS "BUILD_SHARED_LIBS ..... = ${BUILD_SHARED_LIBS}")
-message (STATUS "CMAKE_INSTALL_NAME_DIR  = ${CMAKE_INSTALL_NAME_DIR}")
-message (STATUS "USE_STACKTRACE ........ = ${USE_STACKTRACE}")
+# message (STATUS "BUILD_SHARED_LIBS ..... = ${BUILD_SHARED_LIBS}")
+# message (STATUS "USE_STACKTRACE ........ = ${USE_STACKTRACE}")
 message (STATUS "CMAKE_CXX_COMPILER .... = ${CMAKE_CXX_COMPILER}")
-message (STATUS "CMAKE_CXX_FLAGS ....... = ${CMAKE_CXX_FLAGS}")
+message (STATUS "CMAKE_CXX_FLAGS_RELEASE = ${CMAKE_CXX_FLAGS_RELEASE}")
 
 message (STATUS "ENABLE_MPI ............ = ${ENABLE_MPI}")
 message (STATUS "ENABLE_CUDA ........... = ${ENABLE_CUDA}")
@@ -174,7 +159,7 @@ message (STATUS "LAPACK_LIBRARIES........= ${LAPACK_LIBRARIES}")
 
 # message (STATUS "GFORTRAN-INC  ......... = ${GFORTRAN_INCLUDE_DIR}")
 # message (STATUS "GFORTRAN-LIBS ......... = ${LIBGFORTRAN_LIBRARIES}")
-message (STATUS "CMAKE_Fortran_COMPILER  = ${CMAKE_Fortran_COMPILER}")
+message (STATUS "CMAKE_Fortran_COMPILER. = ${CMAKE_Fortran_COMPILER}")
 
 message (STATUS "CFITSIO_ROOT_DIR........= ${CFITSIO_ROOT_DIR}")
 message (STATUS "CFITSIO_INCLUDE.........= ${CFITSIO_INCLUDE}")
@@ -183,23 +168,15 @@ message (STATUS "CFITSIO_LIB.............= ${CFITSIO_LIB}")
 message (STATUS "WCSLIB_INCLUDE_DIRS.....= ${WCSLIB_INCLUDE_DIRS}")
 message (STATUS "WCSLIB_LIBRARIES .......= ${WCSLIB_LIBRARIES}")
 
-message (STATUS "HDF5_INCLUDE_DIR........= ${HDF5_INCLUDE_DIRS}")
-message (STATUS "HDF5_LIBRARIES..........= ${HDF5_LIBRARIES}")
-
-
-message (STATUS "CMAKE_CURRENT_BINARY_DIR..........= ${CMAKE_CURRENT_BINARY_DIR}")
-message (STATUS "CMAKE_CURRENT_LIST_DIR..........= ${CMAKE_CURRENT_LIST_DIR}")
-message (STATUS "CMAKE_INSTALL_PREFIX..........= ${CMAKE_INSTALL_PREFIX}")
+# message (STATUS "HDF5_INCLUDE_DIR........= ${HDF5_INCLUDE_DIRS}")
+# message (STATUS "HDF5_LIBRARIES..........= ${HDF5_LIBRARIES}")
 
 
 #--------------------------------------- include directories
 add_subdirectory(src)
 
 
-#--------------------------------------- Copy test folder
-
-# FIXME: this will be the final step for testing
-#file(COPY ${PROJECT_SOURCE_DIR}/test DESTINATION ${MAINFOLDER}/dist/test)
-
+#--------------------------------------- install
 
 install(DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/dist/ DESTINATION ${CMAKE_INSTALL_PREFIX})
+
