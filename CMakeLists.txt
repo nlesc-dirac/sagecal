@@ -69,6 +69,7 @@ message(STATUS "\n############################\n#   Searching Sagecal dependenci
 if(ENABLE_CUDA)
     message (STATUS "Compiling SageCal with GPU support.")
     enable_language(CUDA)
+    find_package(CUDA QUIET REQUIRED)
 endif()
 
 # casacore
@@ -129,7 +130,12 @@ set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -std=c++0x -g -O3")
 set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -g -pg -Wall -DNDEBUG -Wextra -Wcast-align -Wpointer-arith -Woverloaded-virtual -Wwrite-strings -Wcast-qual -Wctor-dtor-privacy -Wno-long-long-Wdisabled-optimization -Wformat=2 -Winit-self -Wlogical-op -Wmissing-declarations -Wmissing-include-dirs -Wnoexcept -Wold-style-cast -Woverloaded-virtual -Wredundant-decls -Wshadow -Wsign-conversion -Wsign-promo -Wstrict-null-sentinel -Wstrict-overflow=5 -Wswitch-default -Wundef -Werror -Wno-unused")
 
 if(ENABLE_CUDA)
-  set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -arch=sm_30")
+  set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -gencode arch=compute_35,code=sm_35 -gencode arch=compute_37,code=sm_37 -gencode arch=compute_50,code=sm_50 -gencode arch=compute_52,code=sm_52 -gencode arch=compute_60,code=sm_60 -gencode arch=compute_61,code=compute_61 -gencode arch=compute_62,code=compute_62 --ptxas-options=-v")
+  set(NVCFLAGS "${NVCFLAGS} -gencode arch=compute_35,code=sm_35 -gencode arch=compute_37,code=sm_37 -gencode arch=compute_50,code=sm_50 -gencode arch=compute_52,code=sm_52 -gencode arch=compute_60,code=sm_60 -gencode arch=compute_61,code=compute_61 -gencode arch=compute_62,code=compute_62 --ptxas-options=-v")
+  set(CMAKE_CUDA_CFLAGS "${CMAKE_CUDA_CFLAGS} -DHAVE_CUDA -DHYBRID_CODE")
+  # CUDALIB=-lcuda -lcudart
+  # NVML_LIB=-lnvidia-ml  
+  # LIBPATH= $(CUDALIB)
 endif()
 
 
