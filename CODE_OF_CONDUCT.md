@@ -73,7 +73,9 @@ This code of conduct and its related procedures also applies to unacceptable beh
 
 ## 9. Contact info
 
-yatawatta@astron.nl, f.diblen@esciencecenter.nl, h.spreeuw@esciencecenter.nl
+yatawatta@astron.nl
+f.diblen@esciencecenter.nl
+h.spreeuw@esciencecenter.nl
 
 ## 10. License and attribution
 
