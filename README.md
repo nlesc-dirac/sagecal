@@ -4,6 +4,7 @@
 | ------------- | ------------- |
 | [![Build Status](https://travis-ci.org/nlesc-dirac/sagecal.svg?branch=master)](https://travis-ci.org/nlesc-dirac/sagecal)  | [![Build Status](https://travis-ci.org/nlesc-dirac/sagecal.svg?branch=dev)](https://travis-ci.org/nlesc-dirac/sagecal)  |
 
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.1289316.svg)](https://doi.org/10.5281/zenodo.1289316)
 [![Documentation](https://codedocs.xyz/nlesc-dirac/sagecal.svg)](https://codedocs.xyz/nlesc-dirac/sagecal/)
 
 # SAGECAL
