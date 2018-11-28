@@ -23,7 +23,7 @@ add_executable(sagecal ${SRCFILES})
 
 target_link_libraries(sagecal
  ${CASACORE_LIBRARIES}
- ${CFITSIO_LIBRARIES}
+ ${CFITSIO_LIB}
  ${OpenBLAS_LIB}
  ${LAPACK_LIBRARIES}
  ${WCSLIB_LIBRARIES}
@@ -32,7 +32,6 @@ target_link_libraries(sagecal
  -lopenblas
  -lgfortran
  -lpthread
- -lcfitsio
  -lm
  -ldirac
  -lradio
