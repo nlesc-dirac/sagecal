@@ -205,7 +205,7 @@ lbfgs_fit_robust_cuda(
    double *p, double *x, int m, int n, int itmax, int lbfgs_m, int gpu_threads, void *adata);
 #endif /* HAVE_CUDA */
 
-/****************************** robust_lbfgs_nocuda.c ****************************/
+/****************************** robust_lbfgs.c ****************************/
 typedef struct thread_data_logf_t_ {
   double *f;
   double *x;

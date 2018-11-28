@@ -744,7 +744,7 @@ lbfgs_fit_wrapper(
   data1.n=n;
 
    
-  lbfgs_fit(&cost_func,&grad_func,NULL,p,m,itmax,M,&data1);
+  lbfgs_fit(&cost_func,&grad_func,p,m,itmax,M,&data1,NULL);
   return 0;
 }
 
@@ -758,6 +758,6 @@ lbfgs_fit_robust_wrapper(
   data1.n=n;
 
    
-  lbfgs_fit(&robust_cost_func,&robust_grad_func,NULL,p,m,itmax,M,&data1);
+  lbfgs_fit(&robust_cost_func,&robust_grad_func,p,m,itmax,M,&data1,NULL);
   return 0;
 }

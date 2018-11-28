@@ -49,7 +49,7 @@ else()
         lmfit
         consensus_poly
         lbfgs
-        robust_lbfgs_nocuda
+        robust_lbfgs
         robust_batchmode_lbfgs
         rtr_solve
         rtr_solve_robust
