@@ -20,7 +20,7 @@ if(ENABLE_CUDA)
 
 # objects only for gpu version
     set (extra_objects
-        lmfit
+        lmfit_cuda
         barrier
         clmfit_cuda
         clmfit_fl
@@ -46,7 +46,7 @@ else()
 
 # objects only for cpu version
     set (extra_objects
-        lmfit_nocuda
+        lmfit
         consensus_poly
         lbfgs
         robust_lbfgs_nocuda

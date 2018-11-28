@@ -1201,7 +1201,7 @@ nsd_solve_cuda_robust_admm_fl(
   me_data_t *adata);
 #endif /* HAVE_CUDA */
 /****************************** lmfit.c ****************************/
-/****************************** lmfit_nocuda.c ****************************/
+/****************************** lmfit_cuda.c ****************************/
 /* struct for calling parallel LM jobs */
 typedef struct thread_clm_data_t {
   double *p; /* parameters */
@@ -1363,7 +1363,7 @@ extern void
 openblas_set_num_threads(int num_threads);
 
 /****************************** lmfit.c ****************************/
-/****************************** lmfit_nocuda.c ****************************/
+/****************************** lmfit_cuda.c ****************************/
 /* minimization (or vector cost) function (multithreaded) */
 /* p: size mx1 parameters
    x: size nx1 model being calculated
