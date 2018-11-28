@@ -4,7 +4,7 @@ message (STATUS "\n\n\nConfiguring lib/Dirac")
 # Common objects
 set (objects
     admm_solve
-    clmfit_nocuda
+    clmfit
     manifold_average
     mdl
     myblas
@@ -22,7 +22,7 @@ if(ENABLE_CUDA)
     set (extra_objects
         lmfit
         barrier
-        clmfit
+        clmfit_cuda
         clmfit_fl
         consensus_poly
         lbfgs

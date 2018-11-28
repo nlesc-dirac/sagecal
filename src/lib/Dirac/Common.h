@@ -364,6 +364,10 @@ typedef struct thread_data_grad_ {
 
   /* only used in robust version */
   double robust_nu;
+
+  /* only used in batch mode operation */
+  int noff; /* offset of the batch data, in baselines */
+  int nlen; /* size of the batch, in baselines */
 } thread_data_grad_t;
 
 /* structure for weight product calculation in robust LM  */
