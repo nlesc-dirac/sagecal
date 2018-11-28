@@ -25,7 +25,7 @@ if(ENABLE_CUDA)
         clmfit_cuda
         clmfit_fl
         consensus_poly
-        lbfgs
+        lbfgs_cuda
         load_balance
         manifold_fl
         mderiv
@@ -48,7 +48,7 @@ else()
     set (extra_objects
         lmfit_nocuda
         consensus_poly
-        lbfgs_nocuda
+        lbfgs
         robust_lbfgs_nocuda
         rtr_solve
         rtr_solve_robust

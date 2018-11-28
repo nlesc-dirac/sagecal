@@ -137,7 +137,7 @@ extern int
 find_sumproduct(int N, float *x, float *y, float *sum1, float *sum2, int Nt);
 
 /****************************** lbfgs.c ****************************/
-/****************************** lbfgs_nocuda.c ****************************/
+/****************************** lbfgs_cuda.c ****************************/
 /* LBFGS routines */
 
 #ifndef HAVE_CUDA
