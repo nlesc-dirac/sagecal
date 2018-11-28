@@ -378,7 +378,7 @@ double ph_ra0, double ph_dec0, double ph_freq0, double *longitude, double *latit
 extern int
 precess_source_locations(double jd_tdb, clus_source_t *carr, int M, double *ra_beam, double *dec_beam, int Nt);
 
-/****************************** predict_withbeam_gpu.c ****************************/
+/****************************** predict_withbeam_cuda.c ****************************/
 #ifdef HAVE_CUDA
 /* if dobeam==0, beam calculation is off */
 extern int

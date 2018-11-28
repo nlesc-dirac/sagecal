@@ -24,7 +24,7 @@ INCLUDES= -I. -I../Dirac
 LIBPATH= $(CUDALIB)
 
 
-OBJECTS=readsky.o predict.o residual.o transforms.o stationbeam.o predict_withbeam.o predict_withbeam_gpu.o predict_model.o
+OBJECTS=readsky.o predict.o residual.o transforms.o stationbeam.o predict_withbeam.o predict_withbeam_cuda.o predict_model.o
 
 
 default:libradio.a
@@ -40,7 +40,7 @@ stationbeam.o:stationbeam.c
 	$(CC) $(CFLAGS) $(INCLUDES) $(GLIBI)  -c $<
 predict_withbeam.o:predict_withbeam.c
 	$(CC) $(CFLAGS) $(INCLUDES) $(GLIBI)  -c $<
-predict_withbeam_gpu.o:predict_withbeam_gpu.c
+predict_withbeam_cuda.o:predict_withbeam_cuda.c
 	$(CC) $(CFLAGS) $(INCLUDES) $(GLIBI)  -c $<
 predict_model.o:predict_model.cu
 	$(NVCC) $(NVCFLAGS) $(INCLUDES) $(GLIBI) -o $@ -c $<
