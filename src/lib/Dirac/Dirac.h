@@ -230,7 +230,7 @@ lbfgs_fit_wrapper(
 
 
 
-/****************************** robust_batchmode_lbfgs_nocuda.c ****************************/
+/****************************** robust_batchmode_lbfgs.c ****************************/
 /* batch mode version of LBFGS */
 extern int
 lbfgs_fit_robust_wrapper_minibatch(

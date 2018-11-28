@@ -16,7 +16,7 @@ LIBPATH=
 GLIBI=-I/usr/include/glib-2.0 -I/usr/lib/glib-2.0/include -I/usr/lib/x86_64-linux-gnu/glib-2.0/include/ -I/usr/lib64/glib-2.0/include
 GLIBL=-lglib-2.0
 
-OBJECTS= lmfit.o clmfit.o lbfgs.o myblas.o robustlm.o updatenu.o robust_lbfgs_nocuda.o robust_batchmode_lbfgs_nocuda.o rtr_solve.o  rtr_solve_robust.o manifold_average.o consensus_poly.o rtr_solve_robust_admm.o admm_solve.o mdl.o
+OBJECTS= lmfit.o clmfit.o lbfgs.o myblas.o robustlm.o updatenu.o robust_lbfgs_nocuda.o robust_batchmode_lbfgs.o rtr_solve.o  rtr_solve_robust.o manifold_average.o consensus_poly.o rtr_solve_robust_admm.o admm_solve.o mdl.o
 
 default:libdirac.a
 lmfit.o:lmfit.c
@@ -33,7 +33,7 @@ updatenu.o:updatenu.c
 	$(CC) $(CFLAGS) $(INCLUDES) $(GLIBI)  -c $<
 robust_lbfgs_nocuda.o:robust_lbfgs_nocuda.c
 	$(CC) $(CFLAGS) $(INCLUDES) $(GLIBI)  -c $<
-robust_batchmode_lbfgs_nocuda.o:robust_batchmode_lbfgs_nocuda.c
+robust_batchmode_lbfgs.o:robust_batchmode_lbfgs.c
 	$(CC) $(CFLAGS) $(INCLUDES) $(GLIBI)  -c $<
 rtr_solve.o:rtr_solve.c
 	$(CC) $(CFLAGS) $(INCLUDES) $(GLIBI)  -c $<
