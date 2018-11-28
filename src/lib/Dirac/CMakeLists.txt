@@ -35,7 +35,7 @@ if(ENABLE_CUDA)
         robust_fl
         rtr_solve_cuda
         rtr_solve_robust_cuda
-        rtr_solve_robust_cuda_admm
+        rtr_solve_robust_admm_cuda
     )
     set(objects ${objects} ${extra_objects})
 

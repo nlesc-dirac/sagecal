@@ -1158,7 +1158,7 @@ nsd_solve_cuda_robust_fl(
   int ntiles, /* total tile (data) size being solved for */
   me_data_t *adata);
 
-/****************************** rtr_solve_robust_cuda_admm.c ****************************/
+/****************************** rtr_solve_robust_admm_cuda.c ****************************/
 /* ADMM solver */
 extern int
 rtr_solve_cuda_robust_admm_fl(
