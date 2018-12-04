@@ -13,15 +13,22 @@ set (objects
     updatenu
 )
 
-if(ENABLE_CUDA)
+if(HAVE_CUDA)
     message (STATUS "Compiling lib/Dirac with CUDA support.")
+
+    message (STATUS "CUDA_INCLUDE_DIRS........... = ${CUDA_INCLUDE_DIRS}")
+    message (STATUS "CUDA_LIBRARIES........... = ${CUDA_LIBRARIES}")
+    message (STATUS "CUDA_CUFFT_LIBRARIES........... = ${CUDA_CUFFT_LIBRARIES}")
+    message (STATUS "CUDA_CUBLAS_LIBRARIES........... = ${CUDA_CUBLAS_LIBRARIES}")
+
+
 
     # file(GLOB_RECURSE extra_objects_cuda "*.cu" "*_cuda_*.c" "*_cuda.c")
     # file(GLOB_RECURSE extra_objects_cuda RELATIVE ${CMAKE_SOURCE_DIR} "src/*.c")
     # file(GLOB extra_objects_cuda RELATIVE ${CMAKE_SOURCE_DIR} "src/lib/Dirac/*.cu" "src/lib/Dirac/*_cuda_*.c" "src/lib/Dirac/*_cuda.c")
     # file(GLOB extra_objects_cuda "*.cu" "*_cuda_*.c" "*_cuda.c")
 
-# objects only for gpu version
+    # objects only for gpu version
     set (extra_objects
         lmfit_cuda
         barrier
@@ -32,8 +39,8 @@ if(ENABLE_CUDA)
         load_balance
         oslmfit
         rtr_solve_cuda
+        rtr_solve_robust_admm_cuda
         rtr_solve_robust_cuda
-        rtr_solve_robust_cuda_admm
     )
 
 
@@ -43,20 +50,12 @@ if(ENABLE_CUDA)
         mderiv_fl
         robust
         robust_fl
-        rtr_solve_cuda
-        rtr_solve_robust_cuda
-        rtr_solve_robust_admm_cuda
     )
 
-
     set(objects ${objects} ${extra_objects})
-    # set(objects ${objects} ${extra_objects_cuda})
+#    set(objects ${objects} ${extra_objects_cuda})
 
-    message ("")
-    message (STATUS "Extra CUDA objects ... = ${extra_objects_cuda}")
-    # get_filename_component(extra_objects_name ${extra_objects} NAME)
-    message ("")
-
+    message (STATUS "\nExtra CUDA objects ... = ${extra_objects_cuda}")
 
     message (STATUS "lib/Dirac objects --> ${objects}")
 
@@ -75,15 +74,17 @@ if(ENABLE_CUDA)
     endforeach (object)
 
     add_library(dirac ${objects} Dirac.h)
+    # target_link_libraries(dirac ${CUDA_CUBLAS_LIBRARIES})
+
     SET_TARGET_PROPERTIES(dirac PROPERTIES SOVERSION 0.0)
     SET_TARGET_PROPERTIES(dirac PROPERTIES CUDA_SEPARABLE_COMPILATION ON)
 
 
 else()
-# FIXME: automate this by using regex
-#    FILE(GLOB extra_objects *nocuda.c)
+    # FIXME: automate this by using regex
+    #    FILE(GLOB extra_objects *nocuda.c)
 
-# objects only for cpu version
+    # objects only for cpu version
     set (extra_objects
         lmfit
         consensus_poly
