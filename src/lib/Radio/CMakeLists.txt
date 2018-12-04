@@ -17,7 +17,7 @@ if(ENABLE_CUDA)
 
 # objects only for gpu version
     set (extra_objects
-        predict_withbeam_gpu
+        predict_withbeam_cuda
         predict_model
     )
     set(objects ${objects} ${extra_objects})

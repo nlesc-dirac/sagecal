@@ -137,10 +137,29 @@ extern int
 find_sumproduct(int N, float *x, float *y, float *sum1, float *sum2, int Nt);
 
 /****************************** lbfgs.c ****************************/
-/****************************** lbfgs_nocuda.c ****************************/
+/****************************** lbfgs_cuda.c ****************************/
 /* LBFGS routines */
 
 #ifndef HAVE_CUDA
+/* struct for passing info between batches in batch mode */
+typedef struct persistent_data_t_ {
+  /* y,s pairs */
+  double *y,*s; /* need to be allocated by user */
+  double *rho; /* storage for product 1/y^T s */
+  int nfilled; /* how many <= lbfgs_m of y,s pairs are filled? valid range 0...lbfgs_m, start value 0 */
+  int vacant; /* next vacant offset, cycle in 0...lbfgs_m-1,0,1,...lbfgs_m-1 etc. start value 0 */
+
+  int Nt; /* no. of threads */
+
+  /* location and size of data to work in each batch 
+   (changed  at each batch)  */
+  int noff; /* offset 0..n-1 ; n: total baselines */
+  int nlen; /* length 1..n ; n: total baselines */
+  /* 2 vectors : size mx1, for on-line estimation of var(grad), m: no. of params */
+  double *running_avg, *running_avg_sq;
+  int niter; /* keep track of cumulative no. of iterations */
+} persistent_data_t;
+
 /* line search */
 /* func: scalar function
    xk: parameter values size m x 1 (at which step is calculated)
@@ -174,8 +193,7 @@ extern int
 lbfgs_fit(
    double (*cost_func)(double *p, int m, void *adata),
    void (*grad_func)(double *p, double *g, int m, void *adata),
-   void (*change_batch)(int iter, void *adata),
-   double *p, int m, int itmax, int M, void *adata);
+   double *p, int m, int itmax, int M, void *adata, persistent_data_t *indata);
 #endif /* !HAVE_CUDA */
 
 #ifdef HAVE_CUDA
@@ -187,7 +205,7 @@ lbfgs_fit_robust_cuda(
    double *p, double *x, int m, int n, int itmax, int lbfgs_m, int gpu_threads, void *adata);
 #endif /* HAVE_CUDA */
 
-/****************************** robust_lbfgs_nocuda.c ****************************/
+/****************************** robust_lbfgs.c ****************************/
 typedef struct thread_data_logf_t_ {
   double *f;
   double *x;
@@ -210,6 +228,13 @@ lbfgs_fit_wrapper(
    double *p, double *x, int m, int n, int itmax, int lbfgs_m, int gpu_threads,
  void *adata);
 
+
+
+/****************************** robust_batchmode_lbfgs.c ****************************/
+/* batch mode version of LBFGS */
+extern int
+lbfgs_fit_robust_wrapper_minibatch(
+   double *p, double *x, int m, int n, int itmax, int M, int gpu_threads, void *adata);
 
 /****************************** mderiv.cu ****************************/
 /* cuda driver for kernel */
@@ -377,7 +402,7 @@ cudakernel_evaluatenu_fl(int ThreadsPerBlock, int BlocksPerGrid, int Nd, float q
 extern void
 cudakernel_evaluatenu_fl_eight(int ThreadsPerBlock, int BlocksPerGrid, int Nd, float qsum, float *q, float deltanu,float nulow, float nu0);
 
-/****************************** clmfit.c ****************************/
+/****************************** clmfit_cuda.c ****************************/
 #ifdef HAVE_CUDA
 /* LM with GPU */
 extern int
@@ -690,7 +715,7 @@ update_w_and_nu(double nu0, double *w, double *ed, int N, int Nt,  double nulow,
  note: u = u/c, v=v/c here, so need freq to convert to wavelengths */
 extern void
 whiten_data(int Nbase, double *x, double *u, double *v, double freq0, int Nt);
-/****************************** clmfit_nocuda.c ****************************/
+/****************************** clmfit.c ****************************/
 /* LM with LAPACK */
 /** keep interface almost the same as in levmar **/
 #ifdef USE_MIC
@@ -1133,7 +1158,7 @@ nsd_solve_cuda_robust_fl(
   int ntiles, /* total tile (data) size being solved for */
   me_data_t *adata);
 
-/****************************** rtr_solve_robust_cuda_admm.c ****************************/
+/****************************** rtr_solve_robust_admm_cuda.c ****************************/
 /* ADMM solver */
 extern int
 rtr_solve_cuda_robust_admm_fl(
@@ -1176,7 +1201,7 @@ nsd_solve_cuda_robust_admm_fl(
   me_data_t *adata);
 #endif /* HAVE_CUDA */
 /****************************** lmfit.c ****************************/
-/****************************** lmfit_nocuda.c ****************************/
+/****************************** lmfit_cuda.c ****************************/
 /* struct for calling parallel LM jobs */
 typedef struct thread_clm_data_t {
   double *p; /* parameters */
@@ -1338,7 +1363,7 @@ extern void
 openblas_set_num_threads(int num_threads);
 
 /****************************** lmfit.c ****************************/
-/****************************** lmfit_nocuda.c ****************************/
+/****************************** lmfit_cuda.c ****************************/
 /* minimization (or vector cost) function (multithreaded) */
 /* p: size mx1 parameters
    x: size nx1 model being calculated

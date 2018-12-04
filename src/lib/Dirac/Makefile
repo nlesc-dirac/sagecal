@@ -1,6 +1,6 @@
 CC=gcc
 CXX=g++
-CFLAGS= -Wall -g #-pg
+CFLAGS= -Wall -g -O3 #-pg
 # Extra args for making callgraphs.
 # CFLAGS= -Wall -pg -O2 -ansi -fPIC -fpermissive -fno-omit-frame-pointer -DNDEBUG -fno-inline-functions -fno-inline-functions-called-once -fno-optimize-sibling-calls
 # CFLAGS= -Wall -O3 -fopt-info-optimized
@@ -16,14 +16,14 @@ LIBPATH=
 GLIBI=-I/usr/include/glib-2.0 -I/usr/lib/glib-2.0/include -I/usr/lib/x86_64-linux-gnu/glib-2.0/include/ -I/usr/lib64/glib-2.0/include
 GLIBL=-lglib-2.0
 
-OBJECTS= lmfit_nocuda.o clmfit_nocuda.o lbfgs_nocuda.o myblas.o robustlm.o updatenu.o robust_lbfgs_nocuda.o rtr_solve.o  rtr_solve_robust.o manifold_average.o consensus_poly.o rtr_solve_robust_admm.o admm_solve.o mdl.o
+OBJECTS= lmfit.o clmfit.o lbfgs.o myblas.o robustlm.o updatenu.o robust_lbfgs.o robust_batchmode_lbfgs.o rtr_solve.o  rtr_solve_robust.o manifold_average.o consensus_poly.o rtr_solve_robust_admm.o admm_solve.o mdl.o
 
 default:libdirac.a
-lmfit_nocuda.o:lmfit_nocuda.c
+lmfit.o:lmfit.c
 	$(CC) $(CFLAGS) $(INCLUDES) $(GLIBI)  -c $<
-clmfit_nocuda.o:clmfit_nocuda.c
+clmfit.o:clmfit.c
 	$(CC) $(CFLAGS) $(INCLUDES) $(GLIBI)  -c $<
-lbfgs_nocuda.o:lbfgs_nocuda.c
+lbfgs.o:lbfgs.c
 	$(CC) $(CFLAGS) $(INCLUDES) $(GLIBI)  -c $<
 myblas.o:myblas.c
 	$(CC) $(CFLAGS) $(INCLUDES) $(GLIBI)  -c $<
@@ -31,7 +31,9 @@ robustlm.o:robustlm.c
 	$(CC) $(CFLAGS) $(INCLUDES) $(GLIBI)  -c $<
 updatenu.o:updatenu.c
 	$(CC) $(CFLAGS) $(INCLUDES) $(GLIBI)  -c $<
-robust_lbfgs_nocuda.o:robust_lbfgs_nocuda.c
+robust_lbfgs.o:robust_lbfgs.c
+	$(CC) $(CFLAGS) $(INCLUDES) $(GLIBI)  -c $<
+robust_batchmode_lbfgs.o:robust_batchmode_lbfgs.c
 	$(CC) $(CFLAGS) $(INCLUDES) $(GLIBI)  -c $<
 rtr_solve.o:rtr_solve.c
 	$(CC) $(CFLAGS) $(INCLUDES) $(GLIBI)  -c $<
