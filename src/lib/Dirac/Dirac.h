@@ -44,10 +44,10 @@
 #include <cublas_v2.h>
 #include <cusolverDn.h>
 #include <cuda_runtime_api.h>
-#endif /* HAVE_CUDA */
-
 /* GPU specific tunable parameters */
 #include "GPUtune.h"
+#endif /* HAVE_CUDA */
+
 
 /* speed of light */
 #ifndef CONST_C
