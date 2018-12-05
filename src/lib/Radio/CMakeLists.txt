@@ -10,6 +10,10 @@ set (objects
     predict_withbeam
 )
 
+include_directories(./)
+include_directories(${CMAKE_CURRENT_SOURCE_DIR}/../Dirac)
+include_directories(${GLIB_PKG_INCLUDE_DIRS})
+
 if(HAVE_CUDA)
     message (STATUS "Compiling lib/Radio with CUDA support.")
     # FIXME: add libraries only for gpu version
@@ -48,9 +52,6 @@ else()
     set(objects ${objects} ${extra_objects})
 
 
-    include_directories(./)
-    include_directories(${CMAKE_CURRENT_SOURCE_DIR}/../Dirac)
-    include_directories(${GLIB_PKG_INCLUDE_DIRS})
 
     foreach (object ${objects})
         add_library(${object} ${object}.c)
