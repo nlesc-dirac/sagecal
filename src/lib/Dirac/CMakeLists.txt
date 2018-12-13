@@ -1,5 +1,5 @@
-message (STATUS "\n\n\nConfiguring lib/Dirac")
-
+message("-------------------------------------")
+message (STATUS "Configuring lib/Dirac")
 
 # Common objects
 set (objects
@@ -8,7 +8,6 @@ set (objects
     manifold_average
     mdl
     myblas
-    robustlm
     rtr_solve_robust_admm
     updatenu
 )
@@ -16,50 +15,35 @@ set (objects
 if(HAVE_CUDA)
     message (STATUS "Compiling lib/Dirac with CUDA support.")
 
-    message (STATUS "CUDA_INCLUDE_DIRS........... = ${CUDA_INCLUDE_DIRS}")
-    message (STATUS "CUDA_LIBRARIES........... = ${CUDA_LIBRARIES}")
-    message (STATUS "CUDA_CUFFT_LIBRARIES........... = ${CUDA_CUFFT_LIBRARIES}")
-    message (STATUS "CUDA_CUBLAS_LIBRARIES........... = ${CUDA_CUBLAS_LIBRARIES}")
-
-
-
-    # file(GLOB_RECURSE extra_objects_cuda "*.cu" "*_cuda_*.c" "*_cuda.c")
-    # file(GLOB_RECURSE extra_objects_cuda RELATIVE ${CMAKE_SOURCE_DIR} "src/*.c")
-    # file(GLOB extra_objects_cuda RELATIVE ${CMAKE_SOURCE_DIR} "src/lib/Dirac/*.cu" "src/lib/Dirac/*_cuda_*.c" "src/lib/Dirac/*_cuda.c")
-    # file(GLOB extra_objects_cuda "*.cu" "*_cuda_*.c" "*_cuda.c")
-
     # objects only for gpu version
     set (extra_objects
-        lmfit_cuda
         barrier
-        clmfit_cuda
         clmfit_fl
         consensus_poly
-        lbfgs_cuda
         load_balance
-        oslmfit
         rtr_solve_cuda
         rtr_solve_robust_admm_cuda
         rtr_solve_robust_cuda
+        robustlm
     )
 
-
     set (extra_objects_cuda
+        clmfit_cuda
+        lbfgs_cuda
+        lmfit_cuda
         manifold_fl
         mderiv
         mderiv_fl
         robust
         robust_fl
+        oslmfit
     )
 
     set(objects ${objects} ${extra_objects})
-#    set(objects ${objects} ${extra_objects_cuda})
 
-    message (STATUS "\nExtra CUDA objects ... = ${extra_objects_cuda}")
+    message (STATUS "Extra CUDA objects ... = ${extra_objects_cuda}")
 
     message (STATUS "lib/Dirac objects --> ${objects}")
-
-    include_directories(./)
 
     foreach (object ${objects})
         add_library(${object} SHARED ${object}.c)
@@ -67,41 +51,45 @@ if(HAVE_CUDA)
     endforeach (object)
 
     foreach (object ${extra_objects_cuda})
-        CUDA_ADD_LIBRARY(${object}_cu SHARED ${object}.cu)
-        # FIXME: are these properties necassary for CUDA?
-        # SET_TARGET_PROPERTIES(${object} PROPERTIES SOVERSION 0.0)
-        # SET_TARGET_PROPERTIES(${object} PROPERTIES CUDA_SEPARABLE_COMPILATION ON)
+        file(GLOB CUDA_SRC_FILE ${object}.*)
+        CUDA_ADD_LIBRARY(${object} SHARED ${CUDA_SRC_FILE})
     endforeach (object)
 
-    add_library(dirac ${objects} Dirac.h)
-    # target_link_libraries(dirac ${CUDA_CUBLAS_LIBRARIES})
+    set(objects ${objects} ${extra_objects_cuda})
+
+    foreach (object ${objects})
+        file(GLOB SRC_FILE ${object}.*)
+        set(CUDA_SRC_FILES ${CUDA_SRC_FILES} ${SRC_FILE})
+    endforeach (object)
+
+
+    CUDA_INCLUDE_DIRECTORIES(${CMAKE_CURRENT_SOURCE_DIR})
+    CUDA_ADD_LIBRARY(dirac ${CUDA_SRC_FILES} Dirac.h)
 
     SET_TARGET_PROPERTIES(dirac PROPERTIES SOVERSION 0.0)
     SET_TARGET_PROPERTIES(dirac PROPERTIES CUDA_SEPARABLE_COMPILATION ON)
 
 
 else()
-    # FIXME: automate this by using regex
-    #    FILE(GLOB extra_objects *nocuda.c)
-
     # objects only for cpu version
     set (extra_objects
         lmfit
         consensus_poly
         lbfgs
-        robust_lbfgs
         robust_batchmode_lbfgs
+        robust_lbfgs
+        robustlm
         rtr_solve
         rtr_solve_robust
     )
     set(objects ${objects} ${extra_objects})
 
-
     message (STATUS "lib/Dirac objects --> ${objects}")
 
-    include_directories(./)
+    include_directories(${CMAKE_CURRENT_SOURCE_DIR})
     foreach (object ${objects})
-        add_library(${object} SHARED ${object}.c)
+        file(GLOB SRC_FILE ${object}.*)
+        add_library(${object} ${SRC_FILE})
         SET_TARGET_PROPERTIES(${object} PROPERTIES SOVERSION 0.0)
     endforeach (object)
 
@@ -110,7 +98,4 @@ else()
 
 endif()
 
-
-
-## disable install of lib* files
-##install(TARGETS ${objects} dirac DESTINATION lib)
+message("-------------------------------------")
