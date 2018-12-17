@@ -23,6 +23,8 @@ else()
     add_executable(sagecal-mpi ${SRCFILES})
 
     target_link_libraries(sagecal-mpi
+    -lradio
+    -ldirac
     ${CASACORE_LIBRARIES}
     ${CFITSIO_LIB}
     ${OpenBLAS_LIB}
@@ -36,8 +38,6 @@ else()
     -lgfortran
     -lpthread
     -lm
-    -ldirac
-    -lradio
     )
 
     install(TARGETS sagecal-mpi DESTINATION bin)
