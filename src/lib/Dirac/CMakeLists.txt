@@ -8,6 +8,7 @@ set (objects
     manifold_average
     mdl
     myblas
+    rtr_solve
     rtr_solve_robust_admm
     updatenu
 )
@@ -79,7 +80,6 @@ else()
         robust_batchmode_lbfgs
         robust_lbfgs
         robustlm
-        rtr_solve
         rtr_solve_robust
     )
     set(objects ${objects} ${extra_objects})

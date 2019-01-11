@@ -212,40 +212,6 @@ mylm_fit_single_pth(double *p, double *x, int m, int n, void *data) {
 
 
 /******************** end sage minimization *****************************/
-
-void
-print_levmar_info(double e_0, double e_final,int itermax, int info, int fnum, int jnum, int lnum) {
- printf("\nOptimization terminated with %d iterations, reason: ",itermax);
- switch(info) {
-  case 1:
-   printf("stopped by small gradient J^T e.\n");
-   break;
-  case 2:
-   printf("stopped by small Dp.\n");
-   break;
-  case 3:
-   printf("stopped by itmax.\n");
-   break;
-  case 4:
-   printf("singular matrix. Restart from current p with increased mu.\n");
-   break;
-  case 5:
-   printf("no further error reduction is possible. Restart with increased mu.\n");
-   break;
-  case 6:
-   printf("stopped by small ||e||_2.\n");
-   break;
-  case 7:
-   printf("stopped by invalid (i.e. NaN or Inf) \"func\" values. This is a user error.\n");
-   break;
-  default:
-   printf("Unknown.\n");
-   break;
- }
- printf("Error from %lf to %lf, Evaluations: %d functions %d Jacobians %d Linear systems\n",sqrt(e_0), sqrt(e_final),fnum,jnum,lnum);
-}
-
-
 /******************** full minimization *****************************/
 
 /* worker thread function for prediction */
