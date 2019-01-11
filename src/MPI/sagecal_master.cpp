@@ -616,10 +616,25 @@ cout<<"Reference frequency (MHz)="<<iodata.freq0*1.0e-6<<endl;
            /* old */
            MPI_Send(zold, iodata.N*8*iodata.M, MPI_DOUBLE, cm+1,TAG_CONSENSUS_OLD, MPI_COMM_WORLD);
            /* new */
-           MPI_Send(z, iodata.N*8*iodata.M, MPI_DOUBLE, cm+1,TAG_CONSENSUS, MPI_COMM_WORLD);
-
-         }
-        }
+	   if (admm>0)
+	     MPI_Send(z, iodata.N*8*iodata.M, MPI_DOUBLE, cm+1,TAG_CONSENSUS, MPI_COMM_WORLD);
+	   else if (admm==0){//update and send B_i Z for all ms
+	     int scount=Send[cm]-Sbegin[cm]+1;
+       
+	     for (int ct=0; ct<scount; ct++) {
+	       mmid = Sbegin[cm]+ct;
+	       for (int p=0; p<iodata.M; p++) {
+		 memset(&z[8*iodata.N*p],0,sizeof(double)*(size_t)iodata.N*8);
+		 for (int ci=0; ci<Npoly; ci++) {
+		   my_daxpy(8*iodata.N, &Z[p*8*iodata.N*Npoly+ci*8*iodata.N], B[mmid*Npoly+ci], &z[8*iodata.N*p]);
+		 }
+	       }
+	       MPI_Send(z, iodata.N*8*iodata.M, MPI_DOUBLE, cm+1,TAG_CONSENSUS, MPI_COMM_WORLD);   
+	     }
+	     
+	   }
+	   }
+	 }
 
         /* BB : get updated rho from slaves */
         for (int cm=0; cm<nslaves; cm++) {
