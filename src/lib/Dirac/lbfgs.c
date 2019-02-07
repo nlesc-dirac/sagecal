@@ -553,9 +553,13 @@ lbfgs_fit_fullbatch(
   cm=0; /* cycle in 0..(M-1)m (in strides of m)*/
   ci=0; /* cycle in 0..(M-1) */
   
+#ifdef DEBUG
   printf("cost=%g\n",cost_func(xk,m,adata));
+#endif
   while (ck<itmax && isnormal(gradnrm) && gradnrm>CLM_STOP_THRESH) {
-printf("iter %d gradnrm %g\n",ck,gradnrm);
+#ifdef DEBUG
+  printf("iter %d gradnrm %g\n",ck,gradnrm);
+#endif
    /* mult with hessian  pk=-H_k*gk */
    if (ck<M) {
     mult_hessian(m,pk,gk,s,y,rho,ck,ci);
@@ -781,7 +785,9 @@ lbfgs_fit_minibatch(
   cm=m*ci; /* cycle in 0..(M-1)m (in strides of m)*/
   
   while (ck<itmax && isnormal(gradnrm) && gradnrm>CLM_STOP_THRESH) {
-printf("iter %d gradnrm %g\n",ck,gradnrm);
+#ifdef DEBUG
+   printf("iter %d gradnrm %g\n",ck,gradnrm);
+#endif
    /* increment global iteration count */
    indata->niter++;
    /* detect if we are at first iteration of a new batch */
@@ -813,7 +819,9 @@ printf("iter %d gradnrm %g\n",ck,gradnrm);
 
      /* estimate online variance */
      alphabar=10.0/(1.0+my_dasum(m,indata->running_avg_sq)/((double)(indata->niter-1)*gradnrm)); 
+#ifdef DEBUG
      printf("iter=%d running_avg %lf gradnrm %lf alpha=%lf\n",indata->niter,my_dasum(m,indata->running_avg_sq),gradnrm,alphabar);
+#endif
      free(g_min_rold);
      free(g_min_rnew);
    }
