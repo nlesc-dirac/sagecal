@@ -614,9 +614,9 @@ lbfgs_fit_fullbatch(
 
 #ifdef DEBUG
   printf("iter %d alpha=%g ||grad||=%g\n",ck,alphak,gradnrm);
+  printf("cost=%g\n",cost_func(xk,m,adata));
 #endif
 
-  printf("cost=%g\n",cost_func(xk,m,adata));
   }
 
 
