@@ -711,7 +711,9 @@ lbfgs_fit_robust_wrapper_minibatch(
   */
   int Nbase1=dp->Nbase*ntiles;
   int batchsize=(Nbase1+Nbatch-1)/Nbatch;
+#ifdef DEBUG
   printf("baselines =%d tiles=%d total=%d divided to %d x %d= %d\n",dp->Nbase,ntiles,n,batchsize,Nbatch,batchsize*Nbatch);
+#endif
   /* store info about no. of minibatches to use also in persistent data */
   int ci,ck;
   ck=0;
@@ -728,12 +730,17 @@ lbfgs_fit_robust_wrapper_minibatch(
   /* how many loops (epochs) over batches ? */
   int Nloops=(itmax+Niterperbatch)/Niterperbatch;
   int nl;
+#ifdef DEBUG
   printf("loops=%d\n",Nloops);
   for (ci=0; ci<Nbatch; ci++) {
    printf("batch %d : off %d size %d\n",ci,offsets[ci],lengths[ci]);
   }
+#endif
 
-  ptdata.noff=0; ptdata.nlen=Nbase1; printf("cost=%g\n",robust_cost_func_batch(p, m,&data1));
+#ifdef DEBUG
+  ptdata.noff=0; ptdata.nlen=Nbase1; 
+  printf("cost=%g\n",robust_cost_func_batch(p, m,&data1));
+#endif
   for (nl=0; nl<Nloops; nl++) {
    /* iterate over each batch */
    for (ci=0; ci<Nbatch; ci++) {
@@ -742,7 +749,9 @@ lbfgs_fit_robust_wrapper_minibatch(
     lbfgs_fit(&robust_cost_func_batch,&robust_grad_func_batch,p,m,Niterperbatch,M,&data1,&ptdata);
 
     /* only for debugging, full cost */
+#ifdef DEBUG
     ptdata.noff=0; ptdata.nlen=Nbase1; printf("cost=%g\n",robust_cost_func_batch(p, m,&data1));
+#endif
    }
   }
 
