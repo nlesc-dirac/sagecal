@@ -52,10 +52,10 @@ $INSTALL_PATH is where you want to install SageCal.
     - pkg-config
     - openblas
     - libglib2.0-dev
-    - follow the instructions at 
+    - follow the instructions at
 [https://github.com/casacore/casacore](https://github.com/casacore/casacore) to install casacore.
-    - Additional packages (not essential, but recommended): MPI (openmpi), FFTW 
-		 
+    - Additional packages (not essential, but recommended): MPI (openmpi), FFTW
+
 
 
 ### Building
@@ -68,13 +68,13 @@ $INSTALL_PATH is where you want to install SageCal.
 - Build SAGECal
 ```
     mkdir build && cd build
-    cmake .. -DENABLE_CUDA=OFF
+    cmake ..
 ```
 
 **OPTIONAL:** You can also define a custom casacore path:
 
 ```
-    cmake .. -DCASACORE_ROOT_DIR=/opt/soft/casacore/ -DENABLE_CUDA=OFF
+    cmake .. -DCASACORE_ROOT_DIR=/opt/soft/casacore
 ```
 **OPTIONAL:** You can also define a custom paths to everything:
 
@@ -84,7 +84,7 @@ $INSTALL_PATH is where you want to install SageCal.
 
     Compile with:
 ```
-    make 
+    make
 ```
     Install at your favorite place
 ```
@@ -94,8 +94,24 @@ $INSTALL_PATH is where you want to install SageCal.
 - The sagecal executable can be found in **/path/to/sagecal/dir/usr/local/bin**, also **sagecal-mpi**,**buildsky** and **restore** might be installed depending on the availability of MPI and WCSLIB/FFTW.
 
 
+## GPU Support
 
-### Via Anaconda (WIP)
+### Loading modules on DAS5
+See scripts folder for the modules.
+```
+source ./scripts/load_das5_modules_gcc6.sh
+```
+
+### Compiling with GPU support
+```
+mkdir -p build && cd build
+cmake -DCUDA_DEBUG=ON -DDEBUG=ON -DVERBOSE=ON -DHAVE_CUDA=ON ..
+make VERBOSE=1
+```
+
+
+
+## Installation via Anaconda (WIP)
 ```
     conda install -c sagecal=0.6.0
 ```
@@ -110,13 +126,13 @@ For expert users, and for custom architectures (GPU), the manual install is reco
  - BLAS/LAPACK
    Highly recommended is OpenBLAS http://www.openblas.net/
    Also, to avoid any linking issues (and to get best performance), build OpenBLAS from source and link SAGECal with the static library (libopenblas***.a) and NOT libopenblas***.so
- - Compilers gcc/g++ or Intel icc/icpc 
- - If you have NVIDIA GPUs, 
+ - Compilers gcc/g++ or Intel icc/icpc
+ - If you have NVIDIA GPUs,
   -- CUDA/CUBLAS/CUSOLVER and nvcc
   -- NVML Nvidia management library
  - If you are using Intel Xeon Phi MICs.
   -- Intel MKL and other libraries
- - Get the source for SAGECal 
+ - Get the source for SAGECal
 ```
     git clone -b master https://git@github.com/nlesc-dirac/sagecal.git
 ```
@@ -135,17 +151,17 @@ In ./src/lib/Dirac and ./src/lib/Radio and ./src/MS you MUST edit the Makefiles 
     -I/opt/casacore/include/ -I/opt/casacore/include/casacore
  - CUDAINC/CUDALIB : where CUDA/CUBLAS/CUSOLVER is installed
  - NVML_INC/NVML_LIB : NVML include/lib path
- - NVCFLAGS : flags to pass to nvcc, especially -arch option to match your GPU  
+ - NVCFLAGS : flags to pass to nvcc, especially -arch option to match your GPU
  - MKLROOT : for Intel MKL
 
- Example makefiles: 
+ Example makefiles:
    Makefile : plain build
    Makefile.gpu: with GPU support
    Note: Edit ./lib/Radio/Radio.h MAX_GPU_ID to match the number of available GPUs, e.g., for 2 GPUs, MAX_GPU_ID=1
 
 
 
-## SAGECAL-MPI Manual Installation 
+## SAGECAL-MPI Manual Installation
 This is for manually installing the distributed version of sagecal (sagecal-mpi), the cmake build will will work for most cases.
 ## 1 Prerequsites:
  - Same as for SAGECal.
@@ -165,6 +181,6 @@ This is for manually installing the distributed version of sagecal (sagecal-mpi)
 ## RESTORE Installation
 
   - See INSTALL in ./src/restore
-  
-  
+
+
 

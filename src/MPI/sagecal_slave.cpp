@@ -708,13 +708,44 @@ cout<<myrank<<" : "<<cm<<": downweight ratio ("<<iodata_vec[cm].fratio<<") based
        }
       }
 
-      /* BB : get B_i Z_old from master (store it direcly at Yhat) */
       MPI_Recv(Yhat, iodata_vec[mmid].N*8*Mt, MPI_DOUBLE, 0,TAG_CONSENSUS_OLD, MPI_COMM_WORLD, &status);
+      ck=0;
+      for (ci=0; ci<M; ci++) {
+	if (arho_vec[mmid][ci]>0.0) {
+         /* first update Yhat, because it needs Y_i , Yhat now = (B_i Z_old) */
+         /* scale by -rho */
+          my_dscal(iodata_vec[mmid].N*8*carr_vec[mmid][ci].nchunk,-arho_vec[mmid][ci],&Yhat[ck]);
+         /* add Y_i + rho J */
+         my_daxpy(iodata_vec[mmid].N*8*carr_vec[mmid][ci].nchunk, &Y_vec[mmid][ck], 1.0, &Yhat[ck]);
+	}
+	ck+=iodata_vec[mmid].N*8*carr_vec[mmid][ci].nchunk;
+      }
+      /* now update Y_i with B_i Z*/
+      if(admm==0){
+	/*MM: the first iteration you have to do this for all MS!*/
+        for(int cm=0; cm<mymscount; cm++) {
+	  /* ADMM 3: get B_i Z from master */
+	  MPI_Recv(Z_vec[cm], iodata_vec[cm].N*8*Mt, MPI_DOUBLE, 0,TAG_CONSENSUS, MPI_COMM_WORLD, &status);
+	  /* BB : also need Yhat_i <= Y_i + rho (J_i - B_i Z_old), 
+	     node we already have Y_i + rho J_i */
+	  /* update Y_i <= Y_i + rho (J_i-B_i Z)
+	     since we already have Y_i + rho J_i, only need -rho (B_i Z) */
+	  ck=0;
+	  for (ci=0; ci<M; ci++) {
+	    if (arho_vec[cm][ci]>0.0) {
+	      /* now update Y_i to new value */
+	      my_daxpy(iodata_vec[cm].N*8*carr_vec[cm][ci].nchunk, &Z_vec[cm][ck], -arho_vec[cm][ci], &Y_vec[cm][ck]);
+	    }
+	    ck+=iodata_vec[cm].N*8*carr_vec[cm][ci].nchunk;
+	  }
+	}
+
+      }
+      else {
 
       /* ADMM 3: get B_i Z from master */
       MPI_Recv(Z_vec[mmid], iodata_vec[mmid].N*8*Mt, MPI_DOUBLE, 0,TAG_CONSENSUS, MPI_COMM_WORLD, &status);
      
-
       /* BB : also need Yhat_i <= Y_i + rho (J_i - B_i Z_old), 
               node we already have Y_i + rho J_i */
       /* update Y_i <= Y_i + rho (J_i-B_i Z)
@@ -722,15 +753,12 @@ cout<<myrank<<" : "<<cm<<": downweight ratio ("<<iodata_vec[cm].fratio<<") based
       ck=0;
       for (ci=0; ci<M; ci++) {
         if (arho_vec[mmid][ci]>0.0) {
-         /* first update Yhat, because it needs Y_i , Yhat now = (B_i Z_old) */
-         /* scale by -rho */
-          my_dscal(iodata_vec[mmid].N*8*carr_vec[mmid][ci].nchunk,-arho_vec[mmid][ci],&Yhat[ck]);
-         /* add Y_i + rho J */
-         my_daxpy(iodata_vec[mmid].N*8*carr_vec[mmid][ci].nchunk, &Y_vec[mmid][ck], 1.0, &Yhat[ck]);
          /* now update Y_i to new value */
          my_daxpy(iodata_vec[mmid].N*8*carr_vec[mmid][ci].nchunk, &Z_vec[mmid][ck], -arho_vec[mmid][ci], &Y_vec[mmid][ck]);
         }
         ck+=iodata_vec[mmid].N*8*carr_vec[mmid][ci].nchunk;
+      }
+       
       }
        
 
