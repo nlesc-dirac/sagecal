@@ -1,3 +1,1973 @@
+commit 24c45b0102e4daf9417e3589b9e3411dd50f4704
+Merge: 8074db9 bd15937
+Author: Sarod Yatawatta <30378342+SarodYatawatta@users.noreply.github.com>
+Date:   Tue Aug 28 16:44:34 2018 +0200
+
+    Merge pull request #58 from nlesc-dirac/ci_test
+    
+    Continuous Integration
+
+commit bd15937385f286937dc8d6bf9f316d8a33f0a73b
+Author: Faruk D <f.diblen@esciencecenter.nl>
+Date:   Tue Aug 28 16:36:26 2018 +0200
+
+    disable SL test
+
+commit ed40c6f6c9163aeb55c60eaf1912c13bd144faab
+Author: Faruk D <f.diblen@esciencecenter.nl>
+Date:   Tue Aug 28 16:27:32 2018 +0200
+
+    add casacore paths for cmake build on SL
+
+commit 8074db95cd25be2bdbdd10ecf0eb1023b8741ae3
+Author: Faruk D <fdiblen@users.noreply.github.com>
+Date:   Tue Aug 28 16:12:19 2018 +0200
+
+    add DOI
+    
+    closes #14
+
+commit 4b2c475f9f2db94910143cb1456a81307d918426
+Author: Faruk D <f.diblen@esciencecenter.nl>
+Date:   Tue Aug 28 15:45:47 2018 +0200
+
+    fix casacore build path
+
+commit 69ec55d8e2f121732774f1bf9dfaa20eb6f41d6c
+Author: Faruk D <f.diblen@esciencecenter.nl>
+Date:   Tue Aug 28 15:37:47 2018 +0200
+
+    cmake is called cmake3 on SL
+
+commit 8b8cd50f7a79bad3e89ce51ba59d5cb493d93f30
+Author: Faruk D <f.diblen@esciencecenter.nl>
+Date:   Tue Aug 28 15:27:15 2018 +0200
+
+    change cmake version and update instructions
+
+commit 2c87ae539302d0cd88695aa3e0d68a4362082b18
+Author: Faruk D <f.diblen@esciencecenter.nl>
+Date:   Tue Aug 28 15:15:13 2018 +0200
+
+    disable measurement data and fix path
+
+commit 67f1bc8385597762560b557d5acbf0d88bcca88d
+Author: Faruk D <f.diblen@esciencecenter.nl>
+Date:   Tue Aug 28 15:07:45 2018 +0200
+
+    dsable arch linux
+
+commit 267141d3848bf9e9ce707b57e178a3041e99253c
+Author: Faruk D <f.diblen@esciencecenter.nl>
+Date:   Tue Aug 28 15:06:40 2018 +0200
+
+    add wget to download measurement set
+
+commit 52adaee7f0710bd2318f4e0196587fd4eaf3180e
+Author: Faruk D <f.diblen@esciencecenter.nl>
+Date:   Tue Aug 28 14:54:33 2018 +0200
+
+    add sl compile instructions
+
+commit 20cbbd8f40d17a72176a67d6c7b409003a6d6160
+Author: Faruk D <f.diblen@esciencecenter.nl>
+Date:   Tue Aug 28 14:33:53 2018 +0200
+
+    fix docker command
+
+commit 21b37a3aafefcf3f3e1dd5a59eebe786d08fc8f6
+Author: Sarod Yatawatta <sarod@dop373.nfra.nl>
+Date:   Tue Aug 28 11:49:25 2018 +0200
+
+    chmod +x
+
+commit af8937d2ecdcf19b05e1ce1f4fe376060894d926
+Author: Sarod Yatawatta <sarod@dop373.nfra.nl>
+Date:   Tue Aug 28 11:48:14 2018 +0200
+
+    added script to change freq of MS
+
+commit f5a6a766e6ad914c1cfb2303988681efbc2f425b
+Author: Sarod Yatawatta <sarod@dop373.nfra.nl>
+Date:   Tue Aug 28 11:38:40 2018 +0200
+
+    rho values to match cluster file
+
+commit 74eb0df36830b967e4c7cedddb2997504e246523
+Author: Sarod Yatawatta <sarod@dop373.nfra.nl>
+Date:   Tue Aug 28 11:37:24 2018 +0200
+
+    example scripts for MPI version
+
+commit fa66c95c07db775bd173d06ed275ab916f741f12
+Author: Sarod Yatawatta <sarod@dop373.nfra.nl>
+Date:   Tue Aug 28 11:21:51 2018 +0200
+
+    fix default values of interpolation
+
+commit e7a4845f9226c7d94a021dea1ebe0bbd85f5c23b
+Merge: ed56640 97a6e83
+Author: Sarod Yatawatta <30378342+SarodYatawatta@users.noreply.github.com>
+Date:   Tue Aug 28 10:38:05 2018 +0200
+
+    Merge branch 'master' into dev
+
+commit ed56640cc848683ad3fc83a1ae9fb0cae07d7b40
+Merge: 7688f98 5d96d86
+Author: Hanno Spreeuw <h.spreeuw@esciencecenter.nl>
+Date:   Tue Aug 28 10:28:55 2018 +0200
+
+    Merge branch 'dev' of github.com:nlesc-dirac/sagecal into dev
+
+commit 7688f9804fe8c393fc99c120b454e130d5531aed
+Author: Hanno Spreeuw <h.spreeuw@esciencecenter.nl>
+Date:   Tue Aug 28 10:28:04 2018 +0200
+
+    Now almost the same CXX flags as Makefile and Makefile.gpu: CXXFLAGS=-O3 -Wall -g -std=c++11
+
+commit 5d96d86c7c88409af256e48539fdb8164a0249e5
+Author: Sarod Yatawatta <sarod@dop373.nfra.nl>
+Date:   Tue Aug 28 10:14:10 2018 +0200
+
+    more install updates
+
+commit e2142b5e902ecf61a495c85330cbb7b095ab7ddc
+Merge: 3a218f1 cff31fc
+Author: Sarod Yatawatta <sarod@dop373.nfra.nl>
+Date:   Tue Aug 28 10:06:36 2018 +0200
+
+    Merge branch 'dev' of github.com:nlesc-dirac/sagecal into dev
+
+commit 3a218f11c48fbf064a9f2bb847aa1ccabf336789
+Author: Sarod Yatawatta <sarod@dop373.nfra.nl>
+Date:   Tue Aug 28 10:04:19 2018 +0200
+
+    more install updates
+
+commit cff31fc5778604ac18e1d49cb748e1e9e021a6df
+Author: Hanno Spreeuw <h.spreeuw@esciencecenter.nl>
+Date:   Tue Aug 28 09:59:41 2018 +0200
+
+    Need to comment this out, or it will keep searching for hdf5, without success
+
+commit 77d0cb4c8da9c6cda2a71132be2c1dcc3774a749
+Author: Sarod Yatawatta <sarod@dop373.nfra.nl>
+Date:   Tue Aug 28 09:48:34 2018 +0200
+
+    more install instructions
+
+commit 1a15fbe07e542ed2239a67403951ba3c008112d5
+Author: Sarod Yatawatta <sarod@dop373.nfra.nl>
+Date:   Tue Aug 28 09:43:14 2018 +0200
+
+    updating install instructions
+
+commit 2130398fea6977bccefb859f8f6adb5f7ee73b58
+Author: Sarod Yatawatta <sarod@dop373.nfra.nl>
+Date:   Mon Aug 27 23:46:10 2018 +0200
+
+    install files according to #55
+
+commit 97a6e8387f6a5628f0707689055d6393b5f6a16d
+Merge: b85b031 475b8b0
+Author: Sarod Yatawatta <30378342+SarodYatawatta@users.noreply.github.com>
+Date:   Mon Aug 27 23:20:56 2018 +0200
+
+    Merge pull request #55 from gijzelaerr/install
+    
+    add missing install and SO version
+
+commit 475b8b0f79ec23cd70e2f4f2d7089bc9fa313a7d
+Author: Gijs Molenaar <gijs@pythonic.nl>
+Date:   Mon Aug 27 19:32:13 2018 +0200
+
+    add missing isntall and SO version
+
+commit deab251c0097e38cdec035bad97635fe54c5f5d3
+Author: Sarod Yatawatta <sarod@dop373.nfra.nl>
+Date:   Mon Aug 27 17:46:06 2018 +0200
+
+    update version to checkout
+
+commit 522beb037a7ed55b74690bd9c1db16b82fb5f7ed
+Author: Sarod Yatawatta <sarod@dop373.nfra.nl>
+Date:   Mon Aug 27 15:41:57 2018 +0200
+
+    correct name of input variables
+
+commit f812fa8b7c70341396b54782ecdbeb41818d594d
+Author: Sarod Yatawatta <sarod@dop373.nfra.nl>
+Date:   Mon Aug 27 15:32:19 2018 +0200
+
+    reorder CXX flags
+
+commit 788bbdbeca12daf5eba273916c2a8cfc6fc21fb8
+Author: Sarod Yatawatta <sarod@dop373.nfra.nl>
+Date:   Mon Aug 27 15:24:44 2018 +0200
+
+    casacore has 2 include dirs
+
+commit 29b3e1f0547bdb3bf8b84e05d0ee9e5673656864
+Author: Sarod Yatawatta <sarod@dop373.nfra.nl>
+Date:   Mon Aug 27 14:56:47 2018 +0200
+
+    minimum use of CXX options
+
+commit 33ae6527c9055f630b69d2027f6a3a9e49adb51b
+Author: Sarod Yatawatta <sarod@dop373.nfra.nl>
+Date:   Mon Aug 27 13:26:09 2018 +0200
+
+    add cmake support for buildsky/restore
+
+commit 03cf4b874fb340375c7d1b53a9562d4eaf96a142
+Author: Sarod Yatawatta <sarod@dop373.nfra.nl>
+Date:   Mon Aug 27 11:30:41 2018 +0200
+
+    added cmake support for MPI
+
+commit ac2c2f952db6c6e15bb35cce10e7c8ea4827db9c
+Author: Faruk D <f.diblen@esciencecenter.nl>
+Date:   Fri Aug 24 15:19:03 2018 +0200
+
+    fix scientific linux version
+
+commit 369623d587388776f6a02fa120ed8370b367c9eb
+Author: Faruk D <f.diblen@esciencecenter.nl>
+Date:   Fri Aug 24 13:32:29 2018 +0200
+
+    add scientific linux
+
+commit b85b031b9b522877020dc3759509bde65b17d29f
+Merge: 8b09a58 0b072da
+Author: Hanno Spreeuw <HannoSpreeuw@users.noreply.github.com>
+Date:   Wed Aug 1 12:32:10 2018 +0200
+
+    Merge pull request #53 from nlesc-dirac/dev
+    
+    fix issue #52, update LBFGS interface
+
+commit 0b072da621f8217270c29e5a63048a3a95ac336c
+Author: Sarod Yatawatta <sarod@dop373.nfra.nl>
+Date:   Tue Jul 31 11:49:23 2018 +0200
+
+    fixing issue #52
+
+commit 39d3ed8ad3bbb18080d3c40b894415f171c76e3f
+Author: Sarod Yatawatta <sarod@dop373.nfra.nl>
+Date:   Mon Jul 30 16:33:46 2018 +0200
+
+    fix typo
+
+commit d11e1653fde199b8b831a397feaa1ef4aa2950a2
+Author: Sarod Yatawatta <sarod@dop373.nfra.nl>
+Date:   Mon Jul 30 16:16:03 2018 +0200
+
+    make sure rho text file exactly matches no. clusters
+
+commit 84b813da3f0966d96d8cff3aec89f95037f5e575
+Merge: fa1448b 8b09a58
+Author: Sarod Yatawatta <sarod@dop373.nfra.nl>
+Date:   Mon Jul 30 15:30:05 2018 +0200
+
+    Merge branch 'dev' of github.com:nlesc-dirac/sagecal into dev
+
+commit fa1448be0197763c4f626f677f435c1e5c2cfd35
+Author: Sarod Yatawatta <sarod@dop373.nfra.nl>
+Date:   Mon Jul 30 15:25:08 2018 +0200
+
+    cleaning up LBFGS related code, removed duplicates
+
+commit 8b09a58e0b1f3d395eaf98e28a8d822e96e26024
+Merge: b72644b c366e18
+Author: Sarod Yatawatta <30378342+SarodYatawatta@users.noreply.github.com>
+Date:   Sat Jun 23 20:20:29 2018 +0200
+
+    Merge pull request #50 from nlesc-dirac/dev
+    
+    Dev
+
+commit c366e18977275271546baae6860a68df22093986
+Author: Sarod Yatawatta <sarod@dop373.nfra.nl>
+Date:   Tue Jun 19 15:01:10 2018 +0200
+
+    bug fix
+
+commit b66c291b8efa186d5804ebcfca3a6d11097a499a
+Author: Sarod Yatawatta <sarod@dop373.nfra.nl>
+Date:   Tue Jun 19 14:59:00 2018 +0200
+
+    missing HAVE_CUDA added
+
+commit 157eaf84cd4f808cad80c331e836d17b69aa1a7b
+Author: Sarod Yatawatta <sarod@dop373.nfra.nl>
+Date:   Tue Jun 19 14:42:03 2018 +0200
+
+    added function to predict using stored solutions, with GPU accel
+
+commit 41cf1b3b69981368579b2ccdb5d102184fffdf2b
+Author: Sarod Yatawatta <sarod@dop373.nfra.nl>
+Date:   Tue Jun 19 13:19:09 2018 +0200
+
+    bug fix in reading solutions file
+
+commit b72644b9728c617eb9b2ec568e9ee2bcfdbc864b
+Merge: b38add6 a415926
+Author: Hanno Spreeuw <HannoSpreeuw@users.noreply.github.com>
+Date:   Wed Jun 13 10:10:13 2018 +0200
+
+    Merge pull request #49 from nlesc-dirac/dev
+    
+    streamlining LBFGS routines
+
+commit a415926866ae1a0f563a95e192d88115b9d19926
+Author: Sarod Yatawatta <sarod@dop373.nfra.nl>
+Date:   Tue Jun 12 12:47:06 2018 +0200
+
+    removal of redundant memory copies, stopping when grad norm too low
+
+commit 67f71e0ac5345d72faf99d8e736ced049b66fcd5
+Author: Sarod Yatawatta <sarod@dop373.nfra.nl>
+Date:   Tue Jun 12 11:31:11 2018 +0200
+
+    stop when gradient norm is too small
+
+commit e965dd01191a818d38f5bca88328306f7553ddb1
+Author: Sarod Yatawatta <sarod@dop373.nfra.nl>
+Date:   Tue Jun 12 11:10:43 2018 +0200
+
+    removal of redundant memory copies
+
+commit bd69e0044b4106a9dbc1ecb9f604da969ec4150b
+Author: Sarod Yatawatta <sarod@dop373.nfra.nl>
+Date:   Tue Jun 12 10:44:10 2018 +0200
+
+    removed some redundant memory copies
+
+commit b38add6d20e5439473b587c73c62c5a35c7c0827
+Author: Sarod Yatawatta <sarod@dop373.nfra.nl>
+Date:   Mon May 7 20:35:42 2018 +0200
+
+    to enable adding antenna table by hand (not using keywords)
+
+commit be4065a3a215d13dd45074ca1d7ca240358f762e
+Author: Hanno Spreeuw <h.spreeuw@esciencecenter.nl>
+Date:   Wed May 2 21:13:07 2018 +0200
+
+    -pg not appropriate for general purpose
+
+commit d0a2e251a81c051c4bf93b961af90547d23d24cd
+Author: Hanno Spreeuw <h.spreeuw@esciencecenter.nl>
+Date:   Wed May 2 21:10:01 2018 +0200
+
+    -pg not appropriate, NVML_INC is redundant and link to the latest cuda, i.e. cuda 9.1
+
+commit 45730106a1826eca34dc613552e41348f2834ec8
+Author: Hanno Spreeuw <h.spreeuw@esciencecenter.nl>
+Date:   Mon Apr 30 14:58:30 2018 +0200
+
+    CUDAINC and NVML_INC are redundant
+
+commit 388aa34148e2195f071feb3023673ce7954e569f
+Merge: bbc3863 6a28a02
+Author: Hanno Spreeuw <h.spreeuw@esciencecenter.nl>
+Date:   Mon Apr 30 14:51:39 2018 +0200
+
+    Merge branch 'master' of github.com:nlesc-dirac/sagecal
+
+commit bbc3863a29d754e8790b700278acdfebbce337d3
+Author: Hanno Spreeuw <h.spreeuw@esciencecenter.nl>
+Date:   Mon Apr 30 14:51:18 2018 +0200
+
+    '-std=c++11' is necessary to build Sagecal for casacore/2.4.1-gcc-6.3.0
+
+commit 6a28a0211280b4bac88a7513516c926dcc24eac0
+Author: Sarod Yatawatta <sarod@dop373.nfra.nl>
+Date:   Sun Apr 29 17:15:19 2018 +0200
+
+    check for step size being too small
+
+commit 54bd95e977dd9b9679fad86812741c8adc9341da
+Author: Hanno Spreeuw <h.spreeuw@esciencecenter.nl>
+Date:   Thu Apr 26 17:24:51 2018 +0200
+
+    casacore/v2.4.1-gcc-6.3.0 gives errors like 'error: range-based ‘for’ loops are not allowed in C++98 mode' and 'error: ISO C++ forbids declaration of ‘c’ with no type [-fpermissive]'
+
+commit b9610447416721a7ed1c1e6e184a4c005c387f02
+Author: Hanno Spreeuw <h.spreeuw@esciencecenter.nl>
+Date:   Thu Apr 26 17:21:19 2018 +0200
+
+    Typo: casacore/casacore should be casacore
+
+commit e3a47a28c3b0b07e5f4809f9a0274c3adc71ca08
+Author: Hanno Spreeuw <h.spreeuw@esciencecenter.nl>
+Date:   Thu Apr 26 17:12:11 2018 +0200
+
+    Remove redundant whitespace
+
+commit fc6d275de5119b2c5744da860dbbc2984549a045
+Author: Hanno Spreeuw <h.spreeuw@esciencecenter.nl>
+Date:   Thu Apr 26 17:09:13 2018 +0200
+
+    '/usr/include/nvidia/gdk/' does not exist, at least not on fs5 and NVML_INC is redundant
+
+commit 5feb1d2dfda28361f70aa7c319b56ed59f18bc65
+Author: Hanno Spreeuw <h.spreeuw@esciencecenter.nl>
+Date:   Thu Apr 26 17:05:34 2018 +0200
+
+    '/usr/local/cuda/include' does not exist, at least not on fs5 and CUDAINC is redundant
+
+commit 02548a6b9f5ee16784b2d56dab85fc87fe17211c
+Author: Hanno Spreeuw <h.spreeuw@esciencecenter.nl>
+Date:   Thu Apr 26 17:00:07 2018 +0200
+
+    NVML_INC is redundant and /usr/include/nvidia/gdk/ does not exist, at least not on fs5.
+
+commit 28daeab055d505e4dce80ab8139138ccb45edd2a
+Author: Hanno Spreeuw <h.spreeuw@esciencecenter.nl>
+Date:   Thu Apr 26 16:52:24 2018 +0200
+
+    CUDAINC is redundant and '/usr/local/cuda/include' does not exist, at least not on fs5. 'module load cuda91' or some similar adjustment to PATH should suffice.
+
+commit 020a44ff8746e9680f9cd833f4ff697ba920f92d
+Author: Hanno Spreeuw <h.spreeuw@esciencecenter.nl>
+Date:   Thu Apr 26 16:36:43 2018 +0200
+
+    '-L/usr/lib64/nvidia/' in 'NVML_LIB=-lnvidia-ml -L/usr/lib64/nvidia/' since that directory does not exist, at least not on fs5
+
+commit 58204faadb14c0c5cb7c11af741dbc9bb75c6cef
+Author: Hanno Spreeuw <h.spreeuw@esciencecenter.nl>
+Date:   Thu Apr 26 16:32:32 2018 +0200
+
+    remove redundant whitespace
+
+commit e4f01df6c7ae3336aaa6a5480b8a55ae8c560498
+Author: Hanno Spreeuw <h.spreeuw@esciencecenter.nl>
+Date:   Thu Apr 26 16:21:57 2018 +0200
+
+    CUDAINC is redundant when cuda in PATH, e.g. after 'module load cuda91'
+
+commit 9a1cf91902ab5e08b962f34a03b0f121c5f573de
+Author: Hanno Spreeuw <h.spreeuw@esciencecenter.nl>
+Date:   Thu Apr 26 16:09:03 2018 +0200
+
+    Adjusted Makefile for latest casacore on fs5: casacore/v2.4.1-gcc-6.3.0
+
+commit e3c5a9aff520cb26509f4a0b7547bf1aceee5e4b
+Author: Hanno Spreeuw <h.spreeuw@esciencecenter.nl>
+Date:   Thu Apr 26 16:06:07 2018 +0200
+
+    Adjusted Makefile.gpu for latest casacore on fs5: casacore/v2.4.1-gcc-6.3.0
+
+commit 69a9034d9d52a0886e1dbeddc50c11d06eed524b
+Author: Hanno Spreeuw <h.spreeuw@esciencecenter.nl>
+Date:   Thu Apr 26 15:58:54 2018 +0200
+
+    This fixes 'cannot find -lnvidia-ml' together with the '-lcuda -lcudart' from the previous commit
+
+commit c8a1413a4f177c19504d882daadb728931302b45
+Author: Sarod Yatawatta <sarod@dop373.nfra.nl>
+Date:   Tue Apr 24 09:34:08 2018 +0200
+
+    added -lcuda -lcudart
+
+commit c3b1daaff26896db15fe310a50f2094bbd9ebbb0
+Author: Hanno Spreeuw <h.spreeuw@esciencecenter.nl>
+Date:   Mon Apr 23 16:55:01 2018 +0200
+
+    make clean tries to delete non-existing files.
+
+commit a9d05232f351d056be3e404dc1ee25a03d1e43ec
+Author: Hanno Spreeuw <h.spreeuw@esciencecenter.nl>
+Date:   Wed Apr 18 10:10:33 2018 +0200
+
+    libsagecal.a should be libradio.a
+
+commit 19e0b8a7aa981cf95f7b40a08d4684dda1737f0f
+Author: Faruk D <f.diblen@esciencecenter.nl>
+Date:   Wed Apr 4 18:17:19 2018 +0200
+
+    create separate build folders for each test
+
+commit b771e7ef171fc91d577fbef3a7962efb176338a1
+Author: Faruk D <f.diblen@esciencecenter.nl>
+Date:   Wed Apr 4 18:02:49 2018 +0200
+
+    add archlinux build test
+
+commit 71d281d517507cbe91df3b4efa0dc6bc096d50be
+Author: Faruk D <f.diblen@esciencecenter.nl>
+Date:   Wed Apr 4 17:49:54 2018 +0200
+
+    cleanup travis configuration
+
+commit 1991c7924b7ee2c2ad7fd99de51c6fa517dacb29
+Author: Faruk D <f.diblen@esciencecenter.nl>
+Date:   Wed Apr 4 17:46:35 2018 +0200
+
+    organize build scripts
+
+commit f1c67fa93528a4ea9d4fd0a7b99848e271c738c6
+Author: Sarod Yatawatta <sarod@dop373.nfra.nl>
+Date:   Wed Apr 4 16:28:42 2018 +0200
+
+    info about using more than 1 GPU
+
+commit db185474699aca0bc752787f301925f0205ee08c
+Author: Sarod Yatawatta <sarod@dop373.nfra.nl>
+Date:   Wed Apr 4 13:52:39 2018 +0200
+
+    update documentation
+
+commit 25b10100baec0dfcd1215feda9b793cb6cfd14fc
+Author: Sarod Yatawatta <sarod@dop373.nfra.nl>
+Date:   Tue Apr 3 13:29:34 2018 +0200
+
+    fix isse #48
+
+commit c22c981dc577fa87e5bc39df5fd71f783e1b8d18
+Author: Sarod Yatawatta <sarod@dop373.nfra.nl>
+Date:   Wed Mar 28 14:14:57 2018 +0200
+
+    orcid should be just the id
+
+commit 78bcfe114e1ae3901e8f8a7d8852ce09d13284d4
+Author: Sarod Yatawatta <sarod@dop373.nfra.nl>
+Date:   Wed Mar 28 14:07:35 2018 +0200
+
+    added citation, some fixes to makefile
+
+commit eee948f2c6dd62b279a5c58452e6b5b98fec3534
+Author: Hanno Spreeuw <h.spreeuw@esciencecenter.nl>
+Date:   Thu Mar 22 16:54:26 2018 +0100
+
+    Now authors of articles that were based on Sagecal should know how to refer to it
+
+commit 1c1d60606fb81e8af70de5222a046db549e5234c
+Merge: 3f25c79 0dbab64
+Author: SarodYatawatta <30378342+SarodYatawatta@users.noreply.github.com>
+Date:   Tue Mar 13 12:10:51 2018 +0100
+
+    Merge pull request #47 from tammojan/casacore2
+    
+    Update namespace and include path for casacore >= 2.0
+
+commit 0dbab64b3d170c6af97a3592967e2e1cfacf3ba6
+Author: Tammo Jan Dijkema <T.J.Dijkema@gmail.com>
+Date:   Tue Mar 13 10:08:15 2018 +0100
+
+    Update namespace and include path for casacore >= 2.0
+
+commit 3f25c7987bba3f3a097165a426c8b3b5f0a6ebfa
+Merge: ec010be 4f0bf0d
+Author: SarodYatawatta <30378342+SarodYatawatta@users.noreply.github.com>
+Date:   Mon Mar 12 22:07:34 2018 +0100
+
+    Merge pull request #45 from tammojan/openblas_root
+    
+    Make OpenBLAS_ROOT_DIR configurable
+
+commit 4f0bf0de1a22aacb4d0f30d3a5498f04b73ccb6c
+Author: Tammo Jan Dijkema <T.J.Dijkema@gmail.com>
+Date:   Mon Mar 12 09:28:45 2018 +0100
+
+    Make OpenBLAS_ROOT_DIR configurable
+
+commit ec010be541feb0eadf51f06a3972872eda57c671
+Author: Faruk D <fdiblen@users.noreply.github.com>
+Date:   Thu Mar 1 20:19:31 2018 +0100
+
+    add dev branch build status
+
+commit 3b531e3b581eed76ac844c9e9405af1d3dba25cb
+Author: Faruk D <fdiblen@users.noreply.github.com>
+Date:   Thu Mar 1 18:21:34 2018 +0100
+
+    add travis badge
+
+commit 7af750c1f59eb5f1d6859be2e2f2f53ccf4742c8
+Merge: 7b78914 cb352fa
+Author: Faruk D <fdiblen@users.noreply.github.com>
+Date:   Thu Mar 1 18:12:08 2018 +0100
+
+    Merge pull request #44 from nlesc-dirac/ci_test
+    
+    Add Travis-CI
+
+commit 8ff8379a4661fb4e5c104df892f8dc0b0d4c340f
+Author: Faruk D <f.diblen@esciencecenter.nl>
+Date:   Thu Mar 1 18:07:59 2018 +0100
+
+    fix invisible character in test script
+
+commit cb352fad9aa0f73d80d93921316e43d92a5d3f86
+Author: Faruk D <f.diblen@esciencecenter.nl>
+Date:   Thu Mar 1 17:59:49 2018 +0100
+
+    clean up environment variables
+
+commit eee31e82c060aaff378751f28cbeb401dcd7e178
+Author: Faruk D <f.diblen@esciencecenter.nl>
+Date:   Thu Mar 1 17:53:41 2018 +0100
+
+    add container name
+
+commit bf1596025c13be38707013e8bcff423d23d8e9e8
+Author: Faruk D <f.diblen@esciencecenter.nl>
+Date:   Thu Mar 1 17:50:01 2018 +0100
+
+    add script to test ubuntu builds
+
+commit f396810f31c971da4d70ea9aefce36768f498412
+Author: Faruk D <f.diblen@esciencecenter.nl>
+Date:   Thu Mar 1 17:11:50 2018 +0100
+
+    fix permission problems while clonning
+
+commit 12f99dc62d395c4825a2e2e2312dfe61b9d0eb00
+Author: Faruk D <f.diblen@esciencecenter.nl>
+Date:   Thu Mar 1 17:03:53 2018 +0100
+
+    fix environment argument
+
+commit 52afdf1cbd46ce8974d7880acf6414214882a496
+Author: Faruk D <f.diblen@esciencecenter.nl>
+Date:   Thu Mar 1 16:58:01 2018 +0100
+
+    set environment variable with docker exec
+
+commit 91efc062aea6cee4347b70c3119740548af2288b
+Author: Faruk D <f.diblen@esciencecenter.nl>
+Date:   Thu Mar 1 16:50:38 2018 +0100
+
+    add smart branch detection and setup environment variable
+
+commit 5724879d56c2d17fc9794a02c539bd32572b636a
+Author: Faruk D <f.diblen@esciencecenter.nl>
+Date:   Thu Mar 1 16:43:31 2018 +0100
+
+    change the build branch and update cache before installing the packages
+
+commit 8024b9217fd4c75d1956128260179fc49cda47c2
+Author: Faruk D <f.diblen@esciencecenter.nl>
+Date:   Thu Mar 1 16:38:28 2018 +0100
+
+    update the package repos before installing the kern packages
+
+commit f010fdaa6b618eba91f5cc74f5dac2871028b8da
+Author: Faruk D <f.diblen@esciencecenter.nl>
+Date:   Thu Mar 1 16:32:40 2018 +0100
+
+    add kern repository
+
+commit 9eb949070422303b1c110cca17d2d25892db0fe2
+Author: Faruk D <f.diblen@esciencecenter.nl>
+Date:   Thu Mar 1 16:28:12 2018 +0100
+
+    fix the yaml file
+
+commit c538b281dab6296b3e8b9ac7a997bd8039e6bf18
+Author: Faruk D <f.diblen@esciencecenter.nl>
+Date:   Thu Mar 1 16:19:45 2018 +0100
+
+    add travis configuration to use docker
+
+commit 7b789147fe58d0c27679b24d1dc29e47e48661fc
+Author: Faruk D <f.diblen@esciencecenter.nl>
+Date:   Thu Mar 1 15:06:55 2018 +0100
+
+    disable hdf5 module because it breaks the build
+
+commit b4f101e0d6a6a9cd71075202924f3340704bce83
+Merge: 22f89ae 1088583
+Author: Faruk D <fdiblen@users.noreply.github.com>
+Date:   Wed Feb 28 15:49:20 2018 +0100
+
+    Merge pull request #41 from nlesc-dirac/sprint
+    
+    Sprint changes
+
+commit 22f89ae6d5446bb616623f30bf0244ecb811d3b7
+Merge: 1f139b2 f4ea65f
+Author: Faruk D <fdiblen@users.noreply.github.com>
+Date:   Wed Feb 28 15:46:59 2018 +0100
+
+    Merge pull request #40 from nlesc-dirac/sprint_cmake
+    
+    Cmake Support
+
+commit f4ea65ff815959d91b166414fbfdaae7fb4a5e3b
+Author: Faruk D <f.diblen@esciencecenter.nl>
+Date:   Wed Feb 28 15:43:32 2018 +0100
+
+    added -g option to build flags
+
+commit 6c9e7f4c20c903bc3f24e9891d5e7e79ce3c6978
+Author: Faruk D <f.diblen@esciencecenter.nl>
+Date:   Wed Feb 28 14:51:29 2018 +0100
+
+    update build flags
+
+commit 1088583a21e6f91377fdfc6a4a5b382a70803d73
+Merge: 005e68d 4bf20e7
+Author: Hanno Spreeuw <HannoSpreeuw@users.noreply.github.com>
+Date:   Wed Feb 28 14:38:46 2018 +0100
+
+    Merge pull request #27 from nlesc-dirac/sprint_clang
+    
+    Sprint clang
+
+commit 8df6355697ee34babf5d18ecd63c92d87db76967
+Author: Faruk D <f.diblen@esciencecenter.nl>
+Date:   Wed Feb 28 14:16:36 2018 +0100
+
+    add hdf5 checks and libraries
+
+commit 06aa95abe0d2a677fdd690548a6b095383a7c666
+Author: Faruk D <f.diblen@esciencecenter.nl>
+Date:   Wed Feb 28 12:05:39 2018 +0100
+
+    update the instructions as suggested by @SarodYatawatta
+
+commit 68475f9b910c488179888e06215d13c099f1fa64
+Author: Faruk D <f.diblen@esciencecenter.nl>
+Date:   Wed Feb 28 11:39:30 2018 +0100
+
+    add instructions for other distros and temporarily comment out old installation instructions
+
+commit 2a4a93f953bf0047ed5564367e0089942a1b24f2
+Author: Faruk D <f.diblen@esciencecenter.nl>
+Date:   Wed Feb 28 11:20:06 2018 +0100
+
+    update the package list for Ubuntu
+
+commit 505334573635f4c5986c11ee9f9c86dd7b5b03ba
+Author: Faruk D <f.diblen@esciencecenter.nl>
+Date:   Wed Feb 28 10:57:50 2018 +0100
+
+    add OpenBLAS status message and disable gfortran status
+
+commit 4bf20e77d14a61291f4dfa10c862b4986f5693ec
+Author: Sarod Yatawatta <sarod@dop373.nfra.nl>
+Date:   Wed Feb 28 10:52:57 2018 +0100
+
+    added cookbook link
+
+commit cf6d21978f83befabfb545299c3e9fee1e6e4632
+Author: Faruk D <f.diblen@esciencecenter.nl>
+Date:   Wed Feb 28 10:50:50 2018 +0100
+
+    fix Openblas library path
+
+commit e5cb15316ba8937f209e9fd46fd57ed6296f2b78
+Author: Faruk D <f.diblen@esciencecenter.nl>
+Date:   Wed Feb 28 10:38:29 2018 +0100
+
+    upadate the instructions to give an example about optional casacore path
+
+commit 8153a944e36bf5054d0b46f19767e0d9275c727f
+Author: Faruk D <f.diblen@esciencecenter.nl>
+Date:   Wed Feb 28 10:32:46 2018 +0100
+
+    add make command to instructions
+
+commit 6209d8fb6d4eb0c62ed46a6ffaeb609127809d15
+Author: Faruk D <f.diblen@esciencecenter.nl>
+Date:   Wed Feb 28 10:30:29 2018 +0100
+
+    add custom path for OpenBLAS
+
+commit 909c2024acf88a39378f0dfcc550c408ee999419
+Author: Faruk D <f.diblen@esciencecenter.nl>
+Date:   Wed Feb 28 10:27:08 2018 +0100
+
+    added ubuntu version
+
+commit 218625303507b08c2294240a0c2c80607f379ca9
+Author: Faruk D <f.diblen@esciencecenter.nl>
+Date:   Wed Feb 28 10:14:58 2018 +0100
+
+    add instructions for KERN repo
+
+commit ffd0adeb0489e2b34b5373fc7cfd743413082636
+Author: Faruk D <f.diblen@esciencecenter.nl>
+Date:   Wed Feb 28 10:12:02 2018 +0100
+
+    upadate ubuntu instructions
+
+commit 578470f07d9f5b8af40674d47669c932ce6ff512
+Author: Sarod Yatawatta <sarod@dop373.nfra.nl>
+Date:   Wed Feb 28 10:02:27 2018 +0100
+
+    fixed wrong size of memory allocation
+
+commit 20298cbfcc891db9eefd0ed3285b1f557d1a3f7d
+Author: Faruk D <f.diblen@esciencecenter.nl>
+Date:   Wed Feb 28 10:00:24 2018 +0100
+
+    upadete the instructions for ubuntu
+
+commit c6636f15101cb6b63e276f40bc9b1316b47b4860
+Author: Faruk D <f.diblen@esciencecenter.nl>
+Date:   Tue Feb 27 18:09:50 2018 +0100
+
+    fix issues for Ubuntu and add preliminary instructions to install
+
+commit 900f8bf9a16bcb0dfb096b3c96a79088881f850e
+Author: Faruk D <f.diblen@esciencecenter.nl>
+Date:   Tue Feb 27 17:04:58 2018 +0100
+
+    add cmake_binary_dir variable to fix folder issues during configuration
+
+commit d73bb464adc10967ff92b6716ec28136bc16b03c
+Author: Faruk D <f.diblen@esciencecenter.nl>
+Date:   Tue Feb 27 16:43:09 2018 +0100
+
+    solves dist folder issues for the build
+
+commit 64fc5e833435b5ef2eb0b37598e970607929da6a
+Author: Faruk D <f.diblen@esciencecenter.nl>
+Date:   Tue Feb 27 16:34:47 2018 +0100
+
+    add rtr_solve_robust to dirac library
+
+commit 068cf2322cd1ddc06026cb90a4cbbdcb8532776c
+Author: Sarod Yatawatta <sarod@dop373.nfra.nl>
+Date:   Tue Feb 27 16:15:23 2018 +0100
+
+    check int range
+
+commit dd094c317d7a045bbab16e09da03e4cc00731320
+Author: Sarod Yatawatta <sarod@dop373.nfra.nl>
+Date:   Tue Feb 27 16:09:22 2018 +0100
+
+    fix invalid cases
+
+commit 7fb1a1b10adad10ce55807620ec7e2b21a12492e
+Author: Faruk D <f.diblen@esciencecenter.nl>
+Date:   Tue Feb 27 15:58:41 2018 +0100
+
+    define cxx flags before the status message
+
+commit e657c4769a5ce3a90169e53f74f32d102f02e37c
+Author: Faruk D <f.diblen@esciencecenter.nl>
+Date:   Tue Feb 27 15:56:54 2018 +0100
+
+    fixes casacore include path on das5
+
+commit c660eb70e7548cb814a2fe4e3f438995eae7e893
+Author: Faruk D <f.diblen@esciencecenter.nl>
+Date:   Tue Feb 27 15:51:48 2018 +0100
+
+    add casacore root dir status message
+
+commit a2bfb8468033600d25a97e9a04ed910bb3f6b5bd
+Author: Faruk D <f.diblen@esciencecenter.nl>
+Date:   Tue Feb 27 15:46:12 2018 +0100
+
+    add environment variable check to find casacore
+
+commit 7d7b844c655a7467829b2cb7775dc211b563f4ec
+Author: Sarod Yatawatta <sarod@dop373.nfra.nl>
+Date:   Tue Feb 27 15:31:56 2018 +0100
+
+    clarify array access in fitsio
+
+commit d291d4402915eb04a49b522cfee1be739056cd09
+Author: Sarod Yatawatta <sarod@dop373.nfra.nl>
+Date:   Tue Feb 27 15:12:13 2018 +0100
+
+    fixed missing free (pinv)
+
+commit c42e08e4480541abe24025d361f3faeba52311a9
+Merge: 088f2d0 40252cd
+Author: Sarod Yatawatta <sarod@dop373.nfra.nl>
+Date:   Tue Feb 27 14:40:47 2018 +0100
+
+    Merge branch 'sprint_clang' of github.com:nlesc-dirac/sagecal into sprint_clang
+
+commit 088f2d0fd0ba0da157df1ad810aa166c6f9e7ac6
+Author: Sarod Yatawatta <sarod@dop373.nfra.nl>
+Date:   Tue Feb 27 14:38:57 2018 +0100
+
+    fix (double) allocation instead of (int)
+
+commit 005e68d20ef6663ec17b45594981f17599e03add
+Merge: 40252cd aeb97a3
+Author: Hanno Spreeuw <HannoSpreeuw@users.noreply.github.com>
+Date:   Tue Feb 27 12:11:25 2018 +0100
+
+    Merge pull request #23 from nlesc-dirac/sprint_cppcheck
+    
+    Sprint cppcheck
+
+commit aeb97a3900ffe28f95058e60f701ade69a1359e8
+Merge: 9207c91 d779d2a
+Author: Sarod Yatawatta <sarod@dop373.nfra.nl>
+Date:   Tue Feb 27 11:54:50 2018 +0100
+
+    Merge branch 'sprint_cppcheck' of github.com:nlesc-dirac/sagecal into sprint_cppcheck
+
+commit 9207c91d37e99e4a25b28735ea445aa22fab21e7
+Author: Sarod Yatawatta <sarod@dop373.nfra.nl>
+Date:   Tue Feb 27 11:54:16 2018 +0100
+
+    more fixes
+
+commit 40d9e8a6f171c81a0ba095fe8d083c83ca66a181
+Author: Faruk D <f.diblen@esciencecenter.nl>
+Date:   Tue Feb 27 11:42:00 2018 +0100
+
+    remove found messages. they are managed by cmake modules
+
+commit 35fa294fb59f5283a905e6c34159b8691f460350
+Author: Faruk D <f.diblen@esciencecenter.nl>
+Date:   Tue Feb 27 11:35:49 2018 +0100
+
+    remove openblas status message
+
+commit d779d2a208dd41237560ec4c6bc14c28e6bbe86b
+Merge: 26436e0 05a007d
+Author: Hanno Spreeuw <h.spreeuw@esciencecenter.nl>
+Date:   Tue Feb 27 11:16:37 2018 +0100
+
+    Merge branch 'sprint_cppcheck' of github.com:nlesc-dirac/sagecal into sprint_cppcheck
+    I am confused, but it seems there is a duplication of the branch
+    sprint_cppcheck. I do not understand how this came about.
+
+commit 26436e09f39c82836c33a0cc7298ddf4155743c5
+Author: Hanno Spreeuw <h.spreeuw@esciencecenter.nl>
+Date:   Tue Feb 27 11:10:45 2018 +0100
+
+    I erroneously branched sprint_cppcheck from master instead of sprint, trying to fix that now by committing this README from the sprint_readme to sprint_cppcheck
+
+commit 53036ff783df1dccaad9a1bf80e1d17f943466b8
+Author: Faruk D <f.diblen@esciencecenter.nl>
+Date:   Tue Feb 27 11:07:12 2018 +0100
+
+    remove OpenBLAS option. It will be enabled by default.
+
+commit 3be39951783fd6abc6f73af16f8867c174f6b000
+Author: Faruk D <f.diblen@esciencecenter.nl>
+Date:   Tue Feb 27 11:06:09 2018 +0100
+
+    upgrade the cmake version
+
+commit 872450ce3e20f50ff98c0aba6e42d87db25e9f5c
+Author: Faruk D <f.diblen@esciencecenter.nl>
+Date:   Tue Feb 27 11:04:04 2018 +0100
+
+    add wcslib info
+
+commit 05a007d619c304ee07b24a18cd42f1c009bb5f4d
+Author: Sarod Yatawatta <sarod@dop373.nfra.nl>
+Date:   Tue Feb 27 07:13:00 2018 +0100
+
+    more cppcheck fixes
+
+commit 790827e10416d7ec94ba9debd651e9450679178f
+Author: Sarod Yatawatta <sarod@dop373.nfra.nl>
+Date:   Tue Feb 27 06:57:15 2018 +0100
+
+    fix cppcheck warnings
+
+commit 6abb1de3dc9085c9ee1131cafa97bf4d37ad8a97
+Author: Sarod Yatawatta <sarod@dop373.nfra.nl>
+Date:   Tue Feb 27 06:48:36 2018 +0100
+
+    fix cppcheck warnings
+
+commit bfae096be4c6fdf39bf16ae6af91d7eb33629404
+Author: Sarod Yatawatta <sarod@dop373.nfra.nl>
+Date:   Tue Feb 27 06:40:34 2018 +0100
+
+    fix memory leak
+
+commit 70aecbf75a143d06d872554b826d4a0c769806d7
+Author: Sarod Yatawatta <sarod@dop373.nfra.nl>
+Date:   Tue Feb 27 06:38:47 2018 +0100
+
+    more cppcheck fix
+
+commit e891ccd77d0932b5e31d525fe9f8461fd74e0c38
+Author: Sarod Yatawatta <sarod@dop373.nfra.nl>
+Date:   Tue Feb 27 06:27:54 2018 +0100
+
+    fix cppcheck warning
+
+commit 9e6efce6fe997f8f02dfd1ad82578810683cb071
+Author: Faruk D <f.diblen@esciencecenter.nl>
+Date:   Mon Feb 26 18:14:58 2018 +0100
+
+    add option for openblas
+    -disable gfortranlibs
+    - update status info
+    - add submodules
+
+commit aac063ff625dcde8804c33237aa1aa4792e3c639
+Author: Faruk D <f.diblen@esciencecenter.nl>
+Date:   Mon Feb 26 18:13:24 2018 +0100
+
+    add cmake file to find openblas
+
+commit 156be9a87a292927afea2c0df2ddcc6fc7ee7d79
+Author: Faruk D <f.diblen@esciencecenter.nl>
+Date:   Mon Feb 26 18:12:59 2018 +0100
+
+    add sub cmake files
+
+commit 40252cd8cfc7959065d9cc70b4f2d8af61612880
+Merge: 1f139b2 e30be0b
+Author: Hanno Spreeuw <HannoSpreeuw@users.noreply.github.com>
+Date:   Mon Feb 26 16:12:07 2018 +0100
+
+    Merge pull request #21 from nlesc-dirac/sprint_readme
+    
+    Sprint readme
+
+commit e30be0b3568cdaef23f0f58a7e7cfa12a3290666
+Author: Hanno Spreeuw <h.spreeuw@esciencecenter.nl>
+Date:   Mon Feb 26 16:04:10 2018 +0100
+
+    Some extra spaces
+
+commit 0afd92f34a745887ae388071ee8cdcc4f4cc6b1c
+Author: Faruk D <f.diblen@esciencecenter.nl>
+Date:   Mon Feb 26 15:22:26 2018 +0100
+
+    added cmake master
+
+commit 37740d503ea42e8a5d7171ba95929d0af36324a2
+Author: Sarod Yatawatta <sarod@dop373.nfra.nl>
+Date:   Mon Feb 26 15:10:50 2018 +0100
+
+    change math to verbatim
+
+commit 4629ad55870ba45db3f366fa604f96c59f291283
+Author: Sarod Yatawatta <sarod@dop373.nfra.nl>
+Date:   Mon Feb 26 14:44:13 2018 +0100
+
+    better section headers
+
+commit de86243558cdc454ba511ae9d617a23edf0e4a73
+Author: Sarod Yatawatta <sarod@dop373.nfra.nl>
+Date:   Mon Feb 26 14:28:01 2018 +0100
+
+    more syntax
+
+commit 7317228fc575a57e760c90e7a9cacae5e2c3e22d
+Author: Sarod Yatawatta <sarod@dop373.nfra.nl>
+Date:   Mon Feb 26 14:19:04 2018 +0100
+
+    feature list update
+
+commit 2761fae0b3a71e54a60eaf5a1424d1d7017b5074
+Author: Hanno Spreeuw <h.spreeuw@esciencecenter.nl>
+Date:   Mon Feb 26 11:57:53 2018 +0100
+
+    Old layout is better
+
+commit d3a46d0906ba7bd051c216a0aa1cb7a7ea3fd16b
+Author: Hanno Spreeuw <h.spreeuw@esciencecenter.nl>
+Date:   Mon Feb 26 11:55:47 2018 +0100
+
+    Layout slightly better
+
+commit d5aeed715c7bb26ca5acd401383b13e67db224fe
+Author: Hanno Spreeuw <h.spreeuw@esciencecenter.nl>
+Date:   Mon Feb 26 11:51:56 2018 +0100
+
+    Added a list of Sagecal features
+
+commit 62bbf236a1aae84b8833e215fd89d66b47b41863
+Author: Faruk D <f.diblen@esciencecenter.nl>
+Date:   Mon Feb 26 11:19:41 2018 +0100
+
+    add intellij to gitignore
+
+commit 1f139b2c77f0a10abfdcd64a739f2d427fbf0989
+Merge: d0c9adf 3d98cf2
+Author: Hanno Spreeuw <HannoSpreeuw@users.noreply.github.com>
+Date:   Fri Feb 9 15:13:53 2018 +0100
+
+    Merge pull request #18 from nlesc-dirac/sarod
+    
+    Sarod
+
+commit 3d98cf2d8f1e673265502f126e60eaf5666c397c
+Author: Sarod Yatawatta <sarod@dop373.nfra.nl>
+Date:   Thu Feb 8 11:00:11 2018 +0100
+
+    moved function protos used by both Radio/Dirac to Common.h
+
+commit 2a76d353d3565bcbfbb79cdc04f5956152fc8a6b
+Author: Sarod Yatawatta <sarod@dop373.nfra.nl>
+Date:   Wed Feb 7 15:00:39 2018 +0100
+
+    update casacore
+
+commit a7fa23093210c1406290a1cf3b35ffed5aa2c440
+Author: Sarod Yatawatta <sarod@dop373.nfra.nl>
+Date:   Wed Feb 7 14:08:26 2018 +0100
+
+    more build fixes
+
+commit 281061e57a55a7c4169ea99350d73bd432b4dac8
+Author: Sarod Yatawatta <sarod@dop373.nfra.nl>
+Date:   Wed Feb 7 14:04:20 2018 +0100
+
+    added mdl.o to build
+
+commit 237a5f09a1b8b7ea5e070a2c38e9749b986a1178
+Author: Sarod Yatawatta <sarod@dop373.nfra.nl>
+Date:   Wed Feb 7 13:39:44 2018 +0100
+
+    disable obsolete diagnostic routine
+
+commit d6ee3966b943739d8831ee0ee2d3a7ada06b3a7f
+Author: Sarod Yatawatta <sarod@dop373.nfra.nl>
+Date:   Wed Feb 7 13:34:18 2018 +0100
+
+    fixed compile issues for both CPU/GPU versions
+
+commit a7464acc2d1886e9fd76eab9c9a56abb80b4eba7
+Author: Sarod Yatawatta <sarod@dop373.nfra.nl>
+Date:   Wed Feb 7 12:29:57 2018 +0100
+
+    include both headers
+
+commit c283e024aabaececd7c2ca476c49daaa214c114e
+Author: Sarod Yatawatta <sarod@dop373.nfra.nl>
+Date:   Wed Feb 7 12:28:55 2018 +0100
+
+    fixed headers so not to be included more than once
+
+commit 364e6174f16ecf8939c0c97b1070fd501aa362ea
+Author: Sarod Yatawatta <sarod@dop373.nfra.nl>
+Date:   Wed Feb 7 12:00:48 2018 +0100
+
+    add header Dirac.h
+
+commit c2c9460869efdc565dfac86c9f52c13cea5b7d8b
+Author: Sarod Yatawatta <sarod@dop373.nfra.nl>
+Date:   Wed Feb 7 12:00:25 2018 +0100
+
+    default compile options
+
+commit ba113410c9c584aa60669f405fb7b3f2c1f409f0
+Author: Sarod Yatawatta <sarod@dop373.nfra.nl>
+Date:   Wed Feb 7 11:35:14 2018 +0100
+
+    use absolute paths
+
+commit a8c04b5953bba8bba61979699236456866a36ba7
+Author: Sarod Yatawatta <sarod@dop373.nfra.nl>
+Date:   Wed Feb 7 11:33:24 2018 +0100
+
+    update sagecal-mpi code
+
+commit 295e6f9c4b1bed1b3211e78e28fb6670bab20239
+Author: Sarod Yatawatta <sarod@dop373.nfra.nl>
+Date:   Wed Feb 7 10:55:51 2018 +0100
+
+    update
+
+commit 3a95d1012bb556c36f523ae329dc5a18644b3e82
+Author: Sarod Yatawatta <sarod@dop373.nfra.nl>
+Date:   Wed Feb 7 10:41:03 2018 +0100
+
+    update
+
+commit c0c5424ccd8a8d772792185d1e43579518dfa363
+Author: Sarod Yatawatta <sarod@dop373.nfra.nl>
+Date:   Wed Feb 7 10:36:47 2018 +0100
+
+    update
+
+commit 610e7b731f06489f4f449ee8627753c3166eca5e
+Author: Sarod Yatawatta <sarod@dop373.nfra.nl>
+Date:   Wed Feb 7 10:30:13 2018 +0100
+
+    blocks=2*(..)/threads changed to blocks=(..)/threads
+
+commit 59475a759103760b48e71b9f361152d8ff28c9b0
+Author: Sarod Yatawatta <sarod@dop373.nfra.nl>
+Date:   Tue Feb 6 21:27:25 2018 +0100
+
+    update manifold average without randomization
+
+commit a96d481b8b23d885075a41c4ad269b56b618d9ab
+Author: Sarod Yatawatta <sarod@dop373.nfra.nl>
+Date:   Tue Feb 6 21:22:34 2018 +0100
+
+    original blocks=2*(..)/threads, reverting to blocks=(..)/threads
+
+commit 35749607912df1815e224b1749e099aefac2667d
+Author: Sarod Yatawatta <sarod@dop373.nfra.nl>
+Date:   Tue Feb 6 21:19:24 2018 +0100
+
+    updates to include mdl.c
+
+commit ce34d7c8577fdb4ad0443100d31a70a494c62fac
+Author: Sarod Yatawatta <sarod@dop373.nfra.nl>
+Date:   Tue Feb 6 21:10:37 2018 +0100
+
+    origial blocks=2*(..)/threads, reverting to blocks=(..)/threads
+
+commit 1c2cfa3f7bcc24d4d24270c06064d934974ff3d5
+Author: Sarod Yatawatta <sarod@dop373.nfra.nl>
+Date:   Tue Feb 6 21:08:03 2018 +0100
+
+    original blocks=2*(..)/threads reverting to blocks=(..)/threads
+
+commit 829b7ea072aecec1786ad68c33d93f45e26e05d2
+Author: Sarod Yatawatta <sarod@dop373.nfra.nl>
+Date:   Tue Feb 6 14:38:45 2018 +0100
+
+    more syntax
+
+commit d0c9adf8c01379daab510602a52ff0c5ab232a98
+Author: Sarod Yatawatta <sarod@dop373.nfra.nl>
+Date:   Tue Feb 6 13:52:54 2018 +0100
+
+    more formatting
+
+commit a7c4dfd519cf8d81af8cd7b1b83efaf4cab27c11
+Author: Sarod Yatawatta <sarod@dop373.nfra.nl>
+Date:   Tue Feb 6 13:41:55 2018 +0100
+
+    more updates
+
+commit 6d430cb1d16f0daf8001dbf2f48b3c054a391961
+Author: Sarod Yatawatta <sarod@dop373.nfra.nl>
+Date:   Tue Feb 6 13:41:00 2018 +0100
+
+    update
+
+commit 728b1470a4e266ca32caaee40b952a6b8f1651bb
+Author: Sarod Yatawatta <sarod@dop373.nfra.nl>
+Date:   Tue Feb 6 13:38:42 2018 +0100
+
+    clear docu sections
+
+commit 2d8ff507a81cc75c77ca4af8727d6cbe32c6bdcb
+Author: Sarod Yatawatta <sarod@dop373.nfra.nl>
+Date:   Tue Feb 6 13:31:53 2018 +0100
+
+    removed diagnostic routines that are not used anymore
+
+commit 6330095ca2988727431e13be13ccc38a3039fe3a
+Author: Sarod Yatawatta <sarod@dop373.nfra.nl>
+Date:   Tue Feb 6 12:28:54 2018 +0100
+
+    more fixes
+
+commit 9110379d6a3b432f3e854b0e853ae1901975bdfc
+Merge: 97f9b51 538abbe
+Author: Sarod Yatawatta <sarod@dop373.nfra.nl>
+Date:   Tue Feb 6 10:59:45 2018 +0100
+
+    Merge branch 'master' into sourceforge
+
+commit 97f9b51ba3e52126278a737f7fddd81f7f0662c6
+Author: Hanno Spreeuw <h.spreeuw@esciencecenter.nl>
+Date:   Wed Jan 31 16:00:40 2018 +0100
+
+    We do not need this symlink any longer
+
+commit e9be8d2090edf0e2155e9e902eb44e6f8fac78df
+Author: Hanno Spreeuw <h.spreeuw@esciencecenter.nl>
+Date:   Wed Jan 31 15:00:19 2018 +0100
+
+    Only removing object files seems more appropriate
+
+commit 538abbe6c1172c4205fd553ae7b9914dd0445f79
+Merge: ec9c174 33496b4
+Author: Hanno Spreeuw <h.spreeuw@esciencecenter.nl>
+Date:   Wed Jan 31 14:19:28 2018 +0100
+
+    Merge branch 'master' of github.com:nlesc-dirac/sagecal
+
+commit ec9c174211f436398afdb0f3b1292199f21acb96
+Author: Hanno Spreeuw <h.spreeuw@esciencecenter.nl>
+Date:   Wed Jan 31 14:18:55 2018 +0100
+
+    Cannot remember the motivation for this change
+
+commit e8f3fefec16799a27162de5d5ca44b8e5de5213c
+Author: Hanno Spreeuw <h.spreeuw@esciencecenter.nl>
+Date:   Mon Jan 22 17:12:01 2018 +0100
+
+    Make make clean not only remove the object files, but also the library.
+
+commit 3cc6bc600cba44bfb109753264f55c4f5184ed8f
+Author: Hanno Spreeuw <h.spreeuw@esciencecenter.nl>
+Date:   Mon Jan 22 17:07:58 2018 +0100
+
+    make clean seemed to look for some unnecessary files
+
+commit cb28b445aec81114a625e79c7299f54bb49178f4
+Author: Hanno Spreeuw <h.spreeuw@esciencecenter.nl>
+Date:   Mon Jan 22 17:02:47 2018 +0100
+
+    Copied the Makefiles from the master branch
+
+commit 6145b8013047b80241316f10dbd0d9925dec36d9
+Author: Hanno Spreeuw <h.spreeuw@esciencecenter.nl>
+Date:   Mon Jan 22 16:59:24 2018 +0100
+
+    sagecal.h no longer used
+
+commit cf1d0534d01bc04e687468a596888ff118d3f80a
+Author: Hanno Spreeuw <h.spreeuw@esciencecenter.nl>
+Date:   Mon Jan 22 16:35:25 2018 +0100
+
+    sagecal.h replaced by Radio.h, Dirac.h and Common.h
+
+commit 33496b49d9871d2c3e7a36e68a11e5d9914e3fd9
+Author: Hanno Spreeuw <h.spreeuw@esciencecenter.nl>
+Date:   Wed Jan 17 15:41:19 2018 +0100
+
+    Updated Makefiles to accommodate for openblas module change on fs5, thanks to Tammo Jan Dijkema
+
+commit 31e7de39c50d418ffce99f7d82ea10bdbf322e43
+Author: Hanno Spreeuw <h.spreeuw@esciencecenter.nl>
+Date:   Wed Jan 17 15:39:38 2018 +0100
+
+    Updated Makefiles to accommodate for openblas module change on fs5, thanks to Tammo Jan Dijkema
+
+commit 2cafbeff7e406aee5f9a6191a948ec8753279155
+Author: Hanno Spreeuw <h.spreeuw@esciencecenter.nl>
+Date:   Wed Jan 17 15:36:44 2018 +0100
+
+    Updated Makefiles to accommodate for openblas module change on fs5, thanks to Tammo Jan Dijkema
+
+commit ac577e84f1825591653af1246e4dc4d156af3f05
+Author: Hanno Spreeuw <h.spreeuw@esciencecenter.nl>
+Date:   Thu Jan 11 17:26:41 2018 +0100
+
+    Output of make will be libradio.a instead of libsagecal.a
+
+commit 3a0e9d023f1e46f3e1110a7e7a2f9eb9520f9386
+Author: Hanno Spreeuw <h.spreeuw@esciencecenter.nl>
+Date:   Thu Jan 11 17:07:25 2018 +0100
+
+    Seems that the Makefile.gpu for Radio was erroneously used in Dirac
+
+commit c39892da33eacfded6b9fffe4bfb612fbf1de8fe
+Author: Hanno Spreeuw <h.spreeuw@esciencecenter.nl>
+Date:   Thu Jan 11 17:06:18 2018 +0100
+
+    Added make clean option
+
+commit 8b747591ae72f1d22c87c7fa8a0b8f3635ec6f84
+Author: Hanno Spreeuw <h.spreeuw@esciencecenter.nl>
+Date:   Thu Jan 11 17:03:24 2018 +0100
+
+    Added option to make clean
+
+commit 077bc65763d1eae8598a99a1281fe2f500f69fe0
+Author: Hanno Spreeuw <h.spreeuw@esciencecenter.nl>
+Date:   Thu Jan 11 17:02:14 2018 +0100
+
+    Adjusted Radio.h to accommodate changes in sagecal.h between March and December 2017 on sourceforge
+
+commit 8ecaa4bd472e4172fc92d66f8a735092e0cd220d
+Author: Hanno Spreeuw <h.spreeuw@esciencecenter.nl>
+Date:   Thu Jan 11 17:01:14 2018 +0100
+
+    Adjusted Dirac.h to accommodate changes in sagecal.h between March and December 2017 on sourceforge
+
+commit 24ddfc048144b49e8256277cb562a6348dd4db11
+Author: Hanno Spreeuw <h.spreeuw@esciencecenter.nl>
+Date:   Thu Jan 11 16:59:54 2018 +0100
+
+    Adjusted Common.h to accommodate changes in sagecal.h between March and December 2017 on sourceforge
+
+commit 556a00e7c2141a56d244c2030e8b7c9714d13b70
+Author: Hanno Spreeuw <h.spreeuw@esciencecenter.nl>
+Date:   Thu Jan 11 16:56:31 2018 +0100
+
+    Inserting sources for a sky model near the NCP instead of near 3C196, which is more appropriate for the particular MS we are loading for profiling purposes
+
+commit a652935351b5acf7a12c3bc2ce07a768086c8173
+Author: Hanno Spreeuw <h.spreeuw@esciencecenter.nl>
+Date:   Thu Jan 11 16:51:10 2018 +0100
+
+    module load openblas no longer possible on fs5. Adjusted Makefile to try to fix this. Tammo Jan Dijkema may also have fixed albeit in a different manner, see his email from January 9th, 2018.
+
+commit de385db778c0a510737f004cd33e803f66eb5546
+Author: Hanno Spreeuw <h.spreeuw@esciencecenter.nl>
+Date:   Thu Jan 11 16:45:48 2018 +0100
+
+    Switched to Python 3
+
+commit 233b8d52ab5e7725ce7c75eb6df0d2f9d6224165
+Merge: c41055d b9f164b
+Author: Hanno Spreeuw <HannoSpreeuw@users.noreply.github.com>
+Date:   Thu Jan 11 11:56:38 2018 +0100
+
+    Merge pull request #16 from tammojan/fixtesttypes
+    
+    Fix types of spectral index, RM and extent in test
+
+commit b9f164b93c43340682adc3d1bdab02c9b7ab64e9
+Author: Tammo Jan Dijkema <T.J.Dijkema@gmail.com>
+Date:   Wed Jan 10 13:28:35 2018 +0100
+
+    Fix types of spectral index, RM and extent in test
+
+commit 3e842bae739d417c3843722161dd57e5e90814dc
+Author: Hanno Spreeuw <h.spreeuw@esciencecenter.nl>
+Date:   Fri Dec 22 17:18:55 2017 +0100
+
+    Source files were distributed among Dirac and Radio. Makefiles, Radio.h, Common.h and dirac.h from were copied from cleancode branch. The sagecal.h string was replaced by either Radio.h or Dirac.h in the source files. #define SIMUL_ONLY 1, #define SIMUL_ADD 2 and #define SIMUL_SUB 3 were added to Common.h. The three header files should be also include other updates from sagecal.h. In the end, the top level lib directory should contain no files.
+
+commit 9185df3d4cf88b3cc61486f1d8d85abd51b60c24
+Author: Hanno Spreeuw <h.spreeuw@esciencecenter.nl>
+Date:   Fri Dec 22 17:02:39 2017 +0100
+
+    We don't need CUDAINC, so I removed it
+
+commit 01c3dabc259e8fc88bc59d8a9f6ec87659c733fc
+Author: Hanno Spreeuw <h.spreeuw@esciencecenter.nl>
+Date:   Wed Dec 20 17:13:29 2017 +0100
+
+    Makefiles adjusted to enable builds on DAS5
+
+commit c41055dc1d178884a020ff1e4377619fba4a41ae
+Merge: ab2b1d6 b5dab6c
+Author: Hanno Spreeuw <HannoSpreeuw@users.noreply.github.com>
+Date:   Thu Dec 7 09:44:47 2017 +0100
+
+    Merge pull request #15 from nlesc-dirac/cleancode
+    
+    Cleancode
+
+commit b5dab6c1c9d2bcd78047185c1181a8b457eecb3b
+Merge: ba4025a ab2b1d6
+Author: Hanno Spreeuw <HannoSpreeuw@users.noreply.github.com>
+Date:   Thu Dec 7 09:42:55 2017 +0100
+
+    Merge branch 'master' into cleancode
+
+commit 4a9ec04c3a23e1a93fe25dba8614f060815a2f93
+Author: Sarod Yatawatta <sarod@dop373.nfra.nl>
+Date:   Tue Nov 28 08:57:23 2017 +0100
+
+    added info on -E option
+
+commit 545588bcc09ebad7e6f00fc176bc2960120ddc1e
+Author: Sarod Yatawatta <sarod@dop373.nfra.nl>
+Date:   Mon Nov 27 20:30:39 2017 +0100
+
+    bug fix
+
+commit 15ec822ec435f8e8bb18d4d6113cbc48fee4bab8
+Author: Sarod Yatawatta <sarod@dop373.nfra.nl>
+Date:   Tue Nov 21 21:48:28 2017 +0100
+
+    bug fix
+
+commit b24279190c42636f4176314fdde165d7f327232d
+Author: Sarod Yatawatta <sarod@dop373.nfra.nl>
+Date:   Tue Nov 21 16:19:50 2017 +0100
+
+    added correction of residual data using GPU
+
+commit 028ac53347d133e7b41af50701a0518ec448e719
+Author: Sarod Yatawatta <sarod@dop373.nfra.nl>
+Date:   Mon Nov 20 12:36:17 2017 +0100
+
+    added model prediction and residual calculation using GPU
+
+commit ab2b1d66f8514e5e618511a2ca3aef23e26a6263
+Author: Faruk D <fdiblen@users.noreply.github.com>
+Date:   Thu Nov 16 16:13:07 2017 +0100
+
+    Update INSTALL.md
+
+commit 24abfc6b6c84c7541390d35b9a1a6cc3ff2ecf93
+Author: Faruk D <fdiblen@users.noreply.github.com>
+Date:   Thu Nov 16 16:10:57 2017 +0100
+
+    Update and rename INSTALL to INSTALL.md
+
+commit a98d6893f73f34fc98aa9703ceb3593730336eec
+Author: Faruk D <fdiblen@users.noreply.github.com>
+Date:   Thu Nov 16 16:10:31 2017 +0100
+
+    Update README.md
+
+commit 79f3b46651cd8f8bba23fae75b2dbe7bb6ef1e83
+Author: Faruk D <fdiblen@users.noreply.github.com>
+Date:   Thu Nov 16 16:10:10 2017 +0100
+
+    Update README.md
+
+commit affc6697b36f3d67f73f90dd6deab2b14ceaf395
+Author: Faruk D <fdiblen@users.noreply.github.com>
+Date:   Thu Nov 16 16:09:19 2017 +0100
+
+    Update and rename README to README.md
+
+commit e07a26b63fec8bef19957d07b6e0a5371fd78a50
+Author: Sarod Yatawatta <sarod@dop373.nfra.nl>
+Date:   Mon Nov 13 10:44:55 2017 +0100
+
+    added option to use GPU for model prediction
+
+commit 7425698526373fb0fd72916d6d877293f21d556b
+Author: Sarod Yatawatta <sarod@dop373.nfra.nl>
+Date:   Mon Nov 13 10:43:02 2017 +0100
+
+    added option to use GPU for simulations
+
+commit 05f47ee4cb3f8f47481f74342fd520a7dc671259
+Author: Sarod Yatawatta <sarod@dop373.nfra.nl>
+Date:   Mon Nov 13 10:41:23 2017 +0100
+
+    updated simulation options
+
+commit 759f92537d35a400d9aec826aa195ab06ec2c075
+Author: Sarod Yatawatta <sarod@dop373.nfra.nl>
+Date:   Mon Nov 13 10:40:53 2017 +0100
+
+    prediction with improved kernels
+
+commit 2150c4d12b5e38f2465e828727637555a4b6c436
+Author: Sarod Yatawatta <sarod@dop373.nfra.nl>
+Date:   Mon Nov 13 10:39:40 2017 +0100
+
+    Improved kernel (coherencies) from Hanno Spreeuw and Ben van Werkhoven as part of NLeSC DIRAC project, removed dynamic parallelism, added double precision
+
+commit ba4025a8472c642d24a537c90b5ae60476c48ad8
+Author: Hanno Spreeuw <h.spreeuw@esciencecenter.nl>
+Date:   Fri Nov 3 16:57:53 2017 +0100
+
+    Minor adjustment
+
+commit 6faf72beb3d117489a0f2acac0a5811c583257ad
+Author: Hanno Spreeuw <h.spreeuw@esciencecenter.nl>
+Date:   Fri Nov 3 16:55:48 2017 +0100
+
+    Makefile updated to match casacore update
+
+commit 4fa8cffcddd280654b1a6e97cfe21917bc5f404f
+Author: Sarod Yatawatta <sarod@dop373.nfra.nl>
+Date:   Fri Nov 3 15:20:41 2017 +0100
+
+    clarified various simulation options
+
+commit 0f20a965b0d7e0a9f84989455ae5479377562c12
+Author: Sarod Yatawatta <sarod@dop373.nfra.nl>
+Date:   Fri Nov 3 15:20:11 2017 +0100
+
+    make it work with/without beam
+
+commit 7c56e18b0056961d75ec5aeacf98d14620ccc133
+Author: Sarod Yatawatta <sarod@dop373.nfra.nl>
+Date:   Fri Nov 3 15:18:53 2017 +0100
+
+    Improved kernel (array_beam) from Hanno Spreeuw and Ben van Werkhoven as part of NLeSC DIRAC project, removed dynamic parallelism, 2D thread blocks
+
+commit 1e2c24b31ada7e46d65b9f8b6e98c48e4845c724
+Author: Hanno Spreeuw <h.spreeuw@esciencecenter.nl>
+Date:   Fri Nov 3 14:27:07 2017 +0100
+
+    Header file and Solvers folder redundant as well
+
+commit d6b518116edadd9870ad9138047b7d1a92b47bde
+Author: Hanno Spreeuw <h.spreeuw@esciencecenter.nl>
+Date:   Fri Nov 3 14:24:06 2017 +0100
+
+    These source and Makefiles are redundant, since they are present in the Dirac and Radio subdirectories, albeit somewhat altered.
+
+commit 6244d393c67a78e1b4c70b3b0be68aa73cc19f94
+Author: Sarod Yatawatta <sarod@dop373.nfra.nl>
+Date:   Tue Oct 31 10:41:02 2017 +0100
+
+    clarify -T and -K options
+
+commit 402efc6f17d81628a12a4ccf2fcc0a7bd9ed0efd
+Author: Hanno Spreeuw <h.spreeuw@esciencecenter.nl>
+Date:   Fri Oct 20 15:45:48 2017 +0200
+
+    You can now insert sources at random positions within some angle from 3C196
+
+commit fd32097a60f8b7993d29925114bd89ed109096b8
+Author: Hanno Spreeuw <h.spreeuw@esciencecenter.nl>
+Date:   Wed Oct 18 17:09:37 2017 +0200
+
+    Now possible to position sources within a certain patch of the sky
+
+commit 221b4c3ddd017f855e4cc5db8a7adcd8b0478cb6
+Author: Hanno Spreeuw <h.spreeuw@esciencecenter.nl>
+Date:   Mon Oct 16 16:50:16 2017 +0200
+
+    All input to kernel_array_beam and its output now correctly written to files
+
+commit f8cb7481722cf8c10e93873bc02e9cf0ffcab310
+Author: Sarod Yatawatta <sarod@dop373.nfra.nl>
+Date:   Tue Sep 26 13:21:21 2017 +0200
+
+    correct order of saving Z
+
+commit d1d4d78e4db89c8d02a31963bdf844ea879bd9a2
+Author: Sarod Yatawatta <sarod@dop373.nfra.nl>
+Date:   Tue Sep 12 13:59:23 2017 +0200
+
+    added parsing with missing bmaj/bmin/bpa/freq0
+
+commit dd6284e1363206dc741423a496bc9560f3f5c0db
+Author: Hanno Spreeuw <h.spreeuw@esciencecenter.nl>
+Date:   Thu Sep 7 14:25:04 2017 +0200
+
+    Modifications in order to make a calltree for the CPU version of Sagecal
+
+commit 50e247ff19d0270d6ead109598747a6c1d443ddd
+Author: Hanno Spreeuw <h.spreeuw@esciencecenter.nl>
+Date:   Wed Sep 6 13:49:29 2017 +0200
+
+    Modified Makefiles to match casacore updates on fs5. The input to kernel_array_beam is written to files more completely and correctly.
+
+commit 5b42e561c2c53e05f3815956cdc9d10af3b9952b
+Author: Sarod Yatawatta <sarod@dop373.nfra.nl>
+Date:   Mon Sep 4 16:57:08 2017 +0200
+
+    bug fix
+
+commit 1bdc7f835415ae2be0f2340f76f8903f769d3d14
+Author: Hanno Spreeuw <h.spreeuw@esciencecenter.nl>
+Date:   Fri Aug 25 14:53:50 2017 +0200
+
+    Nelem now written to file correctly
+
+commit 426ea767be0633849bc706f141e1fa73ed82593f
+Author: Hanno Spreeuw <h.spreeuw@esciencecenter.nl>
+Date:   Thu Aug 24 14:20:31 2017 +0200
+
+    xxd, yyd and zzd should now be written to file correctly, albeit as doubles instead of floats, through t->xx[j], t->yy[j] and t->zz[j], respectively.
+
+commit 5179079343e6c73086531acce4501473b7b3bc77
+Author: Sarod Yatawatta <sarod@dop373.nfra.nl>
+Date:   Wed Aug 16 15:28:24 2017 +0200
+
+    and '/'
+
+commit 741dc78d57395866df2e3e47b1923cb5e4a8b1bf
+Author: Sarod Yatawatta <sarod@dop373.nfra.nl>
+Date:   Wed Aug 16 13:17:01 2017 +0200
+
+    handle source names with a '-' in them
+
+commit 87d9f47f6e1be295b354dd83e37b50a633685981
+Author: Sarod Yatawatta <sarod@dop373.nfra.nl>
+Date:   Wed Aug 16 12:32:05 2017 +0200
+
+    update
+
+commit f24343416a0dade1b0f1445c0526da0c55b3a14b
+Author: Hanno Spreeuw <h.spreeuw@esciencecenter.nl>
+Date:   Fri Aug 11 17:29:51 2017 +0200
+
+    Corrections wrt writing input for kernel_array_beam to file
+
+commit c417e7fe27b2603ae48bade7d9263b95bffd16bd
+Author: Hanno Spreeuw <h.spreeuw@esciencecenter.nl>
+Date:   Mon Jul 31 11:01:11 2017 +0200
+
+    Input to and output from cudakernel_array_beam written to files
+
+commit eb9769d462d1edbcadae96ead8487e34f1ab0aa1
+Author: Sarod Yatawatta <sarod@dop373.nfra.nl>
+Date:   Mon Jul 10 11:52:15 2017 +0200
+
+    Major update: multiplexing ADMM, adaptive rho
+
+commit a7108dc0256df4e3f10de709c1f9678a4dab7a31
+Author: Hanno Spreeuw <h.spreeuw@esciencecenter.nl>
+Date:   Wed Jun 21 16:19:52 2017 +0200
+
+    Major cleanup - in particular of files that should not be tracked, i.e. should not be included in the repo.
+
+commit 1e7d1883a3375694c0d75e4c813d1c2f706dc17b
+Author: Hanno Spreeuw <h.spreeuw@esciencecenter.nl>
+Date:   Thu Jun 1 13:24:59 2017 +0200
+
+    Now also extended sources are generated
+
+commit 653fa48e15e05325db258cab3a9e9e522478f297
+Merge: 8d25cfa 2792b81
+Author: Hanno Spreeuw <HannoSpreeuw@users.noreply.github.com>
+Date:   Fri May 12 14:53:14 2017 +0200
+
+    Merge pull request #1 from nlesc-dirac/Sagecal-without-astronomy
+    
+    Sagecal without astronomy
+
+commit 2792b81fe47c374871744979acc6026e60b83443
+Author: Hanno Spreeuw <h.spreeuw@esciencecenter.nl>
+Date:   Fri May 12 14:16:06 2017 +0200
+
+    Python (what else?) script to generate large sky models - and its cluster files - for adequate profiling
+
+commit d96359d476a410d6285f82322a4cf79ce7acf791
+Author: Hanno Spreeuw <h.spreeuw@esciencecenter.nl>
+Date:   Fri May 12 13:42:05 2017 +0200
+
+    Replaced Solvers by Dirac, as requested by Sarod. This effectively reverses the previous commit.
+
+commit b906365a6abcd4008fdb53fa21c98a31e6222dc8
+Author: Hanno Spreeuw <h.spreeuw@esciencecenter.nl>
+Date:   Mon May 1 14:11:26 2017 +0200
+
+    Replaced Dirac by Solvers, which is a more descriptive name
+
+commit 455492109f9ba34609b99682d655f8048948b360
+Author: Hanno Spreeuw <h.spreeuw@esciencecenter.nl>
+Date:   Mon May 1 12:54:07 2017 +0200
+
+    Solvers is a more descriptive  name for the contents of this directory than Dirac
+
+commit ba9d984fd6acedaaba2ad8068ed9647fe1dd8e93
+Author: Hanno Spreeuw <h.spreeuw@esciencecenter.nl>
+Date:   Wed Apr 12 14:56:27 2017 +0200
+
+    All astronomy related function calls were removed, leaving only the optimalizations.
+
+commit b8656b068259e6ce33eaa5636819f3701832cbe5
+Author: Sarod Yatawatta <sarod@dop373.nfra.nl>
+Date:   Thu Mar 23 17:37:50 2017 +0100
+
+    remove obsolete ONE_GPU
+
+commit 8d25cfaa91a35d84c297a1f72db3d76299a6a0c4
+Author: Hanno Spreeuw <h.spreeuw@esciencecenter.nl>
+Date:   Fri Mar 3 11:19:07 2017 +0100
+
+    Edited Makefiles such that sagecal will build on DAS5@ASTRON
+
+commit ef8240bfe96923c8a1c6bb233886a68163c3f6f3
+Author: Sarod Yatawatta <sarod@dop373.nfra.nl>
+Date:   Wed Mar 1 17:58:27 2017 +0100
+
+    added missing file
+
+commit c6da7f1549e28aa161f2f1410aaeb551edf94c01
+Author: Sarod Yatawatta <sarod@dop373.nfra.nl>
+Date:   Mon Feb 27 11:46:40 2017 +0100
+
+    added casacore lib to linker path
+
+commit b9d1a8610ee7456a78c57144e900d3c1a01a49fa
+Author: Sarod Yatawatta <sarod@dop373.nfra.nl>
+Date:   Mon Jan 30 18:24:33 2017 +0100
+
+    comments
+
+commit 1ca7cc60bc4d05ed5f22551182f04dacba66dd64
+Author: Sarod Yatawatta <sarod@dop373.nfra.nl>
+Date:   Mon Jan 30 18:22:43 2017 +0100
+
+    added a small test dataset
+
+commit de0e30128aaf07e819d1749bb9850d9c29764f47
+Author: Sarod Yatawatta <sarod@dop373.nfra.nl>
+Date:   Sat Dec 3 00:12:35 2016 +0100
+
+    major update: 1) CUSOLVER/NVML support, 2) LOFAR Beam model
+
+commit dadfb7abf0299afccab0130056cd0ffd02254ff1
+Author: Sarod Yatawatta <sarod@dop373.nfra.nl>
+Date:   Tue Nov 29 16:42:52 2016 +0100
+
+    info on ATeam subtraction
+
+commit 79b4528f2f9384f4f4995ecdfe6fdd9e14d2c0b9
+Author: Sarod Yatawatta <sarod@dop373.nfra.nl>
+Date:   Fri Oct 21 12:16:09 2016 +0200
+
+    fix parse errors
+
+commit 9aeb1a4426ebb7814cad2376f37aad8a4d944211
+Author: Sarod Yatawatta <sarod@dop373.nfra.nl>
+Date:   Mon Oct 17 13:33:37 2016 +0200
+
+    added info on solution format
+
+commit ca26f7739c86b5c2013b0b7780e3382123d2af12
+Author: Sarod Yatawatta <sarod@dop373.nfra.nl>
+Date:   Tue Oct 4 23:39:21 2016 +0200
+
+    added script to create cluster file from sky model
+
+commit 6bf6221b68ffbb15fa8dd4c4a8bd517c1682c93a
+Author: Sarod Yatawatta <sarod@dop373.nfra.nl>
+Date:   Fri Dec 18 11:07:25 2015 +0100
+
+    explanation about PA
+
+commit d142bd896751ef13946d8a8d5f7d6266a1ac8e24
+Author: Sarod Yatawatta <sarod@dop373.nfra.nl>
+Date:   Mon Dec 14 10:55:56 2015 +0100
+
+    PA explanation
+
+commit 601386ba607103ce84fabe05922f83dc166b488a
+Author: Sarod Yatawatta <sarod@dop373.nfra.nl>
+Date:   Sat Dec 12 14:27:29 2015 +0100
+
+    update
+
+commit 17b58b2a5060b39f3c44478490dabd68fa095079
+Author: Sarod Yatawatta <sarod@dop373.nfra.nl>
+Date:   Sat Dec 12 14:22:47 2015 +0100
+
+    bug fix
+
+commit f951adfa786f80fe5a058b8268f100e1f066480a
+Author: Sarod Yatawatta <sarod@nirvana>
+Date:   Wed Nov 4 21:15:35 2015 +0100
+
+    update casacore include path
+
+commit fac0e824b2f4b7c1d33906b94a137f1e3c17c2cc
+Author: Sarod Yatawatta <sarod@nirvana>
+Date:   Tue Oct 13 11:41:40 2015 +0200
+
+    bug fix
+
+commit b86f57a0f28d54209157eb65b4c855a0559866ba
+Author: Sarod Yatawatta <sarod@nirvana>
+Date:   Thu Aug 20 13:53:14 2015 +0200
+
+    src location
+
+commit fb1feb9ae4c343392a90afc7a34ec864e1e8d05a
+Author: Sarod Yatawatta <sarod@nirvana>
+Date:   Thu Aug 20 13:51:34 2015 +0200
+
+    updated docu
+
+commit 5053fd199332c3292d24fb77836e25af5cc40a7f
+Author: Sarod Yatawatta <sarod@nirvana>
+Date:   Wed Aug 19 19:22:20 2015 +0200
+
+    remove obsolete comment
+
+commit 4f971a5cdd549153ea126c836634f4b3b3509a6c
+Author: Sarod Yatawatta <sarod@nirvana>
+Date:   Wed Aug 19 19:20:08 2015 +0200
+
+    update to 0.3.8
+
+commit b167c818547c2fac9d86dc7efc41fef65616b8cd
+Author: Sarod Yatawatta <sarod@nirvana>
+Date:   Wed Jun 17 15:47:50 2015 +0200
+
+    properly handle multichannel MS
+
+commit e1e3ed0c1b55906e8dd43b66e424959d810a0667
+Author: Sarod Yatawatta <sarod@nirvana>
+Date:   Wed Jun 17 15:40:01 2015 +0200
+
+    move constant out of loop
+
+commit 0248f39a517b6bcc83ed9ec2e3c9edb9f6a069b2
+Author: Sarod Yatawatta <sarod@nirvana>
+Date:   Wed May 13 10:52:44 2015 +0200
+
+    add more headers
+
+commit 6038c8116720db4d9cfbe8304700870b9ebc99a0
+Author: Sarod Yatawatta <sarod@nirvana>
+Date:   Wed May 13 10:51:24 2015 +0200
+
+    handle flags properly
+
+commit 46a2e4536d25a3970c5e5c5096963cbeae62e124
+Author: Sarod Yatawatta <sarod@nirvana>
+Date:   Tue Apr 28 15:43:54 2015 +0200
+
+    Better to link with static libs of openblas
+
+commit 9d28ec9b24a861967dcaeb475abdfc7bab3a755e
+Author: Sarod Yatawatta <sarod@nirvana>
+Date:   Wed Apr 15 15:31:41 2015 +0200
+
+    modified initial TR heurisitic
+
+commit 49b21f62f9168f19dd4c3da31983ed45a913cac7
+Author: Sarod Yatawatta <sarod@nirvana>
+Date:   Tue Mar 31 17:53:05 2015 +0200
+
+    bug fix
+
+commit 741a38eae1b7899754193ae4f08db459a5a974bd
+Author: Sarod Yatawatta <sarod@nirvana>
+Date:   Thu Mar 5 14:14:01 2015 +0100
+
+    handle -ve sources
+
+commit ce633cd4990400e22c4bdc4f886ae4910a3a2ec2
+Author: Sarod Yatawatta <sarod@nirvana>
+Date:   Wed Mar 4 10:53:26 2015 +0100
+
+    spectra correction
+
+commit 0ef03ca1a0c15408d93b079772e63770883498a9
+Author: Sarod Yatawatta <sarod@nirvana>
+Date:   Fri Feb 13 03:45:13 2015 +0100
+
+    include glib
+
+commit 01f43c75f2488b163cbb2b0c7adfac4554c21705
+Author: Sarod Yatawatta <sarod@nirvana>
+Date:   Thu Feb 5 22:29:44 2015 +0100
+
+    refine options
+
+commit 7ccec68eb66f00c38ab15b5187c3c81a8b2a56e8
+Author: Sarod Yatawatta <sarod@nirvana>
+Date:   Thu Feb 5 22:18:10 2015 +0100
+
+    more explanations
+
+commit cca3155c546b33081b66aa8d895e960bd1f4a3f5
+Author: Sarod Yatawatta <sarod@nirvana>
+Date:   Thu Feb 5 17:01:14 2015 +0100
+
+    sagecal-mpi info
+
+commit 85fe4a2891e06198065c68a94728039b9e4b3b3d
+Author: Sarod Yatawatta <sarod@nirvana>
+Date:   Thu Feb 5 16:57:28 2015 +0100
+
+    Major update, added MPI support (distributed calib)
+
+commit b52c16a4fc6d0f43e0215135b7d557229c1b291d
+Author: Sarod Yatawatta <sarod@nirvana>
+Date:   Wed Aug 6 11:05:04 2014 +0200
+
+    update spectral index info
+
+commit 885ba80113218ef1d315956c6b0ceae18040e0f3
+Author: Sarod Yatawatta <sarod@nirvana>
+Date:   Wed Jan 8 06:55:06 2014 +0100
+
+    fix errors
+
+commit 4812b51f8da3ab330a7be40b18a5c1329233dda9
+Author: Sarod Yatawatta <sarod@nirvana>
+Date:   Mon Jan 6 23:11:53 2014 +0100
+
+    update info
+
+commit 881de9946c694c164f8b7667bc3ee6e2ef6106f0
+Author: Sarod Yatawatta <sarod@nirvana>
+Date:   Mon Jan 6 23:07:07 2014 +0100
+
+    Initial commit
 Thu Feb  5 16:54:42 CET 2015
 - Updated SAGECAL
 - Added distributed SAGECAL (using MPI)

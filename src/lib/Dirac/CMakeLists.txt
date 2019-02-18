@@ -4,7 +4,7 @@ message (STATUS "\n\n\nConfiguring lib/Dirac")
 # Common objects
 set (objects
     admm_solve
-    clmfit_nocuda
+    clmfit
     manifold_average
     mdl
     myblas
@@ -20,12 +20,12 @@ if(ENABLE_CUDA)
 
 # objects only for gpu version
     set (extra_objects
-        lmfit
+        lmfit_cuda
         barrier
-        clmfit
+        clmfit_cuda
         clmfit_fl
         consensus_poly
-        lbfgs
+        lbfgs_cuda
         load_balance
         manifold_fl
         mderiv
@@ -35,7 +35,7 @@ if(ENABLE_CUDA)
         robust_fl
         rtr_solve_cuda
         rtr_solve_robust_cuda
-        rtr_solve_robust_cuda_admm
+        rtr_solve_robust_admm_cuda
     )
     set(objects ${objects} ${extra_objects})
 
@@ -46,10 +46,11 @@ else()
 
 # objects only for cpu version
     set (extra_objects
-        lmfit_nocuda
+        lmfit
         consensus_poly
-        lbfgs_nocuda
-        robust_lbfgs_nocuda
+        lbfgs
+        robust_lbfgs
+        robust_batchmode_lbfgs
         rtr_solve
         rtr_solve_robust
     )
@@ -62,6 +63,11 @@ message (STATUS "lib/Dirac objects --> ${objects}")
 include_directories(./)
 foreach (object ${objects})
     add_library(${object} SHARED ${object}.c)
+    SET_TARGET_PROPERTIES(${object} PROPERTIES SOVERSION 0.0)
 endforeach (object)
 
 add_library(dirac ${objects} Dirac.h)
+SET_TARGET_PROPERTIES(dirac PROPERTIES SOVERSION 0.0)
+
+## disable install of lib* files
+##install(TARGETS ${objects} dirac DESTINATION lib)

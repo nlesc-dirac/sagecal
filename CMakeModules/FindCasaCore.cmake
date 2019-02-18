@@ -71,7 +71,15 @@
 # directly fed to the linker.
 #
 #   Usage: casacore_resolve_dependencies(result components...)
-#
+
+
+if (NOT "$ENV{CASACORE_ROOT_DIR}" STREQUAL "")
+set(CASACORE_ROOT_DIR "$ENV{CASACORE_ROOT_DIR}" CACHE INTERNAL "Got from environment variable")
+endif()
+
+
+
+
 macro(casacore_resolve_dependencies _result)
   set(${_result} ${ARGN})
   set(_index 0)
@@ -208,7 +216,7 @@ else(NOT CASACORE_INCLUDE_DIR)
   foreach(_comp ${_find_components})
     casacore_find_library(casa_${_comp})
     if(${_comp} STREQUAL casa)
-      casacore_find_package(HDF5)
+      # casacore_find_package(HDF5)
       casacore_find_library(m)
       list(APPEND CASACORE_LIBRARIES ${CMAKE_DL_LIBS})
     elseif(${_comp} STREQUAL coordinates)
