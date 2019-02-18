@@ -1,16 +1,16 @@
 /*
  *
- Copyright (C) 2006-2008 Sarod Yatawatta <sarod@users.sf.net>  
+ Copyright (C) 2006-2008 Sarod Yatawatta <sarod@users.sf.net>
  This program is free software; you can redistribute it and/or modify
  it under the terms of the GNU General Public License as published by
  the Free Software Foundation; either version 2 of the License, or
  (at your option) any later version.
- 
+
  This program is distributed in the hope that it will be useful,
  but WITHOUT ANY WARRANTY; without even the implied warranty of
  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  GNU General Public License for more details.
- 
+
  You should have received a copy of the GNU General Public License
  along with this program; if not, write to the Free Software
  Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
@@ -19,14 +19,14 @@
 
 #include "data.h"
 #include <fstream>
-#include <vector> 
+#include <vector>
 #include <stdio.h>
 #include <string.h>
 #include <pthread.h>
 #include <casacore/casa/Quanta/Quantum.h>
 
-#include <Radio.h>
-#include <Dirac.h>
+#include "Radio.h"
+#include "Dirac.h"
 
 #ifndef LMCUT
 #define LMCUT 40
@@ -38,7 +38,7 @@ using namespace Data;
 
 void
 print_copyright(void) {
-  cout<<"SAGECal 0.5.1 (C) 2011-2018 Sarod Yatawatta"<<endl;
+  cout<<"SAGECal 0.6.1 (C) 2011-2019 Sarod Yatawatta"<<endl;
 }
 
 
@@ -89,7 +89,7 @@ print_help(void) {
 
 }
 
-void 
+void
 ParseCmdLine(int ac, char **av) {
     print_copyright();
     char c;
@@ -157,34 +157,34 @@ ParseCmdLine(int ac, char **av) {
             case 't':
                 TileSize = atoi(optarg);
                 break;
-            case 'I': 
+            case 'I':
                 DataField = optarg;
                 break;
-            case 'O': 
+            case 'O':
                 OutField = optarg;
                 break;
-            case 'n': 
+            case 'n':
                 Nt= atoi(optarg);
                 break;
-            case 'k': 
+            case 'k':
                 ccid= atoi(optarg);
                 break;
-            case 'o': 
+            case 'o':
                 rho= atof(optarg);
                 break;
-            case 'L': 
+            case 'L':
                 nulow= atof(optarg);
                 break;
-            case 'H': 
+            case 'H':
                 nuhigh= atof(optarg);
                 break;
-            case 'R': 
+            case 'R':
                 randomize= atoi(optarg);
                 break;
-            case 'W': 
+            case 'W':
                 whiten= atoi(optarg);
                 break;
-            case 'J': 
+            case 'J':
                 phaseOnly= atoi(optarg);
                 break;
 #ifdef HAVE_CUDA
@@ -192,10 +192,10 @@ ParseCmdLine(int ac, char **av) {
                 heapsize= atoi(optarg);
                 break;
 #endif
-            case 'x': 
+            case 'x':
                 Data::min_uvcut= atof(optarg);
                 break;
-            case 'y': 
+            case 'y':
                 Data::max_uvcut= atof(optarg);
                 break;
             case 'z':
@@ -205,7 +205,7 @@ ParseCmdLine(int ac, char **av) {
                 DoDiag= atoi(optarg);
                 if (DoDiag<0) { DoDiag=0; }
                 break;
-            case 'h': 
+            case 'h':
                 print_help();
                 exit(1);
             default:
@@ -235,7 +235,7 @@ ParseCmdLine(int ac, char **av) {
     }
 }
 
-int 
+int
 main(int argc, char **argv) {
     ParseCmdLine(argc, argv);
 
@@ -269,7 +269,7 @@ main(int argc, char **argv) {
 
     openblas_set_num_threads(1);//Data::Nt;
     /**********************************************************/
-     int M,Mt,ci,cj,ck;  
+     int M,Mt,ci,cj,ck;
    /* parameters */
    double *p,*pinit,*pfreq;
    double **pm;
@@ -293,7 +293,7 @@ main(int argc, char **argv) {
        do {
         chr = fgetc(sfp);
        } while (chr != '\n');
-      } 
+      }
      }
     }
 
@@ -331,7 +331,7 @@ main(int argc, char **argv) {
      fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
      exit(1);
   }
-   /* if simulation mode, solution file is given check if ignore file 
+   /* if simulation mode, solution file is given check if ignore file
       is also given */
   int *ignorelist=0;
   if (Data::DoSim && solfile) {
@@ -400,7 +400,7 @@ main(int argc, char **argv) {
        do {
         chr = fgetc(sfq);
        } while (chr != '\n');
-      } 
+      }
      printf("Initializing solutions from %s\n",initsolfile);
      read_solutions(sfq,p,carr,iodata.N,M);
      fclose(sfq);
@@ -427,7 +427,7 @@ main(int argc, char **argv) {
 
 
 
-    double res_0,res_1,res_00,res_01;   
+    double res_0,res_1,res_00,res_01;
    /* previous residual */
    double res_prev=CLM_DBL_MAX;
    double res_ratio=5; /* how much can the residual increase before resetting solutions */
@@ -442,13 +442,13 @@ main(int argc, char **argv) {
     vector<MSIter*> msitr;
     vector<MeasurementSet*> msvector;
     if (Data::TableName) {
-      MeasurementSet *ms=new MeasurementSet(Data::TableName,Table::Update); 
+      MeasurementSet *ms=new MeasurementSet(Data::TableName,Table::Update);
       MSIter *mi=new MSIter(*ms,sort,iodata.deltat*(double)iodata.tilesz);
       msitr.push_back(mi);
       msvector.push_back(ms);
     } else if (Data::MSlist) {
      for(int cm=0; cm<iodata.Nms; cm++) {
-      MeasurementSet *ms=new MeasurementSet(msnames[cm].c_str(),Table::Update); 
+      MeasurementSet *ms=new MeasurementSet(msnames[cm].c_str(),Table::Update);
       MSIter *mi=new MSIter(*ms,sort,iodata.deltat*(double)iodata.tilesz);
       msitr.push_back(mi);
       msvector.push_back(ms);
@@ -496,7 +496,7 @@ main(int argc, char **argv) {
        } else {
         Data::loadData(msitr[0]->table(),iodata,beam,&iodata.fratio);
        }
-      } else { 
+      } else {
        Data::loadDataList(msitr,iodata,&iodata.fratio);
       }
     /* rescale u,v,w by 1/c NOT to wavelengths, that is done later in prediction */
@@ -571,7 +571,7 @@ main(int argc, char **argv) {
    }
 #endif
 
-    
+
 #ifndef HAVE_CUDA
     if (start_iter) {
 #ifdef USE_MIC
@@ -585,7 +585,7 @@ main(int argc, char **argv) {
      in(mic_chunks: length(M)) \
      in(mic_pindex: length(Mt)) \
      in(coh: length(4*M*mic_Nbase*mic_tilesz)) \
-     inout(p: length(8*mic_N*Mt)) 
+     inout(p: length(8*mic_N*Mt))
      sagefit_visibilities_mic(mic_u,mic_v,mic_w,mic_x,mic_N,mic_Nbase,mic_tilesz,barr,mic_chunks,mic_pindex,coh,M,Mt,mic_freq0,mic_deltaf,p,mic_data_min_uvcut,mic_data_Nt,2*mic_data_max_emiter,mic_data_max_iter,(mic_data_dochan? 0 :mic_data_max_lbfgs),mic_data_lbfgs_m,mic_data_gpu_threads,mic_data_linsolv,mic_data_solver_mode,mic_data_nulow,mic_data_nuhigh,mic_data_randomize,&mean_nu,&res_0,&res_1);
 #else /* NOT MIC */
      sagefit_visibilities(iodata.u,iodata.v,iodata.w,iodata.x,iodata.N,iodata.Nbase,iodata.tilesz,barr,carr,coh,M,Mt,iodata.freq0,iodata.deltaf,p,Data::min_uvcut,Data::Nt,(iodata.N<=LMCUT?4*Data::max_emiter:6*Data::max_emiter),Data::max_iter,(Data::doChan? 0 :Data::max_lbfgs),Data::lbfgs_m,Data::gpu_threads,Data::linsolv,(iodata.N<=LMCUT && Data::solver_mode==SM_RTR_OSLM_LBFGS?SM_OSLM_LBFGS:(iodata.N<=LMCUT && (Data::solver_mode==SM_RTR_OSRLM_RLBFGS||Data::solver_mode==SM_NSD_RLBFGS)?SM_OSLM_OSRLM_RLBFGS:Data::solver_mode)),Data::nulow,Data::nuhigh,Data::randomize,&mean_nu,&res_0,&res_1);
@@ -604,7 +604,7 @@ main(int argc, char **argv) {
      in(mic_chunks: length(M)) \
      in(mic_pindex: length(Mt)) \
      in(coh: length(4*M*mic_Nbase*mic_tilesz)) \
-     inout(p: length(8*mic_N*Mt)) 
+     inout(p: length(8*mic_N*Mt))
      sagefit_visibilities_mic(mic_u,mic_v,mic_w,mic_x,mic_N,mic_Nbase,mic_tilesz,barr,mic_chunks,mic_pindex,coh,M,Mt,mic_freq0,mic_deltaf,p,mic_data_min_uvcut,mic_data_Nt,mic_data_max_emiter,mic_data_max_iter,(mic_data_dochan? 0: mic_data_max_lbfgs),mic_data_lbfgs_m,mic_data_gpu_threads,mic_data_linsolv,mic_data_solver_mode,mic_data_nulow,mic_data_nuhigh,mic_data_randomize,&mean_nu,&res_0,&res_1);
 #else /* NOT MIC */
      sagefit_visibilities(iodata.u,iodata.v,iodata.w,iodata.x,iodata.N,iodata.Nbase,iodata.tilesz,barr,carr,coh,M,Mt,iodata.freq0,iodata.deltaf,p,Data::min_uvcut,Data::Nt,Data::max_emiter,Data::max_iter,(Data::doChan? 0: Data::max_lbfgs),Data::lbfgs_m,Data::gpu_threads,Data::linsolv,Data::solver_mode,Data::nulow,Data::nuhigh,Data::randomize,&mean_nu,&res_0,&res_1);
@@ -630,7 +630,7 @@ main(int argc, char **argv) {
     }
 #endif /* !ONE_GPU */
 #endif /* HAVE_CUDA */
-   /* if multi channel mode, run BFGS for each channel here 
+   /* if multi channel mode, run BFGS for each channel here
        and then calculate residuals, else just calculate residuals */
       /* parameters 8*N*M ==> 8*N*Mt */
     if (Data::doChan) {
@@ -663,7 +663,7 @@ main(int argc, char **argv) {
       in(mic_chunks: length(M)) \
       in(mic_pindex: length(Mt)) \
       in(coh: length(4*M*mic_Nbase*mic_tilesz)) \
-      inout(pfreq: length(8*mic_N*Mt)) 
+      inout(pfreq: length(8*mic_N*Mt))
         bfgsfit_visibilities_mic(mic_u,mic_v,mic_w,xfreq,mic_N,mic_Nbase,mic_tilesz,barr,mic_chunks,mic_pindex,coh,M,Mt,mic_freq0,mic_deltaf,pfreq,mic_data_min_uvcut,mic_data_Nt,mic_data_max_lbfgs,mic_data_lbfgs_m,mic_data_gpu_threads,mic_data_solver_mode,mean_nu,&res_00,&res_01);
         mic_freq0=iodata.freq0;
         mic_deltaf=iodata.deltaf;
@@ -802,7 +802,7 @@ beam.p_ra0,beam.p_dec0,iodata.freq0,beam.sx,beam.sy,beam.time_utc,beam.Nelem,bea
     end_time = time(0);
     elapsed_time = ((double) (end_time-start_time)) / 60.0;
     if (!Data::DoSim) {
-    if (solver_mode==SM_OSLM_OSRLM_RLBFGS||solver_mode==SM_RLM_RLBFGS||solver_mode==SM_RTR_OSRLM_RLBFGS || solver_mode==SM_NSD_RLBFGS) { 
+    if (solver_mode==SM_OSLM_OSRLM_RLBFGS||solver_mode==SM_RLM_RLBFGS||solver_mode==SM_RTR_OSRLM_RLBFGS || solver_mode==SM_NSD_RLBFGS) {
     cout<<"nu="<<mean_nu<<endl;
     }
       cout<<"Timeslot: "<<tilex<<" Residual: initial="<<res_0<<",final="<<res_1<<", Time spent="<<elapsed_time<<" minutes"<<endl;
@@ -911,6 +911,6 @@ beam.p_ra0,beam.p_dec0,iodata.freq0,beam.sx,beam.sy,beam.time_utc,beam.Nelem,bea
   }
   /**********************************************************/
 
-   cout<<"Done."<<endl;    
+   cout<<"Done."<<endl;
    return 0;
 }

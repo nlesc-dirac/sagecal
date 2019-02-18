@@ -68,13 +68,13 @@ $INSTALL_PATH is where you want to install SageCal.
 - Build SAGECal
 ```
     mkdir build && cd build
-    cmake .. -DENABLE_CUDA=OFF
+    cmake ..
 ```
 
 **OPTIONAL:** You can also define a custom casacore path:
 
 ```
-    cmake .. -DCASACORE_ROOT_DIR=/opt/soft/casacore/ -DENABLE_CUDA=OFF
+    cmake .. -DCASACORE_ROOT_DIR=/opt/soft/casacore
 ```
 **OPTIONAL:** You can also define a custom paths to everything:
 
@@ -98,8 +98,24 @@ $INSTALL_PATH is where you want to install SageCal.
 cmake -DENABLE_MPI=ON
 ```
 
+## GPU Support
 
-### Via Anaconda (WIP)
+### Loading modules on DAS5
+See scripts folder for the modules.
+```
+source ./scripts/load_das5_modules_gcc6.sh
+```
+
+### Compiling with GPU support
+```
+mkdir -p build && cd build
+cmake -DCUDA_DEBUG=ON -DDEBUG=ON -DVERBOSE=ON -DHAVE_CUDA=ON ..
+make VERBOSE=1
+```
+
+
+
+## Installation via Anaconda (WIP)
 ```
     conda install -c sagecal=0.6.0
 ```
