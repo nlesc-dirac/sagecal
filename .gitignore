@@ -1,4 +1,7 @@
 .idea
+.vscode
+
+build
 
 */*.png
 */*.out
