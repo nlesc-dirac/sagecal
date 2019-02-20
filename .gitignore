@@ -3,6 +3,8 @@ build
 .idea
 .vscode
 
+build
+
 */*.png
 */*.out
 */*.output

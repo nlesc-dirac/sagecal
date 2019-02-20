@@ -1,4 +1,4 @@
-CC=gcc
+CC=mpicc
 CXX=g++
 CFLAGS= -Wall -g -O3 #-pg
 # Extra args for making callgraphs.
