@@ -94,6 +94,7 @@ $INSTALL_PATH is where you want to install SageCal.
 - The sagecal executable can be found in **/path/to/sagecal/dir/usr/local/bin**, also **sagecal-mpi**,**buildsky** and **restore** might be installed depending on the availability of MPI and WCSLIB/FFTW.
 
 ### MPI support
+MPI support is automatically detected, otherwise, it can be forced with:
 ```
 cmake -DENABLE_MPI=ON
 ```
