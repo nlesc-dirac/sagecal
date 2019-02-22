@@ -31,6 +31,6 @@ do
       exit $?
     fi
 
-    #docker push fdiblen/$name:$version
-    #docker push fdiblen/$name:latest
+    docker push fdiblen/$name:$version
+    docker push fdiblen/$name:latest
 done

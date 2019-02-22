@@ -11,7 +11,9 @@ RUN yum -y install \
     openblas openblas-devel glib2-devel lapack lapack-devel cfitsio cfitsio-devel \
     wcslib wcslib-devel ncurses ncurses-devel readline readline-devel \
     python-devel boost boost-devel fftw fftw-devel hdf5 hdf5-devel \
-    numpy boost-python mpich mpich-devel fftw fftw-libs fftw-devel
+    numpy boost-python mpich mpich-devel fftw fftw-libs fftw-devel \
+    mpich
+    # openmpi openmpi-devel openmpi3-devel
 
 RUN mkdir /build && cd /build
 
