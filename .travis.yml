@@ -6,10 +6,10 @@ language: cpp
 #env:
 
 before_install:
-  - docker pull fdiblen/ubuntu1604-test:latest
-  - docker run -itd -v "${TRAVIS_BUILD_DIR}:/travis/workdir" --name ubuntu-build fdiblen/ubuntu1604-test:latest
-  - docker pull fdiblen/sl7-test:latest
-  - docker run -itd -v "${TRAVIS_BUILD_DIR}:/travis/workdir" --name sl-build fdiblen/sl7-test:latest
+  - docker pull sagecal/ubuntu1604-test:latest
+  - docker run -itd -v "${TRAVIS_BUILD_DIR}:/travis/workdir" --name ubuntu-build sagecal/ubuntu1604-test:latest
+  - docker pull sagecal/sl7-test:latest
+  - docker run -itd -v "${TRAVIS_BUILD_DIR}:/travis/workdir" --name sl-build sagecal/sl7-test:latest
 #  - docker pull base/archlinux
 #  - docker run -itd -v "${TRAVIS_BUILD_DIR}:/travis/workdir" --name arch-build base/archlinux
 

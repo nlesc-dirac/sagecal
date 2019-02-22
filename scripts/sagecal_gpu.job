@@ -22,5 +22,3 @@ nvidia-smi
 export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/cm/shared/package/cuda91/toolkit/9.1.85/lib64/stubs
 ln -s /cm/shared/package/cuda91/toolkit/9.1.85/lib64/stubs/libnvidia-ml.so libnvidia-ml.so.1
 
-/home/fdiblen/sagecal_gpu/build/dist/bin/sagecal_gpu
-

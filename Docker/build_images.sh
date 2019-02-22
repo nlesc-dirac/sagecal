@@ -13,7 +13,7 @@ do
     echo "Building: "$name
     echo "==========================================="
 
-    cmd="docker build -t fdiblen/$name:$version -t fdiblen/$name:latest ./$name"
+    cmd="docker build -t sagecal/$name:$version -t sagecal/$name:latest ./$name"
     echo
     echo "Running:"
     echo $cmd
@@ -31,6 +31,6 @@ do
       exit $?
     fi
 
-    docker push fdiblen/$name:$version
-    docker push fdiblen/$name:latest
+    docker push sagecal/$name:$version
+    docker push sagecal/$name:latest
 done
