@@ -19,6 +19,10 @@ else()
 
 
     FILE(GLOB SRCFILES *.cpp)
+    # # add build dependencies
+    # target_link_libraries(${target} radio)
+    # target_link_libraries(${target} dirac)
+
     include_directories(SYSTEM ${MPI_INCLUDE_PATH})
     add_executable(sagecal-mpi ${SRCFILES})
 
@@ -34,7 +38,6 @@ else()
     ${LIBGFORTRAN_LIBRARIES}
     ${MPI_CXX_LIBRARIES}
     ${MPI_CXX_LINK_FLAGS}
-    -lopenblas
     -lgfortran
     -lpthread
     -lm
