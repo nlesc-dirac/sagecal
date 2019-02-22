@@ -37,6 +37,6 @@ RUN git clone --progress --verbose https://github.com/casacore/casacore.git casa
 #    -DCASACORE_INCLUDE=/opt/casacore/include/casacore
 #    make -j4 && \
 #    make install && \
-#
-#RUN ls -alsrt /opt/sagecal && \
-#    /opt/sagecal/bin/sagecal
+#    ls -alsrt /opt/sagecal && \
+#    /opt/sagecal/bin/sagecal && \
+#    /opt/sagecal/bin/sagecal-mpi

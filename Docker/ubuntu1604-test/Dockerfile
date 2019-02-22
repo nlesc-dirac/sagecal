@@ -23,6 +23,7 @@ RUN apt-get install -y \
 #    mkdir build-ubuntu && cd build-ubuntu && \
 #    cmake .. -DCMAKE_INSTALL_PREFIX=/opt/sagecal && \
 #    make -j4 && \
-#    make install
-#RUN ls -alsrt /opt/sagecal && \
-#    /opt/sagecal/bin/sagecal
+#    make install && \
+#    ls -alsrt /opt/sagecal && \
+#    /opt/sagecal/bin/sagecal && \
+#    /opt/sagecal/bin/sagecal-mpi

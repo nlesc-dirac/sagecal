@@ -53,4 +53,5 @@ $CMAKE_EXE /travis/workdir -DCMAKE_INSTALL_PREFIX=/opt/sagecal $OPTS
 make -j4 && \
 make install && \
 ls -alsrt /opt/sagecal && \
-/opt/sagecal/bin/sagecal
+/opt/sagecal/bin/sagecal &&
+/opt/sagecal/bin/sagecal-mpi
