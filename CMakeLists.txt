@@ -237,3 +237,6 @@ add_subdirectory(src)
 
 install(DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/dist/ DESTINATION ${CMAKE_INSTALL_PREFIX})
 
+install(DIRECTORY ${CMAKE_SOURCE_DIR}/src/buildsky/
+        DESTINATION bin
+        FILES_MATCHING PATTERN "*.py" )
