@@ -15,7 +15,6 @@ target_link_libraries(buildsky
  ${WCSLIB_LIBRARIES}
  ${GLIB_PKG_LIBRARIES}
  ${LIBGFORTRAN_LIBRARIES}
- -lopenblas
  -lgfortran
  -lpthread
  -lm
