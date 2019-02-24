@@ -18,7 +18,6 @@ target_link_libraries(restore
  ${LIBGFORTRAN_LIBRARIES}
  -lfftw3_threads
  -lfftw3
- -lopenblas
  -lgfortran
  -lpthread
  -lm

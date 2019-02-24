@@ -71,7 +71,6 @@ else()
         ${WCSLIB_LIBRARIES}
         ${GLIB_PKG_LIBRARIES}
         ${LIBGFORTRAN_LIBRARIES}
-        -lopenblas
         -lgfortran
         -lpthread
         -lm

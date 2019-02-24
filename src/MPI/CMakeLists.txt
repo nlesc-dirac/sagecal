@@ -38,7 +38,6 @@ else()
     ${LIBGFORTRAN_LIBRARIES}
     ${MPI_CXX_LIBRARIES}
     ${MPI_CXX_LINK_FLAGS}
-    -lopenblas
     -lgfortran
     -lpthread
     -lm
