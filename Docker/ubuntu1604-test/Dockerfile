@@ -15,7 +15,7 @@ RUN apt-get install -y \
     libglib2.0-dev \
     libcasa-casa2 casacore-dev casacore-data casacore-tools \
     mpich \
-    fftw-dev libfftw3-mpi3 libfftw3-bin
+    fftw-dev libfftw3-dev libfftw3-mpi3 libfftw3-bin
 
 
 ## compile sagecal
