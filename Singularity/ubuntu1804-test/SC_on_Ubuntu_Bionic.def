@@ -1,0 +1,37 @@
+BootStrap: library
+From: ubuntu:18.04 
+
+%post
+    apt-get autoclean
+    apt-get update -y 
+    apt-get install software-properties-common -y 
+    add-apt-repository -s ppa:kernsuite/kern-5 -y 
+    apt-add-repository multiverse 
+    apt-add-repository restricted 
+    add-apt-repository ppa:graphics-drivers/ppa
+    apt-get update -y
+
+    apt-get install -y \
+    git cmake g++ pkg-config \
+    libcfitsio-bin libcfitsio-dev \
+    libopenblas-base libopenblas-dev \
+    wcslib-dev wcslib-tools \
+    libglib2.0-dev \
+    libcasa-casa2 casacore-dev casacore-data casacore-tools \
+    mpich \
+    fftw3-dev libfftw3-mpi3 libfftw3-bin \
+    nvidia-cuda-toolkit gcc-6 \
+    gfortran-6
+
+    git clone https://github.com/nlesc-dirac/sagecal.git  
+    cd sagecal 
+    git checkout dev
+    mkdir build-ubuntu && cd build-ubuntu 
+    cmake .. -DCMAKE_INSTALL_PREFIX=/opt/sagecal -DFFTW_INCLUDE_DIRS=/usr/include -DHAVE_CUDA=ON -DNVML_LIB_PATH=/usr/lib/x86_64-linux-gnu/libnvidia-ml.so -DCMAKE_C_COMPILER=gcc-6 -DCMAKE_CXX_COMPILER=g++-6 -DCMAKE_Fortran_COMPILER=gfortran-6
+    make 
+    make install
+    cd ../test
+    tar xvf sm.ms.tar
+
+%labels
+    Author Hanno Spreeuw (h.spreeuw@esciencecenter.nl)
