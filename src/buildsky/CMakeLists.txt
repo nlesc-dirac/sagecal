@@ -21,4 +21,3 @@ target_link_libraries(buildsky
 )
 
 install(TARGETS buildsky DESTINATION bin)
-
