@@ -24,5 +24,17 @@ RUN apt-get install -y \
 #    cmake .. -DCMAKE_INSTALL_PREFIX=/opt/sagecal && \
 #    make -j4 && \
 #    make install
+<<<<<<< Updated upstream
 #RUN ls -alsrt /opt/sagecal && \
 #    /opt/sagecal/bin/sagecal
+=======
+#RUN   ls -alsrt /opt/sagecal && \
+#   /opt/sagecal/bin/sagecal
+RUN git clone https://github.com/nlesc-dirac/sagecal.git && \ 
+    cd sagecal && \
+    mkdir build-ubuntu && cd build-ubuntu && \
+    cmake .. -DCMAKE_INSTALL_PREFIX=/opt/sagecal && \
+    make -j4 && \
+    make install
+
+>>>>>>> Stashed changes
