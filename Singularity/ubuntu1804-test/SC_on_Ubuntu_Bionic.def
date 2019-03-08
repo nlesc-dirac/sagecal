@@ -1,7 +1,12 @@
 BootStrap: library
 From: ubuntu:18.04 
 
+%environment
+    export CFLAGS="-DMPI_BUILD"
+
 %post
+    # DEBIAN_FRONTEND=noninteractive
+    # export DEBIAN_FRONTEND
     apt-get autoclean
     apt-get update -y 
     apt-get install software-properties-common -y 
@@ -20,14 +25,14 @@ From: ubuntu:18.04
     libcasa-casa2 casacore-dev casacore-data casacore-tools \
     mpich \
     fftw3-dev libfftw3-mpi3 libfftw3-bin \
-    nvidia-cuda-toolkit gcc-6 \
-    gfortran-6
+    nvidia-cuda-toolkit gcc-6 gfortran-6
+    # nvidia-driver-410 nvidia-cuda-toolkit gcc-6 gfortran-6 pciutils
 
     git clone https://github.com/nlesc-dirac/sagecal.git  
     cd sagecal 
     git checkout dev
     mkdir build-ubuntu && cd build-ubuntu 
-    cmake .. -DCMAKE_INSTALL_PREFIX=/opt/sagecal -DFFTW_INCLUDE_DIRS=/usr/include -DHAVE_CUDA=ON -DNVML_LIB_PATH=/usr/lib/x86_64-linux-gnu/libnvidia-ml.so -DCMAKE_C_COMPILER=gcc-6 -DCMAKE_CXX_COMPILER=g++-6 -DCMAKE_Fortran_COMPILER=gfortran-6
+    cmake .. -DCMAKE_INSTALL_PREFIX=/opt/sagecal -DFFTW_INCLUDE_DIRS=/usr/include -DHAVE_CUDA=ON -DNVML_LIB_PATH=/usr/lib/x86_64-linux-gnu/libnvidia-ml.so -DCMAKE_C_COMPILER=gcc-6 -DCMAKE_CXX_COMPILER=g++-6 -DCMAKE_Fortran_COMPILER=gfortran-6 -DENABLE_MPI=ON
     make 
     make install
     cd ../test
