@@ -32,7 +32,7 @@ From: ubuntu:18.04
 
     git clone https://github.com/nlesc-dirac/sagecal.git  
     cd sagecal 
-    git checkout dev
+    git checkout containers_from_dev
     mkdir build-ubuntu && cd build-ubuntu 
     cmake .. -DCMAKE_INSTALL_PREFIX=/opt/sagecal -DHAVE_CUDA=ON
     make 
