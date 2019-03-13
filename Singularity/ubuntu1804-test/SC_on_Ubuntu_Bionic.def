@@ -3,6 +3,8 @@ From: ubuntu:18.04
 
 %environment
     export CFLAGS="-DMPI_BUILD"
+    export CC=/usr/bin/gcc-6
+    export CXX=/usr/bin/g++-6
 
 %post
     # DEBIAN_FRONTEND=noninteractive
@@ -32,7 +34,7 @@ From: ubuntu:18.04
     cd sagecal 
     git checkout dev
     mkdir build-ubuntu && cd build-ubuntu 
-    cmake .. -DCMAKE_INSTALL_PREFIX=/opt/sagecal -DFFTW_INCLUDE_DIRS=/usr/include -DHAVE_CUDA=ON -DNVML_LIB_PATH=/usr/lib/x86_64-linux-gnu/libnvidia-ml.so -DCMAKE_C_COMPILER=gcc-6 -DCMAKE_CXX_COMPILER=g++-6 -DCMAKE_Fortran_COMPILER=gfortran-6 -DENABLE_MPI=ON
+    cmake .. -DCMAKE_INSTALL_PREFIX=/opt/sagecal -DHAVE_CUDA=ON
     make 
     make install
     cd ../test
