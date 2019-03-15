@@ -20,17 +20,10 @@ RUN apt-get install -y \
 
 
 ## compile sagecal
-#RUN mkdir /build && cd /build && \
-#    mkdir build-ubuntu && cd build-ubuntu && \
-#    cmake .. -DCMAKE_INSTALL_PREFIX=/opt/sagecal && \
-#    make -j4 && \
-#    make install
-#RUN   ls -alsrt /opt/sagecal && \
-#   /opt/sagecal/bin/sagecal
-RUN git clone https://github.com/nlesc-dirac/sagecal.git && \ 
-    cd sagecal && \
-    mkdir build-ubuntu && cd build-ubuntu && \
-    cmake .. -DCMAKE_INSTALL_PREFIX=/opt/sagecal -DFFTW_INCLUDE_DIRS=/usr/include && \
-    make -j4 && \
-    make install
-
+# RUN git clone https://github.com/nlesc-dirac/sagecal.git && cd sagecal && \ 
+#     mkdir build-ubuntu && cd build-ubuntu && \
+#     cmake .. -DCMAKE_INSTALL_PREFIX=/opt/sagecal && \
+#     make -j4 && \
+#     make install
+# RUN ls -alsrt /opt/sagecal && \
+#     /opt/sagecal/bin/sagecal
