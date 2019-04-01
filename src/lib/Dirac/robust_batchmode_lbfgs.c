@@ -625,10 +625,10 @@ robust_cost_func_batch(double *p, int m, void *adata) {
   }
 
   /* predict model */
-  minimize_viz_full_pth_batch(p, xmodel, m, n, ptd->noff, ptd->nlen, dp->adata);
+  minimize_viz_full_pth_batch(p, xmodel, m, n, ptd->offset, ptd->nlen, dp->adata);
 
   //double f0=func_robust(x,xmodel,n, d1->robust_nu, d1->Nt);
-  double f0=func_robust(&(x[8*ptd->noff]),&xmodel[8*ptd->noff],8*ptd->nlen, d1->robust_nu, d1->Nt);
+  double f0=func_robust(&(x[8*ptd->offset]),&xmodel[8*ptd->offset],8*ptd->nlen, d1->robust_nu, d1->Nt);
 
   free(xmodel);
   return f0;
@@ -641,7 +641,7 @@ robust_grad_func_batch(double *p, double *g, int m, void *adata) {
   int n=dp->n; /* size also changed per batch */
   persistent_data_t *ptd=dp->ptdata;
 
-  func_grad_robust_batch(&minimize_viz_full_pth_batch,p,g,x, m, n, ptd->noff, ptd->nlen, dp->adata);
+  func_grad_robust_batch(&minimize_viz_full_pth_batch,p,g,x, m, n, ptd->offset, ptd->nlen, dp->adata);
 }
 
 int
@@ -656,53 +656,12 @@ lbfgs_fit_robust_wrapper_minibatch(
   data1.x=x;  /* each batch selects a subset to work on */ 
   data1.n=n;  /* amount of data (n) is lower than this for each batch */
 
-  int Nbatch=5; /* how many batches to split the data */
-  int Niterperbatch=4; /* how many iterations per batch */
-  int *offsets;
-  int *lengths;
-  if ((offsets=(int*)calloc((size_t)Nbatch,sizeof(int)))==0) {
-     fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
-     exit(1);
-  }
-  if ((lengths=(int*)calloc((size_t)Nbatch,sizeof(int)))==0) {
-     fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
-     exit(1);
-  }
-
+  int Nbatch=5; /* how many minibatches to split the data */
+  int Niterperbatch=4; /* how many iterations per minibatch */
   /* persistent memory between batches (y,s) pairs
      and info about online var(||grad||) estimate */
   persistent_data_t ptdata;
-  if ((ptdata.s=(double*)calloc((size_t)m*M,sizeof(double)))==0) {
-     fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
-     exit(1);
-  }
-  if ((ptdata.y=(double*)calloc((size_t)m*M,sizeof(double)))==0) {
-     fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
-     exit(1);
-  }
-  if ((ptdata.rho=(double*)calloc((size_t)M,sizeof(double)))==0) {
-     fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
-     exit(1);
-  }
 
-  /* storage for calculating on-line variance of gradient */
-  if ((ptdata.running_avg=(double*)calloc((size_t)m,sizeof(double)))==0) {
-     fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
-     exit(1);
-  }
-  if ((ptdata.running_avg_sq=(double*)calloc((size_t)m,sizeof(double)))==0) {
-     fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
-     exit(1);
-  }
-
-  ptdata.nfilled=0; /* always 0 when we start */
-  ptdata.vacant=0; /* cycle in 0..M-1 */
-  ptdata.noff=0; /* offset to data */
-  ptdata.nlen=n; /* length of data */
-  ptdata.niter=0; /* cumulative iteration count */
-  ptdata.Nt=dp->Nt; /* no. of threads need to be passed */
-
-  data1.ptdata=&ptdata;
 
   int ntiles=dp->tilesz;
   /* split iterations into mini batches  (counting baselines)
@@ -710,60 +669,44 @@ lbfgs_fit_robust_wrapper_minibatch(
      note data size = 8 x baselines 
   */
   int Nbase1=dp->Nbase*ntiles;
-  int batchsize=(Nbase1+Nbatch-1)/Nbatch;
+  lbfgs_persist_init(&ptdata,Nbatch,m,Nbase1,M,dp->Nt);
+  ptdata.nlen=n; /* length of data =8 x baselines, so reset it here */
+
+  data1.ptdata=&ptdata;
+
 #ifdef DEBUG
-  printf("baselines =%d tiles=%d total=%d divided to %d x %d= %d\n",dp->Nbase,ntiles,n,batchsize,Nbatch,batchsize*Nbatch);
+  printf("baselines =%d tiles=%d total %d divided to %d\n",dp->Nbase,ntiles,n,Nbatch);
 #endif
-  /* store info about no. of minibatches to use also in persistent data */
-  int ci,ck;
-  ck=0;
-  for (ci=0; ci<Nbatch; ci++) {
-   offsets[ci]=ck;
-   if (offsets[ci]+batchsize<=Nbase1) {
-    lengths[ci]=batchsize;
-   } else {
-    lengths[ci]=Nbase1-offsets[ci];
-   }
-   ck=ck+lengths[ci];
-  }
-   
   /* how many loops (epochs) over batches ? */
   int Nloops=(itmax+Niterperbatch)/Niterperbatch;
-  int nl;
+  int nl,ci;
 #ifdef DEBUG
   printf("loops=%d\n",Nloops);
   for (ci=0; ci<Nbatch; ci++) {
-   printf("batch %d : off %d size %d\n",ci,offsets[ci],lengths[ci]);
+   printf("batch %d : off %d size %d\n",ci,ptdata.offsets[ci],ptdata.lengths[ci]);
   }
 #endif
 
 #ifdef DEBUG
-  ptdata.noff=0; ptdata.nlen=Nbase1; 
+  ptdata.offset=0; ptdata.nlen=Nbase1; 
   printf("cost=%g\n",robust_cost_func_batch(p, m,&data1));
 #endif
   for (nl=0; nl<Nloops; nl++) {
    /* iterate over each batch */
    for (ci=0; ci<Nbatch; ci++) {
-    ptdata.noff=offsets[ci];
-    ptdata.nlen=lengths[ci];
+    ptdata.offset=ptdata.offsets[ci];
+    ptdata.nlen=ptdata.lengths[ci];
     lbfgs_fit(&robust_cost_func_batch,&robust_grad_func_batch,p,m,Niterperbatch,M,&data1,&ptdata);
 
     /* only for debugging, full cost */
 #ifdef DEBUG
-    ptdata.noff=0; ptdata.nlen=Nbase1; printf("cost=%g\n",robust_cost_func_batch(p, m,&data1));
+    ptdata.offset=0; ptdata.nlen=Nbase1; printf("cost=%g\n",robust_cost_func_batch(p, m,&data1));
 #endif
    }
   }
 
 
   /* free persistent memory */
-  free(ptdata.s);
-  free(ptdata.y);
-  free(ptdata.rho);
-  free(ptdata.running_avg);
-  free(ptdata.running_avg_sq);
-
-  free(offsets);
-  free(lengths);
+  lbfgs_persist_clear(&ptdata);
   return 0;
 }

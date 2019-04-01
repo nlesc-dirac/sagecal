@@ -133,24 +133,47 @@ find_sumproduct(int N, float *x, float *y, float *sum1, float *sum2, int Nt);
 /* LBFGS routines */
 
 #ifndef HAVE_CUDA
-/* struct for passing info between batches in batch mode */
+/* struct for passing info between batches in minibatch mode */
 typedef struct persistent_data_t_ {
   /* y,s pairs */
-  double *y,*s; /* need to be allocated by user */
+  double *y,*s; /* allocated by initialization routine */
   double *rho; /* storage for product 1/y^T s */
   int nfilled; /* how many <= lbfgs_m of y,s pairs are filled? valid range 0...lbfgs_m, start value 0 */
   int vacant; /* next vacant offset, cycle in 0...lbfgs_m-1,0,1,...lbfgs_m-1 etc. start value 0 */
 
   int Nt; /* no. of threads */
 
-  /* location and size of data to work in each batch
-   (changed  at each batch)  */
-  int noff; /* offset 0..n-1 ; n: total baselines */
+  /* location and size of data to work in each minibatch
+   (changed  at each minibatch)  */
+  int offset; /* offset 0..n-1 ; n: total baselines */
   int nlen; /* length 1..n ; n: total baselines */
+  int *offsets; /* Nbatchx1 offsets to minibathes */
+  int *lengths; /* Nbatchx1 lengths of minibatches */
   /* 2 vectors : size mx1, for on-line estimation of var(grad), m: no. of params */
   double *running_avg, *running_avg_sq;
   int niter; /* keep track of cumulative no. of iterations */
 } persistent_data_t;
+
+/* user routines for setting up and clearing persistent data structure
+   for using stochastic LBFGS */
+/* initialization of persistent data, (user needs to call this)
+   Setting up minibatch info:
+   pt: blank struct persistent data 
+   Nminibatch:  how many minibatches (data is divided into this many)
+   (Note: total LBFGS iterations: itmax*Nminibatch*Nepoch)
+
+   Following are same as used in the lbfgs_fit routine 
+   m: size of parameter vector
+   n: size of data
+   lbfgs_m: LBFGS memory size
+   Nt: no. of threads
+*/
+extern int 
+lbfgs_persist_init(persistent_data_t *pt, int Nminibatch, int m, int n, int lbfgs_m, int Nt);
+
+/* clearing persistent struct after running stochastic LBFGS */
+extern int 
+lbfgs_persist_clear(persistent_data_t *pt);
 
 /* line search */
 /* func: scalar function
