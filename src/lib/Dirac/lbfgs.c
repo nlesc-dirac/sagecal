@@ -858,6 +858,10 @@ lbfgs_fit_minibatch(
 
    grad_func(xk1,gk,m,adata);
    gradnrm=my_dnrm2(m,gk);
+   /* do a sanity check here */
+   if (!isnormal(gradnrm) || gradnrm<CLM_STOP_THRESH) {
+     break;
+   }
  
    if (!batch_changed) {
    /* yk=yk+gk1 */
