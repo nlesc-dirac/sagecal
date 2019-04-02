@@ -18,8 +18,13 @@ GLIBI=-I/usr/include/glib-2.0 -I/usr/lib/glib-2.0/include -I/usr/lib/x86_64-linu
 GLIBL=-lglib-2.0
 
 OBJECTS=demo.o
+OBJECTSSTOCHASTIC=demo_stochastic.o
 default:demo
 demo.o:demo.c
 	$(CC) $(CFLAGS) $(INCLUDES) $(GLIBI)  -c $<
 demo: $(OBJECTS)
 	$(CC)  $(CFLAGS) $(INCLUDES) $(GLIBI)  -o $@ $(OBJECTS) $(LDIRAC) $(CLIBS) $(LIBPATH) $(LAPACK)
+demo_stochastic.o:demo_stochastic.c
+	$(CC) $(CFLAGS) $(INCLUDES) $(GLIBI)  -c $<
+demo_stochastic: $(OBJECTSSTOCHASTIC)
+	$(CC)  $(CFLAGS) $(INCLUDES) $(GLIBI)  -o $@ $(OBJECTSSTOCHASTIC) $(LDIRAC) $(CLIBS) $(LIBPATH) $(LAPACK)
