@@ -199,7 +199,9 @@ linesearch(
    itmax: max iterations
    lbfgs_m: memory size
    gpu_threads: GPU threads per block
-   adata: additional data
+   adata: additional user supplied data
+   indata: NULL if full batch mode, otherwise pass a persistent_data_t for minibatch operation
+   see lbfgs_persist_init() and lbfgs_persist_clear() on how to set/clear this struct
 */
 #ifdef USE_MIC
 __attribute__ ((target(MIC)))
