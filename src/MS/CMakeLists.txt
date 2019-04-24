@@ -22,9 +22,9 @@ link_directories(${CMAKE_CURRENT_SOURCE_DIR}/../lib/Radio)
 
 FILE(GLOB SRCFILES *.cpp)
 
-# # add build dependencies
-# target_link_libraries(${target} radio)
-# target_link_libraries(${target} dirac)
+# add build dependencies
+target_link_libraries(${target} radio)
+target_link_libraries(${target} dirac)
 
 if(HAVE_CUDA)
 

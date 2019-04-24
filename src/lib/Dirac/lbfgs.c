@@ -858,6 +858,10 @@ lbfgs_fit_minibatch(
 
    grad_func(xk1,gk,m,adata);
    gradnrm=my_dnrm2(m,gk);
+   /* do a sanity check here */
+   if (!isnormal(gradnrm) || gradnrm<CLM_STOP_THRESH) {
+     break;
+   }
  
    if (!batch_changed) {
    /* yk=yk+gk1 */
@@ -940,3 +944,81 @@ lbfgs_fit(
   }
   return 0;
 }
+
+
+
+/* user routines for setting up and clearing persistent data structure
+   for using stochastic LBFGS */
+int
+lbfgs_persist_init(persistent_data_t *pt, int Nminibatch, int m, int n, int lbfgs_m, int Nt) {
+
+  if ((pt->offsets=(int*)calloc((size_t)Nminibatch,sizeof(int)))==0) {
+     fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
+     exit(1);
+  }
+  if ((pt->lengths=(int*)calloc((size_t)Nminibatch,sizeof(int)))==0) {
+     fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
+     exit(1);
+  }
+
+  if ((pt->s=(double*)calloc((size_t)m*lbfgs_m,sizeof(double)))==0) {
+     fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
+     exit(1);
+  }
+  if ((pt->y=(double*)calloc((size_t)m*lbfgs_m,sizeof(double)))==0) {
+     fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
+     exit(1);
+  }
+  if ((pt->rho=(double*)calloc((size_t)lbfgs_m,sizeof(double)))==0) {
+     fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
+     exit(1);
+  }
+
+  /* storage for calculating on-line variance of gradient */
+  if ((pt->running_avg=(double*)calloc((size_t)m,sizeof(double)))==0) {
+     fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
+     exit(1);
+  }
+  if ((pt->running_avg_sq=(double*)calloc((size_t)m,sizeof(double)))==0) {
+     fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
+     exit(1);
+  }
+
+  pt->nfilled=0; /* always 0 when we start */
+  pt->vacant=0; /* cycle in 0..M-1 */
+  pt->offset=0; /* offset to data */
+  pt->nlen=n; /* length of data */
+  pt->niter=0; /* cumulative iteration count */
+  pt->Nt=Nt; /* no. of threads need to be passed */
+
+  int batchsize=(n+Nminibatch-1)/Nminibatch;
+  /* store info about no. of minibatches to use also in persistent data */
+  int ci,ck;
+  ck=0;
+  for (ci=0; ci<Nminibatch; ci++) {
+   pt->offsets[ci]=ck;
+   if (pt->offsets[ci]+batchsize<=n) {
+    pt->lengths[ci]=batchsize;
+   } else {
+    pt->lengths[ci]=n-pt->offsets[ci];
+   }
+   ck=ck+pt->lengths[ci];
+  }
+
+  return 0;
+}
+
+int
+lbfgs_persist_clear(persistent_data_t *pt) {
+  /* free persistent memory */
+  free(pt->s);
+  free(pt->y);
+  free(pt->rho);
+  free(pt->running_avg);
+  free(pt->running_avg_sq);
+
+  free(pt->offsets);
+  free(pt->lengths);
+
+  return 0;
+} 
