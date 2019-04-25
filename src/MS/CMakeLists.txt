@@ -28,8 +28,6 @@ target_link_libraries(${target} dirac)
 
 if(HAVE_CUDA)
 
-    add_definitions(-DONE_GPU)
-
     cuda_add_executable(sagecal_gpu ${SRCFILES})
 
     target_link_libraries(sagecal_gpu

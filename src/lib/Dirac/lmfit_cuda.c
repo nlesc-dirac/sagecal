@@ -1450,7 +1450,6 @@ bfgsfit_visibilities_gpu(double *u, double *v, double *w, double *x, int N,
 
 
 
-#ifdef HYBRID_CODE
 /****************************************************************************/
 /*************************** hybrid implementation **************************/
 /* slave thread 2GPU function */
@@ -2134,4 +2133,3 @@ printf("1: %lf -> %lf\n\n\n",info0[0],info0[1]);
  }
  return 0;
 }
-#endif /* HYBRID_CODE */
