@@ -10,8 +10,8 @@ before_install:
   - docker run -itd -v "${TRAVIS_BUILD_DIR}:/travis/workdir" --name ubuntu-build fdiblen/ubuntu1604-test:latest
   - docker pull fdiblen/sl7-test:latest
   - docker run -itd -v "${TRAVIS_BUILD_DIR}:/travis/workdir" --name sl-build fdiblen/sl7-test:latest
-  - docker pull hspreeuw/running_sagecal:ubuntu1804
-  - docker run -itd -v "${TRAVIS_BUILD_DIR}:/travis/workdir" --name ubuntu1804-build hspreeuw/running_sagecal:ubuntu1804
+  - docker pull hspreeuw/running_sagecal:ubuntu1804:latest
+  - docker run -itd -v "${TRAVIS_BUILD_DIR}:/travis/workdir" --name ubuntu1804-build hspreeuw/running_sagecal:ubuntu1804:latest
 #  - docker pull base/archlinux
 #  - docker run -itd -v "${TRAVIS_BUILD_DIR}:/travis/workdir" --name arch-build base/archlinux
 
