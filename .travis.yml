@@ -10,8 +10,8 @@ before_install:
   - docker run -itd -v "${TRAVIS_BUILD_DIR}:/travis/workdir" --name ubuntu-build fdiblen/ubuntu1604-test:latest
   - docker pull fdiblen/sl7-test:latest
   - docker run -itd -v "${TRAVIS_BUILD_DIR}:/travis/workdir" --name sl-build fdiblen/sl7-test:latest
-  - docker pull hspreeuw/running_sagecal:ubuntu1804:latest
-  - docker run -itd -v "${TRAVIS_BUILD_DIR}:/travis/workdir" --name ubuntu1804-build hspreeuw/running_sagecal:ubuntu1804:latest
+  - docker pull hspreeuw/running_sagecal:ubuntu1804
+  - docker run -itd -v "${TRAVIS_BUILD_DIR}:/travis/workdir" --name ubuntu1804-build hspreeuw/running_sagecal:ubuntu1804
 #  - docker pull base/archlinux
 #  - docker run -itd -v "${TRAVIS_BUILD_DIR}:/travis/workdir" --name arch-build base/archlinux
 
@@ -20,6 +20,6 @@ script:
   - echo "TRAVIS_BRANCH=$TRAVIS_BRANCH, PR=$PR, BRANCH=$BRANCH"
   - docker exec -e BRANCH=$BRANCH -e IMAGE='ubuntu' ubuntu-build /bin/bash -c "/travis/workdir/build-tests/compile_sagecal.sh"
   - docker exec -e BRANCH=$BRANCH -e IMAGE='sl7' sl-build /bin/bash -c "/travis/workdir/build-tests/compile_sagecal.sh"
-  - docker exec -e BRANCH=$BRANCH -e IMAGE='ubuntu1804' ubuntu1804-build /bin/bash -c "/travis/workdir/build-tests/compile_sagecal.sh"
+  - docker exec -e BRANCH=$BRANCH -e IMAGE='ubuntu' ubuntu1804-build /bin/bash -c "/travis/workdir/build-tests/compile_sagecal.sh"
 #  - docker exec --env BRANCH=$BRANCH arch-build /bin/bash -c "/travis/workdir/build-tests/arch/prepare-arch.sh"
 #  - docker exec --env BRANCH=$BRANCH arch-build /bin/bash -c "/travis/workdir/build-tests/arch/compile-arch.sh"
