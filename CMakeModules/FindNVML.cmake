@@ -27,7 +27,7 @@ if(WIN32)
 # linux
 elseif(UNIX AND NOT APPLE)
     set(NVML_NAMES nvidia-ml)
-    set(NVML_LIB_DIR "${CUDA_TOOLKIT_ROOT_DIR}/lib64/stubs")
+    set(NVML_LIB_DIR "${CUDA_TOOLKIT_ROOT_DIR}/lib64/stubs" "${CUDA_TOOLKIT_ROOT_DIR}/lib/x86_64-linux-gnu")
     set(NVML_INCLUDE_DIR ${CUDA_INCLUDE_DIRS})
 
     find_library(NVML_LIB_PATH

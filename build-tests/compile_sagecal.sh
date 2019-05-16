@@ -25,6 +25,11 @@ case $IMAGE in
         CMAKE_EXE=$(which cmake3)
         OPTS='-DCASACORE_ROOT_DIR=/opt/casacore'
         ;;
+    ubuntu1804)
+        echo 'Building for Ubuntu 18.04'
+        CMAKE_EXE=$(which cmake)
+        OPTS=''
+        ;;
     arch)
         OPTS=''
         ;;
