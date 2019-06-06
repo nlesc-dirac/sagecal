@@ -149,7 +149,7 @@ read_shapelet_modes_img(char *buff,int *n0,double *beta,double **modes, double *
     exit(1);
   }
   for (ci=0; ci<M; ci++) {
-   fscanf(cfp,"%d %lf",&c,&(*modes)[ci]);
+   c=fscanf(cfp,"%d %lf",&c,&(*modes)[ci]);
   }
 
   /* need to find a line starting with 'L' */

@@ -1,72 +1,101 @@
-message (STATUS "\n\n\nConfiguring lib/Dirac")
-
+message("-------------------------------------")
+message (STATUS "Configuring lib/Dirac")
 
 # Common objects
 set (objects
     admm_solve
-    clmfit_nocuda
+    clmfit
     manifold_average
     mdl
     myblas
-    robustlm
+    rtr_solve
     rtr_solve_robust_admm
     updatenu
 )
 
-if(ENABLE_CUDA)
+if(HAVE_CUDA)
     message (STATUS "Compiling lib/Dirac with CUDA support.")
-# FIXME: add libraries only for gpu version
-#    FILE(GLOB extra_objects *.cu)
 
-# objects only for gpu version
+    # objects only for gpu version
     set (extra_objects
-        lmfit
         barrier
-        clmfit
         clmfit_fl
         consensus_poly
-        lbfgs
         load_balance
+        rtr_solve_cuda
+        rtr_solve_robust_admm_cuda
+        rtr_solve_robust_cuda
+        robustlm
+    )
+
+    set (extra_objects_cuda
+        clmfit_cuda
+        lbfgs_cuda
+        lmfit_cuda
         manifold_fl
         mderiv
         mderiv_fl
-        oslmfit
         robust
         robust_fl
-        rtr_solve_cuda
-        rtr_solve_robust_cuda
-        rtr_solve_robust_cuda_admm
+        oslmfit
     )
+
     set(objects ${objects} ${extra_objects})
 
-else()
-    message (STATUS "Compiling lib/Dirac without CUDA support.")
-# FIXME: automate this by using regex
-#    FILE(GLOB extra_objects *nocuda.c)
+    message (STATUS "Extra CUDA objects ... = ${extra_objects_cuda}")
 
-# objects only for cpu version
+    message (STATUS "lib/Dirac objects --> ${objects}")
+
+    foreach (object ${objects})
+        add_library(${object} SHARED ${object}.c)
+        SET_TARGET_PROPERTIES(${object} PROPERTIES SOVERSION 0.0)
+    endforeach (object)
+
+    foreach (object ${extra_objects_cuda})
+        file(GLOB CUDA_SRC_FILE ${object}.*)
+        CUDA_ADD_LIBRARY(${object} SHARED ${CUDA_SRC_FILE})
+    endforeach (object)
+
+    set(objects ${objects} ${extra_objects_cuda})
+
+    foreach (object ${objects})
+        file(GLOB SRC_FILE ${object}.*)
+        set(CUDA_SRC_FILES ${CUDA_SRC_FILES} ${SRC_FILE})
+    endforeach (object)
+
+
+    CUDA_INCLUDE_DIRECTORIES(${CMAKE_CURRENT_SOURCE_DIR})
+    CUDA_ADD_LIBRARY(dirac ${CUDA_SRC_FILES} Dirac.h)
+
+    SET_TARGET_PROPERTIES(dirac PROPERTIES SOVERSION 0.0)
+    SET_TARGET_PROPERTIES(dirac PROPERTIES CUDA_SEPARABLE_COMPILATION ON)
+
+
+else()
+    # objects only for cpu version
     set (extra_objects
-        lmfit_nocuda
+        lmfit
         consensus_poly
-        lbfgs_nocuda
-        robust_lbfgs_nocuda
-        rtr_solve
+        lbfgs
+        robust_batchmode_lbfgs
+        robust_lbfgs
+        robustlm
         rtr_solve_robust
     )
     set(objects ${objects} ${extra_objects})
+
+    message (STATUS "lib/Dirac objects --> ${objects}")
+
+    include_directories(${CMAKE_CURRENT_SOURCE_DIR})
+    foreach (object ${objects})
+        file(GLOB SRC_FILE ${object}.*)
+        add_library(${object} ${SRC_FILE})
+        SET_TARGET_PROPERTIES(${object} PROPERTIES SOVERSION 0.0)
+    endforeach (object)
+
+    add_library(dirac ${objects} Dirac.h)
+    SET_TARGET_PROPERTIES(dirac PROPERTIES SOVERSION 0.0)
+
 endif()
 
-
-message (STATUS "lib/Dirac objects --> ${objects}")
-
-include_directories(./)
-foreach (object ${objects})
-    add_library(${object} SHARED ${object}.c)
-    SET_TARGET_PROPERTIES(${object} PROPERTIES SOVERSION 0.0)
-endforeach (object)
-
-add_library(dirac ${objects} Dirac.h)
-SET_TARGET_PROPERTIES(dirac PROPERTIES SOVERSION 0.0)
-
-## disable install of lib* files
-##install(TARGETS ${objects} dirac DESTINATION lib)
+message("-------------------------------------")

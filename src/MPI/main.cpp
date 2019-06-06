@@ -34,7 +34,7 @@ using namespace Data;
 
 void
 print_copyright(void) {
-  cout<<"SAGECal-MPI 0.5.1 (C) 2011-2018 Sarod Yatawatta"<<endl;
+  cout<<"SAGECal-MPI 0.6.1 (C) 2011-2019 Sarod Yatawatta"<<endl;
 }
 
 

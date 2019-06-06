@@ -1,16 +1,16 @@
 /*
  *
- Copyright (C) 2006-2008 Sarod Yatawatta <sarod@users.sf.net>  
+ Copyright (C) 2006-2008 Sarod Yatawatta <sarod@users.sf.net>
  This program is free software; you can redistribute it and/or modify
  it under the terms of the GNU General Public License as published by
  the Free Software Foundation; either version 2 of the License, or
  (at your option) any later version.
- 
+
  This program is distributed in the hope that it will be useful,
  but WITHOUT ANY WARRANTY; without even the implied warranty of
  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  GNU General Public License for more details.
- 
+
  You should have received a copy of the GNU General Public License
  along with this program; if not, write to the Free Software
  Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
@@ -39,23 +39,15 @@
 #ifndef complex
 #define complex _Complex
 #endif
- 
+
 #ifdef HAVE_CUDA
 #include <cublas_v2.h>
 #include <cusolverDn.h>
 #include <cuda_runtime_api.h>
+/* GPU specific tunable parameters */
+#include "GPUtune.h"
 #endif /* HAVE_CUDA */
 
-#ifndef MAX_GPU_ID
-#define MAX_GPU_ID 3 /* use 0 (1 GPU), 1 (2 GPUs), ... */
-#endif
-/* default value for threads per block */
-#ifndef DEFAULT_TH_PER_BK 
-#define DEFAULT_TH_PER_BK 64
-#endif
-#ifndef DEFAULT_TH_PER_BK_2
-#define DEFAULT_TH_PER_BK_2 32
-#endif
 
 /* speed of light */
 #ifndef CONST_C
@@ -92,10 +84,10 @@
 #define CLM_INFO_SZ       10
 #define CLM_DBL_MAX       1E12    /* max double value */
 
-#include <Common.h>
+#include "Common.h"
 
-/* given the epoch jd_tdb2, 
- calculate rotation matrix params needed to precess from J2000 
+/* given the epoch jd_tdb2,
+ calculate rotation matrix params needed to precess from J2000
    NOVAS (Naval Observatory Vector Astronomy Software)
    PURPOSE:
       Precesses equatorial rectangular coordinates from one epoch to
@@ -113,7 +105,7 @@
 */
 
 /* convert types */
-/* both arrays size nx1 
+/* both arrays size nx1
    Nt: no of threads
 */
 extern int
@@ -122,14 +114,14 @@ extern int
 float_to_double(double *darr, float *farr,int n, int Nt);
 
 /* create a vector with 1's at flagged data points */
-/* 
+/*
    ddbase: 3*Nbase x 1 (sta1,sta2,flag)
    x: 8*Nbase (set to 0's and 1's)
 */
 extern int
 create_onezerovec(int Nbase, short *ddbase, float *x, int Nt);
 
-/* 
+/*
   find sum1=sum(|x|), and sum2=y^T |x|
   x,y: nx1 arrays
 */
@@ -137,35 +129,79 @@ extern int
 find_sumproduct(int N, float *x, float *y, float *sum1, float *sum2, int Nt);
 
 /****************************** lbfgs.c ****************************/
-/****************************** lbfgs_nocuda.c ****************************/
+/****************************** lbfgs_cuda.c ****************************/
 /* LBFGS routines */
 
 #ifndef HAVE_CUDA
+/* struct for passing info between batches in minibatch mode */
+typedef struct persistent_data_t_ {
+  /* y,s pairs */
+  double *y,*s; /* allocated by initialization routine */
+  double *rho; /* storage for product 1/y^T s */
+  int nfilled; /* how many <= lbfgs_m of y,s pairs are filled? valid range 0...lbfgs_m, start value 0 */
+  int vacant; /* next vacant offset, cycle in 0...lbfgs_m-1,0,1,...lbfgs_m-1 etc. start value 0 */
+
+  int Nt; /* no. of threads */
+
+  /* location and size of data to work in each minibatch
+   (changed  at each minibatch)  */
+  int offset; /* offset 0..n-1 ; n: total baselines */
+  int nlen; /* length 1..n ; n: total baselines */
+  int *offsets; /* Nbatchx1 offsets to minibathes */
+  int *lengths; /* Nbatchx1 lengths of minibatches */
+  /* 2 vectors : size mx1, for on-line estimation of var(grad), m: no. of params */
+  double *running_avg, *running_avg_sq;
+  int niter; /* keep track of cumulative no. of iterations */
+} persistent_data_t;
+
+/* user routines for setting up and clearing persistent data structure
+   for using stochastic LBFGS */
+/* initialization of persistent data, (user needs to call this)
+   Setting up minibatch info:
+   pt: blank struct persistent data 
+   Nminibatch:  how many minibatches (data is divided into this many)
+   (Note: total LBFGS iterations: itmax*Nminibatch*Nepoch)
+
+   Following are same as used in the lbfgs_fit routine 
+   m: size of parameter vector
+   n: size of data
+   lbfgs_m: LBFGS memory size
+   Nt: no. of threads
+*/
+extern int 
+lbfgs_persist_init(persistent_data_t *pt, int Nminibatch, int m, int n, int lbfgs_m, int Nt);
+
+/* clearing persistent struct after running stochastic LBFGS */
+extern int 
+lbfgs_persist_clear(persistent_data_t *pt);
+
 /* line search */
 /* func: scalar function
    xk: parameter values size m x 1 (at which step is calculated)
    pk: step direction size m x 1 (x(k+1)=x(k)+alphak * pk)
    alpha1: initial value for step
-   sigma,rho,t1,t2,t3: line search parameters (from Fletcher) 
+   sigma,rho,t1,t2,t3: line search parameters (from Fletcher)
    m: size or parameter vector
-   step: step size for differencing 
+   step: step size for differencing
    adata:  additional data passed to the function
 */
-extern double 
+extern double
 linesearch(
    double (*func)(double *p, int m, void *adata),
    double *xk, double *pk, double alpha1, double sigma, double rho, double t1, double t2, double t3, int m, double step, void *adata);
- 
+
 /* cost function : return a scalar cost, input : p (mx1) parameters, m: no. of params, adata: additional data
    grad function: return gradient (mx1): input : p (mx1) parameters, g (mx1) gradient vector, m: no. of params, adata: additional data
 */
-/* 
+/*
    p: parameters m x 1 (used as initial value, output final value)
    x: data  n x 1
    itmax: max iterations
    lbfgs_m: memory size
    gpu_threads: GPU threads per block
-   adata: additional data
+   adata: additional user supplied data
+   indata: NULL if full batch mode, otherwise pass a persistent_data_t for minibatch operation
+   see lbfgs_persist_init() and lbfgs_persist_clear() on how to set/clear this struct
 */
 #ifdef USE_MIC
 __attribute__ ((target(MIC)))
@@ -174,8 +210,7 @@ extern int
 lbfgs_fit(
    double (*cost_func)(double *p, int m, void *adata),
    void (*grad_func)(double *p, double *g, int m, void *adata),
-   void (*change_batch)(int iter, void *adata),
-   double *p, int m, int itmax, int M, void *adata);
+   double *p, int m, int itmax, int M, void *adata, persistent_data_t *indata);
 #endif /* !HAVE_CUDA */
 
 #ifdef HAVE_CUDA
@@ -187,7 +222,7 @@ lbfgs_fit_robust_cuda(
    double *p, double *x, int m, int n, int itmax, int lbfgs_m, int gpu_threads, void *adata);
 #endif /* HAVE_CUDA */
 
-/****************************** robust_lbfgs_nocuda.c ****************************/
+/****************************** robust_lbfgs.c ****************************/
 typedef struct thread_data_logf_t_ {
   double *f;
   double *x;
@@ -211,6 +246,13 @@ lbfgs_fit_wrapper(
  void *adata);
 
 
+
+/****************************** robust_batchmode_lbfgs.c ****************************/
+/* batch mode version of LBFGS */
+extern int
+lbfgs_fit_robust_wrapper_minibatch(
+   double *p, double *x, int m, int n, int itmax, int M, int gpu_threads, void *adata);
+
 /****************************** mderiv.cu ****************************/
 /* cuda driver for kernel */
 /* ThreadsPerBlock: keep <= 128
@@ -219,7 +261,7 @@ lbfgs_fit_wrapper(
    tilesz: tile size
    M: no of clusters
    Ns: no of stations
-   Nparam: no of actual parameters  <=total 
+   Nparam: no of actual parameters  <=total
    goff: starting point of gradient calculation 0..Nparams
    x: N*8 x 1 residual
    coh: N*8*M x 1
@@ -228,16 +270,16 @@ lbfgs_fit_wrapper(
    ptoclus: 2*M x 1
    grad: Nparamsx1 gradient values
 */
-extern void 
+extern void
 cudakernel_lbfgs(int ThreadsPerBlock, int BlocksPerGrid, int N, int tilesz, int M, int Ns, int Nparam, int goff, double *x, double *coh, double *p, short *bb, int *ptoclus, double *grad);
 /* x: data vector, not residual */
-extern void 
+extern void
 cudakernel_lbfgs_r(int ThreadsPerBlock, int BlocksPerGrid, int N, int tilesz, int M, int Ns, int Nparam, int goff, double *x, double *coh, double *p, short *bb, int *ptoclus, double *grad);
-extern void 
+extern void
 cudakernel_lbfgs_r_robust(int ThreadsPerBlock, int BlocksPerGrid, int N, int tilesz, int M, int Ns, int Nparam, int goff, double *x, double *coh, double *p, short *bb, int *ptoclus, double *grad, double robust_nu);
 
 
-/* cost function calculation, each GPU works with Nbase baselines out of Nbasetotal baselines 
+/* cost function calculation, each GPU works with Nbase baselines out of Nbasetotal baselines
  */
 extern double
 cudakernel_lbfgs_cost(int ThreadsPerBlock, int BlocksPerGrid, int Nbase, int boff, int M, int Ns, int Nbasetotal, double *x, double *coh, double *p, short *bb, int *ptoclus);
@@ -246,7 +288,7 @@ cudakernel_lbfgs_cost_robust(int ThreadsPerBlock, int BlocksPerGrid, int Nbase, 
 
 
 /* divide by singular values  Dpd[]/Sd[]  for Sd[]> eps */
-extern void 
+extern void
 cudakernel_diagdiv(int ThreadsPerBlock, int BlocksPerGrid, int M, double eps, double *Dpd, double *Sd);
 
 /* cuda driver for calculating
@@ -270,7 +312,7 @@ cudakernel_jacf(int ThreadsPerBlock_row, int  ThreadsPerBlock_col, double *p, do
 
 /****************************** mderiv_fl.cu ****************************/
 /* divide by singular values  Dpd[]/Sd[]  for Sd[]> eps */
-extern void 
+extern void
 cudakernel_diagdiv_fl(int ThreadsPerBlock, int BlocksPerGrid, int M, float eps, float *Dpd, float *Sd);
 /* cuda driver for calculating
   A<= A+mu I, adding mu to diagonal entries of A
@@ -315,7 +357,7 @@ cudakernel_updateweights(int ThreadsPerBlock, int BlocksPerGrid, int N, double *
 extern void
 cudakernel_sqrtweights(int ThreadsPerBlock, int BlocksPerGrid, int N, double *wt);
 
-/* evaluate expression for finding optimum nu for 
+/* evaluate expression for finding optimum nu for
   a range of nu values */
 extern void
 cudakernel_evaluatenu(int ThreadsPerBlock, int BlocksPerGrid, int Nd, double qsum, double *q, double deltanu,double nulow);
@@ -326,7 +368,7 @@ cudakernel_evaluatenu(int ThreadsPerBlock, int BlocksPerGrid, int Nd, double qsu
    tilesz: tile size
    M: no of clusters
    Ns: no of stations
-   Nparam: no of actual parameters  <=total 
+   Nparam: no of actual parameters  <=total
    goff: starting point of gradient calculation 0..Nparams
    x: N*8 x 1 residual
    coh: N*8*M x 1
@@ -335,7 +377,7 @@ cudakernel_evaluatenu(int ThreadsPerBlock, int BlocksPerGrid, int Nd, double qsu
    ptoclus: 2*M x 1
    grad: Nparamsx1 gradient values
 */
-extern void 
+extern void
 cudakernel_lbfgs_robust(int ThreadsPerBlock, int BlocksPerGrid, int N, int tilesz, int M, int Ns, int Nparam, int goff, double robust_nu, double *x, double *coh, double *p, short *bb, int *ptoclus, double *grad);
 
 /****************************** robust_fl.cu ****************************/
@@ -366,18 +408,18 @@ cudakernel_updateweights_fl(int ThreadsPerBlock, int BlocksPerGrid, int N, float
 extern void
 cudakernel_sqrtweights_fl(int ThreadsPerBlock, int BlocksPerGrid, int N, float *wt);
 
-/* evaluate expression for finding optimum nu for 
+/* evaluate expression for finding optimum nu for
   a range of nu values */
 extern void
 cudakernel_evaluatenu_fl(int ThreadsPerBlock, int BlocksPerGrid, int Nd, float qsum, float *q, float deltanu,float nulow);
 
-/* evaluate expression for finding optimum nu for 
+/* evaluate expression for finding optimum nu for
   a range of nu values , 8 variate T distrubution
   using AECM */
 extern void
 cudakernel_evaluatenu_fl_eight(int ThreadsPerBlock, int BlocksPerGrid, int Nd, float qsum, float *q, float deltanu,float nulow, float nu0);
 
-/****************************** clmfit.c ****************************/
+/****************************** clmfit_cuda.c ****************************/
 #ifdef HAVE_CUDA
 /* LM with GPU */
 extern int
@@ -400,7 +442,7 @@ clevmar_der_single(
                       * info[6]=reason for terminating: 1 - stopped by small gradient J^T e
                       *                                 2 - stopped by small Dp
                       *                                 3 - stopped by itmax
-                      *                                 4 - singular matrix. Restart from current p with increased mu 
+                      *                                 4 - singular matrix. Restart from current p with increased mu
                       *                                 5 - no further error reduction is possible. Restart with increased mu
                       *                                 6 - stopped by small ||e||_2
                       *                                 7 - stopped by invalid (i.e. NaN or Inf) "func" values. This is a user error
@@ -434,7 +476,7 @@ extern void
 reset_gpu_memory(double *WORK, int64_t work_size);
 
 
-/* same as above, but f() and jac() calculations are done 
+/* same as above, but f() and jac() calculations are done
   entirely in the GPU */
 extern int
 clevmar_der_single_cuda(
@@ -456,7 +498,7 @@ clevmar_der_single_cuda(
                       * info[6]=reason for terminating: 1 - stopped by small gradient J^T e
                       *                                 2 - stopped by small Dp
                       *                                 3 - stopped by itmax
-                      *                                 4 - singular matrix. Restart from current p with increased mu 
+                      *                                 4 - singular matrix. Restart from current p with increased mu
                       *                                 5 - no further error reduction is possible. Restart with increased mu
                       *                                 6 - stopped by small ||e||_2
                       *                                 7 - stopped by invalid (i.e. NaN or Inf) "func" values. This is a user error
@@ -486,7 +528,7 @@ mlm_der_single_cuda(
   double opts[6],   /* I: minim. options [\mu, \m, \p0, \p1, \p2, \delta].
                         delta: 1 or 2
                        */
-  double info[10], 
+  double info[10],
                       /* O: information regarding the minimization. Set to NULL if don't care
                       */
   cublasHandle_t cbhandle, /* device handle */
@@ -502,7 +544,7 @@ mlm_der_single_cuda(
 
 #endif /* HAVE_CUDA */
 /****************************** robustlm.c ****************************/
-/* robust, iteratively weighted non linear least squares using LM 
+/* robust, iteratively weighted non linear least squares using LM
   entirely in the GPU */
 #ifdef HAVE_CUDA
 extern int
@@ -532,7 +574,7 @@ rlevmar_der_single_cuda(
   double robust_nulow, double robust_nuhigh, /* robust nu range */
   void *adata);
 
-/* robust, iteratively weighted non linear least squares using LM 
+/* robust, iteratively weighted non linear least squares using LM
   entirely in the GPU, using float data */
 int
 rlevmar_der_single_cuda_fl(
@@ -557,9 +599,9 @@ rlevmar_der_single_cuda_fl(
   int tileoff, /* tile offset when solving for many chunks */
   int ntiles, /* total tile (data) size being solved for */
   double robust_nulow, double robust_nuhigh, /* robust nu range */
-  void *adata); 
+  void *adata);
 
-/* robust, iteratively weighted non linear least squares using LM 
+/* robust, iteratively weighted non linear least squares using LM
   entirely in the GPU, using float data, OS acceleration */
 extern int
 osrlevmar_der_single_cuda_fl(
@@ -637,7 +679,7 @@ osrlevmar_der_single_nocuda(
                       * info[6]=reason for terminating: 1 - stopped by small gradient J^T e
                       *                                 2 - stopped by small Dp
                       *                                 3 - stopped by itmax
-                      *                                 4 - singular matrix. Restart from current p with increased mu 
+                      *                                 4 - singular matrix. Restart from current p with increased mu
                       *                                 5 - no further error reduction is possible. Restart with increased mu
                       *                                 6 - stopped by small ||e||_2
                       *                                 7 - stopped by invalid (i.e. NaN or Inf) "func" values. This is a user error
@@ -666,7 +708,7 @@ __attribute__ ((target(MIC)))
 extern double
 update_nu(double sumlogw, int Nd, int Nt, double nulow, double nuhigh, int p, double nu0);
 
-/* update w and nu together 
+/* update w and nu together
    nu0: current value of nu
    w: Nx1 weight vector
    ed: Nx1 error vector
@@ -680,17 +722,17 @@ __attribute__ ((target(MIC)))
 extern double
 update_w_and_nu(double nu0, double *w, double *ed, int N, int Nt,  double nulow, double nuhigh);
 
-/* 
+/*
   taper data by weighting based on uv distance (for short baselines)
   for example: use weights as the inverse density function
-  1/( 1+f(u,v) ) 
- as u,v->inf, f(u,v) -> 0 so long baselines are not affected 
+  1/( 1+f(u,v) )
+ as u,v->inf, f(u,v) -> 0 so long baselines are not affected
  x: Nbase*8 x 1 (input,output) data
  u,v : Nbase x 1
  note: u = u/c, v=v/c here, so need freq to convert to wavelengths */
 extern void
 whiten_data(int Nbase, double *x, double *u, double *v, double freq0, int Nt);
-/****************************** clmfit_nocuda.c ****************************/
+/****************************** clmfit.c ****************************/
 /* LM with LAPACK */
 /** keep interface almost the same as in levmar **/
 #ifdef USE_MIC
@@ -716,7 +758,7 @@ clevmar_der_single_nocuda(
                       * info[6]=reason for terminating: 1 - stopped by small gradient J^T e
                       *                                 2 - stopped by small Dp
                       *                                 3 - stopped by itmax
-                      *                                 4 - singular matrix. Restart from current p with increased mu 
+                      *                                 4 - singular matrix. Restart from current p with increased mu
                       *                                 5 - no further error reduction is possible. Restart with increased mu
                       *                                 6 - stopped by small ||e||_2
                       *                                 7 - stopped by invalid (i.e. NaN or Inf) "func" values. This is a user error
@@ -742,7 +784,7 @@ mlm_der_single(
   double opts[6],   /* I: minim. options [\mu, \m, \p0, \p1, \p2, \delta].
                         delta: 1 or 2
                        */
-  double info[10], 
+  double info[10],
                       /* O: information regarding the minimization. Set to NULL if don't care
                       */
 
@@ -777,7 +819,7 @@ oslevmar_der_single_nocuda(
   void *adata);
 /****************************** oslmfit.c ****************************/
 #ifdef HAVE_CUDA
-/* OS-LM, but f() and jac() calculations are done 
+/* OS-LM, but f() and jac() calculations are done
   entirely in the GPU */
 extern int
 oslevmar_der_single_cuda(
@@ -799,7 +841,7 @@ oslevmar_der_single_cuda(
                       * info[6]=reason for terminating: 1 - stopped by small gradient J^T e
                       *                                 2 - stopped by small Dp
                       *                                 3 - stopped by itmax
-                      *                                 4 - singular matrix. Restart from current p with increased mu 
+                      *                                 4 - singular matrix. Restart from current p with increased mu
                       *                                 5 - no further error reduction is possible. Restart with increased mu
                       *                                 6 - stopped by small ||e||_2
                       *                                 7 - stopped by invalid (i.e. NaN or Inf) "func" values. This is a user error
@@ -841,7 +883,7 @@ clevmar_der_single_cuda_fl(
                       * info[6]=reason for terminating: 1 - stopped by small gradient J^T e
                       *                                 2 - stopped by small Dp
                       *                                 3 - stopped by itmax
-                      *                                 4 - singular matrix. Restart from current p with increased mu 
+                      *                                 4 - singular matrix. Restart from current p with increased mu
                       *                                 5 - no further error reduction is possible. Restart with increased mu
                       *                                 6 - stopped by small ||e||_2
                       *                                 7 - stopped by invalid (i.e. NaN or Inf) "func" values. This is a user error
@@ -876,7 +918,7 @@ oslevmar_der_single_cuda_fl(
                       * info[6]=reason for terminating: 1 - stopped by small gradient J^T e
                       *                                 2 - stopped by small Dp
                       *                                 3 - stopped by itmax
-                      *                                 4 - singular matrix. Restart from current p with increased mu 
+                      *                                 4 - singular matrix. Restart from current p with increased mu
                       *                                 5 - no further error reduction is possible. Restart with increased mu
                       *                                 6 - stopped by small ||e||_2
                       *                                 7 - stopped by invalid (i.e. NaN or Inf) "func" values. This is a user error
@@ -920,7 +962,7 @@ typedef struct thread_data_rtr_ {
   */
   int N; /* no of stations */
   int clus; /* which cluster to process, 0,1,...,M-1 if -1 all clusters */
-  
+
   /* output of cost function */
   double fcost;
   /* gradient */
@@ -1046,7 +1088,7 @@ rtr_solve_nocuda_robust_admm(
   me_data_t *adata);
 #ifdef HAVE_CUDA
 /****************************** manifold_fl.cu ****************************/
-extern float 
+extern float
 cudakernel_fns_f(int ThreadsPerBlock, int BlocksPerGrid, int N, int M, cuFloatComplex *x, float *y, float *coh, short *bbh);
 extern void
 cudakernel_fns_fgradflat(int ThreadsPerBlock, int BlocksPerGrid, int N, int M, cuFloatComplex *x, cuFloatComplex *eta, float *y, float *coh, short *bbh);
@@ -1054,7 +1096,7 @@ extern void
 cudakernel_fns_fhessflat(int ThreadsPerBlock, int BlocksPerGrid, int N, int M, cuFloatComplex *x, cuFloatComplex *eta, cuFloatComplex *fhess, float *y, float *coh, short *bbh);
 extern void
 cudakernel_fns_fscale(int N, cuFloatComplex *eta, float *iw);
-extern float 
+extern float
 cudakernel_fns_f_robust(int ThreadsPerBlock, int BlocksPerGrid, int N, int M, cuFloatComplex *x, float *y, float *coh, short *bbh,  float *wtd);
 extern void
 cudakernel_fns_fgradflat_robust(int ThreadsPerBlock, int BlocksPerGrid, int N, int M, cuFloatComplex *x, cuFloatComplex *eta, float *y, float *coh, short *bbh, float *wtd, cuFloatComplex *Ai, cublasHandle_t cbhandle, cusolverDnHandle_t solver_handle);
@@ -1133,7 +1175,7 @@ nsd_solve_cuda_robust_fl(
   int ntiles, /* total tile (data) size being solved for */
   me_data_t *adata);
 
-/****************************** rtr_solve_robust_cuda_admm.c ****************************/
+/****************************** rtr_solve_robust_admm_cuda.c ****************************/
 /* ADMM solver */
 extern int
 rtr_solve_cuda_robust_admm_fl(
@@ -1176,7 +1218,7 @@ nsd_solve_cuda_robust_admm_fl(
   me_data_t *adata);
 #endif /* HAVE_CUDA */
 /****************************** lmfit.c ****************************/
-/****************************** lmfit_nocuda.c ****************************/
+/****************************** lmfit_cuda.c ****************************/
 /* struct for calling parallel LM jobs */
 typedef struct thread_clm_data_t {
   double *p; /* parameters */
@@ -1194,10 +1236,10 @@ typedef struct thread_clm_data_t {
 
 /* generate a random permutation of given integers */
 /* note: free returned value after use */
-/* n: no of entries, 
+/* n: no of entries,
    weighter_iter: if 1, take weight into account
                   if 0, only generate a random permutation
-   w: weights (size nx1): sort them in descending order and 
+   w: weights (size nx1): sort them in descending order and
       give permutation accordingly
 */
 #ifdef USE_MIC
@@ -1208,7 +1250,7 @@ random_permutation(int n, int weighted_iter, double *w);
 
 /****************************** manifold_average.c ****************************/
 /* calculate manifold average of 2Nx2 solution blocks,
-   then project each solution to this average 
+   then project each solution to this average
    Y: 2Nx2 x M x Nf values (average calculated for each 2Nx2 x Nf blocks)
    N: no of stations
    M: no of directions
@@ -1221,8 +1263,8 @@ extern int
 calculate_manifold_average(int N,int M,int Nf,double *Y,int Niter,int randomize,int Nt);
 
 
-/* find U to  minimize 
-  ||J-J1 U|| solving Procrustes problem 
+/* find U to  minimize
+  ||J-J1 U|| solving Procrustes problem
   J,J1 : 8N x 1 vectors, in standard format
   will be reshaped to 2Nx2 format and J1 will be modified as J1 U
 */
@@ -1266,7 +1308,7 @@ find_prod_inverse(double *B, double *Bi, int Npoly, int Nf, double *fratio);
   Nf: frequencies
   M: clusters
   rho: NfxM array of regularization factors (for each freq, M values)
-  Sum taken is a weighted sum, using weights in rho, rho is assumed to change for each freq,cluster pair 
+  Sum taken is a weighted sum, using weights in rho, rho is assumed to change for each freq,cluster pair
 
   Nt: no. of threads
 */
@@ -1294,7 +1336,7 @@ update_global_z(double *Z,int N,int M,int Npoly,double *z,double *Bi);
 
    Nt: no. of threads
 */
-extern int 
+extern int
 update_global_z_multi(double *Z,int N,int M,int Npoly,double *z,double *Bi, int Nt);
 
 
@@ -1312,9 +1354,9 @@ update_rho_bb(double *rho, double *rhoupper, int N, int M, int Mt, clus_source_t
 /* extra params
    Y : Lagrange multiplier
    BZ : consensus term
-   Y,BZ : size same as pp : 8*N*Mt x1 double values (re,img) for each station/direction 
+   Y,BZ : size same as pp : 8*N*Mt x1 double values (re,img) for each station/direction
    admm_rho : regularization factor array size Mx1
-*/ 
+*/
 extern int
 sagefit_visibilities_admm(double *u, double *v, double *w, double *x, int N,
    int Nbase, int tilesz,  baseline_t *barr,  clus_source_t *carr, complex double *coh, int M, int Mt, double freq0, double fdelta, double *pp, double *Y, double *BZ, double uvmin, int Nt, int max_emiter, int max_iter, int max_lbfgs, int lbfgs_m, int gpu_threads, int linsolv,int solver_mode,double nulow, double nuhigh,int randomize, double *admm_rho, double *mean_nu, double *res_0, double *res_1);
@@ -1323,9 +1365,9 @@ sagefit_visibilities_admm(double *u, double *v, double *w, double *x, int N,
 /* extra params
    Y : Lagrange multiplier
    BZ : consensus term
-   Y,BZ : size same as pp : 8*N*Mt x1 double values (re,img) for each station/direction 
+   Y,BZ : size same as pp : 8*N*Mt x1 double values (re,img) for each station/direction
    admm_rho : regularization factor  array size Mx1
-*/ 
+*/
 #ifdef HAVE_CUDA
 extern int
 sagefit_visibilities_admm_dual_pt_flt(double *u, double *v, double *w, double *x, int N,
@@ -1338,7 +1380,7 @@ extern void
 openblas_set_num_threads(int num_threads);
 
 /****************************** lmfit.c ****************************/
-/****************************** lmfit_nocuda.c ****************************/
+/****************************** lmfit_cuda.c ****************************/
 /* minimization (or vector cost) function (multithreaded) */
 /* p: size mx1 parameters
    x: size nx1 model being calculated
@@ -1355,7 +1397,7 @@ minimize_viz_full_pth(double *p, double *x, int m, int n, void *data);
 #define SM_RTR_OSRLM_RLBFGS 5
 #define SM_NSD_RLBFGS 6
 /* fit visibilities
-  u,v,w: u,v,w coordinates (wavelengths) size Nbase*tilesz x 1 
+  u,v,w: u,v,w coordinates (wavelengths) size Nbase*tilesz x 1
   u,v,w are ordered with baselines, timeslots
   x: data to write size Nbase*8*tileze x 1
    ordered by XX(re,im),XY(re,im),YX(re,im), YY(re,im), baseline, timeslots
@@ -1373,7 +1415,7 @@ minimize_viz_full_pth(double *p, double *x, int m, int n, void *data);
   uvmin: baseline length sqrt(u^2+v^2) below which not to include in solution
   Nt: no. of threads
   max_emiter: EM iterations
-  max_iter: iterations within a single EM 
+  max_iter: iterations within a single EM
   max_lbfgs: LBFGS iterations (if>0 outside minimization will be LBFGS)
   lbfgs_m: memory size for LBFGS
   gpu_threads: GPU threads per block (LBFGS)
@@ -1391,13 +1433,13 @@ minimize_viz_full_pth(double *p, double *x, int m, int n, void *data);
 __attribute__ ((target(MIC)))
 #endif
 extern int
-sagefit_visibilities(double *u, double *v, double *w, double *x, int N, 
-   int Nbase, int tilesz,  baseline_t *barr, clus_source_t *carr, complex double *coh, int M, int Mt, double freq0, double fdelta, double *pp, double uvmin, int Nt,int max_emiter, int max_iter, int max_lbfgs, int lbfgs_m, int gpu_threads, int linsolv, int solver_mode, double nulow, double nuhigh, int randomize, double *mean_nu, double *res_0, double *res_1); 
+sagefit_visibilities(double *u, double *v, double *w, double *x, int N,
+   int Nbase, int tilesz,  baseline_t *barr, clus_source_t *carr, complex double *coh, int M, int Mt, double freq0, double fdelta, double *pp, double uvmin, int Nt,int max_emiter, int max_iter, int max_lbfgs, int lbfgs_m, int gpu_threads, int linsolv, int solver_mode, double nulow, double nuhigh, int randomize, double *mean_nu, double *res_0, double *res_1);
 
 /* same as above, but uses 2 GPUS in the LM stage */
 extern int
-sagefit_visibilities_dual(double *u, double *v, double *w, double *x, int N, 
-   int Nbase, int tilesz,  baseline_t *barr, clus_source_t *carr, complex double *coh, int M, int Mt, double freq0, double fdelta, double *pp, double uvmin, int Nt,int max_emiter, int max_iter, int max_lbfgs, int lbfgs_m, int gpu_threads, int linsolv, double nulow, double nuhigh, int randomize,  double *mean_nu, double *res_0, double *res_1); 
+sagefit_visibilities_dual(double *u, double *v, double *w, double *x, int N,
+   int Nbase, int tilesz,  baseline_t *barr, clus_source_t *carr, complex double *coh, int M, int Mt, double freq0, double fdelta, double *pp, double uvmin, int Nt,int max_emiter, int max_iter, int max_lbfgs, int lbfgs_m, int gpu_threads, int linsolv, double nulow, double nuhigh, int randomize,  double *mean_nu, double *res_0, double *res_1);
 
 
 
@@ -1417,29 +1459,29 @@ bfgsfit_visibilities_mic(double *u, double *v, double *w, double *x, int N,
 #endif
 
 
-/* BFGS only fit for multi channel data, interface same as sagefit_visibilities_xxx 
+/* BFGS only fit for multi channel data, interface same as sagefit_visibilities_xxx
   NO EM iterations are taken  */
 #ifdef USE_MIC
 __attribute__ ((target(MIC)))
 #endif
 extern int
-bfgsfit_visibilities(double *u, double *v, double *w, double *x, int N, 
-   int Nbase, int tilesz,  baseline_t *barr, clus_source_t *carr, complex double *coh, int M, int Mt, double freq0, double fdelta, double *pp, double uvmin, int Nt, int max_lbfgs, int lbfgs_m, int gpu_threads, int solver_mode, double mean_nu, double *res_0, double *res_1); 
+bfgsfit_visibilities(double *u, double *v, double *w, double *x, int N,
+   int Nbase, int tilesz,  baseline_t *barr, clus_source_t *carr, complex double *coh, int M, int Mt, double freq0, double fdelta, double *pp, double uvmin, int Nt, int max_lbfgs, int lbfgs_m, int gpu_threads, int solver_mode, double mean_nu, double *res_0, double *res_1);
 
 
 
 #ifdef HAVE_CUDA
 extern int
-bfgsfit_visibilities_gpu(double *u, double *v, double *w, double *x, int N, 
-   int Nbase, int tilesz,  baseline_t *barr,  clus_source_t *carr, complex double *coh, int M, int Mt, double freq0, double fdelta, double *pp, double uvmin, int Nt, int max_lbfgs, int lbfgs_m, int gpu_threads, int solver_mode,  double mean_nu, double *res_0, double *res_1); 
+bfgsfit_visibilities_gpu(double *u, double *v, double *w, double *x, int N,
+   int Nbase, int tilesz,  baseline_t *barr,  clus_source_t *carr, complex double *coh, int M, int Mt, double freq0, double fdelta, double *pp, double uvmin, int Nt, int max_lbfgs, int lbfgs_m, int gpu_threads, int solver_mode,  double mean_nu, double *res_0, double *res_1);
 
 
 /* data struct shared by all threads */
 typedef struct gb_data_ {
-  int status[2]; /* 0: do nothing, 
+  int status[2]; /* 0: do nothing,
               1: allocate GPU  memory, attach GPU
-              2: free GPU memory, detach GPU 
-              3,4..: do work on GPU 
+              2: free GPU memory, detach GPU
+              3,4..: do work on GPU
               99: reset GPU memory (memest all memory) */
   double *p[2]; /* pointer to parameters being solved by each thread */
   double *x[2]; /* pointer to data being fit by each thread */
@@ -1463,10 +1505,10 @@ typedef struct gb_data_ {
 
 /* same as above, but using floats */
 typedef struct gb_data_fl_ {
-  int status[2]; /* 0: do nothing, 
+  int status[2]; /* 0: do nothing,
               1: allocate GPU  memory, attach GPU
-              3: free GPU memory, detach GPU 
-              3,4..: do work on GPU 
+              3: free GPU memory, detach GPU
+              3,4..: do work on GPU
               99: reset GPU memory (memest all memory) */
   float *p[2]; /* pointer to parameters being solved by each thread */
   float *x[2]; /* pointer to data being fit by each thread */
@@ -1490,10 +1532,10 @@ typedef struct gb_data_fl_ {
 
 /* for ADMM solver */
 typedef struct gb_data_admm_fl_ {
-  int status[2]; /* 0: do nothing, 
+  int status[2]; /* 0: do nothing,
               1: allocate GPU  memory, attach GPU
-              3: free GPU memory, detach GPU 
-              3,4..: do work on GPU 
+              3: free GPU memory, detach GPU
+              3,4..: do work on GPU
               99: reset GPU memory (memest all memory) */
   float *p[2]; /* pointer to parameters being solved by each thread */
   float *Y[2]; /* pointer to Lagrange multiplier */
@@ -1523,8 +1565,8 @@ typedef struct gb_data_admm_fl_ {
 
 /* with 2 GPUs */
 extern int
-sagefit_visibilities_dual_pt(double *u, double *v, double *w, double *x, int N, 
-   int Nbase, int tilesz,  baseline_t *barr, clus_source_t *carr, complex double *coh, int M, int Mt, double freq0, double fdelta, double *pp, double uvmin, int Nt,int max_emiter, int max_iter, int max_lbfgs, int lbfgs_m, int gpu_threads, int linsolv, int solver_mode, double nulow, double nuhigh, int randomize, double *mean_nu, double *res_0, double *res_1); 
+sagefit_visibilities_dual_pt(double *u, double *v, double *w, double *x, int N,
+   int Nbase, int tilesz,  baseline_t *barr, clus_source_t *carr, complex double *coh, int M, int Mt, double freq0, double fdelta, double *pp, double uvmin, int Nt,int max_emiter, int max_iter, int max_lbfgs, int lbfgs_m, int gpu_threads, int linsolv, int solver_mode, double nulow, double nuhigh, int randomize, double *mean_nu, double *res_0, double *res_1);
 
 /* with 1 GPU and 1 CPU thread */
 extern int
