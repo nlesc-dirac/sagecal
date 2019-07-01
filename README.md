@@ -26,6 +26,11 @@
 Read INSTALL for installation. This file gives a brief guide to use SAGECal.
 Warning: this file may be obsolete. use sagecal -h to see up-to-date options.
 
+
+## Contributing
+Read the [contributing guide](https://github.com/nlesc-dirac/sagecal/blob/master/CONTRIBUTING.md)
+
+
 ## Code documentation
 Code documentation can be found [here](https://codedocs.xyz/nlesc-dirac/sagecal).
 
