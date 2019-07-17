@@ -255,7 +255,7 @@ def cluster_this(skymodel,Q,outfile,max_iterations=5):
           mra=X[ci,0]
           mdec=X[ci,1]
           closest=find_closest(mra,mdec,C,Ccos,Csin)
-          print("src %d closest %d"%(ci,closest))
+          #print("src %d closest %d"%(ci,closest))
           CL[ci]=closest
           # add this source to dict
           if closest in D:
