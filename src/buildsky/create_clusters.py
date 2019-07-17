@@ -206,7 +206,7 @@ def radec_to_lm_SIN(ra0,dec0,ra,dec):
 
 
 #### main clustering routine : Q clusters
-def cluster_this(skymodel,Q,outfile,max_iterations):
+def cluster_this(skymodel,Q,outfile,max_iterations=5):
    SKY=read_lsm_sky(skymodel)
    K=len(SKY)
    # check if we have more sources than clusters, otherwise change Q
@@ -234,7 +234,7 @@ def cluster_this(skymodel,Q,outfile,max_iterations):
       C[ci,0]=X[sImax,0]
       C[ci,1]=X[sImax,1]
       sItmp[sImax]=0.0
-   #print C
+   #print(C)
    # calculate weights
 
    # arrays to store which cluster each source belongs to
@@ -255,7 +255,7 @@ def cluster_this(skymodel,Q,outfile,max_iterations):
           mra=X[ci,0]
           mdec=X[ci,1]
           closest=find_closest(mra,mdec,C,Ccos,Csin)
-          #print "src %d closest %d"%(ci,closest)
+          print("src %d closest %d"%(ci,closest))
           CL[ci]=closest
           # add this source to dict
           if closest in D:
@@ -263,7 +263,7 @@ def cluster_this(skymodel,Q,outfile,max_iterations):
           else:
               D[closest]=list()
               D[closest].append(ci)
-      #print D
+      #print(D)
       
       # check to see also if source assignment changes
       if numpy.sum(CL-CLold)==0:
@@ -329,6 +329,8 @@ if __name__ == '__main__':
 
   if opts.skymodel and opts.clusters and opts.outfile and opts.iterations:
     cluster_this(opts.skymodel,opts.clusters,opts.outfile,opts.iterations)
+  elif opts.skymodel and opts.clusters and opts.outfile:
+    cluster_this(opts.skymodel,opts.clusters,opts.outfile)
   else:
    parser.print_help()
   exit()
