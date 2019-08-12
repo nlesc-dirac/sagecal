@@ -39,7 +39,7 @@ We will use the small MeasurementSet sm.ms provided with the SAGECal repo to cal
 ::   
 
    module load openblas cuda91 casacore/2.3.0-gcc-4.9.3 (or a similar instruction, if necessary)
-   ../../install/bin/sagecal_gpu -d sm.ms -s 3c196.sky.txt -c 3c196.sky.txt.cluster -n 40 -t 2 -p sm.ms.solutions -a 0 -e 4 -F 1 -j 5 -k 1 -B 1 -E 1  > sm.ms.output
+   ../../install/bin/sagecal_gpu -d sm.ms -s 3c196.sky.txt -c 3c196.sky.txt.cluster -n 40 -t 2 -p sm.ms.solutions -a 0 -e 4 -F 1 -j 2 -k 1 -B 1 -E 1  > sm.ms.output
 
 The "-t 2" together with the "2" in the second column of the cluster file means that we have effectively used a solution interval equal to the time sampling interval of the sm.ms observation. Also, we have used 40 CPU threads; optimally, this value coincides with the number of logical cores of your CPU. 
 And we have "-k 1" to correct the residuals of our first - and only - cluster. These and other arguments are explained when you run 
@@ -48,11 +48,83 @@ And we have "-k 1" to correct the residuals of our first - and only - cluster. T
 
    ../../install/bin/sagecal_gpu -h
 
-Within a few minutes, the calibration will have completed and we will image the calibrated visibilities using 
+This will also show you other options for "-j". "-j 5" uses a robust Riemannian trust region (RRTR), which is much faster than "-j 2" (OSRLM = Ordered Subsets Accelerated Robust Levenberg Marquardt). The downside from using RRTR is that it will only work properly if the power level of the visibilities that you are calibrating matches the power level of the sky model that you are using. If this is not the case, rounding errors may prevent you from finding accurate solutions. Use this Python 2 script - Scale.py - to scale your visibilities and write the output to the CORRECTED_DATA column:
+
+::
+
+   #!/usr/bin/env python2
+   import pyrap.tables as pt
+   import string
+   def read_corr(msname,scalefac):
+       tt=pt.table(msname,readonly=False)
+       c=tt.getcol('DATA')
+       tt.putcol('CORRECTED_DATA',c*scalefac)
+       tt.close()
+   if __name__ == '__main__':
+       # args MS scalefac
+       import sys
+       argc=len(sys.argv)
+       if argc==3:
+           read_corr(sys.argv[1],float(sys.argv[2]))
+       exit()
+
+You can run this script like this:
+
+::
+
+   ./Scale.py sm.ms 1e5
+
+Beware that it any subsequent steps you will have to use the "-I" option in SAGECal to use the "CORRECTED_DATA" column as input. For now, we will take the easy way by performing coarse calibration - using our initial sky model - with "-j 2" - which does not require any scaling - and using "-j 5" from the first selfcal loop onwards.
+Within a few minutes, SAGECal will have completed coarse calibration and we can image the calibrated visibilities using 
 
 :: 
 
    module load wsclean (or a similar instruction, if necessary)
+   # wsclean -size 2048 2048 -scale 0.3amin -niter 10000 -mgain 0.8 -auto-threshold 3 sm.ms 
    wsclean -size 1024 1024 -scale 0.7amin -niter 10000 -mgain 0.8 -auto-threshold 3 sm.ms
 
+This will produce an image wsclean-image.fits that we can use for the first round of self-calibration. To extract the sky model from wsclean-image.fits we will use Duchamp_. This three-dimensional source finder is most easily installed - after downloading and extracting the source code tar archive - using
+
+::
+
+   ./configure --prefix=/my/favorite/install/dir
+   make
+   make install
+
+
+However, you may run into a missing "wcslib/cpgsbox.h" error. This can be solved by reconfiguring:
+
+::
+
+   ./configure --without-pgplot --prefix=/my/favorite/install/dir
+
+Next, we need to supply Duchamp with a configuration file to extract a sky model from the FITS image. You can use this minimal configuration file:
+
+:: 
+
+   ##########################################
+   imageFile       wsclean-image.fits
+   logFile         logfile.txt
+   outFile         results.txt
+   spectraFile     spectra.ps
+   minPix          5
+   snrRecon        10.
+   flagKarma 1
+   karmaFile duchamp.ann
+   flagnegative 0
+   flagMaps 0
+   flagOutputMask 1
+   flagMaskWithObjectNum 1
+   flagXOutput 0
+   ############################################
+
+which we call my-Duchamp-conf.txt.
+
+Simply run it like this:
+
+::
+
+   Duchamp -p my-Duchamp-conf.txt 
+
+.. _Duchamp: https://www.atnf.csiro.au/people/Matthew.Whiting/Duchamp/
 
