@@ -12,7 +12,7 @@ It is assumed that you have performed direction independent calibration prior to
 
 Selfcal
 ^^^^^^^
-We will demonstrate selfcal using the SAGECal executable for a GPU - sagecal_gpu - built with cmake, but instructions are, of course, similar for the containerized version of sagecal_gpu.
+We will demonstrate selfcal using the SAGECal executable for a GPU - sagecal_gpu - built with cmake, but instructions are, of course, similar for the containerized version of sagecal_gpu. Building sagecal will also automatically build buildsky, which we need for self-calibration.
 
 After you have cloned, built and installed SAGECal - e.g., in a directory called "install" - from the top level directory in the cloned repo, do:
 
@@ -127,4 +127,19 @@ Simply run it like this:
    Duchamp -p my-Duchamp-conf.txt 
 
 .. _Duchamp: https://www.atnf.csiro.au/people/Matthew.Whiting/Duchamp/
+
+Next, build the sky model using the mask file:
+
+::
+
+   /path/to/buildsky -f wsclean-image.fits -m wsclean-image.MASK.fits
+
+This will create a sky model file wsclean-image.fits.sky.txt, in BBS_ format.
+
+.. _BBS: https://support.astron.nl/LOFARImagingCookbook/bbs.html#calibration-with-bbs
+
+From this, we need to construct a cluster file, which determines the directions for which we seek calibration solutions. /src/buildsky/create_clusters.py can be used to construct such a file by setting the number of clusters for a given sky model. It is a Python 3 script that requires the source model to be in LSM format. /src/buildsky/convert_skymodel.py is a Python 2 script to convert our sky model from BBS to LSM format:
+
+::
+
 
