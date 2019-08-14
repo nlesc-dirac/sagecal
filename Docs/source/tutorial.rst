@@ -146,6 +146,7 @@ This will produce a cluster file wsclean-image.fits.sky.txt.cluster defining 10 
 Next, we run a selfcal loop:
 
 ::
+
    ../../install/bin/sagecal_gpu -I CORRECTED_DATA -d sm.ms -s wsclean-image.fits.sky.txt -c wsclean-image.fits.sky.txt.cluster -n 40 -t 2 -p sm.ms.solutions -a 0 -e 4 -F 1 -j 2 -k 1 -B 1 -E 1  > sm.ms.output
    wsclean -size 1024 1024 -scale 0.7amin -niter 10000 -mgain 0.8 -auto-threshold 3 sm.ms
 
