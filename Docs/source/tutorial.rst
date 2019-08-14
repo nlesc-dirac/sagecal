@@ -132,14 +132,27 @@ Next, build the sky model using the mask file:
 
 ::
 
-   /path/to/buildsky -f wsclean-image.fits -m wsclean-image.MASK.fits
+   /path/to/buildsky -f wsclean-image.fits -m wsclean-image.MASK.fits -o 1
 
-This will create a sky model file wsclean-image.fits.sky.txt, in BBS_ format.
+This will create a sky model file wsclean-image.fits.sky.txt, in LSM format [#]_.
 
-.. _BBS: https://support.astron.nl/LOFARImagingCookbook/bbs.html#calibration-with-bbs
-
-From this, we need to construct a cluster file, which determines the directions for which we seek calibration solutions. /src/buildsky/create_clusters.py can be used to construct such a file by setting the number of clusters for a given sky model. It is a Python 3 script that requires the source model to be in LSM format. /src/buildsky/convert_skymodel.py is a Python 2 script to convert our sky model from BBS to LSM format:
+From this, we need to construct a cluster file, which determines the directions for which we seek calibration solutions. src/buildsky/create_clusters.py can be used to construct such a file by setting the number of clusters for a given sky model. It is a Python 3 script that requires the source model to be in LSM format. Thankfully, we have run buildsky in the appropriate manner.
 
 ::
+
+   /path/to/create_clusters.py -s wsclean-image.fits.sky.txt -c 10 -o wsclean-image.fits.sky.txt.cluster -i 10
+
+This will produce a cluster file wsclean-image.fits.sky.txt.cluster defining 10 clusters. A maximum of 10 iterations was set, but 5 were sufficient.
+Next, we run a selfcal loop:
+
+::
+   ../../install/bin/sagecal_gpu -I CORRECTED_DATA -d sm.ms -s wsclean-image.fits.sky.txt -c wsclean-image.fits.sky.txt.cluster -n 40 -t 2 -p sm.ms.solutions -a 0 -e 4 -F 1 -j 2 -k 1 -B 1 -E 1  > sm.ms.output
+   wsclean -size 1024 1024 -scale 0.7amin -niter 10000 -mgain 0.8 -auto-threshold 3 sm.ms
+
+Note the "-I CORRECTED_DATA". It is essential since our new model wsclean-image.fits.sky.txt and our new cluster file wsclean-image.fits.sky.txt.cluster have the 3C196 cluster subtracted, so the visibilities should also exclude this source. We could have run this calibration loop faster by using "-j 5".
+
+.. rubric:: Footnotes
+
+.. [#] I was not able to find a document describing the format of a sky model file in LSM format.
 
 
