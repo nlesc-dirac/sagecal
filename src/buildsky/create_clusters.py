@@ -222,8 +222,6 @@ def cluster_this(skymodel,Q,outfile,max_iterations):
    if Q>K:
      Q=K
 
-   print("Q = {0}, K = {1}".format(Q, K))
-   print()
    # create arrays for all source info (ra,dec,sI) for easy access
    X=numpy.zeros([K,3])
    # iterate over sources
