@@ -209,10 +209,21 @@ def radec_to_lm_SIN(ra0,dec0,ra,dec):
 def cluster_this(skymodel,Q,outfile,max_iterations):
    SKY=read_lsm_sky(skymodel)
    K=len(SKY)
+
+   # negative_cluster_ids will keep a record of the user's request for negative cluster ids,
+   # The user can indicate this  by entering a negative number of clusters.
+   if Q<0:
+       negative_cluster_ids=True
+       Q=-Q
+   else:
+       negative_cluster_ids=False
+
    # check if we have more sources than clusters, otherwise change Q
    if Q>K:
      Q=K
 
+   print("Q = {0}, K = {1}".format(Q, K))
+   print()
    # create arrays for all source info (ra,dec,sI) for easy access
    X=numpy.zeros([K,3])
    # iterate over sources
@@ -312,7 +323,10 @@ def cluster_this(skymodel,Q,outfile,max_iterations):
    outF=open(outfile,'w+')
    outF.write('# Cluster file\n')
    for (clusid,sourcelist) in list(D.items()):
-     outF.write(str(clusid+1)+' 1')
+     if negative_cluster_ids==False:
+         outF.write(str(clusid+1)+' 1')
+     else:
+         outF.write(str(-clusid-1)+' 1')
      for sourceid in sourcelist:
        outF.write(' '+sources[sourceid])
      outF.write('\n')
@@ -322,7 +336,7 @@ if __name__ == '__main__':
   import sys
   parser=optparse.OptionParser()
   parser.add_option('-s', '--skymodel', help='Input sky model')
-  parser.add_option('-c', '--clusters', type='int', help='Number of clusters')
+  parser.add_option('-c', '--clusters', type='int', help='Number of clusters. Absolute value if negative and the cluster ids will be negative.')
   parser.add_option('-o', '--outfile', help='Output cluster file')
   parser.add_option('-i', '--iterations', type='int', help='Number of iterations')
   (opts,args)=parser.parse_args()
