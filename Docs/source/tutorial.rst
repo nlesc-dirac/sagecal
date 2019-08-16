@@ -134,7 +134,9 @@ Next, build the sky model using the mask file:
 
    /path/to/buildsky -f wsclean-image.fits -m wsclean-image.MASK.fits -o 1
 
-This will create a sky model file wsclean-image.fits.sky.txt, in LSM format [#]_.
+This will create a sky model file wsclean-image.fits.sky.txt, in `LSM format`_.
+
+.. _`LSM format`: https://github.com/nlesc-dirac/sagecal/blob/master/README.md#2c-sky-model-format 
 
 From this, we need to construct a cluster file, which determines the directions for which we seek calibration solutions. src/buildsky/create_clusters.py can be used to construct such a file by setting the number of clusters for a given sky model. It is a Python 3 script that requires the source model to be in LSM format. Thankfully, we have run buildsky in the appropriate manner.
 
@@ -151,12 +153,10 @@ Next, we run a selfcal loop:
    wsclean -size 1024 1024 -scale 0.7amin -niter 10000 -mgain 0.8 -auto-threshold 3 sm.ms
 
 Note the "-I CORRECTED_DATA". It is essential since our new model wsclean-image.fits.sky.txt and our new cluster file wsclean-image.fits.sky.txt.cluster have the 3C196 cluster subtracted, so the visibilities should also exclude this source. We could have run this calibration loop faster by using "-j 5".
-After running wsclean you will have an image with a rms noise that has dropped to about 15 mJy/bm from about 25 mJy/bm - after our first sagecal and imaging run. You can inspect this final image:
+After running wsclean you will have an image with a rms noise that has dropped to about 15 mJy/bm from about 25 mJy/bm - after our first sagecal and imaging run. Here you can see a cropped version of this final image:
 
 .. image:: wsclean-image-cropped.png
 
-.. rubric:: Footnotes
 
-.. [#] I was not able to find a document describing the format of a sky model file in LSM format.
 
 
