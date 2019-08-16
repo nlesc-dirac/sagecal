@@ -817,7 +817,9 @@ lbfgs_fit_minibatch(
      }*/
      parallel_outer_product(m,indata->running_avg_sq,g_min_rold,g_min_rnew,indata->Nt);
 
-     /* estimate online variance */
+     /* estimate online variance 
+       Note: for badly initialized cases, might need to increase initial value of alphabar
+       because of gradnrm is too large, alphabar becomes too small */
      alphabar=10.0/(1.0+my_dasum(m,indata->running_avg_sq)/((double)(indata->niter-1)*gradnrm)); 
 #ifdef DEBUG
      printf("iter=%d running_avg %lf gradnrm %lf alpha=%lf\n",indata->niter,my_dasum(m,indata->running_avg_sq),gradnrm,alphabar);

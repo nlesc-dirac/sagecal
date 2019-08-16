@@ -261,7 +261,7 @@ cpu_calc_deriv_robust(void *adata) {
        poff=pstart+tpchunk*8*N+sta2*8;
        G2[0]=(t->p[poff])+_Complex_I*(t->p[poff+1]);
        G2[1]=(t->p[poff+2])+_Complex_I*(t->p[poff+3]);
-       G2[2]=(t->p[poff+4])+_Complex_I*(t->p[poff+4]);
+       G2[2]=(t->p[poff+4])+_Complex_I*(t->p[poff+5]);
        G2[3]=(t->p[poff+6])+_Complex_I*(t->p[poff+7]);
 
      } else if (stc==sta2) {
@@ -522,7 +522,7 @@ cpu_calc_deriv(void *adata) {
        poff=pstart+tpchunk*8*N+sta2*8;
        G2[0]=(t->p[poff])+_Complex_I*(t->p[poff+1]);
        G2[1]=(t->p[poff+2])+_Complex_I*(t->p[poff+3]);
-       G2[2]=(t->p[poff+4])+_Complex_I*(t->p[poff+4]);
+       G2[2]=(t->p[poff+4])+_Complex_I*(t->p[poff+5]);
        G2[3]=(t->p[poff+6])+_Complex_I*(t->p[poff+7]);
 
      } else if (stc==sta2) {

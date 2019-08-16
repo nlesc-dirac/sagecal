@@ -92,7 +92,7 @@ print_help(void) {
 void
 ParseCmdLine(int ac, char **av) {
     print_copyright();
-    char c;
+    int c;
     if(ac < 2)
     {
         print_help();
