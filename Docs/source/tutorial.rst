@@ -151,7 +151,9 @@ Next, we run a selfcal loop:
    wsclean -size 1024 1024 -scale 0.7amin -niter 10000 -mgain 0.8 -auto-threshold 3 sm.ms
 
 Note the "-I CORRECTED_DATA". It is essential since our new model wsclean-image.fits.sky.txt and our new cluster file wsclean-image.fits.sky.txt.cluster have the 3C196 cluster subtracted, so the visibilities should also exclude this source. We could have run this calibration loop faster by using "-j 5".
-After running wsclean you will have an image with a rms noise that has dropped to about 15 mJy/bm from about 25 mJy/bm - after our first sagecal run. You can inspect this final image :download:`here <wsclean-image.fits>`.
+After running wsclean you will have an image with a rms noise that has dropped to about 15 mJy/bm from about 25 mJy/bm - after our first sagecal and imaging run. You can inspect this final image:
+
+.. image:: wsclean-image-cropped.png
 
 .. rubric:: Footnotes
 
