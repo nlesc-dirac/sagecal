@@ -144,7 +144,7 @@ if(HAVE_CUDA)
 
   set(CUDA_NVCC_FLAGS "${CUDA_NVCC_FLAGS} -gencode arch=compute_35,code=sm_35 -gencode arch=compute_37,code=sm_37 -gencode arch=compute_50,code=sm_50 -gencode arch=compute_52,code=sm_52 -gencode arch=compute_60,code=sm_60 -gencode arch=compute_61,code=compute_61 -gencode arch=compute_62,code=compute_62 --ptxas-options=-v")
 
-  set(CUDA_NVCC_FLAGS "${CUDA_NVCC_FLAGS} -DHAVE_CUDA -DHYBRID_CODE")
+  set(CUDA_NVCC_FLAGS "${CUDA_NVCC_FLAGS} -DHAVE_CUDA")
 
   # definition for preprocessor
   # TODO: check target_add_definition()

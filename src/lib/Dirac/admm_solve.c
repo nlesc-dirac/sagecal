@@ -419,8 +419,8 @@ printf("residual init=%lf final=%lf\n\n",init_res,final_res);
 
 
 
+#ifdef HAVE_CUDA
 /****************************************************************************/
-#ifdef HYBRID_CODE
 /* slave thread 2GPU function */
 static void *
 pipeline_slave_code_admm_flt(void *data)
@@ -1311,4 +1311,4 @@ printf("1: %lf -> %lf\n\n\n",info0[0],info0[1]);
  }
  return 0;
 }
-#endif /* HYBRID_CODE */
+#endif /* HAVE_CUDA */

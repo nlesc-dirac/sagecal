@@ -22,13 +22,11 @@ link_directories(${CMAKE_CURRENT_SOURCE_DIR}/../lib/Radio)
 
 FILE(GLOB SRCFILES *.cpp)
 
-# # add build dependencies
-# target_link_libraries(${target} radio)
-# target_link_libraries(${target} dirac)
+# add build dependencies
+target_link_libraries(${target} radio)
+target_link_libraries(${target} dirac)
 
 if(HAVE_CUDA)
-
-    add_definitions(-DONE_GPU)
 
     cuda_add_executable(sagecal_gpu ${SRCFILES})
 
@@ -42,7 +40,6 @@ if(HAVE_CUDA)
         ${WCSLIB_LIBRARIES}
         ${GLIB_PKG_LIBRARIES}
         ${LIBGFORTRAN_LIBRARIES}
-        -lopenblas
         -lgfortran
         -lpthread
         -lm

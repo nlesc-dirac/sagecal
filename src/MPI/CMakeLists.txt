@@ -19,11 +19,12 @@ else()
 
 
     FILE(GLOB SRCFILES *.cpp)
-    # # add build dependencies
-    # target_link_libraries(${target} radio)
-    # target_link_libraries(${target} dirac)
+    # add build dependencies
+    target_link_libraries(${target} radio)
+    target_link_libraries(${target} dirac)
 
     include_directories(SYSTEM ${MPI_INCLUDE_PATH})
+    string(STRIP "${SRCFILES}" SRCFILES)    
     add_executable(sagecal-mpi ${SRCFILES})
 
     target_link_libraries(sagecal-mpi
