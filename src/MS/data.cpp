@@ -46,7 +46,7 @@ int Data::TileSize = 120;
 int Data::Nt= 6; 
 char *Data::SkyModel=NULL;
 char *Data::Clusters=NULL;
-int Data::format=0; /* old LSM */
+int Data::format=1; /* defaut is LSM with 3rd order spectra */
 double Data::nulow=2.0;
 double Data::nuhigh=30.0;
 
