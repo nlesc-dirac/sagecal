@@ -64,6 +64,7 @@ destroy_task_hist(taskhist *th) {
    in such a way to allow load balancing */
 int
 select_work_gpu(int max_gpu, taskhist *th) {
+  if (!max_gpu) return 0; /* no need to spend time if only one GPU is available */
 #ifdef MPI_BUILD
   int rank;
   MPI_Comm_rank(MPI_COMM_WORLD, &rank);
