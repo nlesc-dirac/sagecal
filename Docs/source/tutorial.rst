@@ -151,18 +151,10 @@ Let's call this new configuration file Duchamp-conf-for-first-selfcal-loop.txt. 
 
    Duchamp -p Duchamp-conf-for-first-selfcal-loop.txt
    buildsky -f after-initial-calibration-image.fits -m after-initial-calibration-image-MASK.fits -o 1
-   create_clusters.py -s after-initial-calibration-image.fits.sky.txt -c -4 -o after-initial-calibration-image.fits.sky.txt.cluster -i 10
+   create_clusters.py -s after-initial-calibration-image.fits.sky.txt -c 4 -o after-initial-calibration-image.fits.sky.txt.cluster -i 10
 
-Note that we have used "-4" instead of "4" for the number of clusters to be constructed. This will give all the clusters a negative cluster id. Consequently, sagecal will not subtract any source from the data. This is not necessary, because the remaining sources are so dim that their side lobes do not appear to conceal a significant amount of flux. 
-Now we can do another round of calibration and imaging. For calibration we will use as input the "CORRECTED_DATA" column because this column has 3C196 subracted as has the model that we are calibrating on. We have to run sagecal four times, for the four clusters.
+Now we can do a first round of self calibration. For calibration we will use as input the "CORRECTED_DATA" column because this column has 3C196 subracted as has the model that we are calibrating on. 
 
 ::
-   
-   ../../install/bin/sagecal_gpu -d sm.ms -s after-initial-calibration-image.fits.sky.txt -c after-initial-calibration-image.fits.sky.txt.cluster -n 40 -t 1 -p sm.ms.solutions -a 0 -e 4 -F 1 -j 2 -k 1 -B 1 -E 1 -I CORRECTED_DATA > sm.ms.output
-   ../../install/bin/sagecal_gpu -d sm.ms -s after-initial-calibration-image.fits.sky.txt -c after-initial-calibration-image.fits.sky.txt.cluster -n 40 -t 1 -p sm.ms.solutions -a 0 -e 4 -F 1 -j 2 -k 2 -B 1 -E 1 -I CORRECTED_DATA > sm.ms.output
-   ../../install/bin/sagecal_gpu -d sm.ms -s after-initial-calibration-image.fits.sky.txt -c after-initial-calibration-image.fits.sky.txt.cluster -n 40 -t 1 -p sm.ms.solutions -a 0 -e 4 -F 1 -j 2 -k 3 -B 1 -E 1 -I CORRECTED_DATA > sm.ms.output
-   ../../install/bin/sagecal_gpu -d sm.ms -s after-initial-calibration-image.fits.sky.txt -c after-initial-calibration-image.fits.sky.txt.cluster -n 40 -t 1 -p sm.ms.solutions -a 0 -e 4 -F 1 -j 2 -k 4 -B 1 -E 1 -I CORRECTED_DATA > sm.ms.output
-   wsclean -size 1024 1024 -name after_one_selfcal_loop -scale 0.7amin -niter 10000 -mgain 0.8 -auto-threshold 3 sm.ms
-
-Note the "-name after_one_selfcal_loop" argument to make sure that wsclean does not overwrite our previous image.
+   ../../install/bin/sagecal_gpu -d sm.ms -s after-initial-calibration-image.fits.sky.txt -c after-initial-calibration-image.fits.sky.txt.cluster -n 40 -t 1 -p sm.ms.solutions  -e 4 -F 1 -j 5 -B 1 -E 1 -I CORRECTED_DATA -O MODEL_DATA > sm.ms.output
 
