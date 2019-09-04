@@ -1421,7 +1421,7 @@ bfgsfit_visibilities_gpu(double *u, double *v, double *w, double *x, int N,
 
   if (max_lbfgs>0) {
    /* use LBFGS */
-   if (solver_mode==2 || solver_mode==3) {
+   if (solver_mode==SM_RLM_RLBFGS || solver_mode==SM_OSLM_OSRLM_RLBFGS || solver_mode==SM_RTR_OSRLM_RLBFGS || solver_mode==SM_NSD_RLBFGS) {
     lmdata.robust_nu=mean_nu;
     lbfgs_fit_robust_cuda(p, x, m, n, max_lbfgs, lbfgs_m, gpu_threads, (void*)&lmdata);
    } else {

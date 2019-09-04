@@ -46,7 +46,7 @@ int Data::TileSize = 120;
 int Data::Nt= 6; 
 char *Data::SkyModel=NULL;
 char *Data::Clusters=NULL;
-int Data::format=0; /* old LSM */
+int Data::format=1; /* defaut is LSM with 3rd order spectra */
 double Data::nulow=2.0;
 double Data::nuhigh=30.0;
 
@@ -63,7 +63,7 @@ int Data::DoDiag=0;
 int Data::doChan=0; /* if 1, solve for each channel in multi channel data */
 int Data::doBeam=0; /* if >0, enable LOFAR beam model */
 int Data::phaseOnly=0; /* if >0, enable phase only correction */
-int Data::solver_mode=0;
+int Data::solver_mode=SM_RTR_OSRLM_RLBFGS; /* use RTR+LBFGS by default */
 int Data::ccid=-99999;
 double Data::rho=1e-9;
 char *Data::solfile=NULL;

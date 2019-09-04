@@ -96,7 +96,7 @@ print_help(void) {
 /* command line parsing for both master/slaves */
 void 
 ParseCmdLine(int ac, char **av) {
-    char c;
+    int c;
     while((c=getopt(ac, av, "c:e:f:g:j:k:l:m:n:o:p:q:r:s:t:x:y:A:B:C:E:F:I:J:K:L:O:P:Q:G:H:R:S:T:W:E:MVh"))!= -1)
     {
         switch(c)
