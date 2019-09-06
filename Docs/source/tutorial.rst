@@ -87,17 +87,17 @@ From this, we need to construct a cluster file, which determines the directions 
 
 ::
 
-   /path/to/create_clusters.py -s skyview-image.fits.sky.txt -c 1 -o skyview-image.fits.sky.txt.cluster -i 10
+   /path/to/create_clusters.py -s skyview-image.fits.sky.txt -c -1 -o skyview-image.fits.sky.txt.cluster -i 10
 
-This will produce a cluster file skyview-image.fits.sky.txt.cluster with just one cluster. The two separate sources shown in the SkyView/TGSS image of 3C196 are separated by 3-4', so much less than the size of the isoplanatic patch at our observing frequency (153 MHz). A maximum of 10 iterations was set, but 2 were enough. Now calibrate our data on this sky model, optionally making use of GPU power.
+This will produce a cluster file skyview-image.fits.sky.txt.cluster with just one cluster, which will not be subtracted, because it will get a negative id. The two separate sources shown in the SkyView/TGSS image of 3C196 are separated by 3-4', so much less than the size of the isoplanatic patch at our observing frequency (153 MHz). A maximum of 10 iterations was set, but 2 were enough. Now calibrate our data on this sky model, optionally making use of GPU power.
 
 ::   
 
    module load openblas cuda91 casacore/2.3.0-gcc-4.9.3 (or a similar instruction, if necessary)
-   ../../install/bin/sagecal_gpu -d sm.ms -s skyview-image.fits.sky.txt -c skyview-image.fits.sky.txt.cluster -n 40 -t 1 -p sm.ms.solutions -a 0 -e 4 -F 1 -j 2 -k 1 -B 1 -E 1  > sm.ms.output
+   ../../install/bin/sagecal_gpu -d sm.ms -s skyview-image.fits.sky.txt -c skyview-image.fits.sky.txt.cluster -n 40 -t 1 -p sm.ms.solutions -a 0 -e 4 -F 1 -j 2 -k -1 -B 1 -E 1  > sm.ms.output
 
 The "-t 1" means that we have chosen a solution interval equal to the time sampling interval of the sm.ms observation. Also, we have used 40 CPU threads; optimally, this value coincides with the number of logical cores of your CPU. 
-And we have "-k 1" to correct the residuals of cluster number 1. 
+And we have "-k -1" to apply our calibration solution for cluster number -1, which, as mentioned before, will not be subtracted because of its negative id.
 
    
 These and other arguments are explained when you run 
@@ -132,7 +132,10 @@ You can run this script like this:
 
    ./Scale.py sm.ms 1e5
 
-We do not need to run it if we use the CORRECTED_DATA column, that we have just filled with our "-j 2" sagecal run, for all our subsequent "-j 5" sagecal runs or if we stick with "-j 2".
+We do not need to run it if we use the CORRECTED_DATA column, that we have just filled with our "-j 2" sagecal run, for all our subsequent "-j 5" sagecal runs as input or if we stick with "-j 2". Note that sagecal will only apply calibration solutions if -k is set equal to a cluster id in the cluster file. Also, direction dependent calibration solutions can only be applied for one direction (cluster) at a time. This is not specific to sagecal, but a fundamental property of the matrix equation for direction dependent calibration. Hence, imaging needs to be done per direction and you will need a package like DDFacet_ to stitch the different images (facets) together to cover the entire field of view of the observation. If -k is not set equal to any cluster id, the data stored in the output column - sagecal's -O argument,  the CORRECTED_DATA column by default - will be uncalibrated. This means that, when sagecal has been run with default settings, the contents of the DATA column will be equal to the contents of the CORRECTED_DATA column if the clusters all have a negative id; any cluster will a positive id will be subtracted by applying the inverse of the calibration solutions, i.e. they will be subtracted in the "uncalibrated domain".
+
+.. _DDFacet: https://github.com/saopicc/DDFacet
+
 Within a few minutes, SAGECal will have completed initial calibration and we can image the calibrated visibilities using 
 
 :: 
@@ -144,17 +147,33 @@ This will produce an image after-initial-calibration-image.fits, that looks like
 
 .. image:: image_after_initial_calibration.png
 
-This is already a pretty decent image that has a rms noise of 40-50 mJy/bm. You can clearly see that 3C196 has been removed. We can use it for the first round of self-calibration. To do so, we will have to extract a new sky model from it. Modify your previous Duchamp configuration file my-Duchamp-conf.txt to work on our image after-initial-calibration-image.fits instead of skyview-image.fits and add a line "fileOutputMask  after-initial-calibration-image-MASK.fits" to prevent Duchamp from producing a mask file with a space in the file name, which ds9 cannot handle. 
+This is already a pretty decent image that has a rms noise of 40-50 mJy/bm, but you can see side lobes from 3C196 across the image. We can use it for the first round of self-calibration. To do so, we will have to extract a new sky model from it. Modify your previous Duchamp configuration file my-Duchamp-conf.txt to work on our image after-initial-calibration-image.fits instead of skyview-image.fits and add a line "fileOutputMask  after-initial-calibration-image-MASK.fits" to prevent Duchamp from producing a mask file with a space in the file name, which ds9 cannot handle. 
 Let's call this new configuration file Duchamp-conf-for-first-selfcal-loop.txt. Run Duchamp with this configuration file and also buildsky - which will now be able to extract restoring beam information from the header - and run create_clusters.py to create four clusters:
 
 ::
 
    Duchamp -p Duchamp-conf-for-first-selfcal-loop.txt
    buildsky -f after-initial-calibration-image.fits -m after-initial-calibration-image-MASK.fits -o 1
-   create_clusters.py -s after-initial-calibration-image.fits.sky.txt -c 4 -o after-initial-calibration-image.fits.sky.txt.cluster -i 10
+   create_clusters.py -s after-initial-calibration-image.fits.sky.txt -c -4 -o after-initial-calibration-image.fits.sky.txt.cluster -i 10
 
-Now we can do a first round of self calibration. For calibration we will use as input the "CORRECTED_DATA" column because this column has 3C196 subracted as has the model that we are calibrating on. 
+Now we can do a first round of self calibration and imaging. It will turn out that we will run into a cleaning problem for 3C196 - this is a source with a complicated structure. To circumvent this, we will not image it, but instead subtract it before imaging. This is done by changing the id of cluster -1 to 1 in the cluster file (first column). Consequently, you have to use -k 1 instead of -1 when running sagecal to apply the calibration solution for the direction of 3C196 to the residuals.
 
 ::
-   ../../install/bin/sagecal_gpu -d sm.ms -s after-initial-calibration-image.fits.sky.txt -c after-initial-calibration-image.fits.sky.txt.cluster -n 40 -t 1 -p sm.ms.solutions  -e 4 -F 1 -j 5 -B 1 -E 1 -I CORRECTED_DATA -O MODEL_DATA > sm.ms.output
+
+   ../../install/bin/sagecal_gpu -d sm.ms -s after-initial-calibration-image.fits.sky.txt -c after-initial-calibration-image.fits.sky.txt.cluster -n 40 -t 1 -p sm.ms.solutions -a 0 -e 4 -F 1 -j 2 -k 1 -B 1 -E 1  > sm.ms.output
+   wsclean -name after-first-selfcal -size 1024 1024 -scale 0.7amin -niter 10000 -mgain 0.8 -auto-threshold 3 sm.ms
+
+.. image:: image_after_first_selfcal.png
+
+It turns out that noise levels have remained the same, but the side lobes from (the residuals of) 3C196 have disappeared. One could continue running selfcal on a sky model extracted from this image, using the CORRECTED_DATA column as input and MODEL_DATA as output to circumvent the 3C196 imaging problem. However, the sky model cannot be extracted from this image directly. We need to run sagecal for the three remaining directions, image these three clusters separately, extract sky models from them and combine them into one sky model covering the three clusters. The latter requires renaming of source names that occur in more than one sky model. Make sure your renamed source names do not start with the letters S, G, R or D.
+
+::
+
+   ../../install/bin/sagecal_gpu -d sm.ms -s after-initial-calibration-image.fits.sky.txt -c after-initial-calibration-image.fits.sky.txt.cluster -n 40 -t 1 -p sm.ms.solutions -a 0 -e 4 -F 1 -j 2 -k -2 -B 1 -E 1  > sm.ms.output
+   wsclean -name after-first-selfcal-cluster--2 -size 1024 1024 -scale 0.7amin -niter 10000 -mgain 0.8 -auto-threshold 3 sm.ms
+   ../../install/bin/sagecal_gpu -d sm.ms -s after-initial-calibration-image.fits.sky.txt -c after-initial-calibration-image.fits.sky.txt.cluster -n 40 -t 1 -p sm.ms.solutions -a 0 -e 4 -F 1 -j 2 -k -3 -B 1 -E 1  > sm.ms.output
+   wsclean -name after-first-selfcal-cluster--3 -size 1024 1024 -scale 0.7amin -niter 10000 -mgain 0.8 -auto-threshold 3 sm.ms
+   ../../install/bin/sagecal_gpu -d sm.ms -s after-initial-calibration-image.fits.sky.txt -c after-initial-calibration-image.fits.sky.txt.cluster -n 40 -t 1 -p sm.ms.solutions -a 0 -e 4 -F 1 -j 2 -k -4 -B 1 -E 1  > sm.ms.output
+   wsclean -name after-first-selfcal-cluster--4 -size 1024 1024 -scale 0.7amin -niter 10000 -mgain 0.8 -auto-threshold 3 sm.ms
+
 
