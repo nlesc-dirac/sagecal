@@ -172,23 +172,28 @@ It turns out that noise levels have remained the same, but the side lobes from (
    ../../install/bin/sagecal_gpu -d sm.ms -s after-initial-calibration-image.fits.sky.txt -c after-initial-calibration-image.fits.sky.txt.cluster -n 40 -t 1 -p sm.ms.solutions -a 0 -e 4 -F 1 -j 2 -k -2 -B 1 -E 1  > sm.ms.output
    wsclean -name after-first-selfcal-cluster--2 -size 1024 1024 -scale 0.7amin -niter 10000 -mgain 0.8 -auto-threshold 3 sm.ms
 
-We can now extract a sky model from after-first-selfcal-cluster--2-image.fits using Duchamp and buildsky. After we have turned the id of the second cluster from -2 to 2 and the third from 3 to -3 we can run:
+We can now extract a sky model from after-first-selfcal-cluster--2-image.fits using Duchamp and buildsky. To image the third cluster, we need to turn the id of the second cluster from -2 to 2 and the third from 3 to -3 before we can run:
 
 ::
+
    ../../install/bin/sagecal_gpu -d sm.ms -s after-initial-calibration-image.fits.sky.txt -c after-initial-calibration-image.fits.sky.txt.cluster -n 40 -t 1 -p sm.ms.solutions -a 0 -e 4 -F 1 -j 2 -k -3 -B 1 -E 1  > sm.ms.output
    wsclean -name after-first-selfcal-cluster--3 -size 1024 1024 -scale 0.7amin -niter 10000 -mgain 0.8 -auto-threshold 3 sm.ms
 
+Now, extract a sky model from after-first-selfcal-cluster--3-image.fits.
 
-Finally, we change cluster id -3 to 3 in the cluster file and 4 to -4. Now we run:
+Finally, we change cluster id -3 to 3 in the cluster file and 4 to -4 before we run:
 
 ::
+
    ../../install/bin/sagecal_gpu -d sm.ms -s after-initial-calibration-image.fits.sky.txt -c after-initial-calibration-image.fits.sky.txt.cluster -n 40 -t 1 -p sm.ms.solutions -a 0 -e 4 -F 1 -j 2 -k -4 -B 1 -E 1  > sm.ms.output
    wsclean -name after-first-selfcal-cluster--4 -size 1024 1024 -scale 0.7amin -niter 10000 -mgain 0.8 -auto-threshold 3 sm.ms
 
-Now we can combine our three sky models into one large sky model. This will likely require renaming of source names that occur in more than one sky model. Make sure your renamed source names do not start with the letters S, G, R or D. You need to calibrate the data with the first cluster subtracted on this sky model, so this requires running sagecal with -I CORRECTED_DATA -O MODEL_DATA after filling the CORRECTED_DATA column with this sagecal run:
+and extract a sky model from after-first-selfcal-cluster--4-image.fits.
+
+Now we can combine our three sky models into one large sky model. This will likely require renaming of sources that occur in more than one sky model. Make sure your renamed sources do not start with the letters S, G, R or D. You need to calibrate the data with the first cluster subtracted on this sky model, so this requires running sagecal with -I CORRECTED_DATA -O MODEL_DATA after filling the CORRECTED_DATA column using this sagecal run:
 
 ::
 
   ../../install/bin/sagecal_gpu -d sm.ms -s after-initial-calibration-image.fits.sky.txt -c after-initial-calibration-image.fits.sky.txt.cluster -n 40 -t 1 -p sm.ms.solutions -a 0 -e 4 -F 1 -j 2 -B 1 -E 1  > sm.ms.output
 
-where the first cluster must have a positive id and all the others a negative id.
+where the first cluster must have a positive id and all the others a negative id such that only the 3C196 cluster will be subtracted and no calibration solutions are applied.
