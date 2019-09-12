@@ -46,9 +46,6 @@
 #include <cuda_runtime_api.h>
 #endif /* HAVE_CUDA */
 
-#ifndef MAX_GPU_ID
-#define MAX_GPU_ID 3 /* use 0 (1 GPU), 1 (2 GPUs), ... */
-#endif
 /* default value for threads per block */
 #ifndef DEFAULT_TH_PER_BK 
 #define DEFAULT_TH_PER_BK 64
