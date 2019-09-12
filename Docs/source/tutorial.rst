@@ -5,7 +5,7 @@ Introduction
 ^^^^^^^^^^^^
 
 This tutorial will guide you through the most common steps in self calibration. This involves calibration along one or more directions. Automatically this will cover calibration on a fixed sky model (e.g., for the LOFAR EoR KSP) as this is a single step in the self-calibration process.
-=======
+
 
 Selfcal
 ^^^^^^^
