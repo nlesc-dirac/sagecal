@@ -214,16 +214,6 @@ precalculate_coherencies_multifreq(double *u, double *v, double *w, complex doub
 
 
 
-/* rearranges coherencies for GPU use later */
-/* barr: 2*Nbase x 1
-   coh: M*Nbase*4 x 1 complex
-   ddcoh: M*Nbase*8 x 1
-   ddbase: 2*Nbase x 1 (sta1,sta2) = -1 if flagged
-*/
-/* ddbase: 3*Nbase x 1 (sta1,sta2,flag) */
-extern int
-rearrange_coherencies2(int Nbase, baseline_t *barr, complex double *coh, double *ddcoh, short *ddbase, int M, int Nt);
-
 /* update baseline flags, also make data zero if flagged
   this is needed for solving (calculate error) ignore flagged data */
 /* Nbase: total actual data points = Nbasextilesz

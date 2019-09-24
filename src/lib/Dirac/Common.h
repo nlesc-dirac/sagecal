@@ -114,7 +114,7 @@ typedef struct baseline_t_ {
 
 /* structure for worker threads for various function calculations */
 typedef struct thread_data_base_ {
-  int Nb; /* no of baselines this handle */
+  int Nb; /* no of baselines this thread handles */
   int boff; /* baseline offset per thread */
   baseline_t *barr; /* pointer to baseline-> stations mapping array */
   double *u,*v,*w; /* pointers to uwv arrays,size Nbx1 */
@@ -135,7 +135,7 @@ typedef struct thread_data_base_ {
   double tdelta; /* integration time for time smearing */
   double dec0; /* declination for time smearing */
 
-  /* following used for interpolation */
+  /* following used for interpolation,stochastic calibration */
   double *p0; /* old parameters, same as p */
   int tilesz; /* tile size */
   int Nbase; /* total no of baselines */
