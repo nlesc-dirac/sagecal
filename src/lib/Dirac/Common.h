@@ -491,21 +491,20 @@ typedef struct pipeline_ {
 #endif
 
 
-/******* some common routines that need to be moved - FIXME **********/
-/****************************** readsky.c ****************************/
+/****************************** predict.c ****************************/
 /* rearranges coherencies for GPU use later */
 /* barr: 2*Nbase x 1
- *    coh: M*Nbase*4 x 1 complex
- *       ddcoh: M*Nbase*8 x 1
- *          ddbase: 2*Nbase x 1 (sta1,sta2) = -1 if flagged
- *          */
+ * coh: M*Nbase*4 x 1 complex
+ * ddcoh: M*Nbase*8 x 1
+ * ddbase: 2*Nbase x 1 (sta1,sta2) = -1 if flagged
+ * */
 extern int
 rearrange_coherencies(int Nbase, baseline_t *barr, complex double *coh, double *ddcoh, short *ddbase, int M, int Nt);
 
 /* rearranges baselines for GPU use later */
 /* barr: 2*Nbase x 1
- *    ddbase: 2*Nbase x 1
- *    */
+ * ddbase: 2*Nbase x 1
+ * */
 extern int
 rearrange_baselines(int Nbase, baseline_t *barr, short *ddbase, int Nt);
 

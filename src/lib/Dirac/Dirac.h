@@ -86,24 +86,6 @@
 
 #include "Common.h"
 
-/* given the epoch jd_tdb2,
- calculate rotation matrix params needed to precess from J2000
-   NOVAS (Naval Observatory Vector Astronomy Software)
-   PURPOSE:
-      Precesses equatorial rectangular coordinates from one epoch to
-      another.  One of the two epochs must be J2000.0.  The coordinates
-      are referred to the mean dynamical equator and equinox of the two
-      respective epochs.
-
-   REFERENCES:
-      Explanatory Supplement To The Astronomical Almanac, pp. 103-104.
-      Capitaine, N. et al. (2003), Astronomy And Astrophysics 412,
-         pp. 567-586.
-      Hilton, J. L. et al. (2006), IAU WG report, Celest. Mech., 94,
-         pp. 351-367.
-
-*/
-
 /* convert types */
 /* both arrays size nx1
    Nt: no of threads
@@ -248,10 +230,19 @@ lbfgs_fit_wrapper(
 
 
 /****************************** robust_batchmode_lbfgs.c ****************************/
-/* batch mode version of LBFGS */
+/* minibatch mode version of LBFGS */
 extern int
 lbfgs_fit_robust_wrapper_minibatch(
    double *p, double *x, int m, int n, int itmax, int M, int gpu_threads, void *adata);
+
+/* caller function for minibatch mode */
+/* note that tilesz used here will be normally smaller than the orignal full batch size */
+extern int
+bfgsfit_minibatch_visibilities(double *u, double *v, double *w, double *x, int N,
+   int Nbase, int tilesz, baseline_t *barr, clus_source_t *carr, complex double *coh, int M, int Mt, double *freqs, int Nf, double fdelta, double *p, int Nt, int max_lbfgs, int lbfgs_m, int gpu_threads, int solver_mode, double robust_nu, double *res_0, double *res_1, persistent_data_t *ptdata);
+
+
+
 
 /****************************** mderiv.cu ****************************/
 /* cuda driver for kernel */

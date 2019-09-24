@@ -201,6 +201,17 @@ extern int
 precalculate_coherencies(double *u, double *v, double *w, complex double *x, int N,
    int Nbase, baseline_t *barr,  clus_source_t *carr, int M, double freq0, double fdelta, double tdelta, double dec0, double uvmin, double uvmax, int Nt);
 
+/* multi-freq version of precalculate_coherencies() */
+/*
+  x: coherencies size Nbase*4*M x Nchan
+   ordered by XX(re,im),XY(re,im),YX(re,im), YY(re,im), baseline, timeslots
+   same order repeated per each channel
+  freqs: Nchanx1 array of frequencies
+*/
+extern int
+precalculate_coherencies_multifreq(double *u, double *v, double *w, complex double *x, int N,
+   int Nbase, baseline_t *barr,  clus_source_t *carr, int M, double *freqs, int Nchan, double fdelta, double tdelta, double dec0, double uvmin, double uvmax, int Nt);
+
 
 
 /* rearranges coherencies for GPU use later */
@@ -358,6 +369,12 @@ arraybeam(double ra, double dec, double ra0, double dec0, double f, double f0, i
 extern int
 precalculate_coherencies_withbeam(double *u, double *v, double *w, complex double *x, int N,
    int Nbase, baseline_t *barr,  clus_source_t *carr, int M, double freq0, double fdelta, double tdelta, double dec0, double uvmin, double uvmax, 
+ double ph_ra0, double ph_dec0, double ph_freq0, double *longitude, double *latitude, double *time_utc, int tileze, int *Nelem, double **xx, double **yy, double **zz, int Nt);
+
+/* multi-freq version of precalculate_coherencies_withbeam */
+extern int
+precalculate_coherencies_multifreq_withbeam(double *u, double *v, double *w, complex double *x, int N,
+   int Nbase, baseline_t *barr,  clus_source_t *carr, int M, double *freqs, int Nchan, double fdelta, double tdelta, double dec0, double uvmin, double uvmax, 
  double ph_ra0, double ph_dec0, double ph_freq0, double *longitude, double *latitude, double *time_utc, int tileze, int *Nelem, double **xx, double **yy, double **zz, int Nt);
 
 
