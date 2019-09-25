@@ -203,10 +203,11 @@ precalculate_coherencies(double *u, double *v, double *w, complex double *x, int
 
 /* multi-freq version of precalculate_coherencies() */
 /*
-  x: coherencies size Nbase*4*M x Nchan
+  x: coherencies size Nbase*tilesz*4*M*Nchan x 1
    ordered by XX(re,im),XY(re,im),YX(re,im), YY(re,im), baseline, timeslots
    same order repeated per each channel
   freqs: Nchanx1 array of frequencies
+  Nbase: is actually Nbase*tilesz of original problem
 */
 extern int
 precalculate_coherencies_multifreq(double *u, double *v, double *w, complex double *x, int N,

@@ -236,7 +236,12 @@ lbfgs_fit_robust_wrapper_minibatch(
    double *p, double *x, int m, int n, int itmax, int M, int gpu_threads, void *adata);
 
 /* caller function for minibatch mode */
-/* note that tilesz used here will be normally smaller than the orignal full batch size */
+/* note that tilesz used here will be normally smaller than the orignal full batch size 
+   coh: includes Nchan channels, instead of 1 : Nbase*tilesz*4*M*Nchan x 1  
+   x: data size Nbase*8*tilesz*Nchan x 1
+    ordered by XX(re,im),XY(re,im),YX(re,im), YY(re,im), baseline, timeslots
+    and repeating this for each channel
+*/
 extern int
 bfgsfit_minibatch_visibilities(double *u, double *v, double *w, double *x, int N,
    int Nbase, int tilesz, baseline_t *barr, clus_source_t *carr, complex double *coh, int M, int Mt, double *freqs, int Nf, double fdelta, double *p, int Nt, int max_lbfgs, int lbfgs_m, int gpu_threads, int solver_mode, double robust_nu, double *res_0, double *res_1, persistent_data_t *ptdata);
@@ -1390,7 +1395,7 @@ minimize_viz_full_pth(double *p, double *x, int m, int n, void *data);
 /* fit visibilities
   u,v,w: u,v,w coordinates (wavelengths) size Nbase*tilesz x 1
   u,v,w are ordered with baselines, timeslots
-  x: data to write size Nbase*8*tileze x 1
+  x: data to write size Nbase*8*tilesz x 1
    ordered by XX(re,im),XY(re,im),YX(re,im), YY(re,im), baseline, timeslots
   N: no of stations
   Nbase: no of baselines

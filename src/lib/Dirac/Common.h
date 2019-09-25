@@ -312,6 +312,9 @@ typedef struct me_data_t_ {
   /* following used only by robust T cost/grad functions */
   double robust_nu;
 
+  /* following for calibration of multi channel data */
+  int Nchan;
+
   /* following used only by RTR */
 } me_data_t;
 
@@ -364,6 +367,10 @@ typedef struct thread_data_grad_ {
 
   /* only used in robust version */
   double robust_nu;
+
+
+  /* only used in multifreq data */
+  int Nchan;
 
   /* only used in batch mode operation */
   int noff; /* offset of the batch data, in baselines */
