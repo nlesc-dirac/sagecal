@@ -501,7 +501,7 @@ precal_threadfn(void *data) {
  thread_data_base_t *t=(thread_data_base_t*)data;
  
  /* memory ordering: x[0:4M-1] baseline 0
-                     x[4M:2*4M-1] baseline 2 ... */
+                     x[4M:2*4M-1] baseline 1 ... */
  int ci,cm,cn;
  int M=(t->M);
  double uvdist;
@@ -725,6 +725,241 @@ precalculate_coherencies(double *u, double *v, double *w, complex double *x, int
  return 0;
 }
 
+
+/* worker thread function for precalculation*/
+static void *
+precal_threadfn_multifreq(void *data) {
+ thread_data_base_t *t=(thread_data_base_t*)data;
+ 
+ /* memory ordering: x[0:4M-1] x[4 M Nbase:4 M Nbase+4M-1] baseline 0
+                     x[4M:2*4M-1] x[4 M Nbase+4M:4 M Nbase+2*4M-1] baseline 1 ... 
+  for each channel, offset is 4 M Nbase */
+ int ci,cm,cn;
+ int M=(t->M);
+ double uvdist;
+ double *PHr=0,*PHi=0,*G=0,*II=0,*QQ=0,*UU=0,*VV=0; /* arrays to store calculations */
+ complex double C[4];
+ double fdelta2=t->fdelta*0.5;
+ int nchan, chanoff=4*M*t->Nbase;
+ printf("Nchan =%d off=%d\n",t->Nchan,chanoff);
+ 
+ for (ci=0; ci<t->Nb; ci++) {
+   /* iterate over the sky model and calculate contribution */
+   /* for this x[8*ci:8*(ci+1)-1] */
+   for (nchan=0; nchan<t->Nchan; nchan++) {
+    memset(&(t->coh[4*M*ci+nchan*chanoff]),0,sizeof(complex double)*4*M);
+    double freq0=t->freqs[nchan];
+   /* even if this baseline is flagged, we do compute */
+    for (cm=0; cm<M; cm++) { /* clusters */
+     memset(C,0,sizeof(complex double)*4);
+/*****************************************************************/
+     /* setup memory */
+     if (posix_memalign((void*)&PHr,sizeof(double),((size_t)t->carr[cm].N*sizeof(double)))!=0) {
+      fprintf(stderr,"%s: %d: No free memory\n",__FILE__,__LINE__);
+      exit(1);
+     }
+     if (posix_memalign((void*)&PHi,sizeof(double),((size_t)t->carr[cm].N*sizeof(double)))!=0) {
+      fprintf(stderr,"%s: %d: No free memory\n",__FILE__,__LINE__);
+      exit(1);
+     }
+     if (posix_memalign((void*)&G,sizeof(double),((size_t)t->carr[cm].N*sizeof(double)))!=0) {
+      fprintf(stderr,"%s: %d: No free memory\n",__FILE__,__LINE__);
+      exit(1);
+     }
+     if (posix_memalign((void*)&II,sizeof(double),((size_t)t->carr[cm].N*sizeof(double)))!=0) {
+      fprintf(stderr,"%s: %d: No free memory\n",__FILE__,__LINE__);
+      exit(1);
+     }
+     if (posix_memalign((void*)&QQ,sizeof(double),((size_t)t->carr[cm].N*sizeof(double)))!=0) {
+      fprintf(stderr,"%s: %d: No free memory\n",__FILE__,__LINE__);
+      exit(1);
+     }
+     if (posix_memalign((void*)&UU,sizeof(double),((size_t)t->carr[cm].N*sizeof(double)))!=0) {
+      fprintf(stderr,"%s: %d: No free memory\n",__FILE__,__LINE__);
+      exit(1);
+     }
+     if (posix_memalign((void*)&VV,sizeof(double),((size_t)t->carr[cm].N*sizeof(double)))!=0) {
+      fprintf(stderr,"%s: %d: No free memory\n",__FILE__,__LINE__);
+      exit(1);
+     }
+
+     /* phase (real,imag) parts */
+     /* note u=u/c, v=v/c, w=w/c here */
+     /* phterm is 2pi(u/c l +v/c m +w/c n) */
+     for (cn=0; cn<t->carr[cm].N; cn++) {
+       G[cn]=2.0*M_PI*(t->u[ci]*t->carr[cm].ll[cn]+t->v[ci]*t->carr[cm].mm[cn]+t->w[ci]*t->carr[cm].nn[cn]);
+     }
+     for (cn=0; cn<t->carr[cm].N; cn++) {
+       sincos(G[cn]*freq0,&PHi[cn],&PHr[cn]);
+     }
+
+     /* term due to shape of source, also multiplied by freq/time smearing */
+     for (cn=0; cn<t->carr[cm].N; cn++) {
+       /* freq smearing : extra term delta * sinc(delta/2 * phterm) */
+       if (G[cn]!=0.0) {
+         double smfac=G[cn]*fdelta2;
+         double sinph=sin(smfac)/smfac;
+         G[cn]=fabs(sinph);
+       } else {
+         G[cn]=1.0;
+       }
+     }
+
+     /* multiply (re,im) phase term with smearing/shape factor */
+     for (cn=0; cn<t->carr[cm].N; cn++) {
+       PHr[cn]*=G[cn];
+       PHi[cn]*=G[cn];
+     }
+
+
+     for (cn=0; cn<t->carr[cm].N; cn++) {
+       /* check if source type is not a point source for additional 
+          calculations */
+       if (t->carr[cm].stype[cn]!=STYPE_POINT) {
+        complex double sterm=PHr[cn]+_Complex_I*PHi[cn];
+        if (t->carr[cm].stype[cn]==STYPE_SHAPELET) {
+         sterm*=shapelet_contrib(t->carr[cm].ex[cn],t->u[ci]*freq0,t->v[ci]*freq0,t->w[ci]*freq0);
+        } else if (t->carr[cm].stype[cn]==STYPE_GAUSSIAN) {
+         sterm*=gaussian_contrib(t->carr[cm].ex[cn],t->u[ci]*freq0,t->v[ci]*freq0,t->w[ci]*freq0);
+        } else if (t->carr[cm].stype[cn]==STYPE_DISK) {
+         sterm*=disk_contrib(t->carr[cm].ex[cn],t->u[ci]*freq0,t->v[ci]*freq0,t->w[ci]*freq0);
+        } else if (t->carr[cm].stype[cn]==STYPE_RING) {
+         sterm*=ring_contrib(t->carr[cm].ex[cn],t->u[ci]*freq0,t->v[ci]*freq0,t->w[ci]*freq0);
+        }
+        PHr[cn]=creal(sterm);
+        PHi[cn]=cimag(sterm);
+       }
+
+     }
+
+
+     /* flux of each source, at each freq */
+     for (cn=0; cn<t->carr[cm].N; cn++) {
+       II[cn]=t->carr[cm].sI[cn];
+       QQ[cn]=t->carr[cm].sQ[cn];
+       UU[cn]=t->carr[cm].sU[cn];
+       VV[cn]=t->carr[cm].sV[cn];
+     }
+
+
+     /* add up terms together */
+     for (cn=0; cn<t->carr[cm].N; cn++) {
+       complex double Ph,IIl,QQl,UUl,VVl;
+       Ph=(PHr[cn]+_Complex_I*PHi[cn]);
+       IIl=Ph*II[cn];
+       QQl=Ph*QQ[cn];
+       UUl=Ph*UU[cn];
+       VVl=Ph*VV[cn];
+       C[0]+=IIl+QQl;
+       C[1]+=UUl+_Complex_I*VVl;
+       C[2]+=UUl-_Complex_I*VVl;
+       C[3]+=IIl-QQl;
+     }
+
+     free(PHr);
+     free(PHi);
+     free(G);
+     free(II);
+     free(QQ);
+     free(UU);
+     free(VV);
+
+/*****************************************************************/
+     /* add to baseline visibilities, with right channel offset */
+     t->coh[nchan*chanoff+4*M*ci+4*cm]=C[0];
+     t->coh[nchan*chanoff+4*M*ci+4*cm+1]=C[1];
+     t->coh[nchan*chanoff+4*M*ci+4*cm+2]=C[2];
+     t->coh[nchan*chanoff+4*M*ci+4*cm+3]=C[3];
+     } /* end cluster loop */
+    } /* end channel loop */
+    if (!t->barr[ci+t->boff].flag) {
+    /* change the flag to 2 if baseline length is < uvmin or > uvmax */
+    uvdist=sqrt(t->u[ci]*t->u[ci]+t->v[ci]*t->v[ci])*t->freqs[0];
+    if (uvdist<t->uvmin || uvdist*t->freqs[t->Nchan-1]>t->uvmax*t->freqs[0]) {
+      t->barr[ci+t->boff].flag=2;
+    }
+   }
+ }
+
+ return NULL;
+}
+
+
+
+
+int
+precalculate_coherencies_multifreq(double *u, double *v, double *w, complex double *x, int N,
+   int Nbase, baseline_t *barr,  clus_source_t *carr, int M, double *freqs, int Nchan, double fdelta, double tdelta, double dec0, double uvmin, double uvmax, int Nt) {
+
+  int nth,nth1,ci;
+
+  int Nthb0,Nthb;
+  pthread_attr_t attr;
+  pthread_t *th_array;
+  thread_data_base_t *threaddata;
+
+  /* calculate min baselines a thread can handle */
+  Nthb0=(Nbase+Nt-1)/Nt;
+
+  /* setup threads */
+  pthread_attr_init(&attr);
+  pthread_attr_setdetachstate(&attr,PTHREAD_CREATE_JOINABLE);
+
+  if ((th_array=(pthread_t*)malloc((size_t)Nt*sizeof(pthread_t)))==0) {
+   fprintf(stderr,"%s: %d: No free memory\n",__FILE__,__LINE__);
+   exit(1);
+  }
+  if ((threaddata=(thread_data_base_t*)malloc((size_t)Nt*sizeof(thread_data_base_t)))==0) {
+    fprintf(stderr,"%s: %d: No free memory\n",__FILE__,__LINE__);
+    exit(1);
+  }
+
+  /* iterate over threads, allocating baselines per thread */
+  ci=0;
+  for (nth=0;  nth<Nt && ci<Nbase; nth++) {
+    /* this thread will handle baselines [ci:min(Nbase-1,ci+Nthb0-1)] */
+    /* determine actual no. of baselines */
+    if (ci+Nthb0<Nbase) {
+     Nthb=Nthb0;
+    } else {
+     Nthb=Nbase-ci;
+    }
+
+    threaddata[nth].boff=ci;
+    threaddata[nth].Nb=Nthb;
+    threaddata[nth].Nbase=Nbase; /* needed for calculating offset for each channel */
+    threaddata[nth].barr=barr;
+    threaddata[nth].u=&(u[ci]); 
+    threaddata[nth].v=&(v[ci]);
+    threaddata[nth].w=&(w[ci]);
+    threaddata[nth].carr=carr;
+    threaddata[nth].M=M;
+    threaddata[nth].uvmin=uvmin;
+    threaddata[nth].uvmax=uvmax;
+    threaddata[nth].coh=&(x[4*M*ci]); /* offset for the 1st channel here */
+    threaddata[nth].freqs=freqs;
+    threaddata[nth].Nchan=Nchan;
+    threaddata[nth].fdelta=fdelta;
+    threaddata[nth].tdelta=tdelta;
+    threaddata[nth].dec0=dec0;
+    pthread_create(&th_array[nth],&attr,precal_threadfn_multifreq,(void*)(&threaddata[nth]));
+    /* next baseline set */
+    ci=ci+Nthb;
+  }
+
+  /* now wait for threads to finish */
+  for(nth1=0; nth1<nth; nth1++) {
+   pthread_join(th_array[nth1],NULL);
+  }
+
+ pthread_attr_destroy(&attr);
+
+ free(th_array);
+ free(threaddata);
+
+
+ return 0;
+}
 
 
 
