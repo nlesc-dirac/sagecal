@@ -384,7 +384,7 @@ cout<<"];"<<endl;
       bool *ef=_eflag.data();
 
 /*
-cout<<"A=["<<endl<<;
+cout<<"A=["<<endl;
      for (int cj=0; cj<binfo->Nelem[ci]; cj++) {
 cout<<off[3*cj]<<","<<off[3*cj+1]<<","<<off[3*cj+2]<<endl;
      }

@@ -45,6 +45,9 @@ print_help(void) {
    cout<<"sagecal -d MS -s sky.txt -c cluster.txt"<<endl;
    cout<<"or"<<endl;
    cout<<"sagecal -f MSlist -s sky.txt -c cluster.txt"<<endl;
+   cout<<endl<<"Stochastic calibration:"<<endl;
+   cout<<"sagecal -d MS -s sky.txt -c cluster.txt -C epochs -M minibatches"<<endl;
+   cout<<endl;
    cout << "-d MS name" << endl;
    cout << "-f MSlist: text file with MS names" << endl;
    cout << "-s sky.txt: sky model file"<< endl;
@@ -82,6 +85,9 @@ print_help(void) {
 #endif
    cout << "-D 0,1,2 : if >0, enable diagnostics (Jacobian Leverage) 1 replace Jacobian Leverage as output, 2 only fractional noise/leverage is printed: default " <<Data::DoDiag<< endl;
    cout << "-q solutions.txt: if given, initialize solutions by reading this file (need to have the same format as a solution file, only solutions for 1 timeslot needed)"<< endl;
+
+   cout << "-C epochs, if >0, use stochastic calibration: default "<<Data::stochastic_calib_epochs<< endl;
+   cout << "-M minibatches, must be >0, split data to this many minibatches: default "<<Data::stochastic_calib_minibatches<< endl;
    cout <<"Report bugs to <sarod@users.sf.net>"<<endl;
 
 }
