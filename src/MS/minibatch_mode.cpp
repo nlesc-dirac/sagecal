@@ -305,8 +305,10 @@ run_minibatch_calibration(void) {
 
         /*  call LBFGS routine */
         bfgsfit_minibatch_visibilities(iodata.u,iodata.v,iodata.w,iodata.xo,iodata.N,iodata.Nbase,iodata.tilesz,barr,carr,coh,M,Mt,iodata.freqs,iodata.Nchan,iodata.deltaf,p,Data::Nt,Data::max_lbfgs,Data::lbfgs_m,Data::gpu_threads,Data::solver_mode,mean_nu,&res_00,&res_01,&ptdata);
-
-
+      if (!nepch && !nmb) { /* first run of minimization */
+       res_0=res_00;
+      }
+      res_1=res_01;
     /****************** end calibration **************************/
 
 /******************************* work on minibatch*****************************/

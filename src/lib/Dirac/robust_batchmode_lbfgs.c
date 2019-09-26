@@ -1435,11 +1435,11 @@ bfgsfit_minibatch_visibilities(double *u, double *v, double *w, double *x, int N
   /* the following fields in persistent data are not used here FIXME */
   indata->offset=0; /* no offset */
   indata->nlen=0 ; /* full data length */
-  if (lbfgs_m<0) { lbfgs_m=-lbfgs_m; }
-  printf("cost before=%e\n",robust_cost_func_multifreq(p, m, &data1));
+  if (lbfgs_m<0) { lbfgs_m=-lbfgs_m; } /* FIXME */
+  *res_0=robust_cost_func_multifreq(p, m, &data1);
   lbfgs_fit(&robust_cost_func_multifreq,&robust_grad_func_multifreq,p,m,max_lbfgs,lbfgs_m,&data1,indata);
 
-  printf("cost after=%e\n",robust_cost_func_multifreq(p, m, &data1));
+  *res_1=robust_cost_func_multifreq(p, m, &data1);
 
   return 0;
 }
