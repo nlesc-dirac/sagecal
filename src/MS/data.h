@@ -99,10 +99,13 @@ namespace Data
     /* load data using MS Iterator */
     void loadData(Table t, IOData iodata, double *fratio);
     void loadData(Table t, IOData iodata, LBeam binfo, double *fratio);
+    void loadDataMinibatch(Table ti, Data::IOData iodata, int minibatch, double *fratio);
+    void loadDataMinibatch(Table ti, Data::IOData iodata, LBeam binfo, int minibatch, double *fratio);
 
     void loadDataList(vector<MSIter*> msitr, Data::IOData iodata, double *fratio);
     /* write back data using MS Iterator */
     void writeData(Table t, IOData iodata);
+    void writeDataMinibatch(Table ti, Data::IOData iodata, int minibatch);
     void writeDataList(vector<MSIter*> msitr, IOData iodata);
     void freeData(IOData data);
     void freeData(IOData data, LBeam binfo);
@@ -150,6 +153,10 @@ namespace Data
     extern int doBeam; /* if 1, predict (LOFAR) beam array factor */
     extern int DoDiag; /* if >0, enables diagnostics (Leverage) 1: write leverage as output (no residual), 2: only calculate fractions of leverage/noise */
     extern int phaseOnly; /* if >0, and if any correction is done, extract phase and do phase only correction */
+
+    /* stochastic calibration parameters */
+    extern int stochastic_calib_epochs; /* if > 1, stochastic calibration */
+    extern int stochastic_calib_minibatches; /* number of minibatches the data is split */
 
     /* distributed sagecal parameters */
     extern int Nadmm; /* ADMM iterations >=1 */

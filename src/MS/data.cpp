@@ -72,6 +72,10 @@ char *Data::ignorefile=NULL;
 char *Data::MSlist=NULL;
 char *Data::MSpattern=NULL;
 
+/* stochastic calibration parameters */
+int Data::stochastic_calib_epochs=0; /* if >1, how many epochs for running calib */
+int Data::stochastic_calib_minibatches=1; /* how many minibatches data is split, if =1, minibatch=fullbatch */
+
 /* distributed sagecal parameters */
 int Data::Nadmm=1;
 int Data::Npoly=2;
@@ -380,7 +384,7 @@ cout<<"];"<<endl;
       bool *ef=_eflag.data();
 
 /*
-cout<<"A=["<<endl;
+cout<<"A=["<<endl<<;
      for (int cj=0; cj<binfo->Nelem[ci]; cj++) {
 cout<<off[3*cj]<<","<<off[3*cj+1]<<","<<off[3*cj+2]<<endl;
      }
@@ -1018,6 +1022,319 @@ Data::loadDataList(vector<MSIter*> msitr, Data::IOData iodata, double *fratio) {
 }
 
 
+/* load data in mini-batches
+ minibatch: 0...total_minibatches_per_epoch-1,
+ tilesz: how many time slots are included in one minibatch? 1...tile_size
+ Data::TileSize gives the full time slots
+ skip until correct batch is reached
+ assume iodata can store only tileszxNbaseline rows (x Nchan)*/
+void 
+Data::loadDataMinibatch(Table ti, Data::IOData iodata, int minibatch, double *fratio) {
+
+    /* first iterate to the right minibatch */ 
+    Block<String> ivl(1); ivl[0]="TIME"; 
+    TableIterator tit(ti,ivl);
+    /* till which timeslot should we iterate ? */
+    int tillts=minibatch*iodata.tilesz;
+    int ttime=0;
+    while(!tit.pastEnd() && ttime<tillts) {
+      tit.next();
+      ttime++;
+    }
+
+    /* sort input table by ant1 and ant2 */
+    Block<String> iv1(2);
+    iv1[0] = "ANTENNA1";
+    iv1[1] = "ANTENNA2";
+
+    /* how many timeslots to read now, if we have reached a valid row */
+    int tmb=0;
+    int rowoffset=0;
+    /* counters for finding flagged data ratio */
+    int countgood=0; int countbad=0;
+
+    while(!tit.pastEnd() && tmb<iodata.tilesz) {
+
+    Table t=tit.table().sort(iv1,Sort::Ascending);
+
+    ROScalarColumn<int> a1(t, "ANTENNA1"), a2(t, "ANTENNA2");
+    /* only read only access for input */
+    ROArrayColumn<Complex> dataCol(t, Data::DataField);
+    ROArrayColumn<double> uvwCol(t, "UVW"); 
+    ROArrayColumn<bool> flagCol(t, "FLAG");
+
+    /* check we get correct rows */
+    int nrow=t.nrow();
+    int row0=rowoffset; /* begin with right offset in iodata */
+    for(int row = 0; row < nrow && row0<iodata.tilesz*iodata.Nbase; row++) {
+        uInt i = a1(row); //antenna1 
+        uInt j = a2(row); //antenna2
+        /* only work with cross correlations */
+        if (i!=j) {
+        Array<Complex> data = dataCol(row);
+        Matrix<double> uvw = uvwCol(row);
+        Array<bool> flag = flagCol(row);
+
+        Complex cxx(0, 0);
+        Complex cxy(0, 0);
+        Complex cyx(0, 0);
+        Complex cyy(0, 0);
+        /* calculate sqrt(u^2+v^2) to select uv cuts */
+        double *c = uvw.data();
+        double uvd=sqrt(c[0]*c[0]+c[1]*c[1]);
+        bool flag_uvcut=0;
+        if (uvd<min_uvcut || uvd>max_uvcut) {
+          flag_uvcut=true;
+        } 
+        int nflag=0;
+        for(int k = 0; k < iodata.Nchan; k++) {
+           Complex *ptr = data[k].data();
+           bool *flgptr=flag[k].data();
+           if (!flgptr[0] && !flgptr[1] && !flgptr[2] && !flgptr[3]){
+             cxx+=ptr[0];
+             cxy+=ptr[1];
+             cyx+=ptr[2];
+             cyy+=ptr[3];
+             nflag++; /* remeber unflagged datapoints */ 
+           } 
+        
+           iodata.xo[iodata.Nbase*iodata.tilesz*8*k+row0*8]=ptr[0].real();
+           iodata.xo[iodata.Nbase*iodata.tilesz*8*k+row0*8+1]=ptr[0].imag();
+           iodata.xo[iodata.Nbase*iodata.tilesz*8*k+row0*8+2]=ptr[1].real();
+           iodata.xo[iodata.Nbase*iodata.tilesz*8*k+row0*8+3]=ptr[1].imag();
+           iodata.xo[iodata.Nbase*iodata.tilesz*8*k+row0*8+4]=ptr[2].real();
+           iodata.xo[iodata.Nbase*iodata.tilesz*8*k+row0*8+5]=ptr[2].imag();
+           iodata.xo[iodata.Nbase*iodata.tilesz*8*k+row0*8+6]=ptr[3].real();
+           iodata.xo[iodata.Nbase*iodata.tilesz*8*k+row0*8+7]=ptr[3].imag();
+        }
+        if (nflag>iodata.Nchan/2) { /* at least half channels should have good data */
+         double invnflag=1.0/(double)nflag;
+         cxx*=invnflag;
+         cxy*=invnflag;
+         cyx*=invnflag;
+         cyy*=invnflag;
+         iodata.flag[row0]=0;
+         countgood++;
+        } else {
+         if (!nflag) {
+         /* all channels flagged, flag this row */
+          iodata.flag[row0]=1;
+          countbad++;
+         } else {
+          iodata.flag[row0]=2;
+         }
+        }
+        iodata.u[row0]=c[0];
+        iodata.v[row0]=c[1];
+        iodata.w[row0]=c[2];
+        if (flag_uvcut) {
+            iodata.flag[row0]=2;
+        }
+        iodata.x[row0*8]=cxx.real();
+        iodata.x[row0*8+1]=cxx.imag();
+        iodata.x[row0*8+2]=cxy.real();
+        iodata.x[row0*8+3]=cxy.imag();
+        iodata.x[row0*8+4]=cyx.real();
+        iodata.x[row0*8+5]=cyx.imag();
+        iodata.x[row0*8+6]=cyy.real();
+        iodata.x[row0*8+7]=cyy.imag();
+
+       row0++;
+      }
+    }
+
+     tmb++;
+     rowoffset=row0;
+     /* go to next timeslot */
+     tit.next();
+    }
+
+    /* now if there is a tail of empty data remaining, flag them */
+    if (rowoffset<iodata.tilesz*iodata.Nbase) {
+      for(int row = rowoffset; row<iodata.tilesz*iodata.Nbase; row++) {
+        iodata.flag[row]=1;
+      }
+      /* set uvw and data to 0 to eliminate any funny business */
+      memset(&iodata.u[rowoffset],0,sizeof(double)*(size_t)(iodata.tilesz*iodata.Nbase-rowoffset));
+      memset(&iodata.v[rowoffset],0,sizeof(double)*(size_t)(iodata.tilesz*iodata.Nbase-rowoffset));
+      memset(&iodata.w[rowoffset],0,sizeof(double)*(size_t)(iodata.tilesz*iodata.Nbase-rowoffset));
+      memset(&iodata.x[8*rowoffset],0,sizeof(double)*(size_t)8*(iodata.tilesz*iodata.Nbase-rowoffset));
+
+      for(int k = 0; k < iodata.Nchan; k++) {
+       memset(&iodata.xo[iodata.Nbase*iodata.tilesz*8*k+rowoffset*8],0,sizeof(double)*(size_t)8*(iodata.tilesz*iodata.Nbase-rowoffset));
+      }
+    }
+
+
+    /* flagged data / total usable data, not counting excluded baselines */
+    if (countgood+countbad>0) {
+     *fratio=(double)countbad/(double)(countgood+countbad);
+    } else {
+     *fratio=1.0;
+    }
+
+}
+
+
+void 
+Data::loadDataMinibatch(Table ti, Data::IOData iodata, LBeam binfo, int minibatch, double *fratio) {
+
+    /* first iterate to the right minibatch */
+    Block<String> ivl(1); ivl[0]="TIME";
+    TableIterator tit(ti,ivl);
+    /* till which timeslot should we iterate ? */
+    int tillts=minibatch*iodata.tilesz;
+    int ttime=0;
+    while(!tit.pastEnd() && ttime<tillts) {
+      tit.next();
+      ttime++;
+    }
+
+    /* sort input table by ant1 and ant2 */
+    Block<String> iv1(2);
+    iv1[0] = "ANTENNA1";
+    iv1[1] = "ANTENNA2";
+
+    /* how many timeslots to read now, if we have reached a valid row */
+    int tmb=0;
+    int rowoffset=0;
+    int rowtoffset=0;
+    /* counters for finding flagged data ratio */
+    int countgood=0; int countbad=0;
+
+    while(!tit.pastEnd() && tmb<iodata.tilesz) {
+
+    Table t=tit.table().sort(iv1,Sort::Ascending);
+
+    ROScalarColumn<int> a1(t, "ANTENNA1"), a2(t, "ANTENNA2");
+    /* only read only access for input */
+    ROArrayColumn<Complex> dataCol(t, Data::DataField);
+    ROArrayColumn<double> uvwCol(t, "UVW"); 
+    ROArrayColumn<bool> flagCol(t, "FLAG");
+    ROScalarColumn<double> tut(t,"TIME");
+
+    /* check we get correct rows */
+    int nrow=t.nrow();
+    int row0=rowoffset;
+    int rowt=rowtoffset;
+    for(int row = 0; row < nrow && row0<iodata.tilesz*iodata.Nbase; row++) {
+        uInt i = a1(row); //antenna1 
+        uInt j = a2(row); //antenna2
+        if (!i && !j) {/* use baseline 0-0 to extract time */
+         double tt=tut(row);
+         /* convert MJD (s) to JD (days) */
+         binfo.time_utc[rowt++]=(tt/86400.0+2400000.5); /* no +0.5 added */
+        }
+        /* only work with cross correlations */
+        if (i!=j) {
+        Array<Complex> data = dataCol(row);
+        Matrix<double> uvw = uvwCol(row);
+        Array<bool> flag = flagCol(row);
+
+        Complex cxx(0, 0);
+        Complex cxy(0, 0);
+        Complex cyx(0, 0);
+        Complex cyy(0, 0);
+        /* calculate sqrt(u^2+v^2) to select uv cuts */
+        double *c = uvw.data();
+        double uvd=sqrt(c[0]*c[0]+c[1]*c[1]);
+        bool flag_uvcut=0;
+        if (uvd<min_uvcut || uvd>max_uvcut) {
+          flag_uvcut=true;
+        } 
+        int nflag=0;
+        for(int k = 0; k < iodata.Nchan; k++) {
+           Complex *ptr = data[k].data();
+           bool *flgptr=flag[k].data();
+           if (!flgptr[0] && !flgptr[1] && !flgptr[2] && !flgptr[3]){
+             cxx+=ptr[0];
+             cxy+=ptr[1];
+             cyx+=ptr[2];
+             cyy+=ptr[3];
+             nflag++; /* remeber unflagged datapoints */ 
+           } 
+        
+           iodata.xo[iodata.Nbase*iodata.tilesz*8*k+row0*8]=ptr[0].real();
+           iodata.xo[iodata.Nbase*iodata.tilesz*8*k+row0*8+1]=ptr[0].imag();
+           iodata.xo[iodata.Nbase*iodata.tilesz*8*k+row0*8+2]=ptr[1].real();
+           iodata.xo[iodata.Nbase*iodata.tilesz*8*k+row0*8+3]=ptr[1].imag();
+           iodata.xo[iodata.Nbase*iodata.tilesz*8*k+row0*8+4]=ptr[2].real();
+           iodata.xo[iodata.Nbase*iodata.tilesz*8*k+row0*8+5]=ptr[2].imag();
+           iodata.xo[iodata.Nbase*iodata.tilesz*8*k+row0*8+6]=ptr[3].real();
+           iodata.xo[iodata.Nbase*iodata.tilesz*8*k+row0*8+7]=ptr[3].imag();
+        }
+        if (nflag>iodata.Nchan/2) { /* at least half channels should have good data */
+         double invnflag=1.0/(double)nflag;
+         cxx*=invnflag;
+         cxy*=invnflag;
+         cyx*=invnflag;
+         cyy*=invnflag;
+         iodata.flag[row0]=0;
+         countgood++;
+        } else {
+         if (!nflag) {
+         /* all channels flagged, flag this row */
+          iodata.flag[row0]=1;
+          countbad++;
+         } else {
+          iodata.flag[row0]=2;
+         }
+        }
+        iodata.u[row0]=c[0];
+        iodata.v[row0]=c[1];
+        iodata.w[row0]=c[2];
+        if (flag_uvcut) {
+            iodata.flag[row0]=2;
+        }
+        iodata.x[row0*8]=cxx.real();
+        iodata.x[row0*8+1]=cxx.imag();
+        iodata.x[row0*8+2]=cxy.real();
+        iodata.x[row0*8+3]=cxy.imag();
+        iodata.x[row0*8+4]=cyx.real();
+        iodata.x[row0*8+5]=cyx.imag();
+        iodata.x[row0*8+6]=cyy.real();
+        iodata.x[row0*8+7]=cyy.imag();
+
+       row0++;
+      }
+    }
+
+     tmb++;
+     rowoffset=row0;
+     rowtoffset=rowt;
+     /* go to next timeslot */
+     tit.next();
+
+    }
+
+    /* now if there is a tail of empty data remaining, flag them */
+    if (rowoffset<iodata.tilesz*iodata.Nbase) {
+      for(int row = rowoffset; row<iodata.tilesz*iodata.Nbase; row++) {
+        iodata.flag[row]=1;
+      }
+      /* set uvw and data to 0 to eliminate any funny business */
+      memset(&iodata.u[rowoffset],0,sizeof(double)*(size_t)(iodata.tilesz*iodata.Nbase-rowoffset));
+      memset(&iodata.v[rowoffset],0,sizeof(double)*(size_t)(iodata.tilesz*iodata.Nbase-rowoffset));
+      memset(&iodata.w[rowoffset],0,sizeof(double)*(size_t)(iodata.tilesz*iodata.Nbase-rowoffset));
+      memset(&iodata.x[8*rowoffset],0,sizeof(double)*(size_t)8*(iodata.tilesz*iodata.Nbase-rowoffset));
+
+      for(int k = 0; k < iodata.Nchan; k++) {
+       memset(&iodata.xo[iodata.Nbase*iodata.tilesz*8*k+rowoffset*8],0,sizeof(double)*(size_t)8*(iodata.tilesz*iodata.Nbase-rowoffset));
+      }
+    }
+
+    /* flagged data / total usable data, not counting excluded baselines */
+    if (countgood+countbad>0) {
+     *fratio=(double)countbad/(double)(countgood+countbad);
+    } else {
+     *fratio=1.0;
+    }
+
+}
+
+
+
+
 void 
 Data::writeData(Table ti, Data::IOData iodata) {
 
@@ -1124,6 +1441,72 @@ Data::writeDataList(vector<MSIter*> msitr, Data::IOData iodata) {
     }
 
 }
+
+void 
+Data::writeDataMinibatch(Table ti, Data::IOData iodata, int minibatch) {
+
+    /* first iterate to the right minibatch */
+    Block<String> ivl(1); ivl[0]="TIME";
+    TableIterator tit(ti,ivl);
+    /* till which timeslot should we iterate ? */
+    int tillts=minibatch*iodata.tilesz;
+    int ttime=0;
+    while(!tit.pastEnd() && ttime<tillts) {
+      tit.next();
+      ttime++;
+    }
+
+    /* sort input table by ant1 and ant2 */
+    Block<String> iv1(2);
+    iv1[0] = "ANTENNA1";
+    iv1[1] = "ANTENNA2";
+
+    /* how many timeslots to read now, if we have reached a valid row */
+    int tmb=0;
+    int rowoffset=0;
+    while(!tit.pastEnd() && tmb<iodata.tilesz) {
+
+
+    Table t=tit.table().sort(iv1,Sort::Ascending);
+
+    ROScalarColumn<int> a1(t, "ANTENNA1"), a2(t, "ANTENNA2");
+    /* writable access for output */
+    ArrayColumn<Complex> dataCol(t, Data::OutField);
+
+    /* check we get correct rows = baselines+stations */
+    int nrow=t.nrow(); 
+    //cout<<"Table rows "<<nrow<<" Data rows "<<iodata.tilesz*iodata.Nbase+iodata.tilesz*iodata.N<<endl;
+    int row0=rowoffset;
+    IPosition pos(2,4,iodata.Nchan);
+    for(int row = 0; row < nrow; row++) {
+        uInt i = a1(row); //antenna1 
+        uInt j = a2(row); //antenna2
+        /* only work with cross correlations */
+        if (i!=j) {
+        Array<Complex> data = dataCol(row);
+        for(int k = 0; k < iodata.Nchan; k++) {
+           pos(0)=0;pos(1)=k;
+           data(pos)=Complex(iodata.xo[iodata.Nbase*iodata.tilesz*8*k+row0*8],iodata.xo[iodata.Nbase*iodata.tilesz*8*k+row0*8+1]);
+           pos(0)=1;pos(1)=k;
+           data(pos)=Complex(iodata.xo[iodata.Nbase*iodata.tilesz*8*k+row0*8+2],iodata.xo[iodata.Nbase*iodata.tilesz*8*k+row0*8+3]);
+           pos(0)=2;pos(1)=k;
+           data(pos)=Complex(iodata.xo[iodata.Nbase*iodata.tilesz*8*k+row0*8+4],iodata.xo[iodata.Nbase*iodata.tilesz*8*k+row0*8+5]);
+           pos(0)=3;pos(1)=k;
+           data(pos)=Complex(iodata.xo[iodata.Nbase*iodata.tilesz*8*k+row0*8+6],iodata.xo[iodata.Nbase*iodata.tilesz*8*k+row0*8+7]);
+       }
+
+       row0++;
+       dataCol.put(row,data); // copy to output
+      }
+    }
+     tmb++;
+     rowoffset =row0;
+     /* go to next timeslot */
+     tit.next();
+    }
+
+}
+
 
 
 void Data::freeData(Data::IOData data)
