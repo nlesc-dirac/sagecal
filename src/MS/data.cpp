@@ -1027,7 +1027,8 @@ Data::loadDataList(vector<MSIter*> msitr, Data::IOData iodata, double *fratio) {
  tilesz: how many time slots are included in one minibatch? 1...tile_size
  Data::TileSize gives the full time slots
  skip until correct batch is reached
- assume iodata can store only tileszxNbaseline rows (x Nchan)*/
+ assume iodata can store only tileszxNbaseline rows (x Nchan)
+ Note: no average over channels of data is calculated */
 void 
 Data::loadDataMinibatch(Table ti, Data::IOData iodata, int minibatch, double *fratio) {
 
@@ -1075,10 +1076,6 @@ Data::loadDataMinibatch(Table ti, Data::IOData iodata, int minibatch, double *fr
         Matrix<double> uvw = uvwCol(row);
         Array<bool> flag = flagCol(row);
 
-        Complex cxx(0, 0);
-        Complex cxy(0, 0);
-        Complex cyx(0, 0);
-        Complex cyy(0, 0);
         /* calculate sqrt(u^2+v^2) to select uv cuts */
         double *c = uvw.data();
         double uvd=sqrt(c[0]*c[0]+c[1]*c[1]);
@@ -1091,10 +1088,6 @@ Data::loadDataMinibatch(Table ti, Data::IOData iodata, int minibatch, double *fr
            Complex *ptr = data[k].data();
            bool *flgptr=flag[k].data();
            if (!flgptr[0] && !flgptr[1] && !flgptr[2] && !flgptr[3]){
-             cxx+=ptr[0];
-             cxy+=ptr[1];
-             cyx+=ptr[2];
-             cyy+=ptr[3];
              nflag++; /* remeber unflagged datapoints */ 
            } 
         
@@ -1108,11 +1101,6 @@ Data::loadDataMinibatch(Table ti, Data::IOData iodata, int minibatch, double *fr
            iodata.xo[iodata.Nbase*iodata.tilesz*8*k+row0*8+7]=ptr[3].imag();
         }
         if (nflag>iodata.Nchan/2) { /* at least half channels should have good data */
-         double invnflag=1.0/(double)nflag;
-         cxx*=invnflag;
-         cxy*=invnflag;
-         cyx*=invnflag;
-         cyy*=invnflag;
          iodata.flag[row0]=0;
          countgood++;
         } else {
@@ -1130,15 +1118,6 @@ Data::loadDataMinibatch(Table ti, Data::IOData iodata, int minibatch, double *fr
         if (flag_uvcut) {
             iodata.flag[row0]=2;
         }
-        iodata.x[row0*8]=cxx.real();
-        iodata.x[row0*8+1]=cxx.imag();
-        iodata.x[row0*8+2]=cxy.real();
-        iodata.x[row0*8+3]=cxy.imag();
-        iodata.x[row0*8+4]=cyx.real();
-        iodata.x[row0*8+5]=cyx.imag();
-        iodata.x[row0*8+6]=cyy.real();
-        iodata.x[row0*8+7]=cyy.imag();
-
        row0++;
       }
     }
@@ -1231,10 +1210,6 @@ Data::loadDataMinibatch(Table ti, Data::IOData iodata, LBeam binfo, int minibatc
         Matrix<double> uvw = uvwCol(row);
         Array<bool> flag = flagCol(row);
 
-        Complex cxx(0, 0);
-        Complex cxy(0, 0);
-        Complex cyx(0, 0);
-        Complex cyy(0, 0);
         /* calculate sqrt(u^2+v^2) to select uv cuts */
         double *c = uvw.data();
         double uvd=sqrt(c[0]*c[0]+c[1]*c[1]);
@@ -1247,10 +1222,6 @@ Data::loadDataMinibatch(Table ti, Data::IOData iodata, LBeam binfo, int minibatc
            Complex *ptr = data[k].data();
            bool *flgptr=flag[k].data();
            if (!flgptr[0] && !flgptr[1] && !flgptr[2] && !flgptr[3]){
-             cxx+=ptr[0];
-             cxy+=ptr[1];
-             cyx+=ptr[2];
-             cyy+=ptr[3];
              nflag++; /* remeber unflagged datapoints */ 
            } 
         
@@ -1264,11 +1235,6 @@ Data::loadDataMinibatch(Table ti, Data::IOData iodata, LBeam binfo, int minibatc
            iodata.xo[iodata.Nbase*iodata.tilesz*8*k+row0*8+7]=ptr[3].imag();
         }
         if (nflag>iodata.Nchan/2) { /* at least half channels should have good data */
-         double invnflag=1.0/(double)nflag;
-         cxx*=invnflag;
-         cxy*=invnflag;
-         cyx*=invnflag;
-         cyy*=invnflag;
          iodata.flag[row0]=0;
          countgood++;
         } else {
@@ -1286,14 +1252,6 @@ Data::loadDataMinibatch(Table ti, Data::IOData iodata, LBeam binfo, int minibatc
         if (flag_uvcut) {
             iodata.flag[row0]=2;
         }
-        iodata.x[row0*8]=cxx.real();
-        iodata.x[row0*8+1]=cxx.imag();
-        iodata.x[row0*8+2]=cxy.real();
-        iodata.x[row0*8+3]=cxy.imag();
-        iodata.x[row0*8+4]=cyx.real();
-        iodata.x[row0*8+5]=cyx.imag();
-        iodata.x[row0*8+6]=cyy.real();
-        iodata.x[row0*8+7]=cyy.imag();
 
        row0++;
       }
