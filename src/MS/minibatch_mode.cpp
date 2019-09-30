@@ -199,7 +199,7 @@ run_minibatch_calibration(void) {
     Block<int> sort(1);
     sort[0] = MS::TIME; /* note: only sort over TIME for ms iterator to work */
     /* timeinterval in seconds */
-    cout<<"For "<< Data::TileSize<<" samples, solution time interval (s): "<<iodata.deltat*(double)Data::TileSize<<", minibatch "<<iodata.tilesz<<" time interval (s): "<< iodata.deltat*(double)iodata.tilesz<<endl;
+    cout<<"For "<< Data::TileSize<<" samples, solution time interval (s): "<<iodata.deltat*(double)Data::TileSize<<", minibatch ("<<iodata.tilesz<<") time interval (s): "<< iodata.deltat*(double)iodata.tilesz<<endl;
     cout<<"Freq: "<<iodata.freq0/1e6<<" MHz, Chan: "<<iodata.Nchan<<" Bandwidth: "<<iodata.deltaf/1e6<<" MHz"<<endl;
     vector<MSIter*> msitr;
     vector<MeasurementSet*> msvector;

@@ -741,7 +741,6 @@ precal_threadfn_multifreq(void *data) {
  complex double C[4];
  double fdelta2=t->fdelta*0.5;
  int nchan, chanoff=4*M*t->Nbase;
- printf("Nchan =%d off=%d\n",t->Nchan,chanoff);
  
  for (ci=0; ci<t->Nb; ci++) {
    /* iterate over the sky model and calculate contribution */
