@@ -1440,8 +1440,9 @@ bfgsfit_minibatch_visibilities(double *u, double *v, double *w, double *x, int N
   lbfgs_fit(&robust_cost_func_multifreq,&robust_grad_func_multifreq,p,m,max_lbfgs,lbfgs_m,&data1,indata);
 
   *res_1=robust_cost_func_multifreq(p, m, &data1);
-  *res_0 /=(double)n;
-  *res_1 /=(double)n;
+  double invn=(double)1.0/n;
+  *res_0 *=invn;
+  *res_1 *=invn;
 
   return 0;
 }

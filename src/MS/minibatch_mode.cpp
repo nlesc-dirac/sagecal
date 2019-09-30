@@ -250,7 +250,7 @@ run_minibatch_calibration(void) {
       /* persistent memory between batches (y,s) pairs
        and info about online var(||grad||) estimate */
       persistent_data_t ptdata;
-      lbfgs_persist_init(&ptdata,minibatches,iodata.N*8*Mt,iodata.Nbase*iodata.tilesz,Data::max_lbfgs,Data::gpu_threads);
+      lbfgs_persist_init(&ptdata,minibatches,iodata.N*8*Mt,iodata.Nbase*iodata.tilesz,Data::lbfgs_m,Data::gpu_threads);
       for (int nepch=0; nepch<nepochs; nepch++) {
       for (int nmb=0; nmb<minibatches; nmb++) {
 
