@@ -1137,7 +1137,6 @@ Data::loadDataMinibatch(Table ti, Data::IOData iodata, int minibatch, double *fr
       memset(&iodata.u[rowoffset],0,sizeof(double)*(size_t)(iodata.tilesz*iodata.Nbase-rowoffset));
       memset(&iodata.v[rowoffset],0,sizeof(double)*(size_t)(iodata.tilesz*iodata.Nbase-rowoffset));
       memset(&iodata.w[rowoffset],0,sizeof(double)*(size_t)(iodata.tilesz*iodata.Nbase-rowoffset));
-      memset(&iodata.x[8*rowoffset],0,sizeof(double)*(size_t)8*(iodata.tilesz*iodata.Nbase-rowoffset));
 
       for(int k = 0; k < iodata.Nchan; k++) {
        memset(&iodata.xo[iodata.Nbase*iodata.tilesz*8*k+rowoffset*8],0,sizeof(double)*(size_t)8*(iodata.tilesz*iodata.Nbase-rowoffset));
@@ -1274,7 +1273,6 @@ Data::loadDataMinibatch(Table ti, Data::IOData iodata, LBeam binfo, int minibatc
       memset(&iodata.u[rowoffset],0,sizeof(double)*(size_t)(iodata.tilesz*iodata.Nbase-rowoffset));
       memset(&iodata.v[rowoffset],0,sizeof(double)*(size_t)(iodata.tilesz*iodata.Nbase-rowoffset));
       memset(&iodata.w[rowoffset],0,sizeof(double)*(size_t)(iodata.tilesz*iodata.Nbase-rowoffset));
-      memset(&iodata.x[8*rowoffset],0,sizeof(double)*(size_t)8*(iodata.tilesz*iodata.Nbase-rowoffset));
 
       for(int k = 0; k < iodata.Nchan; k++) {
        memset(&iodata.xo[iodata.Nbase*iodata.tilesz*8*k+rowoffset*8],0,sizeof(double)*(size_t)8*(iodata.tilesz*iodata.Nbase-rowoffset));
