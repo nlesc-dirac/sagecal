@@ -938,7 +938,7 @@ precalculate_coherencies_multifreq(double *u, double *v, double *w, complex doub
     threaddata[nth].coh=&(x[4*M*ci]); /* offset for the 1st channel here */
     threaddata[nth].freqs=freqs;
     threaddata[nth].Nchan=Nchan;
-    threaddata[nth].fdelta=fdelta;
+    threaddata[nth].fdelta=fdelta/(double)Nchan;
     threaddata[nth].tdelta=tdelta;
     threaddata[nth].dec0=dec0;
     pthread_create(&th_array[nth],&attr,precal_threadfn_multifreq,(void*)(&threaddata[nth]));
