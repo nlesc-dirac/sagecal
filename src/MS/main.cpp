@@ -88,6 +88,7 @@ print_help(void) {
 
    cout << "-C epochs, if >0, use stochastic calibration: default "<<Data::stochastic_calib_epochs<< endl;
    cout << "-M minibatches, must be >0, split data to this many minibatches: default "<<Data::stochastic_calib_minibatches<< endl;
+   cout << "-w mini-bands, must be >0, split channels to this many mini-bands for bandpass calibration: default "<<Data::stochastic_calib_bands<< endl;
    cout <<"Report bugs to <sarod@users.sf.net>"<<endl;
 
 }
@@ -101,7 +102,7 @@ ParseCmdLine(int ac, char **av) {
         print_help();
         exit(0);
     }
-    while((c=getopt(ac, av, ":a:b:c:d:e:f:g:j:k:l:m:n:o:p:q:s:t:x:y:z:B:C:D:E:F:H:I:J:L:M:O:R:S:W:E:h"))!= -1)
+    while((c=getopt(ac, av, ":a:b:c:d:e:f:g:j:k:l:m:n:o:p:q:s:t:w:x:y:z:B:C:D:E:F:H:I:J:L:M:O:R:S:W:E:h"))!= -1)
     {
         switch(c)
         {
@@ -210,6 +211,9 @@ ParseCmdLine(int ac, char **av) {
             case 'M':
                 Data::stochastic_calib_minibatches= atoi(optarg);
                 break;
+            case 'w':
+                Data::stochastic_calib_bands= atoi(optarg);
+                break;
             case 'D':
                 DoDiag= atoi(optarg);
                 if (DoDiag<0) { DoDiag=0; }
@@ -218,7 +222,7 @@ ParseCmdLine(int ac, char **av) {
                 print_help();
                 exit(1);
             case ':':
-                cout<<" A value should be given for this option"<<endl;
+                cout<<"Error: A value is missing for one of the options"<<endl;
                 print_help();
                 exit(1);
             default:

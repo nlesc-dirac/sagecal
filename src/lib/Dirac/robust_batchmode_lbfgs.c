@@ -24,7 +24,7 @@
 #include <cuda_runtime.h>
 #endif
 
-#define DEBUG
+//#define DEBUG
 /**** repeated code here ********************/
 /* Jones matrix multiplication 
    C=A*B

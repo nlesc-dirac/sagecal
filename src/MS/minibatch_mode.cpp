@@ -56,7 +56,13 @@ run_minibatch_calibration(void) {
     int minibatches=Data::stochastic_calib_minibatches;
     int time_per_minibatch=(Data::TileSize+minibatches-1)/minibatches;
     cout<<"Stochastic calibration with "<<nepochs<<" epochs (passes) of "<<minibatches<<" minibatches each for each solution interval."<<endl;
-    cout<<"Time per mini "<<time_per_minibatch<<endl;
+    cout<<"Time per minibatch: "<<time_per_minibatch<<endl;
+
+
+    /* how many solutions over the bandwidth?
+       channels divided to get this many solutions */
+    int nsolbw=Data::stochastic_calib_bands;
+    int *chanstart,*nchan;
 
     Data::IOData iodata;
     Data::LBeam beam;
@@ -75,11 +81,38 @@ run_minibatch_calibration(void) {
      srand(time(0)); /* use different seed */
     }
 
+    /* determine how many channels (max) used per each solution */
+    if (nsolbw>=iodata.Nchan) {nsolbw=iodata.Nchan;}
+    int nchanpersol=(iodata.Nchan+nsolbw-1)/nsolbw;
+    cout<<"Get "<<nsolbw<<" solutions, each "<<nchanpersol<<" channels wide"<<endl;
+    /* allocate memory for solution per channels, 
+       channel offset and how many channels */
+    if ((chanstart=(int*)calloc((size_t)nsolbw,sizeof(int)))==0) {
+      fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
+      exit(1);
+    }
+    if ((nchan=(int*)calloc((size_t)nsolbw,sizeof(int)))==0) {
+      fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
+      exit(1);
+    }
+    /* determine offset and how many channels for each solution */
+    int count=0,ii;
+    for (ii=0; ii<nsolbw; ii++) {
+      if (count+nchanpersol<iodata.Nchan) {
+        nchan[ii]=nchanpersol;
+      } else {
+        nchan[ii]=iodata.Nchan-count;
+      }
+      chanstart[ii]=count;
+
+      count+=nchan[ii];
+    }
+
     openblas_set_num_threads(1);//Data::Nt;
     /**********************************************************/
      int M,Mt,ci,cj,ck;
    /* parameters */
-   double *p,*pinit;
+   double *p,*pinit,*pfreq;
    double **pm;
    complex double *coh;
    FILE *sfp=0;
@@ -91,7 +124,8 @@ run_minibatch_calibration(void) {
     }
 
 
-     double mean_nu=2.0;
+     /* robust nu is taken from -L option */
+     double mean_nu=Data::nulow;
      clus_source_t *carr;
      baseline_t *barr;
      read_sky_cluster(Data::SkyModel,Data::Clusters,&carr,&M,iodata.freq0,iodata.ra0,iodata.dec0,Data::format);
@@ -124,7 +158,11 @@ run_minibatch_calibration(void) {
      fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
      exit(1);
   }
-
+  /* parameters for each subband */
+  if ((pfreq=(double*)calloc((size_t)iodata.N*8*Mt*nsolbw,sizeof(double)))==0) {
+     fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
+     exit(1);
+  }
 
   /* update cluster array with correct pointers to parameters */
   cj=0;
@@ -174,12 +212,17 @@ run_minibatch_calibration(void) {
     }
    }
   }
+  free(pm);
   /* backup of default initial values */
   if ((pinit=(double*)calloc((size_t)iodata.N*8*Mt,sizeof(double)))==0) {
      fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
      exit(1);
   }
   memcpy(pinit,p,(size_t)iodata.N*8*Mt*sizeof(double));
+  /* now replicate solutions for all subbands */
+  for (ii=0; ii<nsolbw; ii++) {
+   memcpy(&pfreq[iodata.N*8*Mt*ii],p,(size_t)iodata.N*8*Mt*sizeof(double));
+  }
 
   /* coherencies: note this is only the size of minibatch x number of channels */
   if ((coh=(complex double*)calloc((size_t)(M*iodata.Nbase*iodata.tilesz*4*iodata.Nchan),sizeof(complex double)))==0) {
@@ -199,8 +242,10 @@ run_minibatch_calibration(void) {
     Block<int> sort(1);
     sort[0] = MS::TIME; /* note: only sort over TIME for ms iterator to work */
     /* timeinterval in seconds */
-    cout<<"For "<< Data::TileSize<<" samples, solution time interval (s): "<<iodata.deltat*(double)Data::TileSize<<", minibatch ("<<iodata.tilesz<<") time interval (s): "<< iodata.deltat*(double)iodata.tilesz<<endl;
+    cout<<"For "<< Data::TileSize<<" samples, solution time interval (s): "<<iodata.deltat*(double)Data::TileSize<<", minibatch (length "<<iodata.tilesz<<" samples) time interval (s): "<< iodata.deltat*(double)iodata.tilesz<<endl;
     cout<<"Freq: "<<iodata.freq0/1e6<<" MHz, Chan: "<<iodata.Nchan<<" Bandwidth: "<<iodata.deltaf/1e6<<" MHz"<<endl;
+    /* bandwidth per channel */
+    double deltafch=iodata.deltaf/(double)iodata.Nchan;
     vector<MSIter*> msitr;
     vector<MeasurementSet*> msvector;
     if (Data::TableName) {
@@ -221,8 +266,13 @@ run_minibatch_calibration(void) {
     /* write additional info to solution file */
     if (solfile) {
       fprintf(sfp,"# solution file created by SAGECal\n");
-      fprintf(sfp,"# freq(MHz) bandwidth(MHz) time_interval(min) stations clusters effective_clusters\n");
-      fprintf(sfp,"%lf %lf %lf %d %d %d\n",iodata.freq0*1e-6,iodata.deltaf*1e-6,(double)Data::TileSize*iodata.deltat/60.0,iodata.N,M,Mt);
+      if (nsolbw>1) {
+       fprintf(sfp,"# freq(MHz) bandwidth(MHz) channels mini-bands time_interval(min) stations clusters effective_clusters\n");
+       fprintf(sfp,"%lf %lf %d %d %lf %d %d %d\n",iodata.freq0*1e-6,iodata.deltaf*1e-6,iodata.Nchan,nsolbw,(double)Data::TileSize*iodata.deltat/60.0,iodata.N,M,Mt);
+      } else {
+       fprintf(sfp,"# freq(MHz) bandwidth(MHz) time_interval(min) stations clusters effective_clusters\n");
+       fprintf(sfp,"%lf %lf %lf %d %d %d\n",iodata.freq0*1e-6,iodata.deltaf*1e-6,(double)Data::TileSize*iodata.deltat/60.0,iodata.N,M,Mt);
+      } 
     }
 
 
@@ -249,8 +299,14 @@ run_minibatch_calibration(void) {
       /* this will store LBFGS memory and var(grad) parameters */
       /* persistent memory between batches (y,s) pairs
        and info about online var(||grad||) estimate */
-      persistent_data_t ptdata;
-      lbfgs_persist_init(&ptdata,minibatches,iodata.N*8*Mt,iodata.Nbase*iodata.tilesz,Data::lbfgs_m,Data::gpu_threads);
+      persistent_data_t *ptdata_array;
+      if ((ptdata_array=(persistent_data_t*)calloc((size_t)nsolbw,sizeof(persistent_data_t)))==0) {
+         fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
+         exit(1);
+      }
+      for (ii=0; ii<nsolbw; ii++) {
+        lbfgs_persist_init(&ptdata_array[ii],minibatches,iodata.N*8*Mt,iodata.Nbase*iodata.tilesz,Data::lbfgs_m,Data::gpu_threads);
+      }
       for (int nepch=0; nepch<nepochs; nepch++) {
       for (int nmb=0; nmb<minibatches; nmb++) {
 
@@ -302,13 +358,18 @@ run_minibatch_calibration(void) {
     }
    }
 #endif
-
+     
+        /* iterate over solutions covering full bandwidth */
+        /* updated values for xo, coh, freqs, Nchan, deltaf needed */
         /*  call LBFGS routine */
-        bfgsfit_minibatch_visibilities(iodata.u,iodata.v,iodata.w,iodata.xo,iodata.N,iodata.Nbase,iodata.tilesz,barr,carr,coh,M,Mt,iodata.freqs,iodata.Nchan,iodata.deltaf,p,Data::Nt,Data::max_lbfgs,Data::lbfgs_m,Data::gpu_threads,Data::solver_mode,mean_nu,&res_00,&res_01,&ptdata);
-      if (!nepch && !nmb) { /* first run of minimization */
-       res_0=res_00;
+      for (ii=0; ii<nsolbw; ii++) {
+        bfgsfit_minibatch_visibilities(iodata.u,iodata.v,iodata.w,&iodata.xo[iodata.Nbase*iodata.tilesz*8*chanstart[ii]],iodata.N,iodata.Nbase,iodata.tilesz,barr,carr,&coh[M*iodata.Nbase*iodata.tilesz*4*chanstart[ii]],M,Mt,&iodata.freqs[chanstart[ii]],nchan[ii],deltafch*(double)nchan[ii],&pfreq[iodata.N*8*Mt*ii],Data::Nt,Data::max_lbfgs,Data::lbfgs_m,Data::gpu_threads,Data::solver_mode,mean_nu,&res_00,&res_01,&ptdata_array[0]);
+       if (!ii && !nepch && !nmb) { /* first run of minimization */
+        res_0=res_00;
+       }
+       res_1=res_01;
+       printf("epoch=%d minibatch=%d band=%d %lf %lf\n",nepch,nmb,ii,res_00,res_01);
       }
-      res_1=res_01;
     /****************** end calibration **************************/
 
 /******************************* work on minibatch*****************************/
@@ -317,8 +378,11 @@ run_minibatch_calibration(void) {
 
 
       /* free persistent memory */
-      lbfgs_persist_clear(&ptdata);
-
+      for (ii=0; ii<nsolbw; ii++) {
+       lbfgs_persist_clear(&ptdata_array[ii]);
+      }
+      free(ptdata_array);
+   
 
       if (start_iter) { start_iter=0; }
 
@@ -342,9 +406,11 @@ run_minibatch_calibration(void) {
 
 #ifndef HAVE_CUDA
      if (!doBeam) {
-      calculate_residuals_multifreq(iodata.u,iodata.v,iodata.w,p,iodata.xo,iodata.N,iodata.Nbase,iodata.tilesz,barr,carr,M,iodata.freqs,iodata.Nchan,iodata.deltaf,iodata.deltat,iodata.dec0,Data::Nt,Data::ccid,Data::rho,Data::phaseOnly);
+      for (ii=0; ii<nsolbw; ii++) {
+       calculate_residuals_multifreq(iodata.u,iodata.v,iodata.w,&pfreq[iodata.N*8*Mt*ii],&iodata.xo[iodata.Nbase*iodata.tilesz*8*chanstart[ii]],iodata.N,iodata.Nbase,iodata.tilesz,barr,carr,M,&iodata.freqs[chanstart[ii]],nchan[ii],deltafch*(double)nchan[ii],iodata.deltat,iodata.dec0,Data::Nt,Data::ccid,Data::rho,Data::phaseOnly);
+      }
      } else {
-      calculate_residuals_multifreq_withbeam(iodata.u,iodata.v,iodata.w,p,iodata.xo,iodata.N,iodata.Nbase,iodata.tilesz,barr,carr,M,iodata.freqs,iodata.Nchan,iodata.deltaf,iodata.deltat,iodata.dec0,
+      calculate_residuals_multifreq_withbeam(iodata.u,iodata.v,iodata.w,&pfreq[iodata.N*8*Mt*ii],&iodata.xo[iodata.Nbase*iodata.tilesz*8*chanstart[ii]],iodata.N,iodata.Nbase,iodata.tilesz,barr,carr,M,&iodata.freqs[chanstart[ii]],nchan[ii],iodata.deltaf*(double)nchan[ii],iodata.deltat,iodata.dec0,
 beam.p_ra0,beam.p_dec0,iodata.freq0,beam.sx,beam.sy,beam.time_utc,beam.Nelem,beam.xx,beam.yy,beam.zz,Data::Nt,Data::ccid,Data::rho,Data::phaseOnly);
      }
 #endif
@@ -370,17 +436,20 @@ beam.p_ra0,beam.p_dec0,iodata.freq0,beam.sx,beam.sy,beam.time_utc,beam.Nelem,bea
 
 
    tilex+=Data::TileSize;
-   /* print solutions to file */
+   /* print solutions to file : columns repeat for each subband */
    if (solfile) {
     for (cj=0; cj<iodata.N*8; cj++) {
      fprintf(sfp,"%d ",cj);
      for (ci=M-1; ci>=0; ci--) {
-       for (ck=0; ck<carr[ci].nchunk; ck++) {
-        fprintf(sfp," %e",p[carr[ci].p[ck]+cj]);
+       for (ii=0; ii<nsolbw; ii++) {
+        for (ck=0; ck<carr[ci].nchunk; ck++) {
+         fprintf(sfp," %e",pfreq[iodata.N*8*Mt*ii+carr[ci].p[ck]+cj]);
+        }
        }
      }
      fprintf(sfp,"\n");
     }
+    
    }
 
 
@@ -391,7 +460,9 @@ beam.p_ra0,beam.p_dec0,iodata.freq0,beam.sx,beam.sy,beam.time_utc,beam.Nelem,bea
    if (res_1==0.0 || !isfinite(res_1) || res_1>res_ratio*res_prev) {
      cout<<"Resetting Solution"<<endl;
      /* reset solutions so next iteration has default initial values */
-     memcpy(p,pinit,(size_t)iodata.N*8*Mt*sizeof(double));
+     for (ii=0; ii<nsolbw; ii++) {
+       memcpy(&pfreq[iodata.N*8*Mt*ii],pinit,(size_t)iodata.N*8*Mt*sizeof(double));
+     }
      /* also assume iterations have restarted from scratch */
      start_iter=1;
      /* also forget min residual (otherwise will try to reset it always) */
@@ -429,6 +500,8 @@ beam.p_ra0,beam.p_dec0,iodata.freq0,beam.sx,beam.sy,beam.time_utc,beam.Nelem,bea
     Data::freeData(iodata,beam);
    }
 
+    free(nchan);
+    free(chanstart);
     /**********************************************************/
 
   exinfo_gaussian *exg;
@@ -491,7 +564,7 @@ beam.p_ra0,beam.p_dec0,iodata.freq0,beam.sx,beam.sy,beam.time_utc,beam.Nelem,bea
   free(barr);
   free(p);
   free(pinit);
-  free(pm);
+  free(pfreq);
   free(coh);
   if (solfile) {
     fclose(sfp);

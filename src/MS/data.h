@@ -157,6 +157,7 @@ namespace Data
     /* stochastic calibration parameters */
     extern int stochastic_calib_epochs; /* if > 1, stochastic calibration */
     extern int stochastic_calib_minibatches; /* number of minibatches the data is split */
+    extern int stochastic_calib_bands; /* number of bands to split channels for solutions over full band */
 
     /* distributed sagecal parameters */
     extern int Nadmm; /* ADMM iterations >=1 */
