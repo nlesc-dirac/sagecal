@@ -440,8 +440,8 @@ beam.p_ra0,beam.p_dec0,iodata.freq0,beam.sx,beam.sy,beam.time_utc,beam.Nelem,bea
    if (solfile) {
     for (cj=0; cj<iodata.N*8; cj++) {
      fprintf(sfp,"%d ",cj);
+     for (ii=0; ii<nsolbw; ii++) {
      for (ci=M-1; ci>=0; ci--) {
-       for (ii=0; ii<nsolbw; ii++) {
         for (ck=0; ck<carr[ci].nchunk; ck++) {
          fprintf(sfp," %e",pfreq[iodata.N*8*Mt*ii+carr[ci].p[ck]+cj]);
         }
