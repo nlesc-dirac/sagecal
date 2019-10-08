@@ -375,6 +375,7 @@ run_minibatch_consensus_calibration(void) {
       }
 
       res_0=res_1=res_00=res_01=0.0;
+      memset(Y,0,sizeof(double)*(size_t)iodata.N*8*Mt*nsolbw);
       for (int nadmm=0; nadmm<Nadmm; nadmm++) {
       for (int nepch=0; nepch<nepochs; nepch++) {
       for (int nmb=0; nmb<minibatches; nmb++) {
