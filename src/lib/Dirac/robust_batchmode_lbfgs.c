@@ -811,6 +811,11 @@ typedef struct wrapper_me_data_batchmode_t_ {
  /* persistent data struct, where info about batch 
     is also stored - FIXME not needed */
  persistent_data_t *ptdata;
+
+ /* for consensus optimization */
+ double *y; /* lagrange multiplier, size equal to p */
+ double *z; /* Bz polynomial constraint, size equal to p */
+ double *rho; /* regularization, Mt values */
 } wrapper_me_data_batchmode_t;
 
 static double
@@ -1104,7 +1109,32 @@ robust_cost_func_multifreq(double *p, int m, void *adata) {
   double f0=func_robust(x,xmodel,n,d1->robust_nu,d1->Nt);
 
   free(xmodel);
-  return f0;
+
+  if (!dp->y && !dp->z && !dp->rho){
+   return f0;
+  } 
+  /* else this cost function is used in consensus optimization */
+  /* extra cost  y^T (x-z) + rho/2 (x-z)^T(x-z) */
+  double *xp;
+  if ((xp=(double*)calloc((size_t)m,sizeof(double)))==0) {
+     fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
+     exit(1);
+  }
+  if(m !=d1->Mt*d1->N*8) {
+     fprintf(stderr,"%s: %d: incorrect parameter lengths\n",__FILE__,__LINE__);
+     exit(1);
+  }
+  /* find xp=p-z */
+  my_dcopy(m,p,1,xp,1);
+  my_daxpy(m,dp->z,-1.0,xp);
+  double f1=0.0;
+  int ci;
+  for (ci=0; ci<d1->Mt; ci++) {
+    f1=f1+my_ddot(8*d1->N,&xp[8*d1->N*ci],&dp->y[8*d1->N*ci])+dp->rho[ci]*0.5*my_ddot(8*d1->N,&xp[8*d1->N*ci],&xp[8*d1->N*ci]);
+  }
+  //printf("f0=%lf f1=%lf\n",f0,f1);
+  free(xp);
+  return f0+f1;
 }
 
 
@@ -1256,7 +1286,7 @@ cpu_calc_deriv_multifreq(void *adata) {
      /* accumulate sum NOTE
      its important to get the sign right,
      depending on res=data-model or res=model-data  */
-     t->g[ci]+=-2.0*(dsum);
+     t->g[ci]+=2.0*(dsum);
      }
      }
      }
@@ -1277,11 +1307,13 @@ cpu_calc_deriv_multifreq(void *adata) {
    n: size of vector function (multi channel)
 
    adata:  additional data passed to the function
+
+   y,z,rho: null for normal cost, otherwise consensus mode 
 */
 static int
 func_grad_robust_multifreq(
    void (*func)(double *p, double *hx, int m, int n, void *adata),
-   double *p, double *g, double *xo, int m, int n, void *adata) {
+   double *p, double *g, double *xo, int m, int n, double *y, double *z, double *rho, void *adata) {
 
   double *x; /* array to store residual */
   int ci;
@@ -1299,19 +1331,7 @@ func_grad_robust_multifreq(
 #endif
      exit(1);
   }
-/*
-  double p0=p[0]; double eps=1e-6;
-  p[0]=p0+eps;
-  func(p,x,m,n,noff,nlen,adata);
-  my_daxpy(nlen*8,&xo[8*noff],-1.0,&x[8*noff]);
-  double nrm1=my_dnrm2(nlen*8,&x[8*noff]);
-  p[0]=p0-eps;
-  func(p,x,m,n,noff,nlen,adata);
-  my_daxpy(nlen*8,&xo[8*noff],-1.0,&x[8*noff]);
-  double nrm2=my_dnrm2(nlen*8,&x[8*noff]);
-printf("Numerical grad= %lf , %lf =%lf\n",nrm1,nrm2,(nrm1*nrm1-nrm2*nrm2)/(2.0*eps));
-  p[0]=p0;
-*/
+
   /* evaluate func once, store in x, and create threads */
   /* and calculate the residual x=xo-func */
   func(p,x,m,n,adata);
@@ -1377,11 +1397,36 @@ printf("Numerical grad= %lf , %lf =%lf\n",nrm1,nrm2,(nrm1*nrm1-nrm2*nrm2)/(2.0*e
 
   pthread_attr_destroy(&attr);
 
-//printf("Grad =%lf\n",g[0]);
   free(th_array);
   free(threaddata);
 
   free(x);
+
+  /* gradient needs more terms y+rho(x-z) in consensus mode */
+  if (y && z && rho) {
+   double *xp;
+   if(m !=dp->Mt*dp->N*8) {
+     fprintf(stderr,"%s: %d: incorrect parameter lengths\n",__FILE__,__LINE__);
+     exit(1);
+   }
+   if ((xp=(double*)calloc((size_t)m,sizeof(double)))==0) {
+     fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
+     exit(1);
+   }
+   /* find xp=p-z */
+   my_dcopy(m,p,1,xp,1);
+   my_daxpy(m,z,-1.0,xp);
+   /* now multiply by rho */
+   for (ci=0; ci<dp->Mt; ci++) {
+    my_dscal(8*dp->N,rho[ci],&xp[8*dp->N*ci]);
+   }
+
+   /* now add y + rho(p-z) to g */
+   my_daxpy(m,y,1.0,g);
+   my_daxpy(m,xp,1.0,g);
+   free(xp);
+  }
+
   return 0;
 }
 
@@ -1391,7 +1436,7 @@ robust_grad_func_multifreq(double *p, double *g, int m, void *adata) {
   wrapper_me_data_batchmode_t *dp=(wrapper_me_data_batchmode_t*)adata;
   double *x=dp->x; /* input data : changed at every batch */
   int n=dp->n; /* size also changed per batch */
-  func_grad_robust_multifreq(&minimize_viz_full_multifreq,p,g,x, m, n, dp->adata);
+  func_grad_robust_multifreq(&minimize_viz_full_multifreq,p,g,x, m, n, dp->y, dp->z, dp->rho, dp->adata);
 }
 
 /* caller function for minibatch mode */
@@ -1431,11 +1476,94 @@ bfgsfit_minibatch_visibilities(double *u, double *v, double *w, double *x, int N
   data1.x=x;
   data1.n=n;
   data1.adata=&lmdata;
+  /* other fiels are none */
+  data1.y=data1.z=data1.rho=0;
  
   /* the following fields in persistent data are not used here FIXME */
   indata->offset=0; /* no offset */
   indata->nlen=0 ; /* full data length */
   if (lbfgs_m<0) { lbfgs_m=-lbfgs_m; } /* FIXME */
+  *res_0=robust_cost_func_multifreq(p, m, &data1);
+  lbfgs_fit(&robust_cost_func_multifreq,&robust_grad_func_multifreq,p,m,max_lbfgs,lbfgs_m,&data1,indata);
+
+  *res_1=robust_cost_func_multifreq(p, m, &data1);
+  double invn=(double)1.0/n;
+  *res_0 *=invn;
+  *res_1 *=invn;
+
+  return 0;
+}
+
+
+
+
+
+/* minibatch mode with consensus */
+int
+bfgsfit_minibatch_consensus(double *u, double *v, double *w, double *x, int N,
+   int Nbase, int tilesz, baseline_t *barr, clus_source_t *carr, complex double *coh, int M, int Mt, double *freqs, int Nf, double fdelta, double *p, double *y, double *z, double *rho, int Nt, int max_lbfgs, int lbfgs_m, int gpu_threads, int solver_mode, double robust_nu, double *res_0, double *res_1, persistent_data_t *indata) {
+
+  me_data_t lmdata;
+
+  /*  no. of true parameters */
+  int m=N*Mt*8;
+  /* no of data */
+  int n=Nbase*tilesz*Nf*8;
+
+  /* setup the ME data */
+  lmdata.u=u;
+  lmdata.v=v;
+  lmdata.w=w;
+  lmdata.Nbase=Nbase;
+  lmdata.tilesz=tilesz;
+  lmdata.N=N;
+  lmdata.barr=barr;
+  lmdata.carr=carr;
+  lmdata.M=M;
+  lmdata.Mt=Mt;
+  lmdata.Nt=Nt;
+  lmdata.coh=coh;
+  lmdata.Nchan=Nf; /* multichannel data */
+
+  /* starting guess of robust nu */
+  lmdata.robust_nu=robust_nu;
+
+  /* wrapper struct to pass input */
+  wrapper_me_data_batchmode_t data1;
+  data1.x=x;
+  data1.n=n;
+  data1.adata=&lmdata;
+
+  /* other fiels */
+  data1.y=y;
+  data1.z=z;
+  data1.rho=rho;
+
+  /******************************/
+  /* check gradient */
+/*  double p0=p[0]; double eps=1e-6;
+  p[0]=p0+eps;
+  double f00=robust_cost_func_multifreq(p, m, &data1);
+  p[0]=p0-eps;
+  double f11=robust_cost_func_multifreq(p, m, &data1);
+  p[0]=p0;
+  double *gg;
+   if ((gg=(double*)calloc((size_t)m,sizeof(double)))==0) {
+     fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
+     exit(1);
+   }
+  robust_grad_func_multifreq(p,gg,m,&data1);
+  
+  printf("Numerical grad= %lf , %lf =%lf, analytical=%lf\n",f00,f11,(f00-f11)/(2.0*eps),gg[0]);
+  free(gg);
+*/
+  /******************************/
+
+  /* the following fields in persistent data are not used here FIXME */
+  indata->offset=0; /* no offset */
+  indata->nlen=0 ; /* full data length */
+
+
   *res_0=robust_cost_func_multifreq(p, m, &data1);
   lbfgs_fit(&robust_cost_func_multifreq,&robust_grad_func_multifreq,p,m,max_lbfgs,lbfgs_m,&data1,indata);
 

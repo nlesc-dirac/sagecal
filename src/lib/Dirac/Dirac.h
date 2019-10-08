@@ -247,6 +247,20 @@ bfgsfit_minibatch_visibilities(double *u, double *v, double *w, double *x, int N
    int Nbase, int tilesz, baseline_t *barr, clus_source_t *carr, complex double *coh, int M, int Mt, double *freqs, int Nf, double fdelta, double *p, int Nt, int max_lbfgs, int lbfgs_m, int gpu_threads, int solver_mode, double robust_nu, double *res_0, double *res_1, persistent_data_t *ptdata);
 
 
+/* consensus optimization version,
+   cost= original_cost + y^T(x-Bz) + rho/2(x-Bz)^T (x-Bz)
+   grad = original_grad + y + rho(x-Bz),
+   extra inputs
+   y: 8NMt Lagrange multiplier
+   Bz: (z) : 8NMt constraint
+   rho : Mtx1 regularization factors
+*/
+   
+extern int
+bfgsfit_minibatch_consensus(double *u, double *v, double *w, double *x, int N,
+   int Nbase, int tilesz, baseline_t *barr, clus_source_t *carr, complex double *coh, int M, int Mt, double *freqs, int Nf, double fdelta, double *p, double *y, double *z, double *rho, int Nt, int max_lbfgs, int lbfgs_m, int gpu_threads, int solver_mode, double robust_nu, double *res_0, double *res_1, persistent_data_t *ptdata);
+
+
 
 
 /****************************** mderiv.cu ****************************/

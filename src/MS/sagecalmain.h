@@ -42,5 +42,8 @@ run_fullbatch_calibration(void);
 extern int
 run_minibatch_calibration(void);
 
+/********* minibatch_consensus_mode.cpp *****************************************/
+extern int
+run_minibatch_consensus_calibration(void);
 #endif /* __SAGECALMAIN_H__ */
 

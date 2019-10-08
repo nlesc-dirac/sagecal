@@ -86,9 +86,17 @@ print_help(void) {
    cout << "-D 0,1,2 : if >0, enable diagnostics (Jacobian Leverage) 1 replace Jacobian Leverage as output, 2 only fractional noise/leverage is printed: default " <<Data::DoDiag<< endl;
    cout << "-q solutions.txt: if given, initialize solutions by reading this file (need to have the same format as a solution file, only solutions for 1 timeslot needed)"<< endl;
 
+   cout<<endl<<"Stochastic mode:"<<endl;
    cout << "-C epochs, if >0, use stochastic calibration: default "<<Data::stochastic_calib_epochs<< endl;
    cout << "-M minibatches, must be >0, split data to this many minibatches: default "<<Data::stochastic_calib_minibatches<< endl;
    cout << "-w mini-bands, must be >0, split channels to this many mini-bands for bandpass calibration: default "<<Data::stochastic_calib_bands<< endl;
+
+   cout<<endl<<"Stochastic mode with consensus:"<<endl;
+   cout << "-A ADMM iterations: default " <<Data::Nadmm<< endl;
+   cout << "-P consensus polynomial terms: default " <<Data::Npoly<< endl;
+   cout << "-Q consensus polynomial type (0,1,2,3): default " <<Data::PolyType<< endl;
+   cout << "-r regularization factor: default " <<Data::admm_rho<< endl;
+
    cout <<"Report bugs to <sarod@users.sf.net>"<<endl;
 
 }
@@ -102,7 +110,7 @@ ParseCmdLine(int ac, char **av) {
         print_help();
         exit(0);
     }
-    while((c=getopt(ac, av, ":a:b:c:d:e:f:g:j:k:l:m:n:o:p:q:s:t:w:x:y:z:B:C:D:E:F:H:I:J:L:M:O:R:S:W:E:h"))!= -1)
+    while((c=getopt(ac, av, ":a:b:c:d:e:f:g:j:k:l:m:n:o:p:q:r:s:t:w:x:y:z:A:B:C:D:E:F:H:I:J:L:M:O:P:Q:R:S:W:E:h"))!= -1)
     {
         switch(c)
         {
@@ -214,6 +222,18 @@ ParseCmdLine(int ac, char **av) {
             case 'w':
                 Data::stochastic_calib_bands= atoi(optarg);
                 break;
+            case 'A':
+                Nadmm= atoi(optarg);
+                break;
+            case 'P':
+                Npoly= atoi(optarg);
+                break;
+            case 'Q':
+                PolyType= atoi(optarg);
+                break;
+            case 'r':
+                admm_rho= atof(optarg);
+                break;
             case 'D':
                 DoDiag= atoi(optarg);
                 if (DoDiag<0) { DoDiag=0; }
@@ -261,8 +281,13 @@ main(int argc, char **argv) {
       exit(1);
     }
     if (Data::stochastic_calib_epochs>0) {
-      /* stochastic calibration */
-      run_minibatch_calibration();
+      if (Data::Nadmm>1 && Data::stochastic_calib_bands>1) {
+       /* stochastic calibration with consensus */ 
+       run_minibatch_consensus_calibration();
+      } else {
+       /* stochastic calibration */
+       run_minibatch_calibration();
+      }
     } else {
       /* normal calibration */
       run_fullbatch_calibration();

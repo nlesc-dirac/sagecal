@@ -38,13 +38,13 @@ using namespace Data;
    minibatch: subset of time slots, 
    solutions obtained for every channel - Bandpass calibration
    only using LBFGS (robust): no other solver!
-   Future work : add ADMM outer loop
+   ADMM outer loop
    Future work : add RFI removal from residual
 */
 
 
 int
-run_minibatch_calibration(void) {
+run_minibatch_consensus_calibration(void) {
     if (!Data::SkyModel || !Data::Clusters || !Data::TableName) {
       print_help();
       exit(1);
@@ -57,6 +57,7 @@ run_minibatch_calibration(void) {
     int time_per_minibatch=(Data::TileSize+minibatches-1)/minibatches;
     cout<<"Stochastic calibration with "<<nepochs<<" epochs (passes) of "<<minibatches<<" minibatches each for each solution interval."<<endl;
     cout<<"Time per minibatch: "<<time_per_minibatch<<endl;
+    cout<<"ADMM iterations="<<Nadmm<<" polynomial order="<<Npoly<<" regularization="<<admm_rho<<endl;
 
 
     /* how many solutions over the bandwidth?
@@ -81,6 +82,11 @@ run_minibatch_calibration(void) {
      srand(time(0)); /* use different seed */
     }
 
+    /* cannot run ADMM if we have only one channel, so print error and exit */
+    if (iodata.Nchan==1) {
+      fprintf(stderr,"Not possible to run consensus optimization with only %d channels.\n Quitting.\n",iodata.Nchan);
+      exit(1);
+    }
     /* determine how many channels (max) used per each solution */
     if (nsolbw>=iodata.Nchan) {nsolbw=iodata.Nchan;}
     int nchanpersol=(iodata.Nchan+nsolbw-1)/nsolbw;
@@ -276,6 +282,66 @@ run_minibatch_calibration(void) {
     }
 
 
+    /* ADMM memory */
+    double *Z,*Zold,*Y,*z,*B,*Bii,*rhok;
+    /* Z: 2Nx2 x Npoly x Mt */
+    /* keep ordered by Mt (one direction together) */
+    if ((Z=(double*)calloc((size_t)iodata.N*8*Npoly*Mt,sizeof(double)))==0) {
+     fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
+     exit(1);
+    }
+    if ((Zold=(double*)calloc((size_t)iodata.N*8*Npoly*Mt,sizeof(double)))==0) {
+     fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
+     exit(1);
+    }
+    /* z : 2Nx2 x Mt x Npoly vector, so each block is 8NMt */
+    if ((z=(double*)calloc((size_t)iodata.N*8*Npoly*Mt,sizeof(double)))==0) {
+     fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
+     exit(1);
+    }
+    /* copy of Y+rho J, Mt times, for each solution */
+    /* keep ordered by M (one direction together) */
+    if ((Y=(double*)calloc((size_t)iodata.N*8*Mt*nsolbw,sizeof(double)))==0) {
+     fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
+     exit(1);
+    }
+
+    /* Npoly terms, for each solution, so Npoly x nsolbw */
+    if ((B=(double*)calloc((size_t)Npoly*nsolbw,sizeof(double)))==0) {
+     fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
+     exit(1);
+    }
+    /* pseudoinverse  Mt values of NpolyxNpoly matrices */
+    if ((Bii=(double*)calloc((size_t)Mt*Npoly*Npoly,sizeof(double)))==0) {
+     fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
+     exit(1);
+    }
+    /* each Mt block is for one freq */
+    if ((rhok=(double*)calloc((size_t)Mt*nsolbw,sizeof(double)))==0) {
+     fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
+     exit(1);
+    }
+
+
+    /* freq. vector at each solution is taken */
+    double *ffreq;
+    if ((ffreq=(double*)calloc((size_t)nsolbw,sizeof(double)))==0) {
+     fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
+     exit(1);
+    }
+    for (ii=0; ii<nsolbw; ii++) {
+      ffreq[ii]=iodata.freqs[chanstart[ii]]+ deltafch*0.5*(double)nchan[ii];
+      printf("%d %lf %lf\n",ii,ffreq[ii],iodata.freq0);
+    }
+    /* setup polynomials */
+    setup_polynomials(B, Npoly, nsolbw, ffreq, iodata.freq0,(Npoly==1?1:PolyType));
+
+    setweights(Mt*nsolbw,rhok,Data::admm_rho,Data::Nt);
+    /* find inverse of B for each cluster, solution */
+    find_prod_inverse_full(B,Bii,Npoly,nsolbw,Mt,rhok,Data::Nt);
+
+    free(ffreq);
+
     /* starting iterations are doubled */
     int start_iter=1;
     int sources_precessed=0;
@@ -309,6 +375,7 @@ run_minibatch_calibration(void) {
       }
 
       res_0=res_1=res_00=res_01=0.0;
+      for (int nadmm=0; nadmm<Nadmm; nadmm++) {
       for (int nepch=0; nepch<nepochs; nepch++) {
       for (int nmb=0; nmb<minibatches; nmb++) {
 
@@ -365,16 +432,63 @@ run_minibatch_calibration(void) {
         /* updated values for xo, coh, freqs, Nchan, deltaf needed */
         /*  call LBFGS routine */
       for (ii=0; ii<nsolbw; ii++) {
-        bfgsfit_minibatch_visibilities(iodata.u,iodata.v,iodata.w,&iodata.xo[iodata.Nbase*iodata.tilesz*8*chanstart[ii]],iodata.N,iodata.Nbase,iodata.tilesz,barr,carr,&coh[M*iodata.Nbase*iodata.tilesz*4*chanstart[ii]],M,Mt,&iodata.freqs[chanstart[ii]],nchan[ii],deltafch*(double)nchan[ii],&pfreq[iodata.N*8*Mt*ii],Data::Nt,Data::max_lbfgs,Data::lbfgs_m,Data::gpu_threads,Data::solver_mode,mean_nu,&res_00,&res_01,&ptdata_array[0]);
+        /* find B.Z for this freq, for all clusters */
+        for (ci=0; ci<Mt; ci++) {
+         memset(&z[8*iodata.N*ci],0,sizeof(double)*(size_t)iodata.N*8);
+         for (int npp=0; npp<Npoly; npp++) {
+          my_daxpy(8*iodata.N, &Z[ci*8*iodata.N*Npoly+npp*8*iodata.N], B[ii*Npoly+npp], &z[8*iodata.N*ci]);
+         }
+        }
+        /* now z : 8NMt values = B Z */
+        /* Y[ii*8*iodata.N*Mt] : 8NMt values */
+        /* rhok[ii*Mt] : Mt values */
+        bfgsfit_minibatch_consensus(iodata.u,iodata.v,iodata.w,&iodata.xo[iodata.Nbase*iodata.tilesz*8*chanstart[ii]],iodata.N,iodata.Nbase,iodata.tilesz,barr,carr,&coh[M*iodata.Nbase*iodata.tilesz*4*chanstart[ii]],M,Mt,&iodata.freqs[chanstart[ii]],nchan[ii],deltafch*(double)nchan[ii],&pfreq[iodata.N*8*Mt*ii],&Y[iodata.N*8*Mt*ii],z,&rhok[ii*Mt],Data::Nt,Data::max_lbfgs,Data::lbfgs_m,Data::gpu_threads,Data::solver_mode,mean_nu,&res_00,&res_01,&ptdata_array[0]);
+
        res_0+=res_00;
        res_1+=res_01;
-       printf("epoch=%d minibatch=%d band=%d %lf %lf\n",nepch,nmb,ii,res_00,res_01);
+       printf("admm=%d epoch=%d minibatch=%d band=%d %lf %lf\n",nadmm,nepch,nmb,ii,res_00,res_01);
       }
     /****************** end calibration **************************/
 
+      /* ADMM updates */
+      /* Y <- Y+ rho J */
+      for (ii=0; ii<nsolbw; ii++) {
+        for (ci=0; ci<Mt; ci++) {
+          my_daxpy(8*iodata.N, &pfreq[ii*8*iodata.N*Mt+ci*8*iodata.N], rhok[ii*Mt+ci], &Y[ii*8*iodata.N*Mt+ci*8*iodata.N]);
+        }
+      }
+      /* update Z : sum up B(Y+rho J) first*/
+      for (ci=0; ci<Npoly; ci++) {
+        my_dcopy(8*iodata.N*Mt,Y,1,&z[ci*8*iodata.N*Mt],1);
+        my_dscal(8*iodata.N*Mt,B[ci],&z[ci*8*iodata.N*Mt]);
+      }
+      for (ii=1; ii<nsolbw; ii++) {
+        for(ci=0; ci<Npoly; ci++) {
+          my_daxpy(8*iodata.N*Mt, &Y[ii*8*iodata.N*Mt], B[ii*Npoly+ci], &z[ci*8*iodata.N*Mt]);
+        }
+      }
+      my_dcopy(iodata.N*8*Npoly*Mt,Z,1,Zold,1);
+      update_global_z_multi(Z,iodata.N,Mt,Npoly,z,Bii,Data::Nt);
+      my_daxpy(iodata.N*8*Npoly*Mt,Z,-1.0,Zold);
+      cout<<"ADMM : "<<nadmm<<" dual residual="<<my_dnrm2(iodata.N*8*Npoly*Mt,Zold)/sqrt((double)8*iodata.N*Npoly*Mt)<<endl;
+
+      /* update Y <- Y+rho*(J-B.Z), but already Y=Y+rho J
+        so, only need to add -rho B.Z */
+      for (ii=0; ii<nsolbw; ii++) {
+      for (ci=0; ci<Mt; ci++) {
+       memset(&z[8*iodata.N*ci],0,sizeof(double)*(size_t)iodata.N*8);
+       for (int npp=0; npp<Npoly; npp++) {
+        my_daxpy(8*iodata.N, &Z[ci*8*iodata.N*Npoly+npp*8*iodata.N], B[ii*Npoly+npp], &z[8*iodata.N*ci]);
+       }
+
+       my_daxpy(8*iodata.N, &z[ci*8*iodata.N], -rhok[ii*Mt+ci], &Y[ii*8*iodata.N*Mt+ci*8*iodata.N]);
+      }
+      }
+
 /******************************* work on minibatch*****************************/
-      }
-      }
+      } /* minibatch */
+      } /* epoch */
+      } /* admm */
 
 
       /* free persistent memory */
@@ -569,6 +683,14 @@ beam.p_ra0,beam.p_dec0,iodata.freq0,beam.sx,beam.sy,beam.time_utc,beam.Nelem,bea
   if (solfile) {
     fclose(sfp);
   }
+
+  free(Z);
+  free(Zold);
+  free(z);
+  free(Y);
+  free(B);
+  free(Bii);
+  free(rhok);
   /**********************************************************/
 
    cout<<"Done."<<endl;
