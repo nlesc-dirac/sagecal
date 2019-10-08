@@ -1286,7 +1286,7 @@ cpu_calc_deriv_multifreq(void *adata) {
      /* accumulate sum NOTE
      its important to get the sign right,
      depending on res=data-model or res=model-data  */
-     t->g[ci]+=2.0*(dsum);
+     t->g[ci]+=-2.0*(dsum);
      }
      }
      }
@@ -1421,9 +1421,9 @@ func_grad_robust_multifreq(
     my_dscal(8*dp->N,rho[ci],&xp[8*dp->N*ci]);
    }
 
-   /* now add y + rho(p-z) to g */
-   my_daxpy(m,y,1.0,g);
-   my_daxpy(m,xp,1.0,g);
+   /* now add y + rho(p-z) to g (-ve for -ve g)*/
+   my_daxpy(m,y,-1.0,g);
+   my_daxpy(m,xp,-1.0,g);
    free(xp);
   }
 
