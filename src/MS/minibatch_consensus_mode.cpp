@@ -342,6 +342,14 @@ run_minibatch_consensus_calibration(void) {
 
     free(ffreq);
 
+
+    /* soft thresholding, Z is solved 
+      with constraints l_2 ||Z||^2 + l_1 ||Z||_1
+      so, soft thrsholding threshold = l_1 / (l_2 + sum rho) = l_1/(l_2 + nsolbw*rho)
+      (assuming all B_i matrices are orthonormal)
+    */
+    double st_lambda=0.01/(0.01+(double)nsolbw*Data::admm_rho);
+
     /* starting iterations are doubled */
     int start_iter=1;
     int sources_precessed=0;
@@ -470,6 +478,8 @@ run_minibatch_consensus_calibration(void) {
       }
       my_dcopy(iodata.N*8*Npoly*Mt,Z,1,Zold,1);
       update_global_z_multi(Z,iodata.N,Mt,Npoly,z,Bii,Data::Nt);
+      /* elastic net regulization */
+      soft_threshold_z(Z, iodata.N*8*Npoly*Mt, st_lambda, Data::Nt);
       my_daxpy(iodata.N*8*Npoly*Mt,Z,-1.0,Zold);
       cout<<"ADMM : "<<nadmm<<" dual residual="<<my_dnrm2(iodata.N*8*Npoly*Mt,Zold)/sqrt((double)8*iodata.N*Npoly*Mt)<<endl;
 

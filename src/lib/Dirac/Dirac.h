@@ -1350,6 +1350,16 @@ extern int
 update_global_z_multi(double *Z,int N,int M,int Npoly,double *z,double *Bi, int Nt);
 
 
+/* soft threshold elementwise
+   z: Nx1 data vector (or matrix) : this is modified
+   lambda: threshold
+   Nt: no. of threads
+
+   Z_i ={ Z_i-lambda if Z_i > lambda, Z_i+lambda  if Z_i<-lambda, else 0}
+*/
+extern int
+soft_threshold_z(double *z, int N, double lambda, int Nt);
+
 /* generate a random integer in the range 0,1,...,maxval */
 extern int
 random_int(int maxval);
