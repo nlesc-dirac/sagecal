@@ -348,7 +348,7 @@ run_minibatch_consensus_calibration(void) {
       so, soft thrsholding threshold = l_1 / (l_2 + sum rho) = l_1/(l_2 + nsolbw*rho)
       (assuming all B_i matrices are orthonormal)
     */
-    double st_lambda=0.01/(0.01+(double)nsolbw*Data::admm_rho);
+    //double st_lambda=0.01/(0.01+(double)nsolbw*Data::admm_rho);
 
     /* starting iterations are doubled */
     int start_iter=1;
@@ -478,8 +478,9 @@ run_minibatch_consensus_calibration(void) {
       }
       my_dcopy(iodata.N*8*Npoly*Mt,Z,1,Zold,1);
       update_global_z_multi(Z,iodata.N,Mt,Npoly,z,Bii,Data::Nt);
-      /* elastic net regulization */
-      soft_threshold_z(Z, iodata.N*8*Npoly*Mt, st_lambda, Data::Nt);
+      /* elastic net regulization : Note Bii should also have l_1 I added before
+        inversion, but this is not done, because l_1 << admm_rho */
+      //soft_threshold_z(Z, iodata.N*8*Npoly*Mt, st_lambda, Data::Nt);
       my_daxpy(iodata.N*8*Npoly*Mt,Z,-1.0,Zold);
       cout<<"ADMM : "<<nadmm<<" dual residual="<<my_dnrm2(iodata.N*8*Npoly*Mt,Zold)/sqrt((double)8*iodata.N*Npoly*Mt)<<endl;
 
