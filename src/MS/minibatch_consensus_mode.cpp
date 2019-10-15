@@ -242,7 +242,7 @@ run_minibatch_consensus_calibration(void) {
    /* previous residual */
    double res_prev=CLM_DBL_MAX;
    /* how much can the residual increase before resetting solutions, 
-      use a lower value here (original 5) for more robustness */
+      use a lower value here (original 5) for more robustness, also because this is a log() cost */
    double res_ratio=1.5; 
    res_0=res_1=res_00=res_01=0.0;
 
@@ -343,6 +343,18 @@ run_minibatch_consensus_calibration(void) {
     find_prod_inverse_full(B,Bii,Npoly,nsolbw,Mt,rhok,Data::Nt);
 
     free(ffreq);
+
+    /* vector for keeping residual of each miniband and flag vector */
+    double *resband;
+    int *fband;
+    if ((resband=(double*)calloc((size_t)nsolbw,sizeof(double)))==0) {
+     fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
+     exit(1);
+    }
+    if ((fband=(int*)calloc((size_t)nsolbw,sizeof(int)))==0) {
+     fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
+     exit(1);
+    }
 
 
     /* soft thresholding, Z is solved 
@@ -457,6 +469,7 @@ run_minibatch_consensus_calibration(void) {
 
        res_0+=res_00;
        res_1+=res_01;
+       resband[ii]=res_01;
        printf("admm=%d epoch=%d minibatch=%d band=%d %lf %lf\n",nadmm,nepch,nmb,ii,res_00,res_01);
       }
       /* find average residual over bands*/
@@ -464,13 +477,19 @@ run_minibatch_consensus_calibration(void) {
       res_1/=(double)nsolbw;
       /* FIXME: examine bands where residual is far higher
          and downweight rho for these bands when updating Z */
+      for (ii=0; ii<nsolbw; ii++) {
+        /* flag minibands with higher residual */
+        fband[ii]=(resband[ii]>res_ratio*res_1?1:0);
+      }
     /****************** end calibration **************************/
 
       /* ADMM updates */
       /* Y <- Y+ rho J */
       for (ii=0; ii<nsolbw; ii++) {
-        for (ci=0; ci<Mt; ci++) {
+        if (!fband[ii]) { /* only update for good solutions */
+         for (ci=0; ci<Mt; ci++) {
           my_daxpy(8*iodata.N, &pfreq[ii*8*iodata.N*Mt+ci*8*iodata.N], rhok[ii*Mt+ci], &Y[ii*8*iodata.N*Mt+ci*8*iodata.N]);
+         }
         }
       }
       /* update Z : sum up B(Y+rho J) first*/
@@ -479,8 +498,10 @@ run_minibatch_consensus_calibration(void) {
         my_dscal(8*iodata.N*Mt,B[ci],&z[ci*8*iodata.N*Mt]);
       }
       for (ii=1; ii<nsolbw; ii++) {
+        if (!fband[ii]) { /* only update for good solutions */
         for(ci=0; ci<Npoly; ci++) {
           my_daxpy(8*iodata.N*Mt, &Y[ii*8*iodata.N*Mt], B[ii*Npoly+ci], &z[ci*8*iodata.N*Mt]);
+        }
         }
       }
       my_dcopy(iodata.N*8*Npoly*Mt,Z,1,Zold,1);
@@ -494,6 +515,7 @@ run_minibatch_consensus_calibration(void) {
       /* update Y <- Y+rho*(J-B.Z), but already Y=Y+rho J
         so, only need to add -rho B.Z */
       for (ii=0; ii<nsolbw; ii++) {
+        if (!fband[ii]) { /* only update for good solutions */
       for (ci=0; ci<Mt; ci++) {
        memset(&z[8*iodata.N*ci],0,sizeof(double)*(size_t)iodata.N*8);
        for (int npp=0; npp<Npoly; npp++) {
@@ -501,6 +523,7 @@ run_minibatch_consensus_calibration(void) {
        }
 
        my_daxpy(8*iodata.N, &z[ci*8*iodata.N], -rhok[ii*Mt+ci], &Y[ii*8*iodata.N*Mt+ci*8*iodata.N]);
+      }
       }
       }
 
@@ -710,6 +733,9 @@ beam.p_ra0,beam.p_dec0,iodata.freq0,beam.sx,beam.sy,beam.time_utc,beam.Nelem,bea
   free(B);
   free(Bii);
   free(rhok);
+  free(resband);
+  free(fband);
+
   /**********************************************************/
 
    cout<<"Done."<<endl;
