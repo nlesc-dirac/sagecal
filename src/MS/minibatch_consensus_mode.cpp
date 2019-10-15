@@ -241,7 +241,9 @@ run_minibatch_consensus_calibration(void) {
     double res_0,res_1,res_00,res_01;
    /* previous residual */
    double res_prev=CLM_DBL_MAX;
-   double res_ratio=5; /* how much can the residual increase before resetting solutions */
+   /* how much can the residual increase before resetting solutions, 
+      use a lower value here (original 5) for more robustness */
+   double res_ratio=1.5; 
    res_0=res_1=res_00=res_01=0.0;
 
     /**********************************************************/
@@ -457,6 +459,11 @@ run_minibatch_consensus_calibration(void) {
        res_1+=res_01;
        printf("admm=%d epoch=%d minibatch=%d band=%d %lf %lf\n",nadmm,nepch,nmb,ii,res_00,res_01);
       }
+      /* find average residual over bands*/
+      res_0/=(double)nsolbw;
+      res_1/=(double)nsolbw;
+      /* FIXME: examine bands where residual is far higher
+         and downweight rho for these bands when updating Z */
     /****************** end calibration **************************/
 
       /* ADMM updates */
