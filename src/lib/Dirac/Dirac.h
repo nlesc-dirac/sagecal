@@ -114,7 +114,6 @@ find_sumproduct(int N, float *x, float *y, float *sum1, float *sum2, int Nt);
 /****************************** lbfgs_cuda.c ****************************/
 /* LBFGS routines */
 
-#ifndef HAVE_CUDA
 /* struct for passing info between batches in minibatch mode */
 typedef struct persistent_data_t_ {
   /* y,s pairs */
@@ -136,6 +135,7 @@ typedef struct persistent_data_t_ {
   int niter; /* keep track of cumulative no. of iterations */
 } persistent_data_t;
 
+#ifndef HAVE_CUDA
 /* user routines for setting up and clearing persistent data structure
    for using stochastic LBFGS */
 /* initialization of persistent data, (user needs to call this)
