@@ -475,8 +475,8 @@ run_minibatch_consensus_calibration(void) {
       /* find average residual over bands*/
       res_0/=(double)nsolbw;
       res_1/=(double)nsolbw;
-      /* FIXME: examine bands where residual is far higher
-         and downweight rho for these bands when updating Z */
+      /* Examine bands where residual is far higher
+         and exclude these bands when updating Z */
       for (ii=0; ii<nsolbw; ii++) {
         /* flag minibands with higher residual */
         fband[ii]=(resband[ii]>res_ratio*res_1?1:0);
@@ -608,6 +608,14 @@ beam.p_ra0,beam.p_dec0,iodata.freq0,beam.sx,beam.sy,beam.time_utc,beam.Nelem,bea
     
    }
 
+
+   /* Reset solutions in mini-bands with bad residuals */
+   for (ii=0; ii<nsolbw; ii++) {
+       if (fband[ii]) {
+        cout<<"Resetting solution for band "<<ii<<endl;
+        memcpy(&pfreq[iodata.N*8*Mt*ii],pinit,(size_t)iodata.N*8*Mt*sizeof(double));
+       }
+   }
 
    /* if residual has increased too much, or all are flagged (0 residual)
       or NaN
