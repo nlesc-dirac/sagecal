@@ -622,7 +622,7 @@ beam.p_ra0,beam.p_dec0,iodata.freq0,beam.sx,beam.sy,beam.time_utc,beam.Nelem,bea
       reset solutions to original
       initial values */
    if (res_1==0.0 || !isfinite(res_1) || res_1>res_ratio*res_prev) {
-     cout<<"Resetting Solution"<<endl;
+     cout<<"Resetting all solutions"<<endl;
      /* reset solutions so next iteration has default initial values */
      for (ii=0; ii<nsolbw; ii++) {
        memcpy(&pfreq[iodata.N*8*Mt*ii],pinit,(size_t)iodata.N*8*Mt*sizeof(double));
