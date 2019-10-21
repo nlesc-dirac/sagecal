@@ -114,6 +114,7 @@ find_sumproduct(int N, float *x, float *y, float *sum1, float *sum2, int Nt);
 /****************************** lbfgs_cuda.c ****************************/
 /* LBFGS routines */
 
+#ifndef HAVE_CUDA
 /* struct for passing info between batches in minibatch mode */
 typedef struct persistent_data_t_ {
   /* y,s pairs */
@@ -135,7 +136,6 @@ typedef struct persistent_data_t_ {
   int niter; /* keep track of cumulative no. of iterations */
 } persistent_data_t;
 
-#ifndef HAVE_CUDA
 /* user routines for setting up and clearing persistent data structure
    for using stochastic LBFGS */
 /* initialization of persistent data, (user needs to call this)
@@ -204,6 +204,50 @@ lbfgs_fit_robust_cuda(
    double *p, double *x, int m, int n, int itmax, int lbfgs_m, int gpu_threads, void *adata);
 #endif /* HAVE_CUDA */
 
+/****************************** lbfgs_minibatch_cuda.c ****************************/
+#ifdef HAVE_CUDA
+
+/* struct for passing info between batches in minibatch mode
+  also pointers to GPU memory for running LBFGS 
+  all allocations will be on the GPU */
+typedef struct persistent_data_t_ {
+  /* y,s pairs */
+  double *y,*s; /* allocated by initialization routine */
+  double *rho; /* storage for product 1/y^T s */
+  int nfilled; /* how many <= lbfgs_m of y,s pairs are filled? valid range 0...lbfgs_m, start value 0 */
+  int vacant; /* next vacant offset, cycle in 0...lbfgs_m-1,0,1,...lbfgs_m-1 etc. start value 0 */
+
+  int Nt; /* no. of threads */
+
+  /* 2 vectors : size mx1, for on-line estimation of var(grad), m: no. of params */
+  double *running_avg, *running_avg_sq;
+  int niter; /* keep track of cumulative no. of iterations */
+} persistent_data_t;
+
+/* user routines for setting up and clearing persistent data structure
+   for using stochastic LBFGS : On the GPU */
+/* First, a GPU chosen and attach to it as well */
+/* initialization of persistent data, (user needs to call this)
+   Setting up minibatch info:
+   pt: blank struct persistent data 
+   Nminibatch:  how many minibatches (data is divided into this many)
+   (Note: total LBFGS iterations: itmax*Nminibatch*Nepoch)
+
+   Following are same as used in the lbfgs_fit routine 
+   m: size of parameter vector
+   n: size of data
+   lbfgs_m: LBFGS memory size
+   Nt: no. of threads
+*/
+extern int 
+lbfgs_persist_init(persistent_data_t *pt, int Nminibatch, int m, int n, int lbfgs_m, int Nt);
+
+/* clearing persistent struct after running stochastic LBFGS */
+extern int 
+lbfgs_persist_clear(persistent_data_t *pt);
+
+
+#endif /* HAVE_CUDA */
 /****************************** robust_lbfgs.c ****************************/
 typedef struct thread_data_logf_t_ {
   double *f;
@@ -230,11 +274,16 @@ lbfgs_fit_wrapper(
 
 
 /****************************** robust_batchmode_lbfgs.c ****************************/
+/****************************** robust_batchmode_lbfgs_cuda.c ****************************/
 /* minibatch mode version of LBFGS */
 extern int
 lbfgs_fit_robust_wrapper_minibatch(
    double *p, double *x, int m, int n, int itmax, int M, int gpu_threads, void *adata);
 
+
+/* Note: ptdata below will differ for CPU and GPU versions,
+ * but the interface is the same 
+ */
 /* caller function for minibatch mode */
 /* note that tilesz used here will be normally smaller than the orignal full batch size 
    coh: includes Nchan channels, instead of 1 : Nbase*tilesz*4*M*Nchan x 1  
@@ -255,7 +304,6 @@ bfgsfit_minibatch_visibilities(double *u, double *v, double *w, double *x, int N
    Bz: (z) : 8NMt constraint
    rho : Mtx1 regularization factors
 */
-   
 extern int
 bfgsfit_minibatch_consensus(double *u, double *v, double *w, double *x, int N,
    int Nbase, int tilesz, baseline_t *barr, clus_source_t *carr, complex double *coh, int M, int Mt, double *freqs, int Nf, double fdelta, double *p, double *y, double *z, double *rho, int Nt, int max_lbfgs, int lbfgs_m, int gpu_threads, int solver_mode, double robust_nu, double *res_0, double *res_1, persistent_data_t *ptdata);
