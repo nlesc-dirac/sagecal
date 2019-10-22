@@ -402,6 +402,13 @@ calculate_residuals_multifreq_withbeam_gpu(double *u,double *v,double *w,double 
 extern int
 predict_visibilities_withsol_withbeam_gpu(double *u,double *v,double *w,double *p,double *x, int *ignorelist, int N,int Nbase,int tilesz,baseline_t *barr, clus_source_t *carr, int M,double *freqs,int Nchan, double fdelta,double tdelta, double dec0,
 double ph_ra0, double ph_dec0, double ph_freq0, double *longitude, double *latitude, double *time_utc, int *Nelem, double **xx, double **yy, double **zz, int dobeam, int Nt, int add_to_data, int ccid, double rho, int phase_only);
+
+extern int
+precalculate_coherencies_multifreq_withbeam_gpu(double *u, double *v, double *w, complex double *x, int N,
+   int Nbase, baseline_t *barr,  clus_source_t *carr, int M, double *freqs,int Nchan, double fdelta, double tdelta, double dec0, double uvmin, double uvmax, 
+ double ph_ra0, double ph_dec0, double ph_freq0, double *longitude, double *latitude, double *time_utc, int tileze, int *Nelem, double **xx, double **yy, double **zz, int dobeam, int Nt);
+
+
 #endif /*!HAVE_CUDA */
 
 /****************************** predict_model.cu ****************************/
