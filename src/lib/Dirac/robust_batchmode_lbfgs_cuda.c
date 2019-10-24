@@ -55,6 +55,7 @@ bfgsfit_minibatch_visibilities(double *u, double *v, double *w, double *x, int N
   /* starting guess of robust nu */
   lmdata.robust_nu=robust_nu;
 
+  /* call lbfgs_fit_cuda() with proper cost/grad functions */
   return 0;
 }
 
@@ -92,5 +93,6 @@ bfgsfit_minibatch_consensus(double *u, double *v, double *w, double *x, int N,
   /* starting guess of robust nu */
   lmdata.robust_nu=robust_nu;
 
+  /* call lbfgs_fit_cuda() with proper cost/grad functions */
   return 0;
 }

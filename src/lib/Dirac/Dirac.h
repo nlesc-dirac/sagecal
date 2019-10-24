@@ -133,7 +133,7 @@ typedef struct persistent_data_t_ {
   int *lengths; /* Nbatchx1 lengths of minibatches */
   /* 2 vectors : size mx1, for on-line estimation of var(grad), m: no. of params */
   double *running_avg, *running_avg_sq;
-  int niter; /* keep track of cumulative no. of iterations */
+  int niter; /* keep track of cumulative no. of iterations, needed for online variance */
 } persistent_data_t;
 
 /* user routines for setting up and clearing persistent data structure
@@ -221,7 +221,12 @@ typedef struct persistent_data_t_ {
 
   /* 2 vectors : size mx1, for on-line estimation of var(grad), m: no. of params */
   double *running_avg, *running_avg_sq;
-  int niter; /* keep track of cumulative no. of iterations */
+  
+  /* GPU handles created by attach_gpu_to_thread() */
+  /* note: cost,grad functions may attach to GPU separately */
+  cublasHandle_t *cbhandle;
+  cusolverDnHandle_t *solver_handle;
+  int niter; /* keep track of cumulative no. of iterations, needed for online variance  */
 } persistent_data_t;
 
 /* user routines for setting up and clearing persistent data structure
@@ -246,7 +251,18 @@ lbfgs_persist_init(persistent_data_t *pt, int Nminibatch, int m, int n, int lbfg
 extern int 
 lbfgs_persist_clear(persistent_data_t *pt);
 
-
+/* LBFGS routine,
+ * user has to give cost_func() and grad_func()
+ * indata (persistent_data_t *) should be initialized beforehand
+ */
+extern int
+lbfgs_fit_cuda(
+   double (*cost_func)(double *p, int m, void *adata),
+   void (*grad_func)(double *p, double *g, int m, void *adata),
+   /* adata: user supplied data,
+   indata: persistant data that need to be kept between batches */
+   /* p:mx1 vector, M: memory size */
+   double *p, int m, int itmax, int M, void *adata, persistent_data_t *indata); /* indata=NULL for full batch */
 #endif /* HAVE_CUDA */
 /****************************** robust_lbfgs.c ****************************/
 typedef struct thread_data_logf_t_ {
@@ -406,6 +422,10 @@ cudakernel_setweights(int ThreadsPerBlock, int BlocksPerGrid, int N, double *wtd
 /* hadamard product by a cuda kernel x<= x*wt */
 extern void
 cudakernel_hadamard(int ThreadsPerBlock, int BlocksPerGrid, int N, double *wt, double *x);
+
+/* sum hadamard product by a cuda kernel y=y+x.*w (x.*w elementwise) */
+extern void
+cudakernel_hadamard_sum(int ThreadsPerBlock, int BlocksPerGrid, int N, double *y, double *x, double *w);
 
 /* update weights by a cuda kernel */
 extern void

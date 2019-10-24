@@ -26,6 +26,7 @@
 #include <math.h>
 
 
+#define CUDA_DEBUG
 static void
 checkCudaError(cudaError_t err, char *file, int line)
 {
@@ -36,6 +37,18 @@ checkCudaError(cudaError_t err, char *file, int line)
     exit(EXIT_FAILURE);
 #endif
 }
+
+static void
+checkCublasError(cublasStatus_t cbstatus, char *file, int line)
+{
+#ifdef CUDA_DEBUG
+   if (cbstatus!=CUBLAS_STATUS_SUCCESS) {
+    fprintf(stderr,"%s: %d: CUBLAS failure\n",file,line);
+    exit(EXIT_FAILURE);
+   }
+#endif
+}
+
 /************************ pipeline **************************/
 /* data struct shared by all threads */
 typedef struct gb_data_b_ {
@@ -283,6 +296,105 @@ mult_hessian(int m, double *pk, double *gk, double *s, double *y, double *rho, i
  free(alphai);
  free(idx);
 }
+
+/* pk,gk,s,y are on the device, rho on the host */
+static void
+cuda_mult_hessian(int m, double *pk, double *gk, double *s, double *y, double *rho, cublasHandle_t *cbhandle, int M, int ii) {
+ int ci;
+ double *alphai;
+ int *idx; /* store sorted locations of s, y here */
+ double gamma,beta;
+
+ cudaError_t err;
+ cublasStatus_t cbstatus;
+
+ if ((alphai=(double*)calloc((size_t)M,sizeof(double)))==0) {
+     fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
+     exit(1);
+ }
+ if ((idx=(int*)calloc((size_t)M,sizeof(int)))==0) {
+     fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
+     exit(1);
+ }
+ if (M>0) {
+  /* find the location of k-1 th value */
+  if (ii>0) {
+   ii=ii-1;
+  } else {
+   ii=M-1;
+  }
+ /* s,y will have 0,1,...,ii,ii+1,...M-1 */
+ /* map this to  ii+1,ii+2,...,M-1,0,1,..,ii */
+  for (ci=0; ci<M-ii-1; ci++){
+   idx[ci]=(ii+ci+1);
+  }
+  for(ci=M-ii-1; ci<M; ci++) {
+   idx[ci]=(ci-M+ii+1);
+  }
+ }
+
+#ifdef DEBUG
+ printf("prod M=%d, current ii=%d\n",M,ii);
+ for(ci=0; ci<M; ci++) {
+  printf("%d->%d ",ci,idx[ci]);
+ }
+ printf("\n");
+#endif
+ /* q = grad(f)k : pk<=gk */
+ ///my_dcopy(m,gk,1,pk,1);
+ err=cudaMemcpy(gk, pk, m*sizeof(double), cudaMemcpyDeviceToDevice);
+ checkCudaError(err,__FILE__,__LINE__);
+
+ /* this should be done in the right order */
+ for (ci=0; ci<M; ci++) {
+  /* alphai=rhoi si^T*q */
+  ///alphai[M-ci-1]=rho[idx[M-ci-1]]*my_ddot(m,&s[m*idx[M-ci-1]],pk);
+  cbstatus=cublasDdot(*cbhandle,m,&s[m*idx[M-ci-1]],1,pk,1,&alphai[M-ci-1]);
+  checkCublasError(cbstatus,__FILE__,__LINE__);
+  alphai[M-ci-1]*=rho[idx[M-ci-1]];
+
+  /* q=q-alphai yi */
+  ///my_daxpy(m,&y[m*idx[M-ci-1]],-alphai[M-ci-1],pk);
+  double tmpi=-alphai[M-ci-1];
+  cbstatus=cublasDaxpy(*cbhandle,m,&tmpi,&y[m*idx[M-ci-1]],1,pk,1);
+  checkCublasError(cbstatus,__FILE__,__LINE__);
+ }
+ /* r=Hk(0) q : initial hessian */
+ /* gamma=s(k-1)^T*y(k-1)/y(k-1)^T*y(k-1)*/
+ gamma=1.0;
+ if (M>0) {
+  ///gamma=my_ddot(m,&s[m*idx[M-1]],&y[m*idx[M-1]]);
+  cbstatus=cublasDdot(*cbhandle,m,&s[m*idx[M-1]],1,&y[m*idx[M-1]],1,&gamma);
+  checkCublasError(cbstatus,__FILE__,__LINE__);
+  ///gamma/=my_ddot(m,&y[m*idx[M-1]],&y[m*idx[M-1]]);
+  double gamma1;
+  cbstatus=cublasDdot(*cbhandle,m,&y[m*idx[M-1]],1,&y[m*idx[M-1]],1,&gamma1);
+  checkCublasError(cbstatus,__FILE__,__LINE__);
+  gamma/=gamma1;
+  /* Hk(0)=gamma I, so scale q by gamma */
+  /* r= Hk(0) q */
+  ///my_dscal(m,gamma,pk);
+  cbstatus=cublasDscal(*cbhandle,m,&gamma,pk,1);
+  checkCublasError(cbstatus,__FILE__,__LINE__);
+ } 
+
+ for (ci=0; ci<M; ci++) {
+  /* beta=rhoi yi^T * r */
+  ///beta=rho[idx[ci]]*my_ddot(m,&y[m*idx[ci]],pk);
+  cbstatus=cublasDdot(*cbhandle,m,&y[m*idx[ci]],1,pk,1,&beta);
+  checkCublasError(cbstatus,__FILE__,__LINE__);
+  beta*=rho[idx[ci]];
+  /* r = r + (alphai-beta)*si */
+  ///my_daxpy(m,&s[m*idx[ci]],alphai[ci]-beta,pk);
+  double tmpi=alphai[ci]-beta;
+  cbstatus=cublasDaxpy(*cbhandle,m,&tmpi,&s[m*idx[ci]],1,pk,1);
+  checkCublasError(cbstatus,__FILE__,__LINE__);
+ }
+
+ free(alphai);
+ free(idx);
+}
+
 
 /* cubic interpolation in interval [a,b] (a>b is possible)
    to find step that minimizes cost function */
@@ -1020,33 +1132,45 @@ lbfgs_fit_common(
 int
 lbfgs_persist_init(persistent_data_t *pt, int Nminibatch, int m, int n, int lbfgs_m, int Nt) {
 
-  if ((pt->s=(double*)calloc((size_t)m*lbfgs_m,sizeof(double)))==0) {
+
+    cudaError_t err;
+    err=cudaMalloc((void**)&(pt->s),m*lbfgs_m*sizeof(double));
+    checkCudaError(err,__FILE__,__LINE__);
+    err=cudaMemset(pt->s,0,m*lbfgs_m*sizeof(double));
+    checkCudaError(err,__FILE__,__LINE__);
+
+    err=cudaMalloc((void**)&(pt->y),m*lbfgs_m*sizeof(double));
+    checkCudaError(err,__FILE__,__LINE__);
+    err=cudaMemset(pt->y,0,m*lbfgs_m*sizeof(double));
+    checkCudaError(err,__FILE__,__LINE__);
+
+    /* Note that rho is on the host */
+    if ((pt->rho=(double*)calloc((size_t)lbfgs_m,sizeof(double)))==0) {
      fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
      exit(1);
-  }
-  if ((pt->y=(double*)calloc((size_t)m*lbfgs_m,sizeof(double)))==0) {
-     fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
-     exit(1);
-  }
-  if ((pt->rho=(double*)calloc((size_t)lbfgs_m,sizeof(double)))==0) {
-     fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
-     exit(1);
-  }
+    }
+
 
   /* storage for calculating on-line variance of gradient */
-  if ((pt->running_avg=(double*)calloc((size_t)m,sizeof(double)))==0) {
-     fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
-     exit(1);
-  }
-  if ((pt->running_avg_sq=(double*)calloc((size_t)m,sizeof(double)))==0) {
-     fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
-     exit(1);
-  }
+    err=cudaMalloc((void**)&(pt->running_avg),m*sizeof(double));
+    checkCudaError(err,__FILE__,__LINE__);
+    err=cudaMemset(pt->running_avg,0,m*sizeof(double));
+    checkCudaError(err,__FILE__,__LINE__);
+
+
+    err=cudaMalloc((void**)&(pt->running_avg_sq),m*sizeof(double));
+    checkCudaError(err,__FILE__,__LINE__);
+    err=cudaMemset(pt->running_avg_sq,0,m*sizeof(double));
+    checkCudaError(err,__FILE__,__LINE__);
+
+
 
   pt->nfilled=0; /* always 0 when we start */
   pt->vacant=0; /* cycle in 0..M-1 */
   pt->niter=0; /* cumulative iteration count */
   pt->Nt=Nt; /* no. of threads need to be passed */
+  pt->cbhandle=0;
+  pt->solver_handle=0;
 
   return 0;
 }
@@ -1055,30 +1179,320 @@ lbfgs_persist_init(persistent_data_t *pt, int Nminibatch, int m, int n, int lbfg
 int
 lbfgs_persist_clear(persistent_data_t *pt) {
   /* free persistent memory */
-  free(pt->s);
-  free(pt->y);
-  free(pt->rho);
-  free(pt->running_avg);
-  free(pt->running_avg_sq);
+    cudaError_t err;
+    err=cudaFree(pt->s);
+    checkCudaError(err,__FILE__,__LINE__);
+    err=cudaFree(pt->y);
+    checkCudaError(err,__FILE__,__LINE__);
+
+    free(pt->rho);
+
+    err=cudaFree(pt->running_avg);
+    checkCudaError(err,__FILE__,__LINE__);
+
+    err=cudaFree(pt->running_avg_sq);
+    checkCudaError(err,__FILE__,__LINE__);
 
   return 0;
 }
 
+/*************** backtracking line search **********************************/
+/* func: cost function
+   xk: parameter values size m x 1 (at which step is calculated)
+   pk: step direction size m x 1 (x(k+1)=x(k)+alphak * pk)
+   gk: gradient vector size m x 1
+   m: size or parameter vector
+   alpha0: initial alpha
+   adata:  additional data passed to the function
+   xk,pk,gk are on the device
+*/
+static double
+cuda_linesearch_backtrack(
+   double (*func)(double *p, int m, void *adata),
+   double *xk, double *pk, double *gk, int m, cublasHandle_t *cbhandle, double alpha0, void *adata) {
+
+  /* Armijo condition  f(x+alpha p) <= f(x) + c alpha p^T grad(f(x)) */
+  const double c=1e-4;
+  double alphak=alpha0;
+  double *xk1,fnew,fold,product;
+  if ((xk1=(double*)calloc((size_t)m,sizeof(double)))==0) {
+     fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
+     exit(1);
+  }
+  /* update parameters xk1=xk+alpha_k *pk */
+  my_dcopy(m,xk,1,xk1,1);
+  my_daxpy(m,pk,alphak,xk1);
+
+  fnew=func(xk1,m,adata);
+  fold=func(xk,m,adata); /* add threshold to make iterations stop at some point FIXME: is this correct/needed? */
+  product=c*my_ddot(m,pk,gk);
+  int ci=0;
+  while (ci<15 && fnew>fold+alphak*product) {
+     alphak *=0.5;
+     my_dcopy(m,xk,1,xk1,1);
+     my_daxpy(m,pk,alphak,xk1);
+     fnew=func(xk1,m,adata);
+     ci++;
+  }
+
+  free(xk1);
+  return alphak;
+}
 
 /*****************************************************************************/
 
 /* LBFGS routine,
  * user has to give cost_func() and grad_func()
+ * both p and g should be device pointers, use cudaPointerAttributes() to check
  * indata (persistent_data_t *) should be initialized beforehand
  */
 int
 lbfgs_fit_cuda(
    double (*cost_func)(double *p, int m, void *adata),
    void (*grad_func)(double *p, double *g, int m, void *adata),
-   /* iter: iteration number, adata: user supplied data,
+   /* adata: user supplied data,
    indata: persistant data that need to be kept between batches */
    /* p:mx1 vector, M: memory size */
    double *p, int m, int itmax, int M, void *adata, persistent_data_t *indata) { /* indata=NULL for full batch */
+
+  double *gk; /* gradients at both k+1 and k iter */
+  double *xk1,*xk; /* parameters at k+1 and k iter */
+  double *pk; /* step direction H_k * grad(f) */
+
+  double *g_min_rold, *g_min_rnew; /* temp storage for updating running averages */
+
+  double *y, *s; /* storage for delta(grad) and delta(p) */
+  double *rho; /* storage for 1/yk^T*sk */
+  int ci,ck,cm;
+  double alphak=1.0;
+  double alphabar=1.0;
+  double alpha;
+
+
+    cudaError_t err;
+    cublasStatus_t cbstatus;
+
+    err=cudaMalloc((void**)&(gk),m*sizeof(double));
+    checkCudaError(err,__FILE__,__LINE__);
+    err=cudaMemset(gk,0,m*sizeof(double));
+    checkCudaError(err,__FILE__,__LINE__);
+
+    err=cudaMalloc((void**)&(xk1),m*sizeof(double));
+    checkCudaError(err,__FILE__,__LINE__);
+    err=cudaMemset(xk1,0,m*sizeof(double));
+    checkCudaError(err,__FILE__,__LINE__);
+
+    err=cudaMalloc((void**)&(xk),m*sizeof(double));
+    checkCudaError(err,__FILE__,__LINE__);
+    err=cudaMemset(xk,0,m*sizeof(double));
+    checkCudaError(err,__FILE__,__LINE__);
+
+    err=cudaMalloc((void**)&(pk),m*sizeof(double));
+    checkCudaError(err,__FILE__,__LINE__);
+    err=cudaMemset(pk,0,m*sizeof(double));
+    checkCudaError(err,__FILE__,__LINE__);
+
+
+
+  /* use y,s pairs from the previous run */
+  /* storage size mM x 1*/
+  s=indata->s;
+  y=indata->y;
+  rho=indata->rho;
+  if (!s || !y || !rho) {
+     fprintf(stderr,"%s: %d: storage must be pre allocated befor calling this function.\n",__FILE__,__LINE__);
+     exit(1);
+  }
+
+  /* initial value for params xk=p */
+ /// my_dcopy(m,p,1,xk,1);
+    err=cudaMemcpy(p, xk, m*sizeof(double), cudaMemcpyHostToDevice);
+    checkCudaError(err,__FILE__,__LINE__);
+
+  /*  gradient gk=grad(f)_k */
+  grad_func(xk,gk,m,adata);
+  ///double gradnrm=my_dnrm2(m,gk);
+  double gradnrm;
+  cbstatus=cublasDnrm2(*(indata->cbhandle),m,gk,1,&gradnrm);
+  checkCublasError(cbstatus,__FILE__,__LINE__);
+  /* if gradient is too small, no need to solve, so stop */
+  if (gradnrm<CLM_STOP_THRESH) {
+   ck=itmax;
+  } else {
+   ck=0;
+  }
+#ifdef DEBUG
+  printf("||grad||=%g\n",gradnrm);
+#endif
+
+  ci=indata->vacant; /* cycle in 0..(M-1) */
+  cm=m*ci; /* cycle in 0..(M-1)m (in strides of m)*/
+
+    while (ck<itmax && isnormal(gradnrm) && gradnrm>CLM_STOP_THRESH) {
+#ifdef DEBUG
+   printf("iter %d gradnrm %g\n",ck,gradnrm);
+#endif
+   /* increment global iteration count */
+   indata->niter++;
+   /* detect if we are at first iteration of a new batch */
+   int batch_changed=(indata->niter>1 && ck==0);
+   /* if the batch has changed, update running averages */
+   if (batch_changed) {
+     /* temp vectors : grad-running_avg(old) , grad - running_avg(new) */
+     /* running_avg_new = running_avg_old + (grad-running_avg(old))/niter */
+    err=cudaMalloc((void**)&(g_min_rold),m*sizeof(double));
+    checkCudaError(err,__FILE__,__LINE__);
+
+    err=cudaMalloc((void**)&(g_min_rnew),m*sizeof(double));
+    checkCudaError(err,__FILE__,__LINE__);
+
+
+///     my_dcopy(m,gk,1,g_min_rold,1); /* g_min_rold <- grad */
+    err=cudaMemcpy(gk, g_min_rold, m*sizeof(double), cudaMemcpyDeviceToDevice);
+    checkCudaError(err,__FILE__,__LINE__);
+
+
+///     my_daxpy(m,indata->running_avg,-1.0,g_min_rold); /* g_min_rold <- g_min_rold - running_avg(old) */
+     alpha=-1.0;
+     cbstatus=cublasDaxpy(*(indata->cbhandle),m,&alpha,indata->running_avg,1,g_min_rold,1);
+     checkCublasError(cbstatus,__FILE__,__LINE__);
+
+///     my_daxpy(m,g_min_rold,1.0/(double)indata->niter,indata->running_avg); /* running_avg <- running_avg + 1/niter . g_min_rold */
+     alpha=1.0/(double)indata->niter;
+     cbstatus=cublasDaxpy(*(indata->cbhandle),m,&alpha,g_min_rold,1,indata->running_avg,1);
+     checkCublasError(cbstatus,__FILE__,__LINE__);
+
+///     my_dcopy(m,gk,1,g_min_rnew,1);
+     err=cudaMemcpy(gk, g_min_rnew, m*sizeof(double), cudaMemcpyDeviceToDevice);
+     checkCudaError(err,__FILE__,__LINE__);
+
+///     my_daxpy(m,indata->running_avg,-1.0,g_min_rnew); /* g_min_rnew <- g_min_rnew - running_avg(new) */
+     alpha=-1.0;
+     cbstatus=cublasDaxpy(*(indata->cbhandle),m,&alpha,indata->running_avg,1,g_min_rnew,1);
+     checkCublasError(cbstatus,__FILE__,__LINE__);
+
+
+     /* this loop should be parallelized/vectorized */
+     /*for (it=0; it<m; it++) {
+       indata->running_avg_sq[it] += g_min_rold[it]*g_min_rnew[it];
+     }*/
+     int ThreadsPerBlock = 256;
+     cudakernel_hadamard_sum(ThreadsPerBlock,(m+ThreadsPerBlock-1)/ThreadsPerBlock,m,indata->running_avg_sq,g_min_rold,g_min_rnew);
+
+     /* estimate online variance
+       Note: for badly initialized cases, might need to increase initial value of alphabar
+       because of gradnrm is too large, alphabar becomes too small */
+///     alphabar=10.0/(1.0+my_dasum(m,indata->running_avg_sq)/((double)(indata->niter-1)*gradnrm));
+     cbstatus=cublasDasum(*(indata->cbhandle),m,indata->running_avg_sq,1,&alpha);
+     checkCublasError(cbstatus,__FILE__,__LINE__);
+     alphabar=10.0/(1.0+alpha/((double)(indata->niter-1)*gradnrm));
+#ifdef DEBUG
+     printf("iter=%d running_avg %lf gradnrm %lf alpha=%lf\n",indata->niter,alpha,gradnrm,alphabar);
+#endif
+     err=cudaFree(g_min_rold);
+     checkCudaError(err,__FILE__,__LINE__);
+     err=cudaFree(g_min_rnew);
+     checkCudaError(err,__FILE__,__LINE__);
+   }
+
+   /* mult with hessian  pk=-H_k*gk */
+   if (indata->nfilled<M) {
+    cuda_mult_hessian(m,pk,gk,s,y,rho,indata->cbhandle,indata->nfilled,ci);
+   } else {
+    cuda_mult_hessian(m,pk,gk,s,y,rho,indata->cbhandle,M,ci);
+   }
+///   my_dscal(m,-1.0,pk);
+   alpha=-1.0;
+   cbstatus=cublasDscal(*(indata->cbhandle),m,&alpha,pk,1);
+   checkCublasError(cbstatus,__FILE__,__LINE__);
+
+
+   /* linesearch to find step length */
+   /* Armijo line search */
+   alphak=cuda_linesearch_backtrack(cost_func,xk,pk,gk,m,indata->cbhandle,alphabar,adata);
+   /* check if step size is too small, or nan, then stop */
+   if (!isnormal(alphak) || fabs(alphak)<CLM_EPSILON) {
+    break;
+   }
+   /* update parameters xk1=xk+alpha_k *pk */
+   my_dcopy(m,xk,1,xk1,1);
+   my_daxpy(m,pk,alphak,xk1);
+
+   if (!batch_changed) {
+   /* calculate sk=xk1-xk and yk=gk1-gk */
+   /* sk=xk1 */
+   my_dcopy(m,xk1,1,&s[cm],1);
+   /* sk=sk-xk */
+   my_daxpy(m,xk,-1.0,&s[cm]);
+   /* yk=-gk */
+   my_dcopy(m,gk,1,&y[cm],1);
+   my_dscal(m,-1.0,&y[cm]);
+   }
+
+      grad_func(xk1,gk,m,adata);
+   gradnrm=my_dnrm2(m,gk);
+   /* do a sanity check here */
+   if (!isnormal(gradnrm) || gradnrm<CLM_STOP_THRESH) {
+     break;
+   }
+
+   if (!batch_changed) {
+   /* yk=yk+gk1 */
+   my_daxpy(m,gk,1.0,&y[cm]);
+
+   /* yk = yk + lm0* sk, to create a trust region */
+   double lm0=1e-6;
+   if (gradnrm>1e3*lm0) {
+    my_daxpy(m,&s[cm],lm0,&y[cm]);
+   }
+
+   /* calculate 1/yk^T*sk */
+   rho[ci]=1.0/my_ddot(m,&y[cm],&s[cm]);
+   }
+
+   /* update xk=xk1 */
+   my_dcopy(m,xk1,1,xk,1);
+
+   //printf("iter %d store %d\n",ck,cm);
+   ck++;
+
+     if (!batch_changed) {
+   indata->nfilled=(indata->nfilled<M?indata->nfilled+1:M);
+   /* increment storage appropriately */
+   if (cm<(M-1)*m) {
+    /* offset of m */
+    cm=cm+m;
+    ci++;
+    indata->vacant++;
+   } else {
+    cm=ci=0;
+    indata->vacant=0;
+   }
+   }
+
+#ifdef DEBUG
+  printf("iter %d alpha=%g ||grad||=%g\n",ck,alphak,gradnrm);
+#endif
+  }
+
+
+ /* copy back solution to p */
+ my_dcopy(m,xk,1,p,1);
+
+#ifdef DEBUG
+//  for (ci=0; ci<m; ci++) {
+//   printf("grad %d=%lf\n",ci,gk[ci]);
+//  }
+#endif
+
+    err=cudaFree(gk);
+    checkCudaError(err,__FILE__,__LINE__);
+    err=cudaFree(xk1);
+    checkCudaError(err,__FILE__,__LINE__);
+    err=cudaFree(xk);
+    checkCudaError(err,__FILE__,__LINE__);
+    err=cudaFree(pk);
+    checkCudaError(err,__FILE__,__LINE__);
 
   return 0;
 }

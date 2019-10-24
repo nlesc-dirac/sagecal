@@ -382,6 +382,12 @@ run_minibatch_consensus_calibration(void) {
         cudaDeviceSetLimit(cudaLimitMallocHeapSize, Data::heapsize*1024*1024);
      }
     }
+    /* also attach to a GPU */
+    taskhist thst;
+    cublasHandle_t cbhandle; 
+    cusolverDnHandle_t solver_handle;
+    init_task_hist(&thst);
+    attach_gpu_to_thread(select_work_gpu(MAX_GPU_ID,&thst), &cbhandle, &solver_handle);
 #endif
 
 /******************************* data loop *****************************/
@@ -398,6 +404,11 @@ run_minibatch_consensus_calibration(void) {
       }
       for (ii=0; ii<nsolbw; ii++) {
         lbfgs_persist_init(&ptdata_array[ii],minibatches,iodata.N*8*Mt,iodata.Nbase*iodata.tilesz,Data::lbfgs_m,Data::gpu_threads);
+#ifdef HAVE_CUDA
+        /* pointers to cublas/solver */
+        ptdata_array[ii].cbhandle=&cbhandle;
+        ptdata_array[ii].solver_handle=&solver_handle;
+#endif
       }
 
       res_0=res_1=res_00=res_01=0.0;
@@ -670,6 +681,12 @@ beam.p_ra0,beam.p_dec0,iodata.freq0,beam.sx,beam.sy,beam.time_utc,beam.Nelem,bea
 
     free(nchan);
     free(chanstart);
+
+#ifdef HAVE_CUDA
+   detach_gpu_from_thread(cbhandle,solver_handle);
+   destroy_task_hist(&thst);
+#endif
+
     /**********************************************************/
 
   exinfo_gaussian *exg;
@@ -747,7 +764,6 @@ beam.p_ra0,beam.p_dec0,iodata.freq0,beam.sx,beam.sy,beam.time_utc,beam.Nelem,bea
   free(rhok);
   free(resband);
   free(fband);
-
   /**********************************************************/
 
    cout<<"Done."<<endl;
