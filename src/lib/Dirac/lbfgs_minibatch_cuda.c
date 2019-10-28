@@ -26,6 +26,7 @@
 #include <math.h>
 
 
+#define DEBUG
 #define CUDA_DEBUG
 static void
 checkCudaError(cudaError_t err, char *file, int line)
@@ -342,7 +343,7 @@ cuda_mult_hessian(int m, double *pk, double *gk, double *s, double *y, double *r
 #endif
  /* q = grad(f)k : pk<=gk */
  ///my_dcopy(m,gk,1,pk,1);
- err=cudaMemcpy(gk, pk, m*sizeof(double), cudaMemcpyDeviceToDevice);
+ err=cudaMemcpy(pk, gk, m*sizeof(double), cudaMemcpyDeviceToDevice);
  checkCudaError(err,__FILE__,__LINE__);
 
  /* this should be done in the right order */
@@ -1211,31 +1212,53 @@ cuda_linesearch_backtrack(
    double (*func)(double *p, int m, void *adata),
    double *xk, double *pk, double *gk, int m, cublasHandle_t *cbhandle, double alpha0, void *adata) {
 
+    cudaError_t err;
+    cublasStatus_t cbstatus;
+
   /* Armijo condition  f(x+alpha p) <= f(x) + c alpha p^T grad(f(x)) */
   const double c=1e-4;
   double alphak=alpha0;
   double *xk1,fnew,fold,product;
-  if ((xk1=(double*)calloc((size_t)m,sizeof(double)))==0) {
-     fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
-     exit(1);
-  }
+    err=cudaMalloc((void**)&(xk1),m*sizeof(double));
+    checkCudaError(err,__FILE__,__LINE__);
+    err=cudaMemset(xk1,0,m*sizeof(double));
+    checkCudaError(err,__FILE__,__LINE__);
+
   /* update parameters xk1=xk+alpha_k *pk */
-  my_dcopy(m,xk,1,xk1,1);
-  my_daxpy(m,pk,alphak,xk1);
+  ///my_dcopy(m,xk,1,xk1,1);
+    err=cudaMemcpy(xk1, xk, m*sizeof(double), cudaMemcpyDeviceToDevice);
+    checkCudaError(err,__FILE__,__LINE__);
+
+  ///my_daxpy(m,pk,alphak,xk1);
+    cbstatus=cublasDaxpy(*cbhandle,m,&alphak,pk,1,xk1,1);
+    checkCublasError(cbstatus,__FILE__,__LINE__);
 
   fnew=func(xk1,m,adata);
   fold=func(xk,m,adata); /* add threshold to make iterations stop at some point FIXME: is this correct/needed? */
-  product=c*my_ddot(m,pk,gk);
+///  product=c*my_ddot(m,pk,gk);
+  cbstatus=cublasDdot(*cbhandle,m,gk,1,pk,1,&product);
+  checkCublasError(cbstatus,__FILE__,__LINE__);
+  product *=c;
+
   int ci=0;
   while (ci<15 && fnew>fold+alphak*product) {
      alphak *=0.5;
-     my_dcopy(m,xk,1,xk1,1);
-     my_daxpy(m,pk,alphak,xk1);
+///     my_dcopy(m,xk,1,xk1,1);
+    err=cudaMemcpy(xk1, xk, m*sizeof(double), cudaMemcpyDeviceToDevice);
+    checkCudaError(err,__FILE__,__LINE__);
+
+
+///     my_daxpy(m,pk,alphak,xk1);
+    cbstatus=cublasDaxpy(*cbhandle,m,&alphak,pk,1,xk1,1);
+    checkCublasError(cbstatus,__FILE__,__LINE__);
+
      fnew=func(xk1,m,adata);
      ci++;
   }
 
-  free(xk1);
+     err=cudaFree(xk1);
+     checkCudaError(err,__FILE__,__LINE__);
+
   return alphak;
 }
 
@@ -1304,9 +1327,18 @@ lbfgs_fit_cuda(
      exit(1);
   }
 
+  /* find if p is on host or device */
+  struct cudaPointerAttributes attributes;
+  err=cudaPointerGetAttributes(&attributes,(void*)p);
+  checkCudaError(err,__FILE__,__LINE__);
+  int p_on_device=(attributes.devicePointer!=NULL?1:0);
   /* initial value for params xk=p */
  /// my_dcopy(m,p,1,xk,1);
-    err=cudaMemcpy(p, xk, m*sizeof(double), cudaMemcpyHostToDevice);
+  if (p_on_device) {
+    err=cudaMemcpy(xk, p, m*sizeof(double), cudaMemcpyDeviceToDevice);
+  } else {
+    err=cudaMemcpy(xk, p, m*sizeof(double), cudaMemcpyHostToDevice);
+  }
     checkCudaError(err,__FILE__,__LINE__);
 
   /*  gradient gk=grad(f)_k */
@@ -1348,7 +1380,7 @@ lbfgs_fit_cuda(
 
 
 ///     my_dcopy(m,gk,1,g_min_rold,1); /* g_min_rold <- grad */
-    err=cudaMemcpy(gk, g_min_rold, m*sizeof(double), cudaMemcpyDeviceToDevice);
+    err=cudaMemcpy(g_min_rold, gk, m*sizeof(double), cudaMemcpyDeviceToDevice);
     checkCudaError(err,__FILE__,__LINE__);
 
 
@@ -1363,7 +1395,7 @@ lbfgs_fit_cuda(
      checkCublasError(cbstatus,__FILE__,__LINE__);
 
 ///     my_dcopy(m,gk,1,g_min_rnew,1);
-     err=cudaMemcpy(gk, g_min_rnew, m*sizeof(double), cudaMemcpyDeviceToDevice);
+     err=cudaMemcpy(g_min_rnew, gk, m*sizeof(double), cudaMemcpyDeviceToDevice);
      checkCudaError(err,__FILE__,__LINE__);
 
 ///     my_daxpy(m,indata->running_avg,-1.0,g_min_rnew); /* g_min_rnew <- g_min_rnew - running_avg(new) */
@@ -1415,22 +1447,42 @@ lbfgs_fit_cuda(
     break;
    }
    /* update parameters xk1=xk+alpha_k *pk */
-   my_dcopy(m,xk,1,xk1,1);
-   my_daxpy(m,pk,alphak,xk1);
+///   my_dcopy(m,xk,1,xk1,1);
+    err=cudaMemcpy(xk1, xk, m*sizeof(double), cudaMemcpyDeviceToDevice);
+    checkCudaError(err,__FILE__,__LINE__);
+
+///   my_daxpy(m,pk,alphak,xk1);
+    cbstatus=cublasDaxpy(*(indata->cbhandle),m,&alphak,pk,1,xk1,1);
+    checkCublasError(cbstatus,__FILE__,__LINE__);
 
    if (!batch_changed) {
    /* calculate sk=xk1-xk and yk=gk1-gk */
    /* sk=xk1 */
-   my_dcopy(m,xk1,1,&s[cm],1);
+///   my_dcopy(m,xk1,1,&s[cm],1);
+    err=cudaMemcpy(&s[cm], xk1, m*sizeof(double), cudaMemcpyDeviceToDevice);
+    checkCudaError(err,__FILE__,__LINE__);
+
    /* sk=sk-xk */
-   my_daxpy(m,xk,-1.0,&s[cm]);
+///   my_daxpy(m,xk,-1.0,&s[cm]);
+    alpha=-1.0;
+    cbstatus=cublasDaxpy(*(indata->cbhandle),m,&alpha,xk,1,&s[cm],1);
+    checkCublasError(cbstatus,__FILE__,__LINE__);
+ 
    /* yk=-gk */
-   my_dcopy(m,gk,1,&y[cm],1);
-   my_dscal(m,-1.0,&y[cm]);
+///   my_dcopy(m,gk,1,&y[cm],1);
+    err=cudaMemcpy(&y[cm], gk, m*sizeof(double), cudaMemcpyDeviceToDevice);
+    checkCudaError(err,__FILE__,__LINE__);
+
+///    my_dscal(m,-1.0,&y[cm]);
+    cbstatus=cublasDscal(*(indata->cbhandle),m,&alpha,&y[cm],1);
+    checkCublasError(cbstatus,__FILE__,__LINE__);
    }
 
-      grad_func(xk1,gk,m,adata);
-   gradnrm=my_dnrm2(m,gk);
+   grad_func(xk1,gk,m,adata);
+///   gradnrm=my_dnrm2(m,gk);
+  cbstatus=cublasDnrm2(*(indata->cbhandle),m,gk,1,&gradnrm);
+  checkCublasError(cbstatus,__FILE__,__LINE__);
+
    /* do a sanity check here */
    if (!isnormal(gradnrm) || gradnrm<CLM_STOP_THRESH) {
      break;
@@ -1438,20 +1490,31 @@ lbfgs_fit_cuda(
 
    if (!batch_changed) {
    /* yk=yk+gk1 */
-   my_daxpy(m,gk,1.0,&y[cm]);
+///   my_daxpy(m,gk,1.0,&y[cm]);
+    alpha=1.0;
+    cbstatus=cublasDaxpy(*(indata->cbhandle),m,&alpha,gk,1,&y[cm],1);
+    checkCublasError(cbstatus,__FILE__,__LINE__);
+ 
 
    /* yk = yk + lm0* sk, to create a trust region */
    double lm0=1e-6;
    if (gradnrm>1e3*lm0) {
-    my_daxpy(m,&s[cm],lm0,&y[cm]);
+///    my_daxpy(m,&s[cm],lm0,&y[cm]);
+    cbstatus=cublasDaxpy(*(indata->cbhandle),m,&lm0,&s[cm],1,&y[cm],1);
+    checkCublasError(cbstatus,__FILE__,__LINE__);
    }
 
    /* calculate 1/yk^T*sk */
-   rho[ci]=1.0/my_ddot(m,&y[cm],&s[cm]);
+///   rho[ci]=1.0/my_ddot(m,&y[cm],&s[cm]);
+     cbstatus=cublasDdot(*(indata->cbhandle),m,&y[cm],1,&s[cm],1,&rho[ci]);
+     checkCublasError(cbstatus,__FILE__,__LINE__);
+     rho[ci]=1.0/rho[ci];
    }
 
    /* update xk=xk1 */
-   my_dcopy(m,xk1,1,xk,1);
+///   my_dcopy(m,xk1,1,xk,1);
+    err=cudaMemcpy(xk, xk1, m*sizeof(double), cudaMemcpyDeviceToDevice);
+    checkCudaError(err,__FILE__,__LINE__);
 
    //printf("iter %d store %d\n",ck,cm);
    ck++;
@@ -1477,7 +1540,14 @@ lbfgs_fit_cuda(
 
 
  /* copy back solution to p */
- my_dcopy(m,xk,1,p,1);
+/// my_dcopy(m,xk,1,p,1);
+
+  if (p_on_device) {
+    err=cudaMemcpy(p, xk, m*sizeof(double), cudaMemcpyDeviceToDevice);
+  } else {
+    err=cudaMemcpy(p, xk, m*sizeof(double), cudaMemcpyDeviceToHost);
+  }
+    checkCudaError(err,__FILE__,__LINE__);
 
 #ifdef DEBUG
 //  for (ci=0; ci<m; ci++) {

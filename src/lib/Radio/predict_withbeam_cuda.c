@@ -3026,7 +3026,8 @@ precalcoh_multifreq_threadfn(void *data) {
      err=cudaMemcpy((double*)tempdcoh, cohd, sizeof(double)*t->Nbase*8*t->Nf, cudaMemcpyDeviceToHost);
      checkCudaError(err,__FILE__,__LINE__);
      /* now copy this with right offset and stride */
-     for (int nchan=0; nchan<t->Nf; nchan++) {
+     int nchan;
+     for (nchan=0; nchan<t->Nf; nchan++) {
       my_ccopy(t->Nbase,&tempdcoh[0+4*t->Nbase*nchan],4,&(t->coh[4*ncl+4*t->Nbase*t->M*nchan]),4*t->M);
       my_ccopy(t->Nbase,&tempdcoh[1+4*t->Nbase*nchan],4,&(t->coh[4*ncl+1+4*t->Nbase*t->M*nchan]),4*t->M);
       my_ccopy(t->Nbase,&tempdcoh[2+4*t->Nbase*nchan],4,&(t->coh[4*ncl+2+4*t->Nbase*t->M*nchan]),4*t->M);

@@ -227,6 +227,14 @@ typedef struct persistent_data_t_ {
   cublasHandle_t *cbhandle;
   cusolverDnHandle_t *solver_handle;
   int niter; /* keep track of cumulative no. of iterations, needed for online variance  */
+
+
+  /* following are not always used */
+  /* location and size of data to work in each minibatch
+   (changed  at each minibatch)  */
+  int offset; /* offset 0..n-1 ; n: total data points*/
+  int nlen; /* length 1..n ; n: total data points */
+
 } persistent_data_t;
 
 /* user routines for setting up and clearing persistent data structure
