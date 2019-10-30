@@ -1444,8 +1444,10 @@ robust_grad_func_multifreq(double *p, double *g, int m, void *adata) {
    and x/coh are for Nchan channels, instead of 1 channel */
 int
 bfgsfit_minibatch_visibilities(double *u, double *v, double *w, double *x, int N,
-   int Nbase, int tilesz, baseline_t *barr, clus_source_t *carr, complex double *coh, int M, int Mt, double *freqs, int Nf, double fdelta, double *p, int Nt, int max_lbfgs, int lbfgs_m, int gpu_threads, int solver_mode, double robust_nu, double *res_0, double *res_1, persistent_data_t *indata) {
+   int Nbase, int tilesz, baseline_t *barr, clus_source_t *carr, complex double *coh, int M, int Mt, double *freqs, int Nf, double fdelta, double *p, int Nt, int max_lbfgs, int lbfgs_m, int gpu_threads, int solver_mode, double robust_nu, double *res_0, double *res_1, persistent_data_t *indata,int nminibatch, int totalmbs) {
 
+  /* FIXME: need absolute tile offset and total number of tiles also 
+      for hybrid solutions */
   me_data_t lmdata;
 
   /*  no. of true parameters */
@@ -1482,7 +1484,6 @@ bfgsfit_minibatch_visibilities(double *u, double *v, double *w, double *x, int N
   /* the following fields in persistent data are not used here FIXME */
   indata->offset=0; /* no offset */
   indata->nlen=0 ; /* full data length */
-  if (lbfgs_m<0) { lbfgs_m=-lbfgs_m; } /* FIXME */
   *res_0=robust_cost_func_multifreq(p, m, &data1);
   lbfgs_fit(&robust_cost_func_multifreq,&robust_grad_func_multifreq,p,m,max_lbfgs,lbfgs_m,&data1,indata);
 
@@ -1501,7 +1502,7 @@ bfgsfit_minibatch_visibilities(double *u, double *v, double *w, double *x, int N
 /* minibatch mode with consensus */
 int
 bfgsfit_minibatch_consensus(double *u, double *v, double *w, double *x, int N,
-   int Nbase, int tilesz, baseline_t *barr, clus_source_t *carr, complex double *coh, int M, int Mt, double *freqs, int Nf, double fdelta, double *p, double *y, double *z, double *rho, int Nt, int max_lbfgs, int lbfgs_m, int gpu_threads, int solver_mode, double robust_nu, double *res_0, double *res_1, persistent_data_t *indata) {
+   int Nbase, int tilesz, baseline_t *barr, clus_source_t *carr, complex double *coh, int M, int Mt, double *freqs, int Nf, double fdelta, double *p, double *y, double *z, double *rho, int Nt, int max_lbfgs, int lbfgs_m, int gpu_threads, int solver_mode, double robust_nu, double *res_0, double *res_1, persistent_data_t *indata,int nminibatch, int totalmbs) {
 
   me_data_t lmdata;
 

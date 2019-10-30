@@ -96,6 +96,7 @@ print_help(void) {
    cout << "-P consensus polynomial terms: default " <<Data::Npoly<< endl;
    cout << "-Q consensus polynomial type (0,1,2,3): default " <<Data::PolyType<< endl;
    cout << "-r regularization factor: default " <<Data::admm_rho<< endl;
+   cout << "Note: In stochastic mode, no hybrid solutions are allowed."<<endl<<"All clusters should have 1 in the second column of cluster file."<<endl;
 
    cout <<"Report bugs to <sarod@users.sf.net>"<<endl;
 
