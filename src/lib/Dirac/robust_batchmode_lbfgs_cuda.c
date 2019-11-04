@@ -37,9 +37,35 @@ checkCudaError(cudaError_t err, char *file, int line)
 #endif
 }
 
+typedef struct me_data_batchmode_cuda_t_ {
+ me_data_t *adata;
+ /* note: all arrays are on the device */
+ double *x; /* full data vector nx1 */
+ double *coh; /* coherency vector */
+ int n;
+ int Nbase;
+ int tilesz;
+ int N;
+ int M;
+ int Mt;
+ int Nchan;
+ double robust_nu;
+ int nminibatch; /* which minibatch? 0...(totalminibatches-1) */
+ int totalminibatch; /* total number of minibatches */
+ short *hbb;
+ int *ptoclus;
+
+ /* for consensus optimization */
+ double *y; /* lagrange multiplier, size equal to p */
+ double *z; /* Bz polynomial constraint, size equal to p */
+ double *rho; /* regularization, Mt values */
+} me_data_batchmode_cuda_t;
+
+
+
 int
 bfgsfit_minibatch_visibilities(double *u, double *v, double *w, double *x, int N,
-   int Nbase, int tilesz, baseline_t *barr, clus_source_t *carr, complex double *coh, int M, int Mt, double *freqs, int Nf, double fdelta, double *p, int Nt, int max_lbfgs, int lbfgs_m, int gpu_threads, int solver_mode, double robust_nu, double *res_0, double *res_1, persistent_data_t *indata,int nminibatch, int totalmbs) {
+   int Nbase, int tilesz, baseline_t *barr, clus_source_t *carr, complex double *coh, int M, int Mt, double *freqs, int Nf, double fdelta, double *p, int Nt, int max_lbfgs, int lbfgs_m, int gpu_threads, int solver_mode, double robust_nu, double *res_0, double *res_1, persistent_data_t *indata,int nminibatch, int totalminibatch) {
 
   me_data_t lmdata;
 
@@ -71,41 +97,36 @@ bfgsfit_minibatch_visibilities(double *u, double *v, double *w, double *x, int N
 }
 
 
-typedef struct me_data_batchmode_cuda_t_ {
- me_data_t *adata;
- /* note: all arrays are on the device */
- double *x; /* full data vector nx1 */
- double *coh; /* coherency vector */
- int n;
- int Nbase;
- int tilesz;
- int N;
- int M;
- int Mt;
- int Nchan;
- double robust_nu;
- int nminibatch; /* which minibatch? 0...(totalminibatches-1) */
- int totalmbs; /* total minibatches */
- short *hbb;
- int *ptoclus;
-
- /* for consensus optimization */
- double *y; /* lagrange multiplier, size equal to p */
- double *z; /* Bz polynomial constraint, size equal to p */
- double *rho; /* regularization, Mt values */
-} me_data_batchmode_cuda_t;
-
 
 /* cost function */
 static double
 costfunc_multifreq(double *p, int m, void *adata) {
+ me_data_batchmode_cuda_t *lmdata=(me_data_batchmode_cuda_t *)adata;
 
- return 0;
+ int Nbase=lmdata->tilesz*lmdata->Nbase;
+ /* calculate the absolute baseline offset (in the full batch data) 
+   using which minibatch and total number of minibatches */
+ int boff=lmdata->nminibatch*(Nbase);
+ /* the total number of baselines over the full batch */
+ int Nbasetotal=lmdata->totalminibatch*(Nbase);
+ double fcost=cudakernel_lbfgs_multifreq_cost_robust(Nbase,lmdata->Nchan,lmdata->M,lmdata->N,Nbasetotal,boff,lmdata->x,lmdata->coh,p,m,lmdata->hbb,lmdata->ptoclus,lmdata->robust_nu);
+ printf("Cost %lf\n",fcost);
+ return fcost;
 }
 
 /* gradient function */
 static void
 gradfunc_multifreq(double *p, double *g, int m, void *adata) {
+ me_data_batchmode_cuda_t *lmdata=(me_data_batchmode_cuda_t *)adata;
+
+ int Nbase=lmdata->tilesz*lmdata->Nbase;
+ /* calculate the absolute baseline offset (in the full batch data) 
+   using which minibatch and total number of minibatches */
+ int boff=lmdata->nminibatch*(Nbase);
+ /* the total number of baselines over the full batch */
+ int Nbasetotal=lmdata->totalminibatch*(Nbase);
+ cudakernel_lbfgs_multifreq_r_robust(Nbase,lmdata->tilesz,lmdata->Nchan,lmdata->M,lmdata->N,Nbasetotal,boff,lmdata->x,lmdata->coh,p,m,lmdata->hbb,lmdata->ptoclus,g,lmdata->robust_nu);
+
 }
 
 
@@ -114,8 +135,9 @@ gradfunc_multifreq(double *p, double *g, int m, void *adata) {
    clus_source_t *carr replaced by int *ptoclus : size 2*M x 1 */
 int
 bfgsfit_minibatch_consensus(double *u, double *v, double *w, double *x, int N,
-   int Nbase, int tilesz, short *hbb, int *ptoclus, complex double *coh, int M, int Mt, double *freqs, int Nf, double fdelta, double *p, double *y, double *z, double *rho, int Nt, int max_lbfgs, int lbfgs_m, int gpu_threads, int solver_mode, double robust_nu, double *res_0, double *res_1, persistent_data_t *indata,int nminibatch, int totalmbs) {
+   int Nbase, int tilesz, short *hbb, int *ptoclus, complex double *coh, int M, int Mt, double *freqs, int Nf, double fdelta, double *p, double *y, double *z, double *rho, int Nt, int max_lbfgs, int lbfgs_m, int gpu_threads, int solver_mode, double robust_nu, double *res_0, double *res_1, persistent_data_t *indata,int nminibatch, int totalminibatch) {
 
+printf("BFGS M=%d iter=%d\n",lbfgs_m,max_lbfgs);
   me_data_batchmode_cuda_t lmdata;
   cudaError_t err;
   double *pdevice;
@@ -145,7 +167,7 @@ bfgsfit_minibatch_consensus(double *u, double *v, double *w, double *x, int N,
   lmdata.M=M;
   lmdata.Mt=Mt;
   lmdata.nminibatch=nminibatch;
-  lmdata.totalmbs=totalmbs;
+  lmdata.totalminibatch=totalminibatch;
   err=cudaMalloc((void**)&(lmdata.coh),8*Nbase*tilesz*M*Nf*sizeof(double));
   checkCudaError(err,__FILE__,__LINE__);
   err=cudaMemcpy(lmdata.coh,(double*)coh,8*Nbase*tilesz*M*Nf*sizeof(double),cudaMemcpyHostToDevice);
@@ -183,9 +205,30 @@ bfgsfit_minibatch_consensus(double *u, double *v, double *w, double *x, int N,
   err=cudaMemcpy(lmdata.z,z,m*sizeof(double),cudaMemcpyHostToDevice);
   checkCudaError(err,__FILE__,__LINE__);
 
+/****************************************/
+/* check gradient */
+/* int iii=2;
+ gradfunc_multifreq(pdevice,lmdata.z,m,&lmdata);
+ err=cudaMemcpy(z,lmdata.z,m*sizeof(double),cudaMemcpyDeviceToHost);
+ checkCudaError(err,__FILE__,__LINE__);
+ double p0=p[iii]; double eps=1e-6;
+ p[iii]=p0+eps;
+ err=cudaMemcpy(pdevice,p,m*sizeof(double),cudaMemcpyHostToDevice);
+ checkCudaError(err,__FILE__,__LINE__);
+ double f00=costfunc_multifreq(pdevice,m,&lmdata);
+ p[iii]=p0-eps;
+ err=cudaMemcpy(pdevice,p,m*sizeof(double),cudaMemcpyHostToDevice);
+ checkCudaError(err,__FILE__,__LINE__);
+ double f11=costfunc_multifreq(pdevice,m,&lmdata);
+ printf("Numerical grad =%lf,%lf=%lf analytical=%lf\n",f00,f11,(f00-f11)/(2.0*eps),z[iii]);
+*/
+/****************************************/
+
 
   /* call lbfgs_fit_cuda() with proper cost/grad functions */
+  *res_0=costfunc_multifreq(pdevice,m,&lmdata);
   lbfgs_fit_cuda(costfunc_multifreq,gradfunc_multifreq,pdevice,m,max_lbfgs,lbfgs_m,&lmdata,indata);
+  *res_1=costfunc_multifreq(pdevice,m,&lmdata);
 
   err=cudaMemcpy(p,pdevice,m*sizeof(double),cudaMemcpyDeviceToHost);
   checkCudaError(err,__FILE__,__LINE__);
@@ -207,6 +250,10 @@ bfgsfit_minibatch_consensus(double *u, double *v, double *w, double *x, int N,
   checkCudaError(err,__FILE__,__LINE__);
   err=cudaFree(lmdata.z);
   checkCudaError(err,__FILE__,__LINE__);
+
+  double invn=(double)1.0/n;
+  *res_0 *=invn;
+  *res_1 *=invn;
 
   return 0;
 }

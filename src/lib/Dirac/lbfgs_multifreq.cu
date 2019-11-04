@@ -23,15 +23,15 @@
 #include "GPUtune.h"
 
 /* enable this for checking for kernel failure */
-//#define CUDA_DBG
+#define CUDA_DBG
 
 /* note x is residual, not data */
 __global__ void 
-kernel_deriv_r_robust(int Nbase, int tilesz, int M, int Ns, int Nparam, int goff, const double *__restrict__ x, const double *__restrict__ coh, const double *__restrict__ p, const short *__restrict__ bb, const int *__restrict__ ptoclus, double *__restrict__ grad, double robust_nu){
+kernel_deriv_r_robust(int Nbase, int tilesz, int Nchan, int M, int Ns, int Nparam, int Nbasetotal, int boff, const double *__restrict__ x, const double *__restrict__ coh, const double *__restrict__ p, const short *__restrict__ bb, const int *__restrict__ ptoclus, double *__restrict__ grad, double robust_nu){
   /* global thread index */
   unsigned int n = threadIdx.x + blockDim.x*blockIdx.x;
   /* parameter number of this thread */
-  unsigned int np=n+goff;
+  unsigned int np=n;
 
 
   /* this thread works on 
@@ -80,14 +80,16 @@ kernel_deriv_r_robust(int Nbase, int tilesz, int M, int Ns, int Nparam, int goff
       unsigned int stc=np_s/8; /* this is the station of this param */
       /* which chunk does this parameter belong to */
       unsigned int tpchunk=(np-pstart)/(8*Ns);
-      int tilesperchunk=(tilesz+nchunk-1)/nchunk;
-
       /* total baselines in one tile */
       int Nbase0=(Ns-1)*Ns/2;
+
+      //int tilesperchunk=(tilesz+nchunk-1)/nchunk;
+      int tilesperchunk=(Nbasetotal/Nbase0+nchunk-1)/nchunk;
+
       for(unsigned int nb=0; nb<Nbase; nb++) {
 
         /* which tile is this ? */
-        int ttile=nb/Nbase0;
+        int ttile=(nb+boff)/Nbase0;
         /* which chunk this tile belongs to */
         int tptile=ttile/tilesperchunk;
         /* now tptile has to match tpchunk, otherwise ignore calculation */
@@ -103,28 +105,6 @@ kernel_deriv_r_robust(int Nbase, int tilesz, int M, int Ns, int Nparam, int goff
          /* which cluster 0..M-1 */
          unsigned int stm=cli;
 
-         /* read residual vector */
-         double xr[8];
-         xr[0]=x[nb*8];
-         xr[1]=x[nb*8+1];
-         xr[2]=x[nb*8+2];
-         xr[3]=x[nb*8+3];
-         xr[4]=x[nb*8+4];
-         xr[5]=x[nb*8+5];
-         xr[6]=x[nb*8+6];
-         xr[7]=x[nb*8+7];
-
-         /* read in coherency */
-         cuDoubleComplex C[4];
-         C[0].x=coh[8*nb*M+8*stm];
-         C[0].y=coh[8*nb*M+8*stm+1];
-         C[1].x=coh[8*nb*M+8*stm+2];
-         C[1].y=coh[8*nb*M+8*stm+3];
-         C[2].x=coh[8*nb*M+8*stm+4];
-         C[2].y=coh[8*nb*M+8*stm+5];
-         C[3].x=coh[8*nb*M+8*stm+6];
-         C[3].y=coh[8*nb*M+8*stm+7];
-         
          cuDoubleComplex G1[4];
          cuDoubleComplex G2[4];
          cuDoubleComplex T1[4];
@@ -179,6 +159,30 @@ kernel_deriv_r_robust(int Nbase, int tilesz, int M, int Ns, int Nparam, int goff
            G2[3].x=pp[6];
            G2[3].y=-pp[7];
          }
+
+         for (int fi=0; fi<Nchan; fi++) {
+         /* read residual vector */
+         double xr[8];
+         xr[0]=x[nb*8  +fi*8*Nbase];
+         xr[1]=x[nb*8+1+fi*8*Nbase];
+         xr[2]=x[nb*8+2+fi*8*Nbase];
+         xr[3]=x[nb*8+3+fi*8*Nbase];
+         xr[4]=x[nb*8+4+fi*8*Nbase];
+         xr[5]=x[nb*8+5+fi*8*Nbase];
+         xr[6]=x[nb*8+6+fi*8*Nbase];
+         xr[7]=x[nb*8+7+fi*8*Nbase];
+
+         /* read in coherency */
+         cuDoubleComplex C[4];
+         C[0].x=coh[8*nb*M+8*stm  +8*M*Nbase*fi];
+         C[0].y=coh[8*nb*M+8*stm+1+8*M*Nbase*fi];
+         C[1].x=coh[8*nb*M+8*stm+2+8*M*Nbase*fi];
+         C[1].y=coh[8*nb*M+8*stm+3+8*M*Nbase*fi];
+         C[2].x=coh[8*nb*M+8*stm+4+8*M*Nbase*fi];
+         C[2].y=coh[8*nb*M+8*stm+5+8*M*Nbase*fi];
+         C[3].x=coh[8*nb*M+8*stm+6+8*M*Nbase*fi];
+         C[3].y=coh[8*nb*M+8*stm+7+8*M*Nbase*fi];
+         
          /* T1=G1*C */
          T1[0]=cuCadd(cuCmul(G1[0],C[0]),cuCmul(G1[1],C[2]));
          T1[1]=cuCadd(cuCmul(G1[0],C[1]),cuCmul(G1[1],C[3]));
@@ -206,6 +210,7 @@ kernel_deriv_r_robust(int Nbase, int tilesz, int M, int Ns, int Nparam, int goff
        its important to get the sign right,
       depending on res=data-model or res=model-data  */
         gsum+=-2.0*dsum;
+        }
 
       } 
 
@@ -222,12 +227,13 @@ kernel_deriv_r_robust(int Nbase, int tilesz, int M, int Ns, int Nparam, int goff
 
 
 __global__ void 
-kernel_residual(int Nbase, int M, int Ns, const double *__restrict__ x, const double *__restrict__ coh, const double *__restrict__ p, const short *__restrict__ bb, const int *__restrict__ ptoclus, double *__restrict__ ed){
+kernel_residual_multifreq(int Nbase, int Nchan, int boff, int M, int Ns, int Nbasetotal, const double *__restrict__ x, const double *__restrict__ coh, const double *__restrict__ p, const short *__restrict__ bb, const int *__restrict__ ptoclus, double *__restrict__ ed){
 
   /* global thread index */
-  unsigned int n = threadIdx.x + blockDim.x*blockIdx.x;
+  unsigned int n = threadIdx.x + blockDim.x*blockIdx.x; /* baseline */
+  unsigned int fi= threadIdx.y + blockDim.y*blockIdx.y; /* channel */
 
-  if (n<Nbase) {
+  if (n<Nbase && fi<Nchan) {
     int sta1=(int)bb[2*n];
     int sta2=(int)bb[2*n+1];
 
@@ -237,134 +243,28 @@ kernel_residual(int Nbase, int M, int Ns, const double *__restrict__ x, const do
     if (sta1>=0 && sta2>=0) {
       /* read data vector */
       cuDoubleComplex xr[4];
-      xr[0].x=x[n*8];
-      xr[0].y=x[n*8+1];
-      xr[1].x=x[n*8+2];
-      xr[1].y=x[n*8+3];
-      xr[2].x=x[n*8+4];
-      xr[2].y=x[n*8+5];
-      xr[3].x=x[n*8+6];
-      xr[3].y=x[n*8+7];
+      xr[0].x=x[n*8  +fi*8*Nbase];
+      xr[0].y=x[n*8+1+fi*8*Nbase];
+      xr[1].x=x[n*8+2+fi*8*Nbase];
+      xr[1].y=x[n*8+3+fi*8*Nbase];
+      xr[2].x=x[n*8+4+fi*8*Nbase];
+      xr[2].y=x[n*8+5+fi*8*Nbase];
+      xr[3].x=x[n*8+6+fi*8*Nbase];
+      xr[3].y=x[n*8+7+fi*8*Nbase];
 
       for (int cm=0; cm<M; cm++) {
        int pstart=ptoclus[2*cm+1];
        int nchunk=ptoclus[2*cm];
        /* read in coherency */
        cuDoubleComplex C[4];
-       C[0].x=coh[8*n*M+8*cm];
-       C[0].y=coh[8*n*M+8*cm+1];
-       C[1].x=coh[8*n*M+8*cm+2];
-       C[1].y=coh[8*n*M+8*cm+3];
-       C[2].x=coh[8*n*M+8*cm+4];
-       C[2].y=coh[8*n*M+8*cm+5];
-       C[3].x=coh[8*n*M+8*cm+6];
-       C[3].y=coh[8*n*M+8*cm+7];
-         
-       cuDoubleComplex G1[4];
-       cuDoubleComplex G2[4];
-       cuDoubleComplex T1[4];
-       cuDoubleComplex T2[4];
-
-       int px=(n)/((Nbase+nchunk-1)/nchunk);
-
-       G1[0].x=p[pstart+px*8*Ns+sta1*8];
-       G1[0].y=p[pstart+px*8*Ns+sta1*8+1];
-       G1[1].x=p[pstart+px*8*Ns+sta1*8+2];
-       G1[1].y=p[pstart+px*8*Ns+sta1*8+3];
-       G1[2].x=p[pstart+px*8*Ns+sta1*8+4];
-       G1[2].y=p[pstart+px*8*Ns+sta1*8+5];
-       G1[3].x=p[pstart+px*8*Ns+sta1*8+6];
-       G1[3].y=p[pstart+px*8*Ns+sta1*8+7];
- 
-       /* conjugate and transpose G2 */
-       G2[0].x=p[pstart+px*8*Ns+sta2*8];
-       G2[0].y=-p[pstart+px*8*Ns+sta2*8+1];
-       G2[2].x=p[pstart+px*8*Ns+sta2*8+2];
-       G2[2].y=-p[pstart+px*8*Ns+sta2*8+3];
-       G2[1].x=p[pstart+px*8*Ns+sta2*8+4];
-       G2[1].y=-p[pstart+px*8*Ns+sta2*8+5];
-       G2[3].x=p[pstart+px*8*Ns+sta2*8+6];
-       G2[3].y=-p[pstart+px*8*Ns+sta2*8+7];
- 
-       /* T1=G1*C */
-       T1[0]=cuCadd(cuCmul(G1[0],C[0]),cuCmul(G1[1],C[2]));
-       T1[1]=cuCadd(cuCmul(G1[0],C[1]),cuCmul(G1[1],C[3]));
-       T1[2]=cuCadd(cuCmul(G1[2],C[0]),cuCmul(G1[3],C[2]));
-       T1[3]=cuCadd(cuCmul(G1[2],C[1]),cuCmul(G1[3],C[3]));
-
-       /* T2=T1*G2 , G2 conjugate transposed */
-       T2[0]=cuCadd(cuCmul(T1[0],G2[0]),cuCmul(T1[1],G2[2]));
-       T2[1]=cuCadd(cuCmul(T1[0],G2[1]),cuCmul(T1[1],G2[3]));
-       T2[2]=cuCadd(cuCmul(T1[2],G2[0]),cuCmul(T1[3],G2[2]));
-       T2[3]=cuCadd(cuCmul(T1[2],G2[1]),cuCmul(T1[3],G2[3]));
-
-       /* find residul V - J_p C J_q^H */
-       xr[0]=cuCsub(xr[0],T2[0]);
-       xr[1]=cuCsub(xr[1],T2[1]);
-       xr[2]=cuCsub(xr[2],T2[2]);
-       xr[3]=cuCsub(xr[3],T2[3]);
-      }
-      /* store residual */
-
-      ed[n*8]=xr[0].x;
-      ed[n*8+1]=xr[0].y;
-      ed[n*8+2]=xr[1].x;
-      ed[n*8+3]=xr[1].y;
-      ed[n*8+4]=xr[2].x;
-      ed[n*8+5]=xr[2].y;
-      ed[n*8+6]=xr[3].x;
-      ed[n*8+7]=xr[3].y;
-
-    }
-  } 
-
-}
-
-
-__global__ void 
-kernel_fcost_robust(int Nbase, int boff, int M, int Ns, int Nbasetotal, const double *__restrict__ x, const double *__restrict__ coh, const double *__restrict__ p, const short *__restrict__ bb, const int *__restrict__ ptoclus, double *__restrict__ ed, double inv_robust_nu){
-  /* shared memory */
-  extern __shared__ double ek[];
-
-  /* global thread index */
-  unsigned int n = threadIdx.x + blockDim.x*blockIdx.x;
-  int tid=threadIdx.x;
-  ek[tid]=0.0;
-
-  if (n<Nbase) {
-    double gsum=0.0;
-    int sta1=(int)bb[2*n];
-    int sta2=(int)bb[2*n+1];
-
-    /* only calculate deriv if baseline corresponds
-    to this station and baseline is not flagged */
-    /* flagged baselines will have sta1==sta2==-1 */
-    if (sta1>=0 && sta2>=0) {
-       /* read data vector */
-       cuDoubleComplex xr[4];
-       xr[0].x=x[n*8];
-       xr[0].y=x[n*8+1];
-       xr[1].x=x[n*8+2];
-       xr[1].y=x[n*8+3];
-       xr[2].x=x[n*8+4];
-       xr[2].y=x[n*8+5];
-       xr[3].x=x[n*8+6];
-       xr[3].y=x[n*8+7];
-
-
-      for (int cm=0; cm<M; cm++) {
-       int pstart=ptoclus[2*cm+1];
-       int nchunk=ptoclus[2*cm];
-       /* read in coherency */
-       cuDoubleComplex C[4];
-       C[0].x=coh[8*n*M+8*cm];
-       C[0].y=coh[8*n*M+8*cm+1];
-       C[1].x=coh[8*n*M+8*cm+2];
-       C[1].y=coh[8*n*M+8*cm+3];
-       C[2].x=coh[8*n*M+8*cm+4];
-       C[2].y=coh[8*n*M+8*cm+5];
-       C[3].x=coh[8*n*M+8*cm+6];
-       C[3].y=coh[8*n*M+8*cm+7];
+       C[0].x=coh[8*n*M+8*cm  +8*M*Nbase*fi];
+       C[0].y=coh[8*n*M+8*cm+1+8*M*Nbase*fi];
+       C[1].x=coh[8*n*M+8*cm+2+8*M*Nbase*fi];
+       C[1].y=coh[8*n*M+8*cm+3+8*M*Nbase*fi];
+       C[2].x=coh[8*n*M+8*cm+4+8*M*Nbase*fi];
+       C[2].y=coh[8*n*M+8*cm+5+8*M*Nbase*fi];
+       C[3].x=coh[8*n*M+8*cm+6+8*M*Nbase*fi];
+       C[3].y=coh[8*n*M+8*cm+7+8*M*Nbase*fi];
          
        cuDoubleComplex G1[4];
        cuDoubleComplex G2[4];
@@ -410,27 +310,142 @@ kernel_fcost_robust(int Nbase, int boff, int M, int Ns, int Nbasetotal, const do
        xr[2]=cuCsub(xr[2],T2[2]);
        xr[3]=cuCsub(xr[3],T2[3]);
       }
-      /* squared error */
-      gsum+=xr[0].x*xr[0].x+xr[0].y*xr[0].y;
-      gsum+=xr[1].x*xr[1].x+xr[1].y*xr[1].y;
-      gsum+=xr[2].x*xr[2].x+xr[2].y*xr[2].y;
-      gsum+=xr[3].x*xr[3].x+xr[3].y*xr[3].y;
+      /* store residual */
+
+      ed[n*8  +fi*8*Nbase]=xr[0].x;
+      ed[n*8+1+fi*8*Nbase]=xr[0].y;
+      ed[n*8+2+fi*8*Nbase]=xr[1].x;
+      ed[n*8+3+fi*8*Nbase]=xr[1].y;
+      ed[n*8+4+fi*8*Nbase]=xr[2].x;
+      ed[n*8+5+fi*8*Nbase]=xr[2].y;
+      ed[n*8+6+fi*8*Nbase]=xr[3].x;
+      ed[n*8+7+fi*8*Nbase]=xr[3].y;
+
+    }
+  } 
+
+}
+
+
+__global__ void 
+kernel_fcost_multifreq_robust(int Nbase, int Nchan, int boff, int M, int Ns, int Nbasetotal, const double *__restrict__ x, const double *__restrict__ coh, const double *__restrict__ p, const short *__restrict__ bb, const int *__restrict__ ptoclus, double *__restrict__ ed, double inv_robust_nu){
+  /* shared memory */
+  extern __shared__ double ek[];
+
+  /* global thread index */
+  unsigned int n = threadIdx.x + blockDim.x*blockIdx.x; /* baseline */
+  unsigned int fi = threadIdx.y + blockDim.y*blockIdx.y; /* channel */
+  int tid=threadIdx.x+blockDim.x*threadIdx.y; /* local 2D thread mapped to a vector */
+  ek[tid]=0.0;
+
+  if (n<Nbase && fi<Nchan) {
+    double gsum=0.0;
+    int sta1=(int)bb[2*n];
+    int sta2=(int)bb[2*n+1];
+
+    /* only calculate deriv if baseline corresponds
+    to this station and baseline is not flagged */
+    /* flagged baselines will have sta1==sta2==-1 */
+    if (sta1>=0 && sta2>=0) {
+       /* read data vector */
+       cuDoubleComplex xr[4];
+       xr[0].x=x[n*8  +fi*8*Nbase];
+       xr[0].y=x[n*8+1+fi*8*Nbase];
+       xr[1].x=x[n*8+2+fi*8*Nbase];
+       xr[1].y=x[n*8+3+fi*8*Nbase];
+       xr[2].x=x[n*8+4+fi*8*Nbase];
+       xr[2].y=x[n*8+5+fi*8*Nbase];
+       xr[3].x=x[n*8+6+fi*8*Nbase];
+       xr[3].y=x[n*8+7+fi*8*Nbase];
+
+
+      for (int cm=0; cm<M; cm++) {
+       int pstart=ptoclus[2*cm+1];
+       int nchunk=ptoclus[2*cm];
+         
+       cuDoubleComplex G1[4];
+       cuDoubleComplex G2[4];
+       cuDoubleComplex T1[4];
+       cuDoubleComplex T2[4];
+
+       int px=(n+boff)/((Nbasetotal+nchunk-1)/nchunk);
+
+       G1[0].x=p[pstart+px*8*Ns+sta1*8];
+       G1[0].y=p[pstart+px*8*Ns+sta1*8+1];
+       G1[1].x=p[pstart+px*8*Ns+sta1*8+2];
+       G1[1].y=p[pstart+px*8*Ns+sta1*8+3];
+       G1[2].x=p[pstart+px*8*Ns+sta1*8+4];
+       G1[2].y=p[pstart+px*8*Ns+sta1*8+5];
+       G1[3].x=p[pstart+px*8*Ns+sta1*8+6];
+       G1[3].y=p[pstart+px*8*Ns+sta1*8+7];
+ 
+       /* conjugate and transpose G2 */
+       G2[0].x=p[pstart+px*8*Ns+sta2*8];
+       G2[0].y=-p[pstart+px*8*Ns+sta2*8+1];
+       G2[2].x=p[pstart+px*8*Ns+sta2*8+2];
+       G2[2].y=-p[pstart+px*8*Ns+sta2*8+3];
+       G2[1].x=p[pstart+px*8*Ns+sta2*8+4];
+       G2[1].y=-p[pstart+px*8*Ns+sta2*8+5];
+       G2[3].x=p[pstart+px*8*Ns+sta2*8+6];
+       G2[3].y=-p[pstart+px*8*Ns+sta2*8+7];
+
+       /* read in coherency  -- per each chan */
+       cuDoubleComplex C[4];
+       C[0].x=coh[8*n*M+8*cm  +8*M*Nbase*fi];
+       C[0].y=coh[8*n*M+8*cm+1+8*M*Nbase*fi];
+       C[1].x=coh[8*n*M+8*cm+2+8*M*Nbase*fi];
+       C[1].y=coh[8*n*M+8*cm+3+8*M*Nbase*fi];
+       C[2].x=coh[8*n*M+8*cm+4+8*M*Nbase*fi];
+       C[2].y=coh[8*n*M+8*cm+5+8*M*Nbase*fi];
+       C[3].x=coh[8*n*M+8*cm+6+8*M*Nbase*fi];
+       C[3].y=coh[8*n*M+8*cm+7+8*M*Nbase*fi];
+
+ 
+       /* T1=G1*C */
+       T1[0]=cuCadd(cuCmul(G1[0],C[0]),cuCmul(G1[1],C[2]));
+       T1[1]=cuCadd(cuCmul(G1[0],C[1]),cuCmul(G1[1],C[3]));
+       T1[2]=cuCadd(cuCmul(G1[2],C[0]),cuCmul(G1[3],C[2]));
+       T1[3]=cuCadd(cuCmul(G1[2],C[1]),cuCmul(G1[3],C[3]));
+
+       /* T2=T1*G2 , G2 conjugate transposed */
+       T2[0]=cuCadd(cuCmul(T1[0],G2[0]),cuCmul(T1[1],G2[2]));
+       T2[1]=cuCadd(cuCmul(T1[0],G2[1]),cuCmul(T1[1],G2[3]));
+       T2[2]=cuCadd(cuCmul(T1[2],G2[0]),cuCmul(T1[3],G2[2]));
+       T2[3]=cuCadd(cuCmul(T1[2],G2[1]),cuCmul(T1[3],G2[3]));
+
+       /* find residul V - J_p C J_q^H  
+         -- per channel */
+       xr[0]=cuCsub(xr[0],T2[0]);
+       xr[1]=cuCsub(xr[1],T2[1]);
+       xr[2]=cuCsub(xr[2],T2[2]);
+       xr[3]=cuCsub(xr[3],T2[3]);
+      }
+      /* log(squared) error */
+      gsum+=log(1.0+xr[0].x*xr[0].x*inv_robust_nu);
+      gsum+=log(1.0+xr[0].y*xr[0].y*inv_robust_nu);
+      gsum+=log(1.0+xr[1].x*xr[1].x*inv_robust_nu);
+      gsum+=log(1.0+xr[1].y*xr[1].y*inv_robust_nu);
+      gsum+=log(1.0+xr[2].x*xr[2].x*inv_robust_nu);
+      gsum+=log(1.0+xr[2].y*xr[2].y*inv_robust_nu);
+      gsum+=log(1.0+xr[3].x*xr[3].x*inv_robust_nu);
+      gsum+=log(1.0+xr[3].y*xr[3].y*inv_robust_nu);
+
     }
  
-    /* robust cost is log( 1 + error^2/nu ) */
-    ek[tid]=log(1.0+gsum*inv_robust_nu);
+    /* robust cost is log( 1 + error^2/nu ) -- per channel */
+    ek[tid]=gsum;
   } 
 
   __syncthreads();
   // Build summation tree over elements, assuming blockDim.x is power of 2.
-  for(int s=blockDim.x/2; s>0; s=s/2) {
+  for(int s=blockDim.x*blockDim.y/2; s>0; s=s/2) {
     if(tid < s) ek[tid] += ek[tid + s];
    __syncthreads();
   }
 
   /* copy back to global array */
   if(tid==0) {
-   ed[blockIdx.x]=ek[0];
+   ed[blockIdx.x+gridDim.x*blockIdx.y]=ek[0];
   }
 
 }
@@ -439,7 +454,7 @@ kernel_fcost_robust(int Nbase, int boff, int M, int Ns, int Nbasetotal, const do
 /* sum up all N elements of vector input 
  and save (per block) in output (size > number of blocks) */
 __global__ void
-plus_reduce_multi(const double *__restrict__ input, int N, int blockDim_2, double *__restrict__ output) {
+plus_reduce_multi_mf(const double *__restrict__ input, int N, int blockDim_2, double *__restrict__ output) {
  // Each block loads its elements into shared memory
  extern __shared__ double x[];
  int tid = threadIdx.x;
@@ -469,7 +484,7 @@ plus_reduce_multi(const double *__restrict__ input, int N, int blockDim_2, doubl
 /* sum up all N elements of vector input 
  NOTE: only 1 block should be used */
 __global__ void
-plus_reduce(const double *__restrict__ input, int N, int blockDim_2, double *total) {
+plus_reduce_mf(const double *__restrict__ input, int N, int blockDim_2, double *total) {
  // Each block loads its elements into shared memory
  extern __shared__ double x[];
  int tid = threadIdx.x;
@@ -527,44 +542,46 @@ NearestPowerOf2 (int n){
 }
 
 
-/* cuda driver for kernel */
-/* ThreadsPerBlock: keep <= 128 ???
-   BlocksPerGrid: depends on the threads/baselines> Threads*Blocks approx baselines
+/* 
    Nbase: no of baselines (total, including tilesz >1)
    tilesz: tile size
    M: no of clusters
    Ns: no of stations
-   Nparam: no of actual parameters  <=total 
-   goff: starting point of gradient calculation 0..Nparams
-   x: N*8 x 1 residual
-   coh: N*8*M x 1
-   p: M*Ns*8 x 1
-   bb: 2*N x 1
+   bb: 2*Nbase x 1
    ptoclus: 2*M x 1
 
-   grad: Nparamsx1 gradient values
+   Nbasetotal: the baselines for the full dataset
+   boff: gives the offset of this minibatch in the full batch data
+   coh: includes Nchan channels, instead of 1 : Nbase*8*M*Nchan x 1  
+   x: data size Nbase*8*Nchan x 1
+    ordered by XX(re,im),XY(re,im),YX(re,im), YY(re,im), baseline, timeslots
+    and repeating this for each channel
+
+
+   grad: mx1 gradient values
+   p: mx1 parameters, m :already defined by other variables, this is just to safeguard
+   p: M*Ns*8 x 1, can also be Mt*Ns*8x1 for hybrid solutions
 */
-
-
 void 
-cudakernel_lbfgs_multifreq_r_robust(int ThreadsPerBlock, int BlocksPerGrid, int Nbase, int tilesz, int M, int Ns, int Nparam, int goff, double *x, double *coh, double *p, short *bb, int *ptoclus, double *grad, double robust_nu){
+cudakernel_lbfgs_multifreq_r_robust(int Nbase, int tilesz, int Nchan, int M, int Ns, int Nbasetotal, int boff, double *x, double *coh, double *p, int m, short *bb, int *ptoclus, double *grad, double robust_nu){
  
   cudaError_t error;
-  /* invoke kernel to calculate residuals first */
+  /* invoke kernel to calculate residuals, per baseline and channel */
   double *eo;
-  if((error=cudaMalloc((void**)&eo, Nbase*8*sizeof(double)))!=cudaSuccess) {
+  if((error=cudaMalloc((void**)&eo, Nbase*8*Nchan*sizeof(double)))!=cudaSuccess) {
      fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
      exit(1);
   }
-  cudaMemset(eo, 0, sizeof(double)*Nbase*8);
+  cudaMemset(eo, 0, sizeof(double)*Nbase*8*Nchan);
   checkCudaError(error,__FILE__,__LINE__);
+  dim3 threadsPerBlock(16,4);
+  dim3 blocksPerGrid((Nbase+threadsPerBlock.x-1)/threadsPerBlock.x,(Nchan+threadsPerBlock.y-1)/threadsPerBlock.y);
 
-  int L=(Nbase+ThreadsPerBlock-1)/ThreadsPerBlock;
 #ifdef CUDA_DBG
   error = cudaGetLastError(); /* reset all previous errors */
 #endif
 
-  kernel_residual<<< L, ThreadsPerBlock >>> (Nbase, M, Ns, x, coh, p, bb, ptoclus, eo);
+  kernel_residual_multifreq<<< blocksPerGrid, threadsPerBlock >>> (Nbase, Nchan, boff, M, Ns, Nbasetotal, x, coh, p, bb, ptoclus, eo);
 #ifdef CUDA_DBG
   error = cudaGetLastError();
   if(error != cudaSuccess) {
@@ -574,8 +591,11 @@ cudakernel_lbfgs_multifreq_r_robust(int ThreadsPerBlock, int BlocksPerGrid, int 
   }
 #endif
 
+  int ThreadsPerBlock=32;
+  int BlocksPerGrid=(m+ThreadsPerBlock-1)/ThreadsPerBlock;
+
   /* invoke device on this block/thread grid (last argument is buffer size in bytes) */
-  kernel_deriv_r_robust<<< BlocksPerGrid, ThreadsPerBlock >>> (Nbase, tilesz, M, Ns, Nparam, goff, eo, coh, p, bb, ptoclus, grad, robust_nu);
+  kernel_deriv_r_robust<<< BlocksPerGrid, ThreadsPerBlock >>> (Nbase, tilesz, Nchan, M, Ns, m, Nbasetotal, boff, eo, coh, p, bb, ptoclus, grad, robust_nu);
 #ifdef CUDA_DBG
   error = cudaGetLastError();
   if(error != cudaSuccess) {
@@ -588,25 +608,44 @@ cudakernel_lbfgs_multifreq_r_robust(int ThreadsPerBlock, int BlocksPerGrid, int 
   cudaFree(eo);
 }
 
-/* note x,coh and bb are with the right offset */
+/* 
+   Nbase: baselines for this minibatch (already multiplied by the tilesz)
+   Nchan: total channels of data
+   Nbasetotal: the baselines for the full dataset
+   boff: gives the offset of this minibatch in the full batch data
+   coh: includes Nchan channels, instead of 1 : Nbase*8*M*Nchan x 1  
+   x: data size Nbase*8*Nchan x 1
+    ordered by XX(re,im),XY(re,im),YX(re,im), YY(re,im), baseline, timeslots
+    and repeating this for each channel
+
+   p: mx1 parameters, m :already defined by other variables, this is just to safeguard
+ */
 double 
-cudakernel_lbfgs_multifreq_cost_robust(int ThreadsPerBlock, int BlocksPerGrid, int Nbase, int boff, int M, int Ns, int Nbasetotal, double *x, double *coh, double *p, short *bb, int *ptoclus, double robust_nu){
+cudakernel_lbfgs_multifreq_cost_robust(int Nbase, int Nchan, int M, int Ns, int Nbasetotal, int boff, double *x, double *coh, double *p, int m, short *bb, int *ptoclus, double robust_nu){
  
   double *ed;
   cudaError_t error;
-  if((error=cudaMalloc((void**)&ed, sizeof(double)*BlocksPerGrid))!=cudaSuccess) {
+
+  /* how many blocks needed to cover the minibatch baselines, and frequencies */
+  dim3 threadsPerBlock(16,4);
+  dim3 blocksPerGrid((Nbase+threadsPerBlock.x-1)/threadsPerBlock.x,(Nchan+threadsPerBlock.y-1)/threadsPerBlock.y);
+
+  int blocksPerGridXY=blocksPerGrid.x*blocksPerGrid.y;
+  /* Note that we need 2D ed and shared memory */
+  if((error=cudaMalloc((void**)&ed, sizeof(double)*blocksPerGridXY))!=cudaSuccess) {
      fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
      exit(1);
   }
 
-  cudaMemset(ed, 0, sizeof(double)*BlocksPerGrid);
-  kernel_fcost_robust<<< BlocksPerGrid, ThreadsPerBlock, ThreadsPerBlock*sizeof(double) >>> (Nbase, boff, M, Ns, Nbasetotal, x, coh, p, bb, ptoclus, ed, 1.0/robust_nu);
+  cudaMemset(ed, 0, sizeof(double)*blocksPerGridXY);
+  kernel_fcost_multifreq_robust<<< blocksPerGrid, threadsPerBlock, threadsPerBlock.x*threadsPerBlock.y*sizeof(double) >>> (Nbase, Nchan, boff, M, Ns, Nbasetotal, x, coh, p, bb, ptoclus, ed, 1.0/robust_nu);
 
 #ifdef CUDA_DBG
   error = cudaGetLastError();
   checkCudaError(error,__FILE__,__LINE__);
 #endif
 
+  /* the summing up is done using 1D launches */
   int T=DEFAULT_TH_PER_BK; 
   double *totald,total;
   if((error=cudaMalloc((void**)&totald, sizeof(double)))!=cudaSuccess) {
@@ -615,30 +654,28 @@ cudakernel_lbfgs_multifreq_cost_robust(int ThreadsPerBlock, int BlocksPerGrid, i
   }
   cudaMemset(totald, 0, sizeof(double));
   checkCudaError(error,__FILE__,__LINE__);
-
-
-  if (T>BlocksPerGrid) {
+  if (T>blocksPerGridXY) {
     /* one kernel launch is enough */
-    plus_reduce<<< 1, BlocksPerGrid, sizeof(double)*BlocksPerGrid>>>(ed, BlocksPerGrid, NearestPowerOf2(BlocksPerGrid), totald);
+    plus_reduce_mf<<< 1, blocksPerGridXY, sizeof(double)*blocksPerGridXY>>>(ed, blocksPerGridXY, NearestPowerOf2(blocksPerGridXY), totald);
 #ifdef CUDA_DBG
     error = cudaGetLastError();
     checkCudaError(error,__FILE__,__LINE__);
 #endif
   } else {
     /* multiple kernel launches */
-    int L=(BlocksPerGrid+T-1)/T;
+    int L=(blocksPerGridXY+T-1)/T;
     double *eo;
     if((error=cudaMalloc((void**)&eo, L*sizeof(double)))!=cudaSuccess) {
      fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
      exit(1);
     }
-    plus_reduce_multi<<< L, T, sizeof(double)*T>>>(ed, BlocksPerGrid, NearestPowerOf2(T), eo);
+    plus_reduce_multi_mf<<< L, T, sizeof(double)*T>>>(ed, blocksPerGridXY, NearestPowerOf2(T), eo);
 
 #ifdef CUDA_DBG
     error = cudaGetLastError();
     checkCudaError(error,__FILE__,__LINE__);
 #endif
-    plus_reduce<<< 1, L, sizeof(double)*L>>>(eo, L, NearestPowerOf2(L), totald);
+    plus_reduce_mf<<< 1, L, sizeof(double)*L>>>(eo, L, NearestPowerOf2(L), totald);
 #ifdef CUDA_DBG
     error = cudaGetLastError();
     checkCudaError(error,__FILE__,__LINE__);

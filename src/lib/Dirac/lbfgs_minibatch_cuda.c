@@ -26,8 +26,8 @@
 #include <math.h>
 
 
-//#define DEBUG
-//#define CUDA_DEBUG
+#define DEBUG
+#define CUDA_DEBUG
 static void
 checkCudaError(cudaError_t err, char *file, int line)
 {

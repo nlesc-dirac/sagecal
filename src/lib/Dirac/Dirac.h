@@ -316,13 +316,14 @@ lbfgs_fit_robust_wrapper_minibatch(
     and repeating this for each channel
 
    following are used to solve for correct parameters in hybrid mode
-   nminibatch: minibatch number 0...(totalmbs-1)
-   totalmbs: total minibatches
+   nminibatch: minibatch number 0...(totalminibatch-1)
+   so the baseline offset for this minibatch is = nminibatch*(tilesz*Nbase)
+   totalminibatch: total number of minibatches
 
 */
 extern int
 bfgsfit_minibatch_visibilities(double *u, double *v, double *w, double *x, int N,
-   int Nbase, int tilesz, baseline_t *barr, clus_source_t *carr, complex double *coh, int M, int Mt, double *freqs, int Nf, double fdelta, double *p, int Nt, int max_lbfgs, int lbfgs_m, int gpu_threads, int solver_mode, double robust_nu, double *res_0, double *res_1, persistent_data_t *ptdata,int nminibatch, int totalmbs);
+   int Nbase, int tilesz, baseline_t *barr, clus_source_t *carr, complex double *coh, int M, int Mt, double *freqs, int Nf, double fdelta, double *p, int Nt, int max_lbfgs, int lbfgs_m, int gpu_threads, int solver_mode, double robust_nu, double *res_0, double *res_1, persistent_data_t *ptdata,int nminibatch,int totalminibatch);
 
 
 /* consensus optimization version,
@@ -337,17 +338,18 @@ bfgsfit_minibatch_visibilities(double *u, double *v, double *w, double *x, int N
    clus_source_t *carr replaced by int *ptoclus  : size 2*M x 1
 
    following are used to solve for correct parameters in hybrid mode
-   nminibatch: minibatch number 0...(totalmbs-1)
-   totalmbs: total minibatches
+   nminibatch: minibatch number 0...(totalminibatch-1)
+   so the baseline offset for this minibatch is = nminibatch*(tilesz*Nbase)
+   totalminibatch: total number of minibatches
 */
 #ifdef HAVE_CUDA
 extern int
 bfgsfit_minibatch_consensus(double *u, double *v, double *w, double *x, int N,
-   int Nbase, int tilesz, short *hbb, int *ptoclus, complex double *coh, int M, int Mt, double *freqs, int Nf, double fdelta, double *p, double *y, double *z, double *rho, int Nt, int max_lbfgs, int lbfgs_m, int gpu_threads, int solver_mode, double robust_nu, double *res_0, double *res_1, persistent_data_t *ptdata,int nminibatch, int totalmbs);
+   int Nbase, int tilesz, short *hbb, int *ptoclus, complex double *coh, int M, int Mt, double *freqs, int Nf, double fdelta, double *p, double *y, double *z, double *rho, int Nt, int max_lbfgs, int lbfgs_m, int gpu_threads, int solver_mode, double robust_nu, double *res_0, double *res_1, persistent_data_t *ptdata,int nminibatch, int totalminibatch);
 #else /* !HAVE_CUDA */
 extern int
 bfgsfit_minibatch_consensus(double *u, double *v, double *w, double *x, int N,
-   int Nbase, int tilesz, baseline_t *barr, clus_source_t *carr, complex double *coh, int M, int Mt, double *freqs, int Nf, double fdelta, double *p, double *y, double *z, double *rho, int Nt, int max_lbfgs, int lbfgs_m, int gpu_threads, int solver_mode, double robust_nu, double *res_0, double *res_1, persistent_data_t *ptdata,int nminibatch, int totalmbs);
+   int Nbase, int tilesz, baseline_t *barr, clus_source_t *carr, complex double *coh, int M, int Mt, double *freqs, int Nf, double fdelta, double *p, double *y, double *z, double *rho, int Nt, int max_lbfgs, int lbfgs_m, int gpu_threads, int solver_mode, double robust_nu, double *res_0, double *res_1, persistent_data_t *ptdata,int nminibatch, int totalminibatch);
 #endif /* !HAVE_CUDA */
 
 
@@ -524,10 +526,10 @@ cudakernel_evaluatenu_fl_eight(int ThreadsPerBlock, int BlocksPerGrid, int Nd, f
 
 /****************************** lbfgs_multifreq.cu ****************************/
 extern void
-cudakernel_lbfgs_multifreq_r_robust(int ThreadsPerBlock, int BlocksPerGrid, int Nbase, int tilesz, int M, int Ns, int Nparam, double *x, double *coh, double *p, short *bb, int *ptoclus, double *grad, double robust_nu);
+cudakernel_lbfgs_multifreq_r_robust(int Nbase, int tilesz, int Nchan, int M, int Ns, int Nbasetotal, int boff, double *x, double *coh, double *p, int m, short *bb, int *ptoclus, double *grad, double robust_nu);
 
 extern double
-cudakernel_lbfgs_multifreq_cost_robust(int ThreadsPerBlock, int BlocksPerGrid, int Nbase, int M, int Ns, int Nbasetotal, double *x, double *coh, double *p, short *bb, int *ptoclus, double robust_nu);
+cudakernel_lbfgs_multifreq_cost_robust(int Nbase, int Nchan, int M, int Ns, int Nbasetotal, int boff, double *x, double *coh, double *p, int m, short *bb, int *ptoclus, double robust_nu);
 /****************************** clmfit_cuda.c ****************************/
 #ifdef HAVE_CUDA
 /* LM with GPU */
