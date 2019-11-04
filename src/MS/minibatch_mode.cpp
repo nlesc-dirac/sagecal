@@ -290,6 +290,35 @@ run_minibatch_calibration(void) {
         cudaDeviceSetLimit(cudaLimitMallocHeapSize, Data::heapsize*1024*1024);
      }
     }
+    /* also attach to a GPU */
+    taskhist thst;
+    cublasHandle_t cbhandle;
+    cusolverDnHandle_t solver_handle;
+    init_task_hist(&thst);
+    attach_gpu_to_thread(select_work_gpu(MAX_GPU_ID,&thst), &cbhandle, &solver_handle);
+
+    short *hbb;
+    int *ptoclus;
+    int Nbase1=iodata.Nbase*iodata.tilesz;
+
+    /* auxilliary arrays for GPU */
+    if ((hbb=(short*)calloc((size_t)(Nbase1*2),sizeof(short)))==0) {
+     fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
+     exit(1);
+    }
+    /* baseline->station mapping */
+    rearrange_baselines(Nbase1, barr, hbb, Nt);
+
+    /* parameter->cluster mapping */
+    /* for each cluster: chunk size, start param index */
+    if ((ptoclus=(int*)calloc((size_t)(2*M),sizeof(int)))==0) {
+     fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
+     exit(1);
+    }
+    for(ci=0; ci<M; ci++) {
+     ptoclus[2*ci]=carr[ci].nchunk;
+     ptoclus[2*ci+1]=carr[ci].p[0]; /* so end at p[0]+nchunk*8*N-1 */
+    }
 #endif
 
 /******************************* data loop *****************************/
@@ -306,6 +335,11 @@ run_minibatch_calibration(void) {
       }
       for (ii=0; ii<nsolbw; ii++) {
         lbfgs_persist_init(&ptdata_array[ii],minibatches,iodata.N*8*Mt,iodata.Nbase*iodata.tilesz,Data::lbfgs_m,Data::gpu_threads);
+#ifdef HAVE_CUDA
+        /* pointers to cublas/solver */
+        ptdata_array[ii].cbhandle=&cbhandle;
+        ptdata_array[ii].solver_handle=&solver_handle;
+#endif
       }
 
       res_0=res_1=res_00=res_01=0.0;
@@ -365,7 +399,11 @@ run_minibatch_calibration(void) {
         /* updated values for xo, coh, freqs, Nchan, deltaf needed */
         /*  call LBFGS routine */
       for (ii=0; ii<nsolbw; ii++) {
+#ifdef HAVE_CUDA
+       bfgsfit_minibatch_visibilities(iodata.u,iodata.v,iodata.w,&iodata.xo[iodata.Nbase*iodata.tilesz*8*chanstart[ii]],iodata.N,iodata.Nbase,iodata.tilesz,hbb,ptoclus,&coh[M*iodata.Nbase*iodata.tilesz*4*chanstart[ii]],M,Mt,&iodata.freqs[chanstart[ii]],nchan[ii],deltafch*(double)nchan[ii],&pfreq[iodata.N*8*Mt*ii],Data::Nt,Data::max_lbfgs,Data::lbfgs_m,Data::gpu_threads,Data::solver_mode,mean_nu,&res_00,&res_01,&ptdata_array[ii],nmb,minibatches);
+#else
         bfgsfit_minibatch_visibilities(iodata.u,iodata.v,iodata.w,&iodata.xo[iodata.Nbase*iodata.tilesz*8*chanstart[ii]],iodata.N,iodata.Nbase,iodata.tilesz,barr,carr,&coh[M*iodata.Nbase*iodata.tilesz*4*chanstart[ii]],M,Mt,&iodata.freqs[chanstart[ii]],nchan[ii],deltafch*(double)nchan[ii],&pfreq[iodata.N*8*Mt*ii],Data::Nt,Data::max_lbfgs,Data::lbfgs_m,Data::gpu_threads,Data::solver_mode,mean_nu,&res_00,&res_01,&ptdata_array[ii],nmb,minibatches);
+#endif
        res_0+=res_00;
        res_1+=res_01;
        printf("epoch=%d minibatch=%d band=%d %lf %lf\n",nepch,nmb,ii,res_00,res_01);
@@ -502,6 +540,14 @@ beam.p_ra0,beam.p_dec0,iodata.freq0,beam.sx,beam.sy,beam.time_utc,beam.Nelem,bea
 
     free(nchan);
     free(chanstart);
+
+#ifdef HAVE_CUDA
+   detach_gpu_from_thread(cbhandle,solver_handle);
+   destroy_task_hist(&thst);
+   free(hbb);
+   free(ptoclus);
+#endif
+
     /**********************************************************/
 
   exinfo_gaussian *exg;

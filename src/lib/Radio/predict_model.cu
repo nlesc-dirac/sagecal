@@ -28,7 +28,7 @@
 
 //Max no. of frequencies for a single kernel to work on
 #ifndef MAX_F
-#define MAX_F 20
+#define MAX_F 16
 #endif
 
 /* matrix multiplications */

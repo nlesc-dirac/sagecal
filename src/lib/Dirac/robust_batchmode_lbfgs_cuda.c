@@ -25,7 +25,7 @@
 #endif
 
 //#define DEBUG
-//#define CUDA_DEBUG
+#define CUDA_DEBUG
 static void
 checkCudaError(cudaError_t err, char *file, int line)
 {
@@ -37,8 +37,19 @@ checkCudaError(cudaError_t err, char *file, int line)
 #endif
 }
 
+static void
+checkCublasError(cublasStatus_t cbstatus, char *file, int line)
+{
+#ifdef CUDA_DEBUG
+   if (cbstatus!=CUBLAS_STATUS_SUCCESS) {
+    fprintf(stderr,"%s: %d: CUBLAS failure\n",file,line);
+    exit(EXIT_FAILURE);
+   }
+#endif
+}
+
+
 typedef struct me_data_batchmode_cuda_t_ {
- me_data_t *adata;
  /* note: all arrays are on the device */
  double *x; /* full data vector nx1 */
  double *coh; /* coherency vector */
@@ -59,44 +70,10 @@ typedef struct me_data_batchmode_cuda_t_ {
  double *y; /* lagrange multiplier, size equal to p */
  double *z; /* Bz polynomial constraint, size equal to p */
  double *rho; /* regularization, Mt values */
+ /* for CUBLAS */
+ cublasHandle_t *cbhandle;
+
 } me_data_batchmode_cuda_t;
-
-
-
-int
-bfgsfit_minibatch_visibilities(double *u, double *v, double *w, double *x, int N,
-   int Nbase, int tilesz, baseline_t *barr, clus_source_t *carr, complex double *coh, int M, int Mt, double *freqs, int Nf, double fdelta, double *p, int Nt, int max_lbfgs, int lbfgs_m, int gpu_threads, int solver_mode, double robust_nu, double *res_0, double *res_1, persistent_data_t *indata,int nminibatch, int totalminibatch) {
-
-  me_data_t lmdata;
-
-  /*  no. of true parameters */
-  int m=N*Mt*8;
-  /* no of data */
-  int n=Nbase*tilesz*Nf*8;
-
-  /* setup the ME data */
-  lmdata.u=u;
-  lmdata.v=v;
-  lmdata.w=w;
-  lmdata.Nbase=Nbase;
-  lmdata.tilesz=tilesz;
-  lmdata.N=N;
-  lmdata.barr=barr;
-  lmdata.carr=carr;
-  lmdata.M=M;
-  lmdata.Mt=Mt;
-  lmdata.Nt=Nt;
-  lmdata.coh=coh;
-  lmdata.Nchan=Nf; /* multichannel data */
-
-  /* starting guess of robust nu */
-  lmdata.robust_nu=robust_nu;
-
-  /* call lbfgs_fit_cuda() with proper cost/grad functions */
-  return 0;
-}
-
-
 
 /* cost function */
 static double
@@ -110,8 +87,47 @@ costfunc_multifreq(double *p, int m, void *adata) {
  /* the total number of baselines over the full batch */
  int Nbasetotal=lmdata->totalminibatch*(Nbase);
  double fcost=cudakernel_lbfgs_multifreq_cost_robust(Nbase,lmdata->Nchan,lmdata->M,lmdata->N,Nbasetotal,boff,lmdata->x,lmdata->coh,p,m,lmdata->hbb,lmdata->ptoclus,lmdata->robust_nu);
- printf("Cost %lf\n",fcost);
- return fcost;
+
+ if (!lmdata->rho && !lmdata->y && !lmdata->z) {
+   printf("Cost %lf\n",fcost);
+   return fcost;
+ } 
+
+ /* else add regularization cost */
+ if (m!=lmdata->Mt*lmdata->N*8) {
+  fprintf(stderr,"paramter vector dimentions %d does not match %d\n",m,lmdata->Mt*lmdata->N*8);
+ }
+ /* extra cost  y^T (x-z) + rho/2 (x-z)^T(x-z) */
+ double *xp;
+ cudaError_t err;
+ cublasStatus_t cbstatus;
+ err=cudaMalloc((void**)&(xp),m*sizeof(double));
+ checkCudaError(err,__FILE__,__LINE__);
+
+ /* find xp=p-z */
+ err=cudaMemcpy(xp,p,m*sizeof(double),cudaMemcpyDeviceToDevice);
+ checkCudaError(err,__FILE__,__LINE__);
+ double tmpi=-1.0;
+ cbstatus=cublasDaxpy(*(lmdata->cbhandle),m,&tmpi,lmdata->z,1,xp,1);
+ checkCublasError(cbstatus,__FILE__,__LINE__);
+
+ double f1=0.0;
+ int ci;
+ for (ci=0; ci<lmdata->Mt; ci++) {
+  cbstatus=cublasDdot(*(lmdata->cbhandle),8*lmdata->N,&lmdata->y[8*lmdata->N*ci],1,&xp[8*lmdata->N*ci],1,&tmpi);
+  checkCublasError(cbstatus,__FILE__,__LINE__);
+  f1+=tmpi;
+
+  cbstatus=cublasDdot(*(lmdata->cbhandle),8*lmdata->N,&xp[8*lmdata->N*ci],1,&xp[8*lmdata->N*ci],1,&tmpi);
+  checkCublasError(cbstatus,__FILE__,__LINE__);
+  f1+=0.5*lmdata->rho[ci]*tmpi;
+ }
+
+ err=cudaFree(xp);
+ checkCudaError(err,__FILE__,__LINE__);
+
+ printf("Cost %lf %lf\n",fcost,f1);
+ return fcost+f1;
 }
 
 /* gradient function */
@@ -127,17 +143,51 @@ gradfunc_multifreq(double *p, double *g, int m, void *adata) {
  int Nbasetotal=lmdata->totalminibatch*(Nbase);
  cudakernel_lbfgs_multifreq_r_robust(Nbase,lmdata->tilesz,lmdata->Nchan,lmdata->M,lmdata->N,Nbasetotal,boff,lmdata->x,lmdata->coh,p,m,lmdata->hbb,lmdata->ptoclus,g,lmdata->robust_nu);
 
+ if (lmdata->rho && lmdata->y && lmdata->z) {
+ if (m!=lmdata->Mt*lmdata->N*8) {
+  fprintf(stderr,"paramter vector dimentions %d does not match %d\n",m,lmdata->Mt*lmdata->N*8);
+ }
+ /* add regularization grad */
+ double *xp;
+ cudaError_t err;
+ cublasStatus_t cbstatus;
+ err=cudaMalloc((void**)&(xp),m*sizeof(double));
+ checkCudaError(err,__FILE__,__LINE__);
+
+ /* find xp=p-z */
+ err=cudaMemcpy(xp,p,m*sizeof(double),cudaMemcpyDeviceToDevice);
+ checkCudaError(err,__FILE__,__LINE__);
+ double tmpi=-1.0;
+ cbstatus=cublasDaxpy(*(lmdata->cbhandle),m,&tmpi,lmdata->z,1,xp,1);
+ checkCublasError(cbstatus,__FILE__,__LINE__);
+ /* now multiply by rho */
+ int ci;
+ for (ci=0; ci<lmdata->Mt; ci++) {
+  //  my_dscal(8*dp->N,rho[ci],&xp[8*dp->N*ci]);
+  cbstatus=cublasDscal(*(lmdata->cbhandle),8*lmdata->N,&lmdata->rho[ci],&xp[8*lmdata->N*ci],1);
+  checkCublasError(cbstatus,__FILE__,__LINE__);
+ }
+
+   /* now add y + rho(p-z) to g (-ve for -ve g)*/
+ //  my_daxpy(m,y,-1.0,g);
+ //  my_daxpy(m,xp,-1.0,g);
+   cbstatus=cublasDaxpy(*(lmdata->cbhandle),m,&tmpi,lmdata->y,1,g,1);
+   checkCublasError(cbstatus,__FILE__,__LINE__);
+   cbstatus=cublasDaxpy(*(lmdata->cbhandle),m,&tmpi,xp,1,g,1);
+   checkCublasError(cbstatus,__FILE__,__LINE__);
+
+ err=cudaFree(xp);
+ checkCudaError(err,__FILE__,__LINE__);
+ }
+
 }
 
 
-/* minibatch mode with consensus */
-/* baseline_t *barr replaced by short *hbb :size 2*Nbase*tilesz x 1
-   clus_source_t *carr replaced by int *ptoclus : size 2*M x 1 */
-int
-bfgsfit_minibatch_consensus(double *u, double *v, double *w, double *x, int N,
-   int Nbase, int tilesz, short *hbb, int *ptoclus, complex double *coh, int M, int Mt, double *freqs, int Nf, double fdelta, double *p, double *y, double *z, double *rho, int Nt, int max_lbfgs, int lbfgs_m, int gpu_threads, int solver_mode, double robust_nu, double *res_0, double *res_1, persistent_data_t *indata,int nminibatch, int totalminibatch) {
 
-printf("BFGS M=%d iter=%d\n",lbfgs_m,max_lbfgs);
+int
+bfgsfit_minibatch_visibilities(double *u, double *v, double *w, double *x, int N,
+   int Nbase, int tilesz, short *hbb, int *ptoclus, complex double *coh, int M, int Mt, double *freqs, int Nf, double fdelta, double *p, int Nt, int max_lbfgs, int lbfgs_m, int gpu_threads, int solver_mode, double robust_nu, double *res_0, double *res_1, persistent_data_t *indata,int nminibatch, int totalminibatch) {
+
   me_data_batchmode_cuda_t lmdata;
   cudaError_t err;
   double *pdevice;
@@ -189,11 +239,103 @@ printf("BFGS M=%d iter=%d\n",lbfgs_m,max_lbfgs);
   err=cudaMemcpy(lmdata.ptoclus,ptoclus,2*M*sizeof(int),cudaMemcpyHostToDevice);
   checkCudaError(err,__FILE__,__LINE__);
 
+  /* rho,y, and z are Null */
+  lmdata.rho=0;
+  lmdata.y=0;
+  lmdata.z=0;
 
-  err=cudaMalloc((void**)&(lmdata.rho),Mt*sizeof(double));
+  /* call lbfgs_fit_cuda() with proper cost/grad functions */
+  *res_0=costfunc_multifreq(pdevice,m,&lmdata);
+  lbfgs_fit_cuda(costfunc_multifreq,gradfunc_multifreq,pdevice,m,max_lbfgs,lbfgs_m,&lmdata,indata);
+  *res_1=costfunc_multifreq(pdevice,m,&lmdata);
+
+  err=cudaMemcpy(p,pdevice,m*sizeof(double),cudaMemcpyDeviceToHost);
   checkCudaError(err,__FILE__,__LINE__);
-  err=cudaMemcpy(lmdata.rho,rho,Mt*sizeof(double),cudaMemcpyHostToDevice);
+
+  err=cudaFree(pdevice);
   checkCudaError(err,__FILE__,__LINE__);
+  err=cudaFree(lmdata.x);
+  checkCudaError(err,__FILE__,__LINE__);
+  err=cudaFree(lmdata.coh);
+  checkCudaError(err,__FILE__,__LINE__);
+  err=cudaFree(lmdata.hbb);
+  checkCudaError(err,__FILE__,__LINE__);
+  err=cudaFree(lmdata.ptoclus);
+  checkCudaError(err,__FILE__,__LINE__);
+
+  double invn=(double)1.0/n;
+  *res_0 *=invn;
+  *res_1 *=invn;
+
+  return 0;
+}
+
+
+
+
+/* minibatch mode with consensus */
+/* baseline_t *barr replaced by short *hbb :size 2*Nbase*tilesz x 1
+   clus_source_t *carr replaced by int *ptoclus : size 2*M x 1 */
+int
+bfgsfit_minibatch_consensus(double *u, double *v, double *w, double *x, int N,
+   int Nbase, int tilesz, short *hbb, int *ptoclus, complex double *coh, int M, int Mt, double *freqs, int Nf, double fdelta, double *p, double *y, double *z, double *rho, int Nt, int max_lbfgs, int lbfgs_m, int gpu_threads, int solver_mode, double robust_nu, double *res_0, double *res_1, persistent_data_t *indata,int nminibatch, int totalminibatch) {
+
+printf("BFGS M=%d iter=%d\n",lbfgs_m,max_lbfgs);
+  me_data_batchmode_cuda_t lmdata;
+  cudaError_t err;
+  double *pdevice;
+
+  /*  no. of true parameters */
+  int m=N*Mt*8;
+  /* no of data */
+  int n=Nbase*tilesz*Nf*8;
+
+  err=cudaMalloc((void**)&(pdevice),m*sizeof(double));
+  checkCudaError(err,__FILE__,__LINE__);
+  err=cudaMemcpy(pdevice,p,m*sizeof(double),cudaMemcpyHostToDevice);
+  checkCudaError(err,__FILE__,__LINE__);
+
+  lmdata.n=n;
+  /* copy all necerrary data to the GPU, and only pass pointers to
+     the data as a struct to the cost and grad functions :lbfgs_cuda.c 140*/
+  err=cudaMalloc((void**)&(lmdata.x),n*sizeof(double));
+  checkCudaError(err,__FILE__,__LINE__);
+  err=cudaMemcpy(lmdata.x,x,n*sizeof(double),cudaMemcpyHostToDevice);
+  checkCudaError(err,__FILE__,__LINE__);
+
+  /* setup the necessary ME data */
+  lmdata.Nbase=Nbase;
+  lmdata.tilesz=tilesz;
+  lmdata.N=N;
+  lmdata.M=M;
+  lmdata.Mt=Mt;
+  lmdata.nminibatch=nminibatch;
+  lmdata.totalminibatch=totalminibatch;
+  lmdata.cbhandle=indata->cbhandle;
+
+  err=cudaMalloc((void**)&(lmdata.coh),8*Nbase*tilesz*M*Nf*sizeof(double));
+  checkCudaError(err,__FILE__,__LINE__);
+  err=cudaMemcpy(lmdata.coh,(double*)coh,8*Nbase*tilesz*M*Nf*sizeof(double),cudaMemcpyHostToDevice);
+  checkCudaError(err,__FILE__,__LINE__);
+
+  lmdata.Nchan=Nf; /* multichannel data */
+  /* fixed robust nu */
+  lmdata.robust_nu=robust_nu;
+
+  /* GPU replacement for barr */
+  err=cudaMalloc((void**)&(lmdata.hbb),2*Nbase*tilesz*sizeof(short));
+  checkCudaError(err,__FILE__,__LINE__);
+  err=cudaMemcpy(lmdata.hbb,hbb,2*Nbase*tilesz*sizeof(short),cudaMemcpyHostToDevice);
+  checkCudaError(err,__FILE__,__LINE__);
+
+  /* GPU replacement for carr */
+  err=cudaMalloc((void**)&(lmdata.ptoclus),2*M*sizeof(int));
+  checkCudaError(err,__FILE__,__LINE__);
+  err=cudaMemcpy(lmdata.ptoclus,ptoclus,2*M*sizeof(int),cudaMemcpyHostToDevice);
+  checkCudaError(err,__FILE__,__LINE__);
+
+
+  lmdata.rho=rho; /* note : this is on host */
 
   err=cudaMalloc((void**)&(lmdata.y),m*sizeof(double));
   checkCudaError(err,__FILE__,__LINE__);
@@ -243,8 +385,6 @@ printf("BFGS M=%d iter=%d\n",lbfgs_m,max_lbfgs);
   err=cudaFree(lmdata.hbb);
   checkCudaError(err,__FILE__,__LINE__);
   err=cudaFree(lmdata.ptoclus);
-  checkCudaError(err,__FILE__,__LINE__);
-  err=cudaFree(lmdata.rho);
   checkCudaError(err,__FILE__,__LINE__);
   err=cudaFree(lmdata.y);
   checkCudaError(err,__FILE__,__LINE__);

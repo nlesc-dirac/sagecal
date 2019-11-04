@@ -321,10 +321,15 @@ lbfgs_fit_robust_wrapper_minibatch(
    totalminibatch: total number of minibatches
 
 */
+#ifdef HAVE_CUDA
+extern int
+bfgsfit_minibatch_visibilities(double *u, double *v, double *w, double *x, int N,
+   int Nbase, int tilesz, short *hbb, int *ptoclus, complex double *coh, int M, int Mt, double *freqs, int Nf, double fdelta, double *p, int Nt, int max_lbfgs, int lbfgs_m, int gpu_threads, int solver_mode, double robust_nu, double *res_0, double *res_1, persistent_data_t *ptdata,int nminibatch,int totalminibatch);
+#else /* !HAVE_CUDA */
 extern int
 bfgsfit_minibatch_visibilities(double *u, double *v, double *w, double *x, int N,
    int Nbase, int tilesz, baseline_t *barr, clus_source_t *carr, complex double *coh, int M, int Mt, double *freqs, int Nf, double fdelta, double *p, int Nt, int max_lbfgs, int lbfgs_m, int gpu_threads, int solver_mode, double robust_nu, double *res_0, double *res_1, persistent_data_t *ptdata,int nminibatch,int totalminibatch);
-
+#endif /* !HAVE_CUDA */
 
 /* consensus optimization version,
    cost= original_cost + y^T(x-Bz) + rho/2(x-Bz)^T (x-Bz)
