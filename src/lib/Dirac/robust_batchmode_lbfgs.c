@@ -1132,7 +1132,6 @@ robust_cost_func_multifreq(double *p, int m, void *adata) {
   for (ci=0; ci<d1->Mt; ci++) {
     f1=f1+my_ddot(8*d1->N,&xp[8*d1->N*ci],&dp->y[8*d1->N*ci])+dp->rho[ci]*0.5*my_ddot(8*d1->N,&xp[8*d1->N*ci],&xp[8*d1->N*ci]);
   }
-  printf("Costs f0=%lf f1=%lf\n",f0,f1);
   free(xp);
   return f0+f1;
 }

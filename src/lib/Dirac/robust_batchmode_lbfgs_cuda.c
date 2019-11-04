@@ -25,7 +25,7 @@
 #endif
 
 //#define DEBUG
-#define CUDA_DEBUG
+//#define CUDA_DEBUG
 static void
 checkCudaError(cudaError_t err, char *file, int line)
 {
@@ -89,7 +89,6 @@ costfunc_multifreq(double *p, int m, void *adata) {
  double fcost=cudakernel_lbfgs_multifreq_cost_robust(Nbase,lmdata->Nchan,lmdata->M,lmdata->N,Nbasetotal,boff,lmdata->x,lmdata->coh,p,m,lmdata->hbb,lmdata->ptoclus,lmdata->robust_nu);
 
  if (!lmdata->rho && !lmdata->y && !lmdata->z) {
-   printf("Cost %lf\n",fcost);
    return fcost;
  } 
 
@@ -126,7 +125,6 @@ costfunc_multifreq(double *p, int m, void *adata) {
  err=cudaFree(xp);
  checkCudaError(err,__FILE__,__LINE__);
 
- printf("Cost %lf %lf\n",fcost,f1);
  return fcost+f1;
 }
 
@@ -280,7 +278,6 @@ int
 bfgsfit_minibatch_consensus(double *u, double *v, double *w, double *x, int N,
    int Nbase, int tilesz, short *hbb, int *ptoclus, complex double *coh, int M, int Mt, double *freqs, int Nf, double fdelta, double *p, double *y, double *z, double *rho, int Nt, int max_lbfgs, int lbfgs_m, int gpu_threads, int solver_mode, double robust_nu, double *res_0, double *res_1, persistent_data_t *indata,int nminibatch, int totalminibatch) {
 
-printf("BFGS M=%d iter=%d\n",lbfgs_m,max_lbfgs);
   me_data_batchmode_cuda_t lmdata;
   cudaError_t err;
   double *pdevice;
