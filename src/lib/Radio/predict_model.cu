@@ -26,6 +26,11 @@
 /* enable this for checking for kernel failure */
 //#define CUDA_DBG
 
+//Max no. of frequencies for a single kernel to work on
+#ifndef MAX_F
+#define MAX_F 20
+#endif
+
 /* matrix multiplications */
 /* C=A*B */
 __device__ void
@@ -646,9 +651,10 @@ const double *__restrict__ sQ0, const double *__restrict__ sU0, const double *__
    double v_n=(v[n]);
    double w_n=(w[n]);
 
-   //TODO: figure out if this max_f makes any sense
-   #define MAX_F 20
    double l_coh[MAX_F][8];
+
+   if (F<=MAX_F) {
+
    for(int cf=0; cf<F; cf++) {
         l_coh[cf][0]=0.0;
         l_coh[cf][1]=0.0;
@@ -659,7 +665,6 @@ const double *__restrict__ sQ0, const double *__restrict__ sU0, const double *__
         l_coh[cf][6]=0.0;
         l_coh[cf][7]=0.0;
    }
-
 
    // split to two cases, F==1 and F>1
    if (F==1) {
@@ -722,11 +727,6 @@ const double *__restrict__ sQ0, const double *__restrict__ sU0, const double *__
 
      }
 
-
-   }
-
-
-
      //write output with right multi frequency offset
     double *coh1 = &coh[8*n];
     for(int cf=0; cf<F; cf++) {
@@ -739,7 +739,69 @@ const double *__restrict__ sQ0, const double *__restrict__ sU0, const double *__
         coh1[cf*8*B+6] = l_coh[cf][6];
         coh1[cf*8*B+7] = l_coh[cf][7];
     }
+    }
+    } else {
+      /* F> MAX_F, need to calculate/write multiple times */
+      /* how many calculate/write cycles */
+      int fcycle=(F+MAX_F-1)/MAX_F;
+      for (int cff=0; cff<fcycle; cff++) {
+     for(int cf=0; cf<MAX_F; cf++) {
+        l_coh[cf][0]=0.0;
+        l_coh[cf][1]=0.0;
+        l_coh[cf][2]=0.0;
+        l_coh[cf][3]=0.0;
+        l_coh[cf][4]=0.0;
+        l_coh[cf][5]=0.0;
+        l_coh[cf][6]=0.0;
+        l_coh[cf][7]=0.0;
+     }
 
+     for (int k=0; k<K; k++) {
+        //source specific params
+        double sI0f,sQ0f,sU0f,sV0f,spec_idxf,spec_idx1f,spec_idx2f,myf0;
+        double phterm0 = (2.0*M_PI*(u_n*__ldg(&ll[k])+v_n*__ldg(&mm[k])+w_n*__ldg(&nn[k])));
+        sI0f=__ldg(&sI0[k]);
+        sQ0f=__ldg(&sQ0[k]);
+        sU0f=__ldg(&sU0[k]);
+        sV0f=__ldg(&sV0[k]);
+        spec_idxf=__ldg(&spec_idx[k]);
+        spec_idx1f=__ldg(&spec_idx1[k]);
+        spec_idx2f=__ldg(&spec_idx2[k]);
+        myf0=__ldg(&f0[k]);
+
+        unsigned char stypeT=__ldg(&stype[k]);
+        for(int cf=0; cf<MAX_F && cf+cff*MAX_F<F; cf++) {
+            double llcoh[8];
+            compute_prodterm_multifreq(sta1, sta2, N, K, T, F, phterm0, sI0f, sQ0f, sU0f, sV0f, spec_idxf, spec_idx1f, spec_idx2f, 
+               myf0, __ldg(&(freqs[cf+cff*MAX_F])), deltaf, dobeam, tslot, k, cf+cff*MAX_F, beam, exs, stypeT, u_n, v_n, w_n,llcoh);
+         l_coh[cf][0] +=llcoh[0];
+         l_coh[cf][1] +=llcoh[1];
+         l_coh[cf][2] +=llcoh[2];
+         l_coh[cf][3] +=llcoh[3];
+         l_coh[cf][4] +=llcoh[4];
+         l_coh[cf][5] +=llcoh[5];
+         l_coh[cf][6] +=llcoh[6];
+         l_coh[cf][7] +=llcoh[7];
+        }
+
+
+      }
+       double *coh1 = &coh[8*n];
+      for(int cf=0; cf<MAX_F && cf+cff*MAX_F<F; cf++) {
+        coh1[(cf+cff*MAX_F)*8*B+0] = l_coh[cf][0];
+        coh1[(cf+cff*MAX_F)*8*B+1] = l_coh[cf][1];
+        coh1[(cf+cff*MAX_F)*8*B+2] = l_coh[cf][2];
+        coh1[(cf+cff*MAX_F)*8*B+3] = l_coh[cf][3];
+        coh1[(cf+cff*MAX_F)*8*B+4] = l_coh[cf][4];
+        coh1[(cf+cff*MAX_F)*8*B+5] = l_coh[cf][5];
+        coh1[(cf+cff*MAX_F)*8*B+6] = l_coh[cf][6];
+        coh1[(cf+cff*MAX_F)*8*B+7] = l_coh[cf][7];
+      }
+
+
+     }
+
+    }
   
   }
 
@@ -790,9 +852,8 @@ const double *__restrict__ sQ0, const double *__restrict__ sU0, const double *__
    double v_n=(v[n]);
    double w_n=(w[n]);
 
-   //TODO: figure out if this max_f makes any sense
-   #define MAX_F 20
    double l_coh[MAX_F][8];
+   if (F<=MAX_F) {
    for(int cf=0; cf<F; cf++) {
         l_coh[cf][0]=0.0;
         l_coh[cf][1]=0.0;
@@ -930,6 +991,96 @@ const double *__restrict__ sQ0, const double *__restrict__ sU0, const double *__
         coh1[cf*8*B+6] = l_coh[cf][6];
         coh1[cf*8*B+7] = l_coh[cf][7];
     }
+   } else {
+    /* F> MAX_F, need to calculate/write multiple times */
+      /* how many calculate/write cycles */
+      int fcycle=(F+MAX_F-1)/MAX_F;
+      for (int cff=0; cff<fcycle; cff++) {
+     for(int cf=0; cf<MAX_F; cf++) {
+        l_coh[cf][0]=0.0;
+        l_coh[cf][1]=0.0;
+        l_coh[cf][2]=0.0;
+        l_coh[cf][3]=0.0;
+        l_coh[cf][4]=0.0;
+        l_coh[cf][5]=0.0;
+        l_coh[cf][6]=0.0;
+        l_coh[cf][7]=0.0;
+     }
+
+     for (int k=0; k<K; k++) {
+        //source specific params
+        double sI0f,sQ0f,sU0f,sV0f,spec_idxf,spec_idx1f,spec_idx2f,myf0;
+        double phterm0 = (2.0*M_PI*(u_n*__ldg(&ll[k])+v_n*__ldg(&mm[k])+w_n*__ldg(&nn[k])));
+        sI0f=__ldg(&sI0[k]);
+        sQ0f=__ldg(&sQ0[k]);
+        sU0f=__ldg(&sU0[k]);
+        sV0f=__ldg(&sV0[k]);
+        spec_idxf=__ldg(&spec_idx[k]);
+        spec_idx1f=__ldg(&spec_idx1[k]);
+        spec_idx2f=__ldg(&spec_idx2[k]);
+        myf0=__ldg(&f0[k]);
+
+        unsigned char stypeT=__ldg(&stype[k]);
+
+        for(int cf=0; cf<MAX_F && cf+cff*MAX_F<F; cf++) {
+            double llcoh[8];
+            compute_prodterm_multifreq(sta1, sta2, N, K, T, F, phterm0, sI0f, sQ0f, sU0f, sV0f, spec_idxf, spec_idx1f, spec_idx2f, 
+               myf0, __ldg(&(freqs[cf+cff*MAX_F])), deltaf, dobeam, tslot, k, cf+cff*MAX_F, beam, exs, stypeT, u_n, v_n, w_n,llcoh);
+         l_coh[cf][0] +=llcoh[0];
+         l_coh[cf][1] +=llcoh[1];
+         l_coh[cf][2] +=llcoh[2];
+         l_coh[cf][3] +=llcoh[3];
+         l_coh[cf][4] +=llcoh[4];
+         l_coh[cf][5] +=llcoh[5];
+         l_coh[cf][6] +=llcoh[6];
+         l_coh[cf][7] +=llcoh[7];
+        }
+
+     }
+
+     cuDoubleComplex L1[4],L2[4];
+     for(int cf=0; cf<MAX_F; cf++) {
+       L1[0].x=l_coh[cf][0];
+       L1[0].y=l_coh[cf][1];
+       L1[1].x=l_coh[cf][2];
+       L1[1].y=l_coh[cf][3];
+       L1[2].x=l_coh[cf][4];
+       L1[2].y=l_coh[cf][5];
+       L1[3].x=l_coh[cf][6];
+       L1[3].y=l_coh[cf][7];
+       /* L2=G1*L1 */
+       amb(G1,L1,L2);
+       /* L1=L2*G2^H */
+       ambt(L2,G2,L1);
+       l_coh[cf][0]=L1[0].x;
+       l_coh[cf][1]=L1[0].y;
+       l_coh[cf][2]=L1[1].x;
+       l_coh[cf][3]=L1[1].y;
+       l_coh[cf][4]=L1[2].x;
+       l_coh[cf][5]=L1[2].y;
+       l_coh[cf][6]=L1[3].x;
+       l_coh[cf][7]=L1[3].y;
+     }
+
+
+
+   
+    double *coh1 = &coh[8*n];
+    for(int cf=0; cf<MAX_F && cf+cff*MAX_F<F; cf++) {
+        coh1[(cf+cff*MAX_F)*8*B+0] = l_coh[cf][0];
+        coh1[(cf+cff*MAX_F)*8*B+1] = l_coh[cf][1];
+        coh1[(cf+cff*MAX_F)*8*B+2] = l_coh[cf][2];
+        coh1[(cf+cff*MAX_F)*8*B+3] = l_coh[cf][3];
+        coh1[(cf+cff*MAX_F)*8*B+4] = l_coh[cf][4];
+        coh1[(cf+cff*MAX_F)*8*B+5] = l_coh[cf][5];
+        coh1[(cf+cff*MAX_F)*8*B+6] = l_coh[cf][6];
+        coh1[(cf+cff*MAX_F)*8*B+7] = l_coh[cf][7];
+    }
+
+     }
+
+
+   }
 
   
   }
