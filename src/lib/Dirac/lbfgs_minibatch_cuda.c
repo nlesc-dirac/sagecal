@@ -1241,7 +1241,7 @@ cuda_linesearch_backtrack(
   product *=c;
 
   int ci=0;
-  while (ci<15 && fnew>fold+alphak*product) {
+  while (ci<15 && fnew>fold+alphak*product) { /* FIXME: using higher iterations here gives worse results */
      alphak *=0.5;
 ///     my_dcopy(m,xk,1,xk1,1);
     err=cudaMemcpy(xk1, xk, m*sizeof(double), cudaMemcpyDeviceToDevice);
@@ -1288,7 +1288,7 @@ lbfgs_fit_cuda(
   double *rho; /* storage for 1/yk^T*sk */
   int ci,ck,cm;
   double alphak=1.0;
-  double alphabar=1.0;
+  double alphabar=10.0; /* FIXME: use a higher value for CUDA version */
   double alpha;
 
 

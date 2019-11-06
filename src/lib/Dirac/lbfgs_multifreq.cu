@@ -434,10 +434,10 @@ kernel_fcost_multifreq_robust(int Nbase, int Nchan, int boff, int M, int Ns, int
  
     /* robust cost is log( 1 + error^2/nu ) -- per channel */
     ek[tid]=gsum;
-  } 
+  }
 
   __syncthreads();
-  // Build summation tree over elements, assuming blockDim.x is power of 2.
+  // Build summation tree over elements, assuming blockDim.x*blockDim.y is power of 2.
   for(int s=blockDim.x*blockDim.y/2; s>0; s=s/2) {
     if(tid < s) ek[tid] += ek[tid + s];
    __syncthreads();

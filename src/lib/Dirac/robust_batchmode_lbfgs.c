@@ -987,6 +987,7 @@ predict_threadfn_withgain_multifreq(void *data) {
       C[1]=t->coh[nchan*chanoff+4*M*ci+4*cm+1];
       C[2]=t->coh[nchan*chanoff+4*M*ci+4*cm+2];
       C[3]=t->coh[nchan*chanoff+4*M*ci+4*cm+3];
+//printf("n=%d base (%d,%d) clus %d vis %lf,%lf\n",ci+t->boff,sta1,sta2,cm,creal(C[0]),cimag(C[0]));
 
      /* form G1*C*G2' */
      /* T1=G1*C  */

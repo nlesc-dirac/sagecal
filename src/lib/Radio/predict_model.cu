@@ -27,6 +27,7 @@
 //#define CUDA_DBG
 
 //Max no. of frequencies for a single kernel to work on
+//Make this large ~64 for handling data with many channels
 #ifndef MODEL_MAX_F
 #define MODEL_MAX_F 16
 #endif
