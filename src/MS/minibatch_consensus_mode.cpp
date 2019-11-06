@@ -455,6 +455,10 @@ run_minibatch_consensus_calibration(void) {
         /* update baseline flags */
         /* and set x[]=0 for flagged values */
         preset_flags_and_data(iodata.Nbase*iodata.tilesz,iodata.flag,barr,iodata.x,Data::Nt);
+#ifdef HAVE_CUDA
+        /* update baseline flags */
+        rearrange_baselines(iodata.Nbase*iodata.tilesz, barr, hbb, Nt);
+#endif
 
         /* precess source locations (also beam pointing) from J2000 to JAPP if we do any beam predictions,
            using first time slot as epoch */
