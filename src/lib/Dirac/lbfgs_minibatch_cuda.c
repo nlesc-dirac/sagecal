@@ -1288,7 +1288,7 @@ lbfgs_fit_cuda(
   double *rho; /* storage for 1/yk^T*sk */
   int ci,ck,cm;
   double alphak=1.0;
-  double alphabar=10.0; /* FIXME: use a higher value for CUDA version */
+  double alphabar=1.0; 
   double alpha;
 
 
