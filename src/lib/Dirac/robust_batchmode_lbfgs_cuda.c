@@ -347,8 +347,11 @@ bfgsfit_minibatch_consensus(double *u, double *v, double *w, double *x, int N,
 /****************************************/
 /* check gradient */
 /* int iii=2;
- gradfunc_multifreq(pdevice,lmdata.z,m,&lmdata);
- err=cudaMemcpy(z,lmdata.z,m*sizeof(double),cudaMemcpyDeviceToHost);
+ double *tmpgrad,*tmphost;
+ err=cudaMalloc((void**)&(tmpgrad),m*sizeof(double));
+ err=cudaHostAlloc((void**)&(tmphost),m*sizeof(double),cudaHostAllocDefault);
+ gradfunc_multifreq(pdevice,tmpgrad,m,&lmdata);
+ err=cudaMemcpy(tmphost,tmpgrad,m*sizeof(double),cudaMemcpyDeviceToHost);
  checkCudaError(err,__FILE__,__LINE__);
  double p0=p[iii]; double eps=1e-6;
  p[iii]=p0+eps;
@@ -359,7 +362,9 @@ bfgsfit_minibatch_consensus(double *u, double *v, double *w, double *x, int N,
  err=cudaMemcpy(pdevice,p,m*sizeof(double),cudaMemcpyHostToDevice);
  checkCudaError(err,__FILE__,__LINE__);
  double f11=costfunc_multifreq(pdevice,m,&lmdata);
- printf("Numerical grad =%lf,%lf=%lf analytical=%lf\n",f00,f11,(f00-f11)/(2.0*eps),z[iii]);
+ printf("Numerical grad =%lf,%lf=%lf analytical=%lf\n",f00,f11,(f00-f11)/(2.0*eps),tmphost[iii]);
+ cudaFree(tmpgrad);
+ cudaFreeHost(tmphost);
 */
 /****************************************/
 
