@@ -275,6 +275,12 @@ run_minibatch_calibration(void) {
       } 
     }
 
+    /* vector for keeping residual of each miniband */
+    double *resband;
+    if ((resband=(double*)calloc((size_t)nsolbw,sizeof(double)))==0) {
+     fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
+     exit(1);
+    }
 
     /* starting iterations are doubled */
     int start_iter=1;
@@ -410,9 +416,14 @@ run_minibatch_calibration(void) {
 #endif
        res_0+=res_00;
        res_1+=res_01;
+       resband[ii]=res_01;
        printf("epoch=%d minibatch=%d band=%d %lf %lf\n",nepch,nmb,ii,res_00,res_01);
       }
     /****************** end calibration **************************/
+      /* find average residual over bands*/
+      res_0/=(double)nsolbw;
+      res_1/=(double)nsolbw;
+
 
 /******************************* work on minibatch*****************************/
       }
@@ -494,6 +505,14 @@ beam.p_ra0,beam.p_dec0,iodata.freq0,beam.sx,beam.sy,beam.time_utc,beam.Nelem,bea
      fprintf(sfp,"\n");
     }
     
+   }
+
+   /* Reset solutions in mini-bands with bad residuals */
+   for (ii=0; ii<nsolbw; ii++) {
+       if (resband[ii]>res_ratio*res_1) {
+        cout<<"Resetting solution for band "<<ii<<endl;
+        memcpy(&pfreq[iodata.N*8*Mt*ii],pinit,(size_t)iodata.N*8*Mt*sizeof(double));
+       }
    }
 
 
@@ -617,6 +636,7 @@ beam.p_ra0,beam.p_dec0,iodata.freq0,beam.sx,beam.sy,beam.time_utc,beam.Nelem,bea
   free(p);
   free(pinit);
   free(pfreq);
+  free(resband);
   free(coh);
   if (solfile) {
     fclose(sfp);
