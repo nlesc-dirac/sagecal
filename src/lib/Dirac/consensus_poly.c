@@ -846,3 +846,87 @@ update_rho_bb(double *rho, double *rhoupper, int N, int M, int Mt, clus_source_t
  free(deltaJ);
  return 0;
 }
+
+
+
+typedef struct thread_data_sthreshold_ {
+ int starti;
+ int endi;
+ double *z;
+ double lambda;
+} thread_data_sthreshold_t;
+
+
+/* soft thresholding function */
+static void*
+sthreshold_threadfn(void *data) {
+  thread_data_sthreshold_t *t=(thread_data_sthreshold_t*) data;
+  int ci;
+  for (ci=t->starti; ci<=t->endi; ci++) {
+   /* elementwise soft threshold */
+   t->z[ci]=(t->z[ci]<-t->lambda?t->z[ci]+t->lambda:(t->z[ci]>t->lambda?t->z[ci]-t->lambda:0.0));
+  }
+
+  return NULL;
+}
+
+/* soft threshold elementwise
+   z: Nx1 data vector (or matrix) : this is modified
+   lambda: threshold
+   Nt: no. of threads
+
+   Z_i ={ Z_i-lambda if Z_i > lambda, Z_i+lambda  if Z_i<-lambda, else 0}
+*/
+int
+soft_threshold_z(double *z, int N, double lambda, int Nt) {
+
+  int Nthb,Nthb0,ci,nth,nth1;
+
+  pthread_attr_t attr;
+  pthread_t *th_array;
+  thread_data_sthreshold_t *threaddata;
+
+
+  /* values per thread */
+  Nthb0=(N+Nt-1)/Nt;
+
+  /* setup threads */
+  pthread_attr_init(&attr);
+  pthread_attr_setdetachstate(&attr,PTHREAD_CREATE_JOINABLE);
+
+  if ((th_array=(pthread_t*)malloc((size_t)Nt*sizeof(pthread_t)))==0) {
+   fprintf(stderr,"%s: %d: No free memory\n",__FILE__,__LINE__);
+   exit(1);
+  }
+  if ((threaddata=(thread_data_sthreshold_t*)malloc((size_t)Nt*sizeof(thread_data_sthreshold_t)))==0) {
+    fprintf(stderr,"%s: %d: No free memory\n",__FILE__,__LINE__);
+    exit(1);
+  }
+
+  ci=0;
+  for (nth=0;  nth<Nt && ci<N; nth++) {
+    if (ci+Nthb0<N) {
+     Nthb=Nthb0;
+    } else {
+     Nthb=N-ci;
+    }
+    threaddata[nth].starti=ci;
+    threaddata[nth].endi=ci+Nthb-1;
+    threaddata[nth].lambda=lambda;
+    threaddata[nth].z=z;
+
+    pthread_create(&th_array[nth],&attr,sthreshold_threadfn,(void*)(&threaddata[nth]));
+    ci=ci+Nthb;
+  }
+
+  for(nth1=0; nth1<nth; nth1++) {
+   pthread_join(th_array[nth1],NULL);
+  }
+
+  pthread_attr_destroy(&attr);
+
+  free(th_array);
+  free(threaddata);
+
+   return 0;
+}
