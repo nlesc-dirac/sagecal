@@ -369,9 +369,10 @@ cuda_mult_hessian(int m, double *pk, double *gk, double *s, double *y, double *r
   checkCublasError(cbstatus,__FILE__,__LINE__);
   ///gamma/=my_ddot(m,&y[m*idx[M-1]],&y[m*idx[M-1]]);
   double gamma1;
-  cbstatus=cublasDdot(*cbhandle,m,&y[m*idx[M-1]],1,&y[m*idx[M-1]],1,&gamma1);
+  //cbstatus=cublasDdot(*cbhandle,m,&y[m*idx[M-1]],1,&y[m*idx[M-1]],1,&gamma1);
+  cbstatus=cublasDnrm2(*cbhandle,m,&y[m*idx[M-1]],1,&gamma1);
   checkCublasError(cbstatus,__FILE__,__LINE__);
-  gamma/=gamma1;
+  gamma/=(gamma1*gamma1);
   /* Hk(0)=gamma I, so scale q by gamma */
   /* r= Hk(0) q */
   ///my_dscal(m,gamma,pk);

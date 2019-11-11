@@ -452,7 +452,8 @@ run_minibatch_consensus_calibration(void) {
         my_dscal(iodata.Nbase*iodata.tilesz,inv_c,iodata.w);
 
         /**********************************************************/
-        /* update baseline flags */
+        /* FIXME: do this efficiently
+          update baseline flags */
         /* and set x[]=0 for flagged values */
         preset_flags_and_data(iodata.Nbase*iodata.tilesz,iodata.flag,barr,iodata.x,Data::Nt);
 #ifdef HAVE_CUDA
@@ -481,7 +482,8 @@ run_minibatch_consensus_calibration(void) {
 #endif
 #ifdef HAVE_CUDA
    if (GPUpredict) {
-     precalculate_coherencies_multifreq_withbeam_gpu(iodata.u,iodata.v,iodata.w,coh,iodata.N,iodata.Nbase*iodata.tilesz,barr,carr,M,iodata.freqs,iodata.Nchan,iodata.deltaf,iodata.deltat,iodata.dec0,Data::min_uvcut,Data::max_uvcut,
+     /* note we need to use bandwith per channel here */
+     precalculate_coherencies_multifreq_withbeam_gpu(iodata.u,iodata.v,iodata.w,coh,iodata.N,iodata.Nbase*iodata.tilesz,barr,carr,M,iodata.freqs,iodata.Nchan,deltafch,iodata.deltat,iodata.dec0,Data::min_uvcut,Data::max_uvcut,
   beam.p_ra0,beam.p_dec0,iodata.freq0,beam.sx,beam.sy,beam.time_utc,iodata.tilesz,beam.Nelem,beam.xx,beam.yy,beam.zz,doBeam,Data::Nt);
    } else {
     if (!doBeam) {
