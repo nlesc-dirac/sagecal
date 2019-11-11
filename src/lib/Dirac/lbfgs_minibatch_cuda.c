@@ -1150,7 +1150,8 @@ lbfgs_persist_init(persistent_data_t *pt, int Nminibatch, int m, int n, int lbfg
      fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
      exit(1);
     }
-
+    pt->m=m;
+    pt->lbfgs_m=lbfgs_m;
 
   /* storage for calculating on-line variance of gradient */
     err=cudaMalloc((void**)&(pt->running_avg),m*sizeof(double));
@@ -1193,6 +1194,30 @@ lbfgs_persist_clear(persistent_data_t *pt) {
 
     err=cudaFree(pt->running_avg_sq);
     checkCudaError(err,__FILE__,__LINE__);
+
+  return 0;
+}
+
+int
+lbfgs_persist_reset(persistent_data_t *pt) {
+
+    cudaError_t err;
+    err=cudaMemset(pt->s,0,pt->m*pt->lbfgs_m*sizeof(double));
+    checkCudaError(err,__FILE__,__LINE__);
+    err=cudaMemset(pt->y,0,pt->m*pt->lbfgs_m*sizeof(double));
+    checkCudaError(err,__FILE__,__LINE__);
+
+  memset(pt->rho,0,sizeof(double)*(size_t)pt->lbfgs_m);
+
+    err=cudaMemset(pt->running_avg,0,pt->m*sizeof(double));
+    checkCudaError(err,__FILE__,__LINE__);
+    err=cudaMemset(pt->running_avg_sq,0,pt->m*sizeof(double));
+    checkCudaError(err,__FILE__,__LINE__);
+
+
+  pt->nfilled=0; /* always 0 when we start */
+  pt->vacant=0; /* cycle in 0..m-1 */
+  pt->niter=0; /* cumulative iteration count */
 
   return 0;
 }

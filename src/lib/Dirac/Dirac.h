@@ -122,6 +122,8 @@ typedef struct persistent_data_t_ {
   double *rho; /* storage for product 1/y^T s */
   int nfilled; /* how many <= lbfgs_m of y,s pairs are filled? valid range 0...lbfgs_m, start value 0 */
   int vacant; /* next vacant offset, cycle in 0...lbfgs_m-1,0,1,...lbfgs_m-1 etc. start value 0 */
+  int lbfgs_m; /* LBFGS memory size */
+  int m; /* parameter size : so length of y,s: mxlbfgs_m, rho: lbfgs_m */
 
   int Nt; /* no. of threads */
 
@@ -156,6 +158,11 @@ lbfgs_persist_init(persistent_data_t *pt, int Nminibatch, int m, int n, int lbfg
 /* clearing persistent struct after running stochastic LBFGS */
 extern int 
 lbfgs_persist_clear(persistent_data_t *pt);
+
+/* reset persistent struct (no memory allocation, but reset everyting to original state)
+   needed sometimes to recover from a bad solution */
+extern int 
+lbfgs_persist_reset(persistent_data_t *pt);
 
 /* line search */
 /* func: scalar function
@@ -216,6 +223,8 @@ typedef struct persistent_data_t_ {
   double *rho; /* storage for product 1/y^T s */
   int nfilled; /* how many <= lbfgs_m of y,s pairs are filled? valid range 0...lbfgs_m, start value 0 */
   int vacant; /* next vacant offset, cycle in 0...lbfgs_m-1,0,1,...lbfgs_m-1 etc. start value 0 */
+  int lbfgs_m; /* LBFGS memory size */
+  int m; /* parameter size : so length of y,s: mxlbfgs_m, rho: lbfgs_m */
 
   int Nt; /* no. of threads */
 
@@ -258,6 +267,12 @@ lbfgs_persist_init(persistent_data_t *pt, int Nminibatch, int m, int n, int lbfg
 /* clearing persistent struct after running stochastic LBFGS */
 extern int 
 lbfgs_persist_clear(persistent_data_t *pt);
+
+/* reset persistent struct (no memory allocation, but reset everyting to original state)
+   needed sometimes to recover from a bad solution */
+extern int 
+lbfgs_persist_reset(persistent_data_t *pt);
+
 
 /* LBFGS routine,
  * user has to give cost_func() and grad_func()

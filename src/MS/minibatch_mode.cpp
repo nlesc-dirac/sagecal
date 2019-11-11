@@ -326,10 +326,6 @@ run_minibatch_calibration(void) {
      ptoclus[2*ci+1]=carr[ci].p[0]; /* so end at p[0]+nchunk*8*N-1 */
     }
 #endif
-
-/******************************* data loop *****************************/
-    while (msitr[0]->more()) {
-      start_time = time(0);
       /* setup persistant struct for the stochastic mode solver */
       /* this will store LBFGS memory and var(grad) parameters */
       /* persistent memory between batches (y,s) pairs
@@ -347,6 +343,10 @@ run_minibatch_calibration(void) {
         ptdata_array[ii].solver_handle=&solver_handle;
 #endif
       }
+
+/******************************* data loop *****************************/
+    while (msitr[0]->more()) {
+      start_time = time(0);
 
       res_0=res_1=res_00=res_01=0.0;
       for (int nepch=0; nepch<nepochs; nepch++) {
@@ -430,11 +430,6 @@ run_minibatch_calibration(void) {
       }
 
 
-      /* free persistent memory */
-      for (ii=0; ii<nsolbw; ii++) {
-       lbfgs_persist_clear(&ptdata_array[ii]);
-      }
-      free(ptdata_array);
    
 
       if (start_iter) { start_iter=0; }
@@ -512,6 +507,7 @@ beam.p_ra0,beam.p_dec0,iodata.freq0,beam.sx,beam.sy,beam.time_utc,beam.Nelem,bea
        if (resband[ii]>res_ratio*res_1) {
         cout<<"Resetting solution for band "<<ii<<endl;
         memcpy(&pfreq[iodata.N*8*Mt*ii],pinit,(size_t)iodata.N*8*Mt*sizeof(double));
+        lbfgs_persist_reset(&ptdata_array[ii]);
        }
    }
 
@@ -550,6 +546,11 @@ beam.p_ra0,beam.p_dec0,iodata.freq0,beam.sx,beam.sy,beam.time_utc,beam.Nelem,bea
 
     }
 /******************************* end data loop *****************************/
+    /* free persistent memory */
+    for (ii=0; ii<nsolbw; ii++) {
+       lbfgs_persist_clear(&ptdata_array[ii]);
+    }
+    free(ptdata_array);
 
 
     for(int cm=0; cm<iodata.Nms; cm++) {

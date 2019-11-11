@@ -962,7 +962,6 @@ lbfgs_persist_init(persistent_data_t *pt, int Nminibatch, int m, int n, int lbfg
      fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
      exit(1);
   }
-
   if ((pt->s=(double*)calloc((size_t)m*lbfgs_m,sizeof(double)))==0) {
      fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
      exit(1);
@@ -975,6 +974,8 @@ lbfgs_persist_init(persistent_data_t *pt, int Nminibatch, int m, int n, int lbfg
      fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
      exit(1);
   }
+  pt->m=m;
+  pt->lbfgs_m=lbfgs_m;
 
   /* storage for calculating on-line variance of gradient */
   if ((pt->running_avg=(double*)calloc((size_t)m,sizeof(double)))==0) {
@@ -1024,3 +1025,20 @@ lbfgs_persist_clear(persistent_data_t *pt) {
 
   return 0;
 } 
+
+
+int
+lbfgs_persist_reset(persistent_data_t *pt) {
+ 
+  memset(pt->s,0,sizeof(double)*(size_t)pt->m*pt->lbfgs_m);
+  memset(pt->y,0,sizeof(double)*(size_t)pt->m*pt->lbfgs_m);
+  memset(pt->rho,0,sizeof(double)*(size_t)pt->lbfgs_m);
+  memset(pt->running_avg,0,sizeof(double)*(size_t)pt->m);
+  memset(pt->running_avg_sq,0,sizeof(double)*(size_t)pt->m);
+
+  pt->nfilled=0; /* always 0 when we start */
+  pt->vacant=0; /* cycle in 0..m-1 */
+  pt->niter=0; /* cumulative iteration count */
+
+  return 0;
+}
