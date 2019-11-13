@@ -190,13 +190,13 @@ Finally, we change cluster id -3 to 3 in the cluster file and 4 to -4 before we 
 
 and extract a sky model from after-first-selfcal-cluster--4-image.fits.
 
-Now we can combine our three sky models into one large sky model. This will likely require renaming of sources that occur in more than one sky model. Make sure your renamed sources do not start with the letters S, G, R or D. You need to calibrate the data with the first cluster subtracted on this sky model, so this requires running sagecal with -I CORRECTED_DATA -O MODEL_DATA after filling the CORRECTED_DATA column using this sagecal run:
+Now we can combine our three sky models into one large sky model. This will likely require renaming of different sources with the same names that occur in more than one sky model. Make sure your renamed sources do not start with the letters S, G, R or D. You need to calibrate the data with the first cluster subtracted on this sky model, so this requires running sagecal with -I CORRECTED_DATA -O MODEL_DATA after filling the CORRECTED_DATA column using this sagecal run:
 
 ::
 
   ../../install/bin/sagecal_gpu -d sm.ms -s after-initial-calibration-image.fits.sky.txt -c after-initial-calibration-image.fits.sky.txt.cluster -n 40 -t 1 -p sm.ms.solutions -a 0 -e 4 -F 1 -j 2 -B 1 -E 1  > sm.ms.output
 
-where the first cluster must have a positive id and all the others a negative id such that only the 3C196 cluster will be subtracted and no calibration solutions are applied.
+where the first cluster must have a positive id and all the others a negative id such that only the 3C196 cluster will be subtracted - in the uncalibrated domain, by applying the inverse calibration solution for the direction towards 3C196  - and no calibration solutions are applied. This command differs from the sagecal run to produce the image above by a missing "-k 1", because we do want our data to be calibrated for one particular direction since it is to be used as input for calibration to several directions. However, adding "-k 1" might not affect the final results.
 
 See the :doc:`user manual <user_manual>` for all the possible operations, e.g. stochastic calibration. Other options include distributed and bandpass calibration. Also simulation is included in the :doc:`user manual <user_manual>`.
 
