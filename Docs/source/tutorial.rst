@@ -6,6 +6,7 @@ Introduction
 
 This tutorial will guide you through the most common steps in self calibration. This involves calibration along one or more directions. Automatically this will cover calibration on a fixed sky model (e.g., for the LOFAR EoR KSP) as this is a single step in the self-calibration process.
 
+
 Selfcal
 ^^^^^^^
 We will demonstrate selfcal using the SAGECal executable for a GPU - sagecal_gpu - built with cmake, but instructions are, of course, similar for the containerized version of sagecal_gpu. Building sagecal will also automatically build buildsky and create_clusters.py, which we need for self-calibration.
