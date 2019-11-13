@@ -5,7 +5,6 @@ Introduction
 ^^^^^^^^^^^^
 
 This tutorial will guide you through the most common steps in self calibration. This involves calibration along one or more directions. Automatically this will cover calibration on a fixed sky model (e.g., for the LOFAR EoR KSP) as this is a single step in the self-calibration process.
-=======
 
 Selfcal
 ^^^^^^^
@@ -127,8 +126,9 @@ You can run this script like this:
 
 ::
 
-   ./Scale.py sm.ms 1e5
+   ./Scale.py sm.ms large_number
 
+"large_number" can be set to 1e5 for this particular dataset, but not for any dataset. So first run sagecal on the raw data and inspect the solutions. Say that the solutions (elements of the Jones matrices) are of order 0.1, then you can set large_number to 10.
 We do not need to run it if we use the CORRECTED_DATA column, that we have just filled with our "-j 2" sagecal run, for all our subsequent "-j 5" sagecal runs as input or if we stick with "-j 2". 
 
 Note that sagecal will only apply calibration solutions if -k is set equal to a cluster id in the cluster file. Also, direction dependent calibration solutions can only be applied for one direction (cluster) at a time. This is not specific to sagecal, but a fundamental property of the matrix equation for direction dependent calibration. Hence, imaging needs to be done per direction and you will need a package like DDFacet_ to stitch the different images (facets) together to cover the entire field of view of the observation. If -k is not set equal to any cluster id, the data stored in the output column - sagecal's -O argument,  the CORRECTED_DATA column by default - will be uncalibrated. This means that, when sagecal has been run with default settings, the contents of the DATA column will be equal to the contents of the CORRECTED_DATA column if the clusters all have a negative id; any cluster will a positive id will be subtracted by applying the inverse of the calibration solutions, i.e. they will be subtracted in the "uncalibrated domain".
@@ -196,3 +196,6 @@ Now we can combine our three sky models into one large sky model. This will like
   ../../install/bin/sagecal_gpu -d sm.ms -s after-initial-calibration-image.fits.sky.txt -c after-initial-calibration-image.fits.sky.txt.cluster -n 40 -t 1 -p sm.ms.solutions -a 0 -e 4 -F 1 -j 2 -B 1 -E 1  > sm.ms.output
 
 where the first cluster must have a positive id and all the others a negative id such that only the 3C196 cluster will be subtracted and no calibration solutions are applied.
+
+See the :doc:`user manual <user_manual>` for all the possible operations, e.g. stochastic calibration. Other options include distributed and bandpass calibration. Also simulation is included in the :doc:`user manual <user_manual>`.
+
