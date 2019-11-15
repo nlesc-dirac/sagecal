@@ -114,7 +114,7 @@ typedef struct baseline_t_ {
 
 /* structure for worker threads for various function calculations */
 typedef struct thread_data_base_ {
-  int Nb; /* no of baselines this handle */
+  int Nb; /* no of baselines this thread handles */
   int boff; /* baseline offset per thread */
   baseline_t *barr; /* pointer to baseline-> stations mapping array */
   double *u,*v,*w; /* pointers to uwv arrays,size Nbx1 */
@@ -135,7 +135,7 @@ typedef struct thread_data_base_ {
   double tdelta; /* integration time for time smearing */
   double dec0; /* declination for time smearing */
 
-  /* following used for interpolation */
+  /* following used for interpolation,stochastic calibration */
   double *p0; /* old parameters, same as p */
   int tilesz; /* tile size */
   int Nbase; /* total no of baselines */
@@ -312,6 +312,9 @@ typedef struct me_data_t_ {
   /* following used only by robust T cost/grad functions */
   double robust_nu;
 
+  /* following for calibration of multi channel data */
+  int Nchan;
+
   /* following used only by RTR */
 } me_data_t;
 
@@ -364,6 +367,10 @@ typedef struct thread_data_grad_ {
 
   /* only used in robust version */
   double robust_nu;
+
+
+  /* only used in multifreq data */
+  int Nchan;
 
   /* only used in batch mode operation */
   int noff; /* offset of the batch data, in baselines */
@@ -491,21 +498,20 @@ typedef struct pipeline_ {
 #endif
 
 
-/******* some common routines that need to be moved - FIXME **********/
-/****************************** readsky.c ****************************/
+/****************************** predict.c ****************************/
 /* rearranges coherencies for GPU use later */
 /* barr: 2*Nbase x 1
- *    coh: M*Nbase*4 x 1 complex
- *       ddcoh: M*Nbase*8 x 1
- *          ddbase: 2*Nbase x 1 (sta1,sta2) = -1 if flagged
- *          */
+ * coh: M*Nbase*4 x 1 complex
+ * ddcoh: M*Nbase*8 x 1
+ * ddbase: 2*Nbase x 1 (sta1,sta2) = -1 if flagged
+ * */
 extern int
 rearrange_coherencies(int Nbase, baseline_t *barr, complex double *coh, double *ddcoh, short *ddbase, int M, int Nt);
 
 /* rearranges baselines for GPU use later */
 /* barr: 2*Nbase x 1
- *    ddbase: 2*Nbase x 1
- *    */
+ * ddbase: 2*Nbase x 1
+ * */
 extern int
 rearrange_baselines(int Nbase, baseline_t *barr, short *ddbase, int Nt);
 

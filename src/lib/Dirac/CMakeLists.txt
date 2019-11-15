@@ -38,6 +38,9 @@ if(HAVE_CUDA)
         robust
         robust_fl
         oslmfit
+	lbfgs_minibatch_cuda
+	robust_batchmode_lbfgs_cuda
+  lbfgs_multifreq
     )
 
     set(objects ${objects} ${extra_objects})
