@@ -336,7 +336,7 @@ run_minibatch_consensus_calibration(void) {
       for (int fii=0; fii<nchan[ii]; fii++) {
         ffreq[ii]+=iodata.freqs[chanstart[ii]+fii];
       }
-      ffreq[ii]/=(double)(2*nchan[ii]);
+      ffreq[ii]/=(double)(nchan[ii]); /* mean */
       printf("%d %lf %lf\n",ii,ffreq[ii],iodata.freq0);
     }
     /* setup polynomials */
