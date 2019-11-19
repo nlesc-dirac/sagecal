@@ -28,20 +28,17 @@ RUN git clone --progress --verbose https://github.com/casacore/casacore.git casa
     -DUSE_THREADS=ON && \
     make -j4 && \
     make install && \
-    mkdir -p /opt/casacore/data && cd /opt/casacore/data && \
-    wget ftp://ftp.astron.nl/outgoing/Measures/WSRT_Measures.ztar && tar xvf WSRT_Measures.ztar
+    # mkdir -p /opt/casacore/data && cd /opt/casacore/data && \
+    # wget ftp://ftp.astron.nl/outgoing/Measures/WSRT_Measures.ztar && tar xvf WSRT_Measures.ztar
      
-    
-
-
 ## compile sagecal
-#RUN cd /build && \
-#    mkdir build-sl && cd build-sl && \
+#RUN cd && git clone --progress --verbose https://github.com/nlesc-dirac/sagecal.git && \
+#    cd sagecal && mkdir build-sl && cd build-sl && \
 #    cmake3 .. -DCMAKE_INSTALL_PREFIX=/opt/sagecal \
 #    -DCASACORE_ROOT_DIR=/opt/casacore \
-#    -DCASACORE_INCLUDE=/opt/casacore/include/casacore
+#    -DCASACORE_INCLUDE=/opt/casacore/include/casacore && \
 #    make -j4 && \
-#    make install && \
+#    make install 
 #
 #RUN ls -alsrt /opt/sagecal && \
 #    /opt/sagecal/bin/sagecal
