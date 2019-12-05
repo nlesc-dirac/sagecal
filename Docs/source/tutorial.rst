@@ -196,7 +196,7 @@ Now we can combine our three sky models into one large sky model. This will like
 
   ../../install/bin/sagecal_gpu -d sm.ms -s after-initial-calibration-image.fits.sky.txt -c after-initial-calibration-image.fits.sky.txt.cluster -n 40 -t 1 -p sm.ms.solutions -a 0 -e 4 -F 1 -j 2 -B 1 -E 1  > sm.ms.output
 
-where the first cluster must have a positive id and all the others a negative id such that only the 3C196 cluster will be subtracted - in the uncalibrated domain, by applying the inverse calibration solution for the direction towards 3C196  - and no calibration solutions are applied. This command differs from the sagecal run to produce the image above by a missing "-k 1", because we do want our data to be calibrated for one particular direction since it is to be used as input for calibration to several directions. However, adding "-k 1" might not affect the final results.
+where the first cluster must have a positive id and all the others a negative id such that only the 3C196 cluster will be subtracted - in the uncalibrated domain, by applying the inverse calibration solution for the direction towards 3C196  - and no calibration solutions are applied. This command differs from the sagecal run to produce the image above by a missing "-k 1", so our data is not calibrated for any direction. Adding "-k 1" will apply calibration solutions to the direction of the residuals of 3C196. This will likely be an equally good starting point for a selfcal run with 3C196 subtracted.
 
 See the :doc:`user manual <user_manual>` for all the possible operations, e.g. stochastic calibration. Other options include distributed and bandpass calibration. Also simulation is included in the :doc:`user manual <user_manual>`.
 
