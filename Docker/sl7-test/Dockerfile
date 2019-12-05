@@ -28,8 +28,8 @@ RUN git clone --progress --verbose https://github.com/casacore/casacore.git casa
     -DUSE_THREADS=ON && \
     make -j4 && \
     make install && \
-    # mkdir -p /opt/casacore/data && cd /opt/casacore/data && \
-    # wget ftp://ftp.astron.nl/outgoing/Measures/WSRT_Measures.ztar && tar xvf WSRT_Measures.ztar
+    mkdir -p /opt/casacore/data && cd /opt/casacore/data && \
+    wget ftp://ftp.astron.nl/outgoing/Measures/WSRT_Measures.ztar && tar xvf WSRT_Measures.ztar
      
 ## compile sagecal
 #RUN cd && git clone --progress --verbose https://github.com/nlesc-dirac/sagecal.git && \
