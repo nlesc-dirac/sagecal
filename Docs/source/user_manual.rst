@@ -25,7 +25,7 @@ sagecal -d MS -s sky.txt -c cluster.txt -C epochs -M minibatches
 - -m LBFGS memory size, see the `Wikipedia page on LBFGS`_ where the same symbol m is used for the past m updates of the position and gradient vectors: default 7 updates kept in history.
 - -n number of worker threads on the CPU: default 6
 - -t tile size, this means the number of time samples than constitute a solution interval : default 120, so that would be two minutes for visibility sampling at one second.
-- -a 0,1,2,3 : These are the simulation options, so converting a sky model to its corresponding visibilities at the (u, v, w) triples of the observation. if 1, only simulate, if 2, simulate and add to input, if 3, simulate and subtract from input (For a>0, multiplied by solutions if solutions file is also given): default 0, which means no simulation. 
+- -a 0,1,2,3 : These are the simulation options, so just converting a sky model to its corresponding visibilities at the (u, v, w) triples of the observation without calibrating. if 1, only simulate, if 2, simulate and add to input, if 3, simulate and subtract from input (For a>0, multiplied by solutions if solutions file is also given): default 0, which means no simulation. 
 - -z ignore_clusters: if only doing a simulation, ignore the cluster ids listed in this file
 - -b 0,1 : if 1, solve for each channel: default 0
 - -B 0,1 : if 1, predict array beam, which means that SAGECal will compute and take account of the sensitivity profile of the telescope for this particular observation, i.e. the array beam: default 0
