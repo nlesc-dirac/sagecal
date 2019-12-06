@@ -17,12 +17,13 @@ RUN apt-get install -y \
     mpich \
     fftw-dev libfftw3-dev libfftw3-mpi3 libfftw3-bin
 
+## Download and build sagecal
+# RUN git clone https://github.com/nlesc-dirac/sagecal.git && \ 
+#     cd sagecal && \
+#     mkdir build-ubuntu && cd build-ubuntu && \
+#     cmake .. -DCMAKE_INSTALL_PREFIX=/opt/sagecal && \
+#     make -j4 && \
+#     make install
 
-## compile sagecal
-#RUN mkdir /build && cd /build && \
-#    mkdir build-ubuntu && cd build-ubuntu && \
-#    cmake .. -DCMAKE_INSTALL_PREFIX=/opt/sagecal && \
-#    make -j4 && \
-#    make install
-#RUN ls -alsrt /opt/sagecal && \
-#    /opt/sagecal/bin/sagecal
+# RUN   ls -alsrt /opt/sagecal && \
+#    /opt/sagecal/bin/sagecal -h
