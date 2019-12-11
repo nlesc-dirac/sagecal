@@ -36,32 +36,39 @@ sagecal -d MS -s sky.txt -c cluster.txt -C epochs -M minibatches
 Advanced options:
 
 - -k cluster_id : correct residuals with solution of this cluster : default -99999
-- -o robust rho, robust matrix inversion during correction: default 1e-09
+- -o rho, for robust matrix inversion during correction: default 1e-09. Rho is a small value to make sure that the inverse of J does not blow up when J is singular (inverse J+rho*I).
 - -J 0,1 : if >0, use phase only correction: default 0
-- -j 0,1,2... 0 : OSaccel, 1 no OSaccel, 2: OSRLM, 3: RLM, 4: RTR, 5: RRTR, 6:NSD : default 5
-- -L robust nu, lower bound: default 2
-- -H robust nu, upper bound: default 30
+- | -j 0,1,2... 0 : OSaccel, 1 no OSaccel, 2: OSRLM, 3: RLM, 4: RTR, 5: RRTR, 6:NSD : default 5
+  | * OSaccel: Ordered Subsets acceleration
+  | * OSRLM: Ordered Subsets accelerated Robust Levenberg Marquardt
+  | * RLM: Robust Levenberg Marquardt
+  | * RTR: Riemannian Trust Region
+  | * RRTR: Robust Riemannian Trust Region
+  | * NSD: Nesterov's Steepest Descent
+
+- -L Lower bound for nu, a parameter in the robust noise model: default 2. 
+- -H Upper bound for nu: a parameter in the robust noise model: default 30
 - -W pre-whiten data: default 0
 - -R randomize iterations: default 1
 - -S GPU heap size (MB): default 32
 - -D 0,1,2 : if >0, enable diagnostics (Jacobian Leverage) 1 replace Jacobian Leverage as output, 2 only fractional noise/leverage is printed: default 0
 - -q solutions.txt: if given, initialize solutions by reading this file (need to have the same format as a solution file, only solutions for 1 timeslot needed)
  
-  Stochastic mode:
+  | Stochastic mode:
+  | -C epochs, if >0, use stochastic calibration: default 0
+  | -M minibatches, must be >0, split data to this many minibatches: default 1
+  | -w mini-bands, must be >0, split channels to this many mini-bands for bandpass calibration: default 1
+  |
+  | Stochastic mode with consensus:
+  | -A ADMM iterations: default 1
+  | -P consensus polynomial terms: default 2
+  | -Q consensus polynomial type (0,1,2,3): default 2
+  | -r regularization factor: default 5
 
-  - -C epochs, if >0, use stochastic calibration: default 0
-  - -M minibatches, must be >0, split data to this many minibatches: default 1
-  - -w mini-bands, must be >0, split channels to this many mini-bands for bandpass calibration: default 1
-  - 
-  - Stochastic mode with consensus:
-  - -A ADMM iterations: default 1
-  - -P consensus polynomial terms: default 2
-  - -Q consensus polynomial type (0,1,2,3): default 2
-  - -r regularization factor: default 5
-
-Note: In stochastic mode, no hybrid solutions are allowed.
-All clusters should have 1 in the second column of cluster file.
-Report bugs to <sarod@users.sf.net>
+| Note: 
+| - In stochastic mode, no hybrid solutions are allowed.
+| - All clusters should have 1 in the second column of cluster file.
+| - Report bugs at https://github.com/nlesc-dirac/sagecal/issues.
 
 .. _`Measurement Set`: https://casa.nrao.edu/casadocs/casa-5.1.0/reference-material/measurement-set
 .. _`Wikipedia page on LBFGS`: https://en.wikipedia.org/wiki/Limited-memory_BFGS
