@@ -1,0 +1,63 @@
+---
+- hosts: all
+  tasks:
+
+    - name: Add kern-suite repository
+      apt_repository:
+        validate_certs: no
+        repo: 'ppa:kernsuite/kern-5'
+        state: present
+        update_cache: yes
+
+    - name: Install SageCal dependencies
+      apt: pkg={{item}} state=present update_cache=yes cache_valid_time=604800
+      with_items:
+        - git
+        - cmake 
+        - g++
+        - pkg-config
+        - libcfitsio-bin
+        - libcfitsio-dev
+        - libopenblas-base 
+        - libopenblas-dev
+        - wcslib-dev
+        - wcslib-tools
+        - libglib2.0-dev
+        - libcasa-casa2
+        - casacore-dev
+        - casacore-data
+        - casacore-tools
+        - gfortran
+        - mpich
+        - fftw3-dev
+        - libfftw3-mpi3
+        - libfftw3-bin
+        - python3-pip
+        - openjdk-11-jdk
+        - openjdk-11-jre-headless
+        - ipython
+        - rsync
+
+    - name: Clone SageCal
+      vars:
+          clone_dir: "/tmp/sagecal"
+      git: repo=https://github.com/nlesc-dirac/sagecal.git
+          dest={{ clone_dir }}
+          accept_hostkey=yes
+          force=yes
+      register: gitclone
+
+    - name: Create build directory
+      vars:
+          build_dir: "/tmp/sagecal/build"
+      file: state=directory path={{ build_dir }}
+
+    - name: Build and install SageCal
+      vars:
+          build_dir: "/tmp/sagecal/build"    
+      command: "{{ item }} chdir={{ build_dir }}"
+      with_items:
+        - cmake .. -DCMAKE_INSTALL_PREFIX=/opt/dirac
+        - make
+        - make install
+      # when: gitclone.changed

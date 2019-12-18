@@ -46,9 +46,6 @@
 #include <cuda_runtime_api.h>
 #endif /* HAVE_CUDA */
 
-#ifndef MAX_GPU_ID
-#define MAX_GPU_ID 3 /* use 0 (1 GPU), 1 (2 GPUs), ... */
-#endif
 /* default value for threads per block */
 #ifndef DEFAULT_TH_PER_BK 
 #define DEFAULT_TH_PER_BK 64
@@ -204,17 +201,19 @@ extern int
 precalculate_coherencies(double *u, double *v, double *w, complex double *x, int N,
    int Nbase, baseline_t *barr,  clus_source_t *carr, int M, double freq0, double fdelta, double tdelta, double dec0, double uvmin, double uvmax, int Nt);
 
-
-
-/* rearranges coherencies for GPU use later */
-/* barr: 2*Nbase x 1
-   coh: M*Nbase*4 x 1 complex
-   ddcoh: M*Nbase*8 x 1
-   ddbase: 2*Nbase x 1 (sta1,sta2) = -1 if flagged
+/* multi-freq version of precalculate_coherencies() */
+/*
+  x: coherencies size Nbase*tilesz*4*M*Nchan x 1
+   ordered by XX(re,im),XY(re,im),YX(re,im), YY(re,im), baseline, timeslots
+   same order repeated per each channel
+  freqs: Nchanx1 array of frequencies
+  Nbase: is actually Nbase*tilesz of original problem
 */
-/* ddbase: 3*Nbase x 1 (sta1,sta2,flag) */
 extern int
-rearrange_coherencies2(int Nbase, baseline_t *barr, complex double *coh, double *ddcoh, short *ddbase, int M, int Nt);
+precalculate_coherencies_multifreq(double *u, double *v, double *w, complex double *x, int N,
+   int Nbase, baseline_t *barr,  clus_source_t *carr, int M, double *freqs, int Nchan, double fdelta, double tdelta, double dec0, double uvmin, double uvmax, int Nt);
+
+
 
 /* update baseline flags, also make data zero if flagged
   this is needed for solving (calculate error) ignore flagged data */
@@ -363,6 +362,12 @@ precalculate_coherencies_withbeam(double *u, double *v, double *w, complex doubl
    int Nbase, baseline_t *barr,  clus_source_t *carr, int M, double freq0, double fdelta, double tdelta, double dec0, double uvmin, double uvmax, 
  double ph_ra0, double ph_dec0, double ph_freq0, double *longitude, double *latitude, double *time_utc, int tileze, int *Nelem, double **xx, double **yy, double **zz, int Nt);
 
+/* multi-freq version of precalculate_coherencies_withbeam */
+extern int
+precalculate_coherencies_multifreq_withbeam(double *u, double *v, double *w, complex double *x, int N,
+   int Nbase, baseline_t *barr,  clus_source_t *carr, int M, double *freqs, int Nchan, double fdelta, double tdelta, double dec0, double uvmin, double uvmax, 
+ double ph_ra0, double ph_dec0, double ph_freq0, double *longitude, double *latitude, double *time_utc, int tileze, int *Nelem, double **xx, double **yy, double **zz, int Nt);
+
 
 extern int
 predict_visibilities_multifreq_withbeam(double *u,double *v,double *w,double *x,int N,int Nbase,int tilesz,baseline_t *barr, clus_source_t *carr, int M,double *freqs,int Nchan, double fdelta,double tdelta, double dec0,
@@ -397,6 +402,13 @@ calculate_residuals_multifreq_withbeam_gpu(double *u,double *v,double *w,double 
 extern int
 predict_visibilities_withsol_withbeam_gpu(double *u,double *v,double *w,double *p,double *x, int *ignorelist, int N,int Nbase,int tilesz,baseline_t *barr, clus_source_t *carr, int M,double *freqs,int Nchan, double fdelta,double tdelta, double dec0,
 double ph_ra0, double ph_dec0, double ph_freq0, double *longitude, double *latitude, double *time_utc, int *Nelem, double **xx, double **yy, double **zz, int dobeam, int Nt, int add_to_data, int ccid, double rho, int phase_only);
+
+extern int
+precalculate_coherencies_multifreq_withbeam_gpu(double *u, double *v, double *w, complex double *x, int N,
+   int Nbase, baseline_t *barr,  clus_source_t *carr, int M, double *freqs,int Nchan, double fdelta, double tdelta, double dec0, double uvmin, double uvmax, 
+ double ph_ra0, double ph_dec0, double ph_freq0, double *longitude, double *latitude, double *time_utc, int tileze, int *Nelem, double **xx, double **yy, double **zz, int dobeam, int Nt);
+
+
 #endif /*!HAVE_CUDA */
 
 /****************************** predict_model.cu ****************************/

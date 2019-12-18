@@ -453,7 +453,7 @@ __global__ void kernel_jacf_wt(int Nbase, int M, double *jac, double *coh, doubl
 
 __global__ void kernel_setweights(int N, double *wt, double alpha){
   unsigned int tid = blockIdx.x*blockDim.x + threadIdx.x;
-  /* make sure to use only M threads */
+  /* make sure to use only N threads */
   if (tid<N) {
      wt[tid]=alpha;
   }
@@ -461,15 +461,24 @@ __global__ void kernel_setweights(int N, double *wt, double alpha){
 
 __global__ void kernel_hadamard(int N, double *wt, double *x){
   unsigned int tid = blockIdx.x*blockDim.x + threadIdx.x;
-  /* make sure to use only M threads */
+  /* make sure to use only N threads */
   if (tid<N) {
      x[tid]*=wt[tid];
   }
 }
 
+
+__global__ void kernel_hadamard_sum(int N, double *y, double *x, double *w){
+  unsigned int tid = blockIdx.x*blockDim.x + threadIdx.x;
+  /* make sure to use only N threads */
+  if (tid<N) {
+     y[tid]+=x[tid]*w[tid];
+  }
+}
+
 __global__ void kernel_updateweights(int N, double *wt, double *x, double *q, double nu){
   unsigned int tid = blockIdx.x*blockDim.x + threadIdx.x;
-  /* make sure to use only M threads */
+  /* make sure to use only N threads */
   if (tid<N) {
      wt[tid]=((nu+1.0)/(nu+x[tid]*x[tid]));
      q[tid]=wt[tid]-log(wt[tid]); /* so that its +ve */
@@ -478,7 +487,7 @@ __global__ void kernel_updateweights(int N, double *wt, double *x, double *q, do
 
 __global__ void kernel_sqrtweights(int N, double *wt){
   unsigned int tid = blockIdx.x*blockDim.x + threadIdx.x;
-  /* make sure to use only M threads */
+  /* make sure to use only N threads */
   if (tid<N) {
      wt[tid]=sqrt(wt[tid]); 
   }
@@ -545,6 +554,29 @@ cudakernel_hadamard(int ThreadsPerBlock, int BlocksPerGrid, int N, double *wt, d
   cudaError_t error;
 #endif
   kernel_hadamard<<< BlocksPerGrid, ThreadsPerBlock >>>(N, wt, x);
+  cudaDeviceSynchronize();
+#ifdef CUDA_DBG
+  error = cudaGetLastError();
+  if(error != cudaSuccess)
+  {
+    // print the CUDA error message and exit
+    fprintf(stderr,"CUDA error: %s :%s: %d\n", cudaGetErrorString(error),__FILE__,__LINE__);
+    exit(-1);
+  }
+#endif
+
+
+}
+
+
+/* sum hadamard product by a cuda kernel y=y+x.*w (x.*w elementwise) */
+void
+cudakernel_hadamard_sum(int ThreadsPerBlock, int BlocksPerGrid, int N, double *y, double *x, double *w) {
+
+#ifdef CUDA_DBG
+  cudaError_t error;
+#endif
+  kernel_hadamard_sum<<< BlocksPerGrid, ThreadsPerBlock >>>(N, y, x, w);
   cudaDeviceSynchronize();
 #ifdef CUDA_DBG
   error = cudaGetLastError();

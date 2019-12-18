@@ -86,24 +86,6 @@
 
 #include "Common.h"
 
-/* given the epoch jd_tdb2,
- calculate rotation matrix params needed to precess from J2000
-   NOVAS (Naval Observatory Vector Astronomy Software)
-   PURPOSE:
-      Precesses equatorial rectangular coordinates from one epoch to
-      another.  One of the two epochs must be J2000.0.  The coordinates
-      are referred to the mean dynamical equator and equinox of the two
-      respective epochs.
-
-   REFERENCES:
-      Explanatory Supplement To The Astronomical Almanac, pp. 103-104.
-      Capitaine, N. et al. (2003), Astronomy And Astrophysics 412,
-         pp. 567-586.
-      Hilton, J. L. et al. (2006), IAU WG report, Celest. Mech., 94,
-         pp. 351-367.
-
-*/
-
 /* convert types */
 /* both arrays size nx1
    Nt: no of threads
@@ -151,7 +133,7 @@ typedef struct persistent_data_t_ {
   int *lengths; /* Nbatchx1 lengths of minibatches */
   /* 2 vectors : size mx1, for on-line estimation of var(grad), m: no. of params */
   double *running_avg, *running_avg_sq;
-  int niter; /* keep track of cumulative no. of iterations */
+  int niter; /* keep track of cumulative no. of iterations, needed for online variance */
 } persistent_data_t;
 
 /* user routines for setting up and clearing persistent data structure
@@ -222,6 +204,74 @@ lbfgs_fit_robust_cuda(
    double *p, double *x, int m, int n, int itmax, int lbfgs_m, int gpu_threads, void *adata);
 #endif /* HAVE_CUDA */
 
+/****************************** lbfgs_minibatch_cuda.c ****************************/
+#ifdef HAVE_CUDA
+
+/* struct for passing info between batches in minibatch mode
+  also pointers to GPU memory for running LBFGS 
+  all allocations will be on the GPU */
+typedef struct persistent_data_t_ {
+  /* y,s pairs */
+  double *y,*s; /* allocated by initialization routine */
+  double *rho; /* storage for product 1/y^T s */
+  int nfilled; /* how many <= lbfgs_m of y,s pairs are filled? valid range 0...lbfgs_m, start value 0 */
+  int vacant; /* next vacant offset, cycle in 0...lbfgs_m-1,0,1,...lbfgs_m-1 etc. start value 0 */
+
+  int Nt; /* no. of threads */
+
+  /* 2 vectors : size mx1, for on-line estimation of var(grad), m: no. of params */
+  double *running_avg, *running_avg_sq;
+  
+  /* GPU handles created by attach_gpu_to_thread() */
+  /* note: cost,grad functions may attach to GPU separately */
+  cublasHandle_t *cbhandle;
+  cusolverDnHandle_t *solver_handle;
+  int niter; /* keep track of cumulative no. of iterations, needed for online variance  */
+
+
+  /* following are not always used */
+  /* location and size of data to work in each minibatch
+   (changed  at each minibatch)  */
+  int offset; /* offset 0..n-1 ; n: total data points*/
+  int nlen; /* length 1..n ; n: total data points */
+
+} persistent_data_t;
+
+/* user routines for setting up and clearing persistent data structure
+   for using stochastic LBFGS : On the GPU */
+/* First, a GPU chosen and attach to it as well */
+/* initialization of persistent data, (user needs to call this)
+   Setting up minibatch info:
+   pt: blank struct persistent data 
+   Nminibatch:  how many minibatches (data is divided into this many)
+   (Note: total LBFGS iterations: itmax*Nminibatch*Nepoch)
+
+   Following are same as used in the lbfgs_fit routine 
+   m: size of parameter vector
+   n: size of data
+   lbfgs_m: LBFGS memory size
+   Nt: no. of threads
+*/
+extern int 
+lbfgs_persist_init(persistent_data_t *pt, int Nminibatch, int m, int n, int lbfgs_m, int Nt);
+
+/* clearing persistent struct after running stochastic LBFGS */
+extern int 
+lbfgs_persist_clear(persistent_data_t *pt);
+
+/* LBFGS routine,
+ * user has to give cost_func() and grad_func()
+ * indata (persistent_data_t *) should be initialized beforehand
+ */
+extern int
+lbfgs_fit_cuda(
+   double (*cost_func)(double *p, int m, void *adata),
+   void (*grad_func)(double *p, double *g, int m, void *adata),
+   /* adata: user supplied data,
+   indata: persistant data that need to be kept between batches */
+   /* p:mx1 vector, M: memory size */
+   double *p, int m, int itmax, int M, void *adata, persistent_data_t *indata); /* indata=NULL for full batch */
+#endif /* HAVE_CUDA */
 /****************************** robust_lbfgs.c ****************************/
 typedef struct thread_data_logf_t_ {
   double *f;
@@ -248,10 +298,66 @@ lbfgs_fit_wrapper(
 
 
 /****************************** robust_batchmode_lbfgs.c ****************************/
-/* batch mode version of LBFGS */
+/****************************** robust_batchmode_lbfgs_cuda.c ****************************/
+/* minibatch mode version of LBFGS */
 extern int
 lbfgs_fit_robust_wrapper_minibatch(
    double *p, double *x, int m, int n, int itmax, int M, int gpu_threads, void *adata);
+
+
+/* Note: ptdata below will differ for CPU and GPU versions,
+ * but the interface is the same 
+ */
+/* caller function for minibatch mode */
+/* note that tilesz used here will be normally smaller than the orignal full batch size 
+   coh: includes Nchan channels, instead of 1 : Nbase*tilesz*4*M*Nchan x 1  
+   x: data size Nbase*8*tilesz*Nchan x 1
+    ordered by XX(re,im),XY(re,im),YX(re,im), YY(re,im), baseline, timeslots
+    and repeating this for each channel
+
+   following are used to solve for correct parameters in hybrid mode
+   nminibatch: minibatch number 0...(totalminibatch-1)
+   so the baseline offset for this minibatch is = nminibatch*(tilesz*Nbase)
+   totalminibatch: total number of minibatches
+
+*/
+#ifdef HAVE_CUDA
+extern int
+bfgsfit_minibatch_visibilities(double *u, double *v, double *w, double *x, int N,
+   int Nbase, int tilesz, short *hbb, int *ptoclus, complex double *coh, int M, int Mt, double *freqs, int Nf, double fdelta, double *p, int Nt, int max_lbfgs, int lbfgs_m, int gpu_threads, int solver_mode, double robust_nu, double *res_0, double *res_1, persistent_data_t *ptdata,int nminibatch,int totalminibatch);
+#else /* !HAVE_CUDA */
+extern int
+bfgsfit_minibatch_visibilities(double *u, double *v, double *w, double *x, int N,
+   int Nbase, int tilesz, baseline_t *barr, clus_source_t *carr, complex double *coh, int M, int Mt, double *freqs, int Nf, double fdelta, double *p, int Nt, int max_lbfgs, int lbfgs_m, int gpu_threads, int solver_mode, double robust_nu, double *res_0, double *res_1, persistent_data_t *ptdata,int nminibatch,int totalminibatch);
+#endif /* !HAVE_CUDA */
+
+/* consensus optimization version,
+   cost= original_cost + y^T(x-Bz) + rho/2(x-Bz)^T (x-Bz)
+   grad = original_grad + y + rho(x-Bz),
+   extra inputs
+   y: 8NMt Lagrange multiplier
+   Bz: (z) : 8NMt constraint
+   rho : Mtx1 regularization factors
+
+   baseline_t *barr replaced by short *hbb :size 2*Nbase*tilesz x 1
+   clus_source_t *carr replaced by int *ptoclus  : size 2*M x 1
+
+   following are used to solve for correct parameters in hybrid mode
+   nminibatch: minibatch number 0...(totalminibatch-1)
+   so the baseline offset for this minibatch is = nminibatch*(tilesz*Nbase)
+   totalminibatch: total number of minibatches
+*/
+#ifdef HAVE_CUDA
+extern int
+bfgsfit_minibatch_consensus(double *u, double *v, double *w, double *x, int N,
+   int Nbase, int tilesz, short *hbb, int *ptoclus, complex double *coh, int M, int Mt, double *freqs, int Nf, double fdelta, double *p, double *y, double *z, double *rho, int Nt, int max_lbfgs, int lbfgs_m, int gpu_threads, int solver_mode, double robust_nu, double *res_0, double *res_1, persistent_data_t *ptdata,int nminibatch, int totalminibatch);
+#else /* !HAVE_CUDA */
+extern int
+bfgsfit_minibatch_consensus(double *u, double *v, double *w, double *x, int N,
+   int Nbase, int tilesz, baseline_t *barr, clus_source_t *carr, complex double *coh, int M, int Mt, double *freqs, int Nf, double fdelta, double *p, double *y, double *z, double *rho, int Nt, int max_lbfgs, int lbfgs_m, int gpu_threads, int solver_mode, double robust_nu, double *res_0, double *res_1, persistent_data_t *ptdata,int nminibatch, int totalminibatch);
+#endif /* !HAVE_CUDA */
+
+
 
 /****************************** mderiv.cu ****************************/
 /* cuda driver for kernel */
@@ -349,6 +455,10 @@ cudakernel_setweights(int ThreadsPerBlock, int BlocksPerGrid, int N, double *wtd
 extern void
 cudakernel_hadamard(int ThreadsPerBlock, int BlocksPerGrid, int N, double *wt, double *x);
 
+/* sum hadamard product by a cuda kernel y=y+x.*w (x.*w elementwise) */
+extern void
+cudakernel_hadamard_sum(int ThreadsPerBlock, int BlocksPerGrid, int N, double *y, double *x, double *w);
+
 /* update weights by a cuda kernel */
 extern void
 cudakernel_updateweights(int ThreadsPerBlock, int BlocksPerGrid, int N, double *wt, double *x, double *q, double robust_nu);
@@ -419,6 +529,12 @@ cudakernel_evaluatenu_fl(int ThreadsPerBlock, int BlocksPerGrid, int Nd, float q
 extern void
 cudakernel_evaluatenu_fl_eight(int ThreadsPerBlock, int BlocksPerGrid, int Nd, float qsum, float *q, float deltanu,float nulow, float nu0);
 
+/****************************** lbfgs_multifreq.cu ****************************/
+extern void
+cudakernel_lbfgs_multifreq_r_robust(int Nbase, int tilesz, int Nchan, int M, int Ns, int Nbasetotal, int boff, double *x, double *coh, double *p, int m, short *bb, int *ptoclus, double *grad, double robust_nu);
+
+extern double
+cudakernel_lbfgs_multifreq_cost_robust(int Nbase, int Nchan, int M, int Ns, int Nbasetotal, int boff, double *x, double *coh, double *p, int m, short *bb, int *ptoclus, double robust_nu);
 /****************************** clmfit_cuda.c ****************************/
 #ifdef HAVE_CUDA
 /* LM with GPU */
@@ -1340,6 +1456,16 @@ extern int
 update_global_z_multi(double *Z,int N,int M,int Npoly,double *z,double *Bi, int Nt);
 
 
+/* soft threshold elementwise
+   z: Nx1 data vector (or matrix) : this is modified
+   lambda: threshold
+   Nt: no. of threads
+
+   Z_i ={ Z_i-lambda if Z_i > lambda, Z_i+lambda  if Z_i<-lambda, else 0}
+*/
+extern int
+soft_threshold_z(double *z, int N, double lambda, int Nt);
+
 /* generate a random integer in the range 0,1,...,maxval */
 extern int
 random_int(int maxval);
@@ -1399,7 +1525,7 @@ minimize_viz_full_pth(double *p, double *x, int m, int n, void *data);
 /* fit visibilities
   u,v,w: u,v,w coordinates (wavelengths) size Nbase*tilesz x 1
   u,v,w are ordered with baselines, timeslots
-  x: data to write size Nbase*8*tileze x 1
+  x: data to write size Nbase*8*tilesz x 1
    ordered by XX(re,im),XY(re,im),YX(re,im), YY(re,im), baseline, timeslots
   N: no of stations
   Nbase: no of baselines
