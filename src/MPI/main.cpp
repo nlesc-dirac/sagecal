@@ -90,6 +90,10 @@ print_help(void) {
    cout << "-V if given, enable verbose output: default "<<Data::verbose<<endl;
    cout << "-M if given, evaluate AIC/MDL criteria for polynomials starting from 1 term to the one given by -P and suggest the best polynomial terms to use based on the minimum AIC/MDL: default "<<Data::mdl<<endl;
    cout << "-q solutions.txt: if given, initialize solutions by reading this file (need to have the same format as a solution file, only solutions for 1 timeslot needed)"<< endl;
+   cout<<endl<<"Stochastic mode:"<<endl;
+   cout << "-N epochs, if >0, use stochastic calibration: default "<<Data::stochastic_calib_epochs<< endl;
+   cout << "-b minibatches, must be >0, split data to this many minibatches: default "<<Data::stochastic_calib_minibatches<< endl;
+   cout << "-w mini-bands, must be >0, split channels to this many mini-bands for bandpass calibration: default "<<Data::stochastic_calib_bands<< endl;
    cout <<"Report bugs to <sarod@users.sf.net>"<<endl;
 }
 
@@ -97,7 +101,7 @@ print_help(void) {
 void 
 ParseCmdLine(int ac, char **av) {
     int c;
-    while((c=getopt(ac, av, "c:e:f:g:j:k:l:m:n:o:p:q:r:s:t:x:y:A:B:C:E:F:I:J:K:L:O:P:Q:G:H:R:S:T:W:E:MVh"))!= -1)
+    while((c=getopt(ac, av, ":b:c:e:f:g:j:k:l:m:n:o:p:q:r:s:t:w:x:y:A:B:C:E:F:G:H:I:J:K:L:N:O:P:Q:R:S:T:W:E:MVh"))!= -1)
     {
         switch(c)
         {
@@ -218,9 +222,22 @@ ParseCmdLine(int ac, char **av) {
             case 'W':
                 whiten= atoi(optarg);
                 break;
+            case 'N':
+                Data::stochastic_calib_epochs= atoi(optarg);
+                break;
+            case 'b':
+                Data::stochastic_calib_minibatches= atoi(optarg);
+                break;
+            case 'w':
+                Data::stochastic_calib_bands= atoi(optarg);
+                break;
             case 'h': 
                 print_help();
                 MPI_Finalize();
+                exit(1);
+            case ':':
+                cout<<"Error: A value is missing for one of the options"<<endl;
+                print_help();
                 exit(1);
             default:
                 print_help();
