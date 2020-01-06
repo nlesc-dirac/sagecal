@@ -114,7 +114,7 @@ run_minibatch_consensus_calibration(void) {
       count+=nchan[ii];
     }
 
-    openblas_set_num_threads(1);//Data::Nt;
+    openblas_set_num_threads(1);
     /**********************************************************/
      int M,Mt,ci,cj,ck;
    /* parameters */

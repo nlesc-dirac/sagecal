@@ -283,10 +283,22 @@ main(int argc, char **argv) {
  /* find out my identity and default communicator */
  MPI_Comm_rank(MPI_COMM_WORLD,&myrank);
  /* both slave and master will parse command line again */
- if (myrank==0) {
-  sagecal_master(argc,argv);
+ /* full batch mode */
+
+ ParseCmdLine(argc, argv); /* need to parse input here as well */
+ if (Data::stochastic_calib_epochs==0) {
+  if (myrank==0) {
+   sagecal_master(argc,argv);
+  } else {
+   sagecal_slave(argc,argv);
+  }
  } else {
-  sagecal_slave(argc,argv);
+  /* stochastic calibration */
+  if (myrank==0) {
+   sagecal_stochastic_master(argc,argv);
+  } else {
+   sagecal_stochastic_slave(argc,argv);
+  }
  }
  /* shutdown MPI */
  MPI_Finalize();
