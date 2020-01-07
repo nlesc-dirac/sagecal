@@ -419,7 +419,7 @@ cout<<"Slave "<<myrank<<" has nothing to do"<<endl;
 
 
     /* ADMM memory */
-    double *Z,*Zold,*Y,*z,*B,*Bii,*rhok;
+    double *Z,*Zold,*Zavg,*Y,*z,*B,*Bii,*rhok;
     /* Z: 2Nx2 x Npoly x Mt */
     /* keep ordered by Mt (one direction together) */
     if ((Z=(double*)calloc((size_t)iodata_vec[0].N*8*Npoly*Mt,sizeof(double)))==0) {
@@ -427,6 +427,10 @@ cout<<"Slave "<<myrank<<" has nothing to do"<<endl;
      exit(1);
     }
     if ((Zold=(double*)calloc((size_t)iodata_vec[0].N*8*Npoly*Mt,sizeof(double)))==0) {
+     fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
+     exit(1);
+    }
+    if ((Zavg=(double*)calloc((size_t)iodata_vec[0].N*8*Npoly*Mt,sizeof(double)))==0) {
      fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
      exit(1);
     }
@@ -464,6 +468,9 @@ cout<<"Slave "<<myrank<<" has nothing to do"<<endl;
      fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
      exit(1);
     }
+    /* also find the min,max freq values where solution is taken */
+    double min_f,max_f;
+    min_f=1e15; max_f=-1e15;
     for (ii=0; ii<nsolbw; ii++) {
       /* consider the case where frequencies are non regular */
       for (int fii=0; fii<nchan[ii]; fii++) {
@@ -471,15 +478,54 @@ cout<<"Slave "<<myrank<<" has nothing to do"<<endl;
       }
       ffreq[ii]/=(double)(nchan[ii]); /* mean */
       printf("%d %lf %lf\n",ii,ffreq[ii],iodata_vec[0].freq0);
+      min_f=(min_f>ffreq[ii]?ffreq[ii]:min_f);
+      max_f=(max_f<ffreq[ii]?ffreq[ii]:max_f);
     }
+
+    /* send min,max freq to master */
+    bufdouble=new double[2];
+    bufdouble[0]=min_f;
+    bufdouble[1]=max_f;
+
+    MPI_Send(bufdouble, 2, MPI_DOUBLE, 0,TAG_MSAUX, MPI_COMM_WORLD);
+
+    delete [] bufdouble;
+    bufdouble=new double[3];
+    /* get back global min,max freq from master */
+    MPI_Recv(bufdouble, 3, /* min, max freq */
+           MPI_DOUBLE, 0, TAG_MSAUX, MPI_COMM_WORLD, &status);
+    min_f=bufdouble[0];
+    max_f=bufdouble[1];
+    double ref_f=bufdouble[2];
+    printf("%d New range %lf %lf %lf\n",myrank,min_f,max_f,ref_f);
+    delete [] bufdouble;
+    /* resize memory so that polynomials are generated for expanded freq range [min_f,ffreq,max_f] */
+    double *Bext, *ffreq2;
+    if ((Bext=(double*)calloc((size_t)Npoly*(nsolbw+2),sizeof(double)))==0) {
+     fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
+     exit(1);
+    }
+    if ((ffreq2=(double*)calloc((size_t)(nsolbw+2),sizeof(double)))==0) {
+     fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
+     exit(1);
+    }
+    memcpy(ffreq2,ffreq,(size_t)(nsolbw)*sizeof(double));
+    ffreq2[nsolbw]=min_f;
+    ffreq2[nsolbw+1]=max_f;
+
+
     /* setup polynomials */
-    setup_polynomials(B, Npoly, nsolbw, ffreq, iodata_vec[0].freq0,(Npoly==1?1:PolyType));
+    setup_polynomials(Bext, Npoly, nsolbw+2, ffreq2, ref_f,(Npoly==1?1:PolyType));
+
+    memcpy(B,Bext,(size_t)(nsolbw*Npoly)*sizeof(double));
 
     setweights(Mt*nsolbw,rhok,Data::admm_rho,Data::Nt);
     /* find inverse of B for each cluster, solution */
     find_prod_inverse_full(B,Bii,Npoly,nsolbw,Mt,rhok,Data::Nt);
 
     free(ffreq);
+    free(ffreq2);
+    free(Bext);
 
     /* vector for keeping residual of each miniband and flag vector */
     double *resband;
@@ -573,11 +619,9 @@ cout<<"Slave "<<myrank<<" quitting"<<endl;
        (*msitr[cm])++;
       }
       tilex+=Data::TileSize;
-cout<<"Slave "<<myrank<<" skipping"<<endl;
       continue;
      }
 
-cout<<"Slave "<<myrank<<" start"<<endl;
 
      memset(Y,0,sizeof(double)*(size_t)iodata_vec[0].N*8*Mt*nsolbw);
      for (int nadmm=0; nadmm<Nadmm; nadmm++) {
@@ -658,7 +702,7 @@ cout<<"Slave "<<myrank<<" start"<<endl;
        res_0+=res_00[0];
        res_1+=res_01[0];
        resband[ii]=res_01[0];
-       printf("admm=%d epoch=%d minibatch=%d band=%d %lf %lf\n",nadmm,nepch,nmb,ii,res_00[0],res_01[0]);
+       printf("%d: admm=%d epoch=%d minibatch=%d band=%d %lf %lf\n",myrank,nadmm,nepch,nmb,ii,res_00[0],res_01[0]);
       }
       /* find average residual over bands*/
       res_0/=(double)nsolbw;
@@ -722,7 +766,14 @@ cout<<"Slave "<<myrank<<" start"<<endl;
       } /* epoch */
       
       /* send Z to master and get back the average */
+      MPI_Send(Z, iodata_vec[0].N*8*Npoly*Mt, MPI_DOUBLE, 0,TAG_MSAUX, MPI_COMM_WORLD);
+      MPI_Recv(Zavg, iodata_vec[0].N*8*Npoly*Mt, MPI_DOUBLE, 0,TAG_MSAUX, MPI_COMM_WORLD,&status);
 
+      /* find error */
+      my_dcopy(iodata_vec[0].N*8*Npoly*Mt,Z,1,Zold,1);
+      my_daxpy(iodata_vec[0].N*8*Npoly*Mt,Zavg,-1.0,Zold);
+      cout<<myrank<<":FEDA: "<<nadmm<<" dual residual="<<my_dnrm2(iodata_vec[0].N*8*Npoly*Mt,Zold)/sqrt((double)8*iodata_vec[0].N*Npoly*Mt)<<endl;
+      my_dcopy(iodata_vec[0].N*8*Npoly*Mt,Zavg,1,Z,1);
      } /* admm */
 
      if (start_iter) { start_iter=0; }
@@ -963,6 +1014,7 @@ beam_vec[0].p_ra0,beam_vec[0].p_dec0,iodata_vec[0].freq0,beam_vec[0].sx,beam_vec
 
   free(Z);
   free(Zold);
+  free(Zavg);
   free(z);
   free(Y);
   free(B);

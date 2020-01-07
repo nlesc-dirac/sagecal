@@ -244,7 +244,7 @@ cout<<"Slave "<<cm+1<<" MS="<<thismsid<<" N="<<bufint[1]<<" M="<<bufint[2]<<"/"<
          if (cm==0 && ct==0) { /* update metadata */
           iodata.N=bufint[1];
           Mo=bufint[2];
-          iodata.M=bufint[3];
+          iodata.M=bufint[3]; /* Note M here is Mt in slave */
           iodata.tilesz=bufint[4];
           iodata.totalt=bufint[5];
 
@@ -271,21 +271,43 @@ cout<<"Slave "<<cm+1<<" MS="<<thismsid<<" N="<<bufint[1]<<" M="<<bufint[2]<<"/"<
    delete [] bufdouble;
 cout<<"Reference frequency (MHz)="<<iodata.freq0*1.0e-6<<endl;
 
-    /* ADMM memory : allocated together for all MS */
+    /* get min,max freq from each slave to find full freq. range */
+    bufdouble = new double[2];
+    double min_f,max_f;
+    min_f=1e15; max_f=-1e15;
+    for (int cm=0; cm<nslaves; cm++) {
+       MPI_Recv(bufdouble, 2, /* min, max freq */
+           MPI_DOUBLE, cm+1, TAG_MSAUX, MPI_COMM_WORLD, &status);
+
+      min_f=(min_f>bufdouble[0]?bufdouble[0]:min_f);
+      max_f=(max_f<bufdouble[1]?bufdouble[1]:max_f);
+    }
+cout<<"Freq range (MHz) ["<<min_f*1e-6<<","<<max_f*1e-6<<"]"<<endl;
+    delete [] bufdouble;
+    bufdouble = new double[3];
+    /* send min,max and reference freq to each slave to setup polynomials */
+    bufdouble[0]=min_f;
+    bufdouble[1]=max_f;
+    bufdouble[2]=iodata.freq0;
+    for (int cm=0; cm<nslaves; cm++) {
+     MPI_Send(bufdouble, 3, MPI_DOUBLE, cm+1,TAG_MSAUX, MPI_COMM_WORLD);
+    }
+    delete [] bufdouble;
+    /* ADMM global memory : allocated together for all slaves */
     double *Z;
-    /* Z: 2Nx2 x Npoly x M */
-    /* keep ordered by M (one direction together) */
-    if ((Z=(double*)calloc((size_t)iodata.N*8*Npoly*iodata.M,sizeof(double)))==0) {
+    /* Z: 2Nx2 x Npoly x M  x nslaves */
+    /* keep ordered by M (one direction together) , per each slave */
+    if ((Z=(double*)calloc((size_t)iodata.N*8*Npoly*iodata.M*nslaves,sizeof(double)))==0) {
      fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
      exit(1);
     }
     /* need a copy */
-    double *Zold;
-    if ((Zold=(double*)calloc((size_t)iodata.N*8*Npoly*iodata.M,sizeof(double)))==0) {
+    double *Zavg;
+    if ((Zavg=(double*)calloc((size_t)iodata.N*8*Npoly*iodata.M,sizeof(double)))==0) {
      fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
      exit(1);
     }
-   
+
    /**********************************************************/
     /* determine how many iterations are needed */
     int Ntime=(iodata.totalt+iodata.tilesz-1)/iodata.tilesz;
@@ -316,7 +338,25 @@ cout<<"Reference frequency (MHz)="<<iodata.freq0*1.0e-6<<endl;
       }
 
 
-      /* receive Z from all slaves */
+    /* receive Z from each slave */
+    for (int cm=0; cm<nslaves; cm++) {
+       MPI_Recv(&Z[cm*iodata.N*8*Npoly*iodata.M], iodata.N*8*Npoly*iodata.M,
+           MPI_DOUBLE, cm+1, TAG_MSAUX, MPI_COMM_WORLD, &status);
+    }
+    /* find the average over quotient manifold, Z is now projected to this average */
+    calculate_manifold_average(iodata.N*Npoly,iodata.M,nslaves,Z,20,Data::randomize,Data::Nt);
+    /* find average value of each nslaves of Z */
+    /* first value */
+    my_dcopy(iodata.N*8*Npoly*iodata.M,Z,1,Zavg,1);
+    for (int cm=1; cm<nslaves; cm++) {
+      my_daxpy(iodata.N*8*Npoly*iodata.M,&Z[cm*iodata.N*8*Npoly*iodata.M],1.0,Zavg);
+    }
+    /* now average */
+    my_dscal(iodata.N*8*Npoly*iodata.M,1.0/(double)nslaves,Zavg); 
+    /* send  back to all slaves */
+    for (int cm=0; cm<nslaves; cm++) {
+     MPI_Send(Zavg, iodata.N*8*Npoly*iodata.M, MPI_DOUBLE, cm+1,TAG_MSAUX, MPI_COMM_WORLD);
+    }
 
 
 
@@ -334,7 +374,7 @@ cout<<"Reference frequency (MHz)="<<iodata.freq0*1.0e-6<<endl;
 
    delete [] iodata.freqs;
    free(Z);
-   free(Zold);
+   free(Zavg);
   /**********************************************************/
 
    cout<<"Done."<<endl;    
