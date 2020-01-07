@@ -287,6 +287,50 @@ cout<<"Reference frequency (MHz)="<<iodata.freq0*1.0e-6<<endl;
     }
    
    /**********************************************************/
+    /* determine how many iterations are needed */
+    int Ntime=(iodata.totalt+iodata.tilesz-1)/iodata.tilesz;
+    /* override if input limit is given */
+    if (Nmaxtime>0 && Ntime>Nmaxtime) {
+      Ntime=Nmaxtime;
+    }
+
+    cout<<"Master total timeslots="<<Ntime<<endl;
+
+    int msgcode;
+
+   /**********************************************************/
+   /* iterate over all data */
+   for (int ct=0; ct<Ntime; ct++)  {
+      /* send start processing signal to slaves */
+      if (Nskip>0 && ct<Nskip) {
+       msgcode=CTRL_SKIP;
+      } else {
+       msgcode=CTRL_START;
+      }
+      for(int cm=0; cm<nslaves; cm++) {
+        MPI_Send(&msgcode, 1, MPI_INT, cm+1,TAG_CTRL, MPI_COMM_WORLD);
+      }
+      if (Nskip>0 && ct<Nskip) {
+        cout<<"Skipping timeslot "<<ct<<endl;
+        continue;
+      }
+
+
+      /* receive Z from all slaves */
+
+
+
+   }
+   /**********************************************************/
+
+
+    /* send end signal to each slave */
+    msgcode=CTRL_END;
+    for(int cm=0; cm<nslaves; cm++) {
+        MPI_Send(&msgcode, 1, MPI_INT, cm+1,TAG_CTRL, MPI_COMM_WORLD);
+    }
+
+
 
    delete [] iodata.freqs;
    free(Z);
