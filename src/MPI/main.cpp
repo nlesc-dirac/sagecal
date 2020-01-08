@@ -88,11 +88,11 @@ print_help(void) {
    cout << "Note: if -K a -T b, then calibration will start at 'a' and end at 'b', so b > a always."<<endl;
    cout << "Note: a,b are measured in number of solutions (tiles), so amount of data calibrated depends on -t parameter."<<endl;
    cout << "-V if given, enable verbose output: default "<<Data::verbose<<endl;
-   cout << "-M if given, evaluate AIC/MDL criteria for polynomials starting from 1 term to the one given by -P and suggest the best polynomial terms to use based on the minimum AIC/MDL: default "<<Data::mdl<<endl;
+   //cout << "-M if given, evaluate AIC/MDL criteria for polynomials starting from 1 term to the one given by -P and suggest the best polynomial terms to use based on the minimum AIC/MDL: default "<<Data::mdl<<endl;
    cout << "-q solutions.txt: if given, initialize solutions by reading this file (need to have the same format as a solution file, only solutions for 1 timeslot needed)"<< endl;
    cout<<endl<<"Stochastic mode:"<<endl;
    cout << "-N epochs, if >0, use stochastic calibration: default "<<Data::stochastic_calib_epochs<< endl;
-   cout << "-b minibatches, must be >0, split data to this many minibatches: default "<<Data::stochastic_calib_minibatches<< endl;
+   cout << "-M minibatches, must be >0, split data to this many minibatches: default "<<Data::stochastic_calib_minibatches<< endl;
    cout << "-w mini-bands, must be >0, split channels to this many mini-bands for bandpass calibration: default "<<Data::stochastic_calib_bands<< endl;
    cout <<"Report bugs to <sarod@users.sf.net>"<<endl;
 }
@@ -101,7 +101,7 @@ print_help(void) {
 void 
 ParseCmdLine(int ac, char **av) {
     int c;
-    while((c=getopt(ac, av, ":b:c:e:f:g:j:k:l:m:n:o:p:q:r:s:t:w:x:y:A:B:C:E:F:G:H:I:J:K:L:N:O:P:Q:R:S:T:W:E:MVh"))!= -1)
+    while((c=getopt(ac, av, ":c:e:f:g:j:k:l:m:n:o:p:q:r:s:t:w:x:y:A:B:C:E:F:G:H:I:J:K:L:M:N:O:P:Q:R:S:T:W:E:MVh"))!= -1)
     {
         switch(c)
         {
@@ -184,9 +184,9 @@ ParseCmdLine(int ac, char **av) {
             case 'A': 
                 Nadmm= atoi(optarg);
                 break;
-            case 'M': 
+/*            case 'M': 
                 Data::mdl=1;
-                break; 
+                break;  */
             case 'E': 
                 GPUpredict=atoi(optarg);
                 break; 
@@ -225,7 +225,7 @@ ParseCmdLine(int ac, char **av) {
             case 'N':
                 Data::stochastic_calib_epochs= atoi(optarg);
                 break;
-            case 'b':
+            case 'M':
                 Data::stochastic_calib_minibatches= atoi(optarg);
                 break;
             case 'w':
