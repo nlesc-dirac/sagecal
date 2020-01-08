@@ -346,7 +346,7 @@ cout<<"Slave "<<myrank<<" has nothing to do"<<endl;
 
 
    double res_0,res_1;
-   vector<double> res_00(mymscount),res_01(mymscount),res_0vec(mymscount),res_1vec(mymscount),res_prev(mymscount);   
+   vector<double> res_00(mymscount),res_01(mymscount),res_prev(mymscount);   
    double res_ratio=15.0; /* how much can the residual increase before resetting solutions, set higher than stand alone mode */
     res_0=res_1=0.0;
     for(int cm=0; cm<mymscount; cm++) {
@@ -670,7 +670,7 @@ cout<<"Slave "<<myrank<<" quitting"<<endl;
   beam_vec[0].p_ra0,beam_vec[0].p_dec0,iodata_vec[0].freq0,beam_vec[0].sx,beam_vec[0].sy,beam_vec[0].time_utc,iodata_vec[0].tilesz,beam_vec[0].Nelem,beam_vec[0].xx,beam_vec[0].yy,beam_vec[0].zz,doBeam,Data::Nt);
    } else {
     if (!doBeam) {
-     precalculate_coherencies_multifreq(iodata_vec[0].u,iodata_vec[0].v,iodata_vec[0].w,coh_vec[0],iodata_vec[0].N,iodata_vec[0].Nbase*iodata_vec[0].tilesz,barr_vec[0],carr_vec[0],M,iodata_vec[0].freqs,iodata.Nchan,iodata_vec[0].deltaf,iodata_vec[0].deltat,iodata_vec[0].dec0,Data::min_uvcut,Data::max_uvcut,Data::Nt);
+     precalculate_coherencies_multifreq(iodata_vec[0].u,iodata_vec[0].v,iodata_vec[0].w,coh_vec[0],iodata_vec[0].N,iodata_vec[0].Nbase*iodata_vec[0].tilesz,barr_vec[0],carr_vec[0],M,iodata_vec[0].freqs,iodata_vec[0].Nchan,iodata_vec[0].deltaf,iodata_vec[0].deltat,iodata_vec[0].dec0,Data::min_uvcut,Data::max_uvcut,Data::Nt);
     } else {
      //precalculate_coherencies_withbeam(iodata.u,iodata.v,iodata.w,coh,iodata.N,iodata.Nbase*iodata.tilesz,barr,carr,M,iodata.freq0,iodata.deltaf,iodata.deltat,iodata.dec0,Data::min_uvcut,Data::max_uvcut,
   //beam.p_ra0,beam.p_dec0,iodata.freq0,beam.sx,beam.sy,beam.time_utc,iodata.tilesz,beam.Nelem,beam.xx,beam.yy,beam.zz,Data::Nt);
@@ -695,7 +695,7 @@ cout<<"Slave "<<myrank<<" quitting"<<endl;
         /* Y[ii*8*iodata.N*Mt] : 8NMt values */
         /* rhok[ii*Mt] : Mt values */
 #ifdef HAVE_CUDA
-        bfgsfit_minibatch_consensus(iodata_vec[0].u,iodata_vec[0].v,iodata_vec[0].w,&iodata_vec[0].xo[iodata_vec[0].Nbase*iodata_vec[0].tilesz*8*chanstart[ii]],iodata_vec[0].N,iodata_vec[0].Nbase,iodata_vec[0].tilesz,hbb,ptoclus,&coh_vec[0][M*iodata_vec[0].Nbase*iodata_vec[0].tilesz*4*chanstart[ii]],M,Mt,&iodata_vec[0].freqs[chanstart[ii]],nchan[ii],deltafch*(double)nchan[ii],&pfreq_vec[0][iodata_vec[0].N*8*Mt*ii],&Y[iodata.N*8*Mt*ii],z,&rhok[ii*Mt],Data::Nt,Data::max_lbfgs,Data::lbfgs_m,Data::gpu_threads,Data::solver_mode,mean_nu,&res_00,&res_01,&ptdata_array[ii],nmb,minibatches);
+        bfgsfit_minibatch_consensus(iodata_vec[0].u,iodata_vec[0].v,iodata_vec[0].w,&iodata_vec[0].xo[iodata_vec[0].Nbase*iodata_vec[0].tilesz*8*chanstart[ii]],iodata_vec[0].N,iodata_vec[0].Nbase,iodata_vec[0].tilesz,hbb,ptoclus,&coh_vec[0][M*iodata_vec[0].Nbase*iodata_vec[0].tilesz*4*chanstart[ii]],M,Mt,&iodata_vec[0].freqs[chanstart[ii]],nchan[ii],deltafch*(double)nchan[ii],&pfreq_vec[0][iodata_vec[0].N*8*Mt*ii],&Y[iodata_vec[0].N*8*Mt*ii],z,&rhok[ii*Mt],Data::Nt,Data::max_lbfgs,Data::lbfgs_m,Data::gpu_threads,Data::solver_mode,mean_nu,&res_00[0],&res_01[0],&ptdata_array[ii],nmb,minibatches);
 #else
         bfgsfit_minibatch_consensus(iodata_vec[0].u,iodata_vec[0].v,iodata_vec[0].w,&iodata_vec[0].xo[iodata_vec[0].Nbase*iodata_vec[0].tilesz*8*chanstart[ii]],iodata_vec[0].N,iodata_vec[0].Nbase,iodata_vec[0].tilesz,barr_vec[0],carr_vec[0],&coh_vec[0][M*iodata_vec[0].Nbase*iodata_vec[0].tilesz*4*chanstart[ii]],M,Mt,&iodata_vec[0].freqs[chanstart[ii]],nchan[ii],deltafch*(double)nchan[ii],&pfreq_vec[0][iodata_vec[0].N*8*Mt*ii],&Y[iodata_vec[0].N*8*Mt*ii],z,&rhok[ii*Mt],Data::Nt,Data::max_lbfgs,Data::lbfgs_m,Data::gpu_threads,Data::solver_mode,mean_nu,&res_00[0],&res_01[0],&ptdata_array[ii],nmb,minibatches);
 #endif
@@ -888,7 +888,7 @@ beam_vec[0].p_ra0,beam_vec[0].p_dec0,iodata_vec[0].freq0,beam_vec[0].sx,beam_vec
      }
     if (Data::verbose) {
      for(int cm=0; cm<mymscount; cm++) {
-      cout<<myrank<< ": Timeslot: "<<tilex<<" residual MS "<<cm<<": initial="<<res_00[cm]<<"/"<<res_0vec[cm]<<",final="<<res_01[cm]<<"/"<<res_1vec[cm]<<", Time spent="<<elapsed_time<<" minutes"<<endl;
+      cout<<myrank<< ": Timeslot: "<<tilex<<" residual MS "<<cm<<": initial="<<res_00[cm]<<",final="<<res_01[cm]<<", Time spent="<<elapsed_time<<" minutes"<<endl;
      }
     }
 

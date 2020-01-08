@@ -316,7 +316,7 @@ cout<<"Freq range (MHz) ["<<min_f*1e-6<<","<<max_f*1e-6<<"]"<<endl;
       Ntime=Nmaxtime;
     }
 
-    cout<<"Master total timeslots="<<Ntime<<endl;
+    cout<<"Master total batches="<<Ntime<<endl;
 
     int msgcode;
 
