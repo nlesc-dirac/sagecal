@@ -347,7 +347,9 @@ cout<<"Slave "<<myrank<<" has nothing to do"<<endl;
 
    double res_0,res_1;
    vector<double> res_00(mymscount),res_01(mymscount),res_prev(mymscount);   
-   double res_ratio=15.0; /* how much can the residual increase before resetting solutions, set higher than stand alone mode */
+   /* how much can the residual increase before resetting solutions, 
+      use a lower value here (original 5) for more robustness, also because this is a log() cost */
+   double res_ratio=1.5; /* how much can the residual increase before resetting solutions, set higher than stand alone mode */
     res_0=res_1=0.0;
     for(int cm=0; cm<mymscount; cm++) {
      res_00[cm]=res_01[cm]=0.0;
