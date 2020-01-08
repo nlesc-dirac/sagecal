@@ -338,6 +338,8 @@ cout<<"Freq range (MHz) ["<<min_f*1e-6<<","<<max_f*1e-6<<"]"<<endl;
       }
 
 
+    for (int nadmm=0; nadmm<Nadmm; nadmm++) {
+
     /* receive Z from each slave */
     for (int cm=0; cm<nslaves; cm++) {
        MPI_Recv(&Z[cm*iodata.N*8*Npoly*iodata.M], iodata.N*8*Npoly*iodata.M,
@@ -358,7 +360,19 @@ cout<<"Freq range (MHz) ["<<min_f*1e-6<<","<<max_f*1e-6<<"]"<<endl;
      MPI_Send(Zavg, iodata.N*8*Npoly*iodata.M, MPI_DOUBLE, cm+1,TAG_MSAUX, MPI_COMM_WORLD);
     }
 
+    cout<<"Master admm "<<nadmm<<endl;
+    }
 
+    /* wait till all slaves are done writing data */
+    int resetcount=0;
+    for(int cm=0; cm<nslaves; cm++) {
+        MPI_Recv(&msgcode, 1, MPI_INT, cm+1,TAG_CTRL, MPI_COMM_WORLD,&status);
+        if (msgcode==CTRL_RESET) {
+          resetcount++;
+        }
+    }
+
+    cout<<"Master batch "<<ct<<" done with "<<resetcount<<endl;
 
    }
    /**********************************************************/
@@ -377,6 +391,6 @@ cout<<"Freq range (MHz) ["<<min_f*1e-6<<","<<max_f*1e-6<<"]"<<endl;
    free(Zavg);
   /**********************************************************/
 
-   cout<<"Done."<<endl;    
+   cout<<"Masted Done."<<endl;    
    return 0;
 }

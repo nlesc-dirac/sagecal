@@ -363,7 +363,7 @@ cout<<"Slave "<<myrank<<" has nothing to do"<<endl;
     /* timeinterval in seconds */
 
     for(int cm=0; cm<mymscount; cm++) {
-     cout<<"For "<<iodata_vec[cm].tilesz<<" samples, solution time interval (s): "<<iodata_vec[cm].deltat*(double)iodata_vec[cm].tilesz<<endl;
+     cout<<"For "<<Data::TileSize<<" samples, solution time interval (s): "<<iodata_vec[cm].deltat*(double)Data::TileSize<<", minibatch (length "<<iodata_vec[cm].tilesz<<" samples) time interval (s): "<< iodata_vec[cm].deltat*(double)iodata_vec[cm].tilesz<<endl;
      cout<<"Freq: "<<iodata_vec[cm].freq0/1e6<<" MHz, Chan: "<<iodata_vec[cm].Nchan<<" Bandwidth: "<<iodata_vec[cm].deltaf/1e6<<" MHz"<<endl;
     }
     /* bandwidth per channel */
@@ -394,7 +394,7 @@ cout<<"Slave "<<myrank<<" has nothing to do"<<endl;
        fprintf(sfp_vec[cm],"%lf %lf %d %d %lf %d %d %d\n",iodata_vec[cm].freq0*1e-6,iodata_vec[cm].deltaf*1e-6,iodata_vec[cm].Nchan,nsolbw,(double)Data::TileSize*iodata_vec[cm].deltat/60.0,iodata_vec[cm].N,M,Mt);
      } else {
       fprintf(sfp_vec[cm],"# freq(MHz) bandwidth(MHz) time_interval(min) stations clusters effective_clusters\n");
-      fprintf(sfp_vec[cm],"%lf %lf %lf %d %d %d\n",iodata_vec[cm].freq0*1e-6,iodata_vec[cm].deltaf*1e-6,(double)iodata_vec[cm].tilesz*iodata_vec[cm].deltat/60.0,iodata_vec[cm].N,M,Mt);
+      fprintf(sfp_vec[cm],"%lf %lf %lf %d %d %d\n",iodata_vec[cm].freq0*1e-6,iodata_vec[cm].deltaf*1e-6,(double)Data::TileSize*iodata_vec[cm].deltat/60.0,iodata_vec[cm].N,M,Mt);
      }
     }
 
@@ -409,7 +409,7 @@ cout<<"Slave "<<myrank<<" has nothing to do"<<endl;
      bufint[1]=iodata_vec[cm].N;
      bufint[2]=M;
      bufint[3]=Mt;
-     bufint[4]=iodata_vec[cm].tilesz;
+     bufint[4]=Data::TileSize;
      bufint[5]=iodata_vec[cm].totalt;
      bufdouble[0]=iodata_vec[cm].freq0;
      MPI_Send(bufint, 6, MPI_INT, 0,TAG_MSAUX, MPI_COMM_WORLD);
