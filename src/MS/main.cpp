@@ -46,7 +46,7 @@ print_help(void) {
    cout<<"or"<<endl;
    cout<<"sagecal -f MSlist -s sky.txt -c cluster.txt"<<endl;
    cout<<endl<<"Stochastic calibration:"<<endl;
-   cout<<"sagecal -d MS -s sky.txt -c cluster.txt -C epochs -M minibatches"<<endl;
+   cout<<"sagecal -d MS -s sky.txt -c cluster.txt -N epochs -M minibatches"<<endl;
    cout<<endl;
    cout << "-d MS name" << endl;
    cout << "-f MSlist: text file with MS names" << endl;
