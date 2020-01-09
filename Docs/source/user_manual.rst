@@ -69,6 +69,7 @@ Advanced options:
   | **-P consensus polynomial terms**. Default: 2.
   | **-Q consensus polynomial type** (0,1,2,3). Default: 2.
   | **-r regularization factor**. Default: 5.
+  | **-u regularization factor**. Must be >0, regularization in federated averaging between global and local value. Default: 0.1.
 
 | Note: 
 | - In stochastic mode, no hybrid solutions are allowed.
