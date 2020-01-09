@@ -21,6 +21,7 @@
 - Distributed calibration using MPI - consensus optimization with data multiplexing
 - Tools to build sky models and restore sky models to images
 - Adaptive update of ADMM penalty (Barzilai-Borwein a.k.a. Spectral method)
+- Bandpass calibration and unprecedented RFI mitigation with stochastic LBFGS
 
 
 Read INSTALL for installation. This file gives a brief guide to use SAGECal.

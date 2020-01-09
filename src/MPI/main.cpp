@@ -88,8 +88,12 @@ print_help(void) {
    cout << "Note: if -K a -T b, then calibration will start at 'a' and end at 'b', so b > a always."<<endl;
    cout << "Note: a,b are measured in number of solutions (tiles), so amount of data calibrated depends on -t parameter."<<endl;
    cout << "-V if given, enable verbose output: default "<<Data::verbose<<endl;
-   cout << "-M if given, evaluate AIC/MDL criteria for polynomials starting from 1 term to the one given by -P and suggest the best polynomial terms to use based on the minimum AIC/MDL: default "<<Data::mdl<<endl;
+   //cout << "-M if given, evaluate AIC/MDL criteria for polynomials starting from 1 term to the one given by -P and suggest the best polynomial terms to use based on the minimum AIC/MDL: default "<<Data::mdl<<endl;
    cout << "-q solutions.txt: if given, initialize solutions by reading this file (need to have the same format as a solution file, only solutions for 1 timeslot needed)"<< endl;
+   cout<<endl<<"Stochastic mode:"<<endl;
+   cout << "-N epochs, if >0, use stochastic calibration: default "<<Data::stochastic_calib_epochs<< endl;
+   cout << "-M minibatches, must be >0, split data to this many minibatches: default "<<Data::stochastic_calib_minibatches<< endl;
+   cout << "-w mini-bands, must be >0, split channels to this many mini-bands for bandpass calibration: default "<<Data::stochastic_calib_bands<< endl;
    cout <<"Report bugs to <sarod@users.sf.net>"<<endl;
 }
 
@@ -97,7 +101,7 @@ print_help(void) {
 void 
 ParseCmdLine(int ac, char **av) {
     int c;
-    while((c=getopt(ac, av, "c:e:f:g:j:k:l:m:n:o:p:q:r:s:t:x:y:A:B:C:E:F:I:J:K:L:O:P:Q:G:H:R:S:T:W:E:MVh"))!= -1)
+    while((c=getopt(ac, av, ":c:e:f:g:j:k:l:m:n:o:p:q:r:s:t:w:x:y:A:B:C:E:F:G:H:I:J:K:L:M:N:O:P:Q:R:S:T:W:E:MVh"))!= -1)
     {
         switch(c)
         {
@@ -180,9 +184,9 @@ ParseCmdLine(int ac, char **av) {
             case 'A': 
                 Nadmm= atoi(optarg);
                 break;
-            case 'M': 
+/*            case 'M': 
                 Data::mdl=1;
-                break; 
+                break;  */
             case 'E': 
                 GPUpredict=atoi(optarg);
                 break; 
@@ -218,9 +222,22 @@ ParseCmdLine(int ac, char **av) {
             case 'W':
                 whiten= atoi(optarg);
                 break;
+            case 'N':
+                Data::stochastic_calib_epochs= atoi(optarg);
+                break;
+            case 'M':
+                Data::stochastic_calib_minibatches= atoi(optarg);
+                break;
+            case 'w':
+                Data::stochastic_calib_bands= atoi(optarg);
+                break;
             case 'h': 
                 print_help();
                 MPI_Finalize();
+                exit(1);
+            case ':':
+                cout<<"Error: A value is missing for one of the options"<<endl;
+                print_help();
                 exit(1);
             default:
                 print_help();
@@ -266,10 +283,22 @@ main(int argc, char **argv) {
  /* find out my identity and default communicator */
  MPI_Comm_rank(MPI_COMM_WORLD,&myrank);
  /* both slave and master will parse command line again */
- if (myrank==0) {
-  sagecal_master(argc,argv);
+ /* full batch mode */
+
+ ParseCmdLine(argc, argv); /* need to parse input here as well */
+ if (Data::stochastic_calib_epochs==0) {
+  if (myrank==0) {
+   sagecal_master(argc,argv);
+  } else {
+   sagecal_slave(argc,argv);
+  }
  } else {
-  sagecal_slave(argc,argv);
+  /* stochastic calibration */
+  if (myrank==0) {
+   sagecal_stochastic_master(argc,argv);
+  } else {
+   sagecal_stochastic_slave(argc,argv);
+  }
  }
  /* shutdown MPI */
  MPI_Finalize();

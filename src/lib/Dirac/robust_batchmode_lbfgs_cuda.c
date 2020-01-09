@@ -117,9 +117,10 @@ costfunc_multifreq(double *p, int m, void *adata) {
   checkCublasError(cbstatus,__FILE__,__LINE__);
   f1+=tmpi;
 
-  cbstatus=cublasDdot(*(lmdata->cbhandle),8*lmdata->N,&xp[8*lmdata->N*ci],1,&xp[8*lmdata->N*ci],1,&tmpi);
+  //cbstatus=cublasDdot(*(lmdata->cbhandle),8*lmdata->N,&xp[8*lmdata->N*ci],1,&xp[8*lmdata->N*ci],1,&tmpi);
+  cbstatus=cublasDnrm2(*(lmdata->cbhandle),8*lmdata->N,&xp[8*lmdata->N*ci],1,&tmpi);
   checkCublasError(cbstatus,__FILE__,__LINE__);
-  f1+=0.5*lmdata->rho[ci]*tmpi;
+  f1+=0.5*lmdata->rho[ci]*tmpi*tmpi; /* need ||x||^2 */
  }
 
  err=cudaFree(xp);

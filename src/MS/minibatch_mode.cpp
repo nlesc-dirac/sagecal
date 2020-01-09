@@ -326,10 +326,6 @@ run_minibatch_calibration(void) {
      ptoclus[2*ci+1]=carr[ci].p[0]; /* so end at p[0]+nchunk*8*N-1 */
     }
 #endif
-
-/******************************* data loop *****************************/
-    while (msitr[0]->more()) {
-      start_time = time(0);
       /* setup persistant struct for the stochastic mode solver */
       /* this will store LBFGS memory and var(grad) parameters */
       /* persistent memory between batches (y,s) pairs
@@ -348,6 +344,10 @@ run_minibatch_calibration(void) {
 #endif
       }
 
+/******************************* data loop *****************************/
+    while (msitr[0]->more()) {
+      start_time = time(0);
+
       res_0=res_1=res_00=res_01=0.0;
       for (int nepch=0; nepch<nepochs; nepch++) {
       for (int nmb=0; nmb<minibatches; nmb++) {
@@ -364,7 +364,8 @@ run_minibatch_calibration(void) {
         my_dscal(iodata.Nbase*iodata.tilesz,inv_c,iodata.w);
 
         /**********************************************************/
-        /* update baseline flags */
+        /* FIXME: do this efficiently
+          update baseline flags */
         /* and set x[]=0 for flagged values */
         preset_flags_and_data(iodata.Nbase*iodata.tilesz,iodata.flag,barr,iodata.x,Data::Nt);
 #ifdef HAVE_CUDA
@@ -393,7 +394,8 @@ run_minibatch_calibration(void) {
 #endif
 #ifdef HAVE_CUDA
    if (GPUpredict) {
-     precalculate_coherencies_multifreq_withbeam_gpu(iodata.u,iodata.v,iodata.w,coh,iodata.N,iodata.Nbase*iodata.tilesz,barr,carr,M,iodata.freqs,iodata.Nchan,iodata.deltaf,iodata.deltat,iodata.dec0,Data::min_uvcut,Data::max_uvcut,
+     /* note we need to use bandwith per channel here */
+     precalculate_coherencies_multifreq_withbeam_gpu(iodata.u,iodata.v,iodata.w,coh,iodata.N,iodata.Nbase*iodata.tilesz,barr,carr,M,iodata.freqs,iodata.Nchan,deltafch,iodata.deltat,iodata.dec0,Data::min_uvcut,Data::max_uvcut,
   beam.p_ra0,beam.p_dec0,iodata.freq0,beam.sx,beam.sy,beam.time_utc,iodata.tilesz,beam.Nelem,beam.xx,beam.yy,beam.zz,doBeam,Data::Nt);
    } else {
     if (!doBeam) {
@@ -430,11 +432,6 @@ run_minibatch_calibration(void) {
       }
 
 
-      /* free persistent memory */
-      for (ii=0; ii<nsolbw; ii++) {
-       lbfgs_persist_clear(&ptdata_array[ii]);
-      }
-      free(ptdata_array);
    
 
       if (start_iter) { start_iter=0; }
@@ -512,6 +509,7 @@ beam.p_ra0,beam.p_dec0,iodata.freq0,beam.sx,beam.sy,beam.time_utc,beam.Nelem,bea
        if (resband[ii]>res_ratio*res_1) {
         cout<<"Resetting solution for band "<<ii<<endl;
         memcpy(&pfreq[iodata.N*8*Mt*ii],pinit,(size_t)iodata.N*8*Mt*sizeof(double));
+        lbfgs_persist_reset(&ptdata_array[ii]);
        }
    }
 
@@ -550,6 +548,11 @@ beam.p_ra0,beam.p_dec0,iodata.freq0,beam.sx,beam.sy,beam.time_utc,beam.Nelem,bea
 
     }
 /******************************* end data loop *****************************/
+    /* free persistent memory */
+    for (ii=0; ii<nsolbw; ii++) {
+       lbfgs_persist_clear(&ptdata_array[ii]);
+    }
+    free(ptdata_array);
 
 
     for(int cm=0; cm<iodata.Nms; cm++) {
