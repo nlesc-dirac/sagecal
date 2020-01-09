@@ -345,19 +345,13 @@ cout<<"Freq range (MHz) ["<<min_f*1e-6<<","<<max_f*1e-6<<"]"<<endl;
        MPI_Recv(&Z[cm*iodata.N*8*Npoly*iodata.M], iodata.N*8*Npoly*iodata.M,
            MPI_DOUBLE, cm+1, TAG_MSAUX, MPI_COMM_WORLD, &status);
     }
-    /* find the average over quotient manifold, Z is now projected to this average */
-    calculate_manifold_average(iodata.N*Npoly,iodata.M,nslaves,Z,20,Data::randomize,Data::Nt);
-    /* find average value of each nslaves of Z */
-    /* first value */
-    my_dcopy(iodata.N*8*Npoly*iodata.M,Z,1,Zavg,1);
-    for (int cm=1; cm<nslaves; cm++) {
-      my_daxpy(iodata.N*8*Npoly*iodata.M,&Z[cm*iodata.N*8*Npoly*iodata.M],1.0,Zavg);
-    }
-    /* now average */
-    my_dscal(iodata.N*8*Npoly*iodata.M,1.0/(double)nslaves,Zavg); 
+    /* find the average over quotient manifold, say Zav 
+      and project it back to Z for each freq, Z : 2N.Npoly x 2 blocks, 
+     total nslaves, per each M direction : Z input and output */
+    calculate_manifold_average_projectback(iodata.N*Npoly,iodata.M,nslaves,Z,20,Data::randomize,Data::Nt);
     /* send  back to all slaves */
     for (int cm=0; cm<nslaves; cm++) {
-     MPI_Send(Zavg, iodata.N*8*Npoly*iodata.M, MPI_DOUBLE, cm+1,TAG_MSAUX, MPI_COMM_WORLD);
+     MPI_Send(&Z[cm*iodata.N*8*Npoly*iodata.M], iodata.N*8*Npoly*iodata.M, MPI_DOUBLE, cm+1,TAG_MSAUX, MPI_COMM_WORLD);
     }
 
     cout<<"Master admm "<<nadmm<<endl;

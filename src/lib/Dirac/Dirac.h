@@ -1393,6 +1393,20 @@ random_permutation(int n, int weighted_iter, double *w);
 extern int
 calculate_manifold_average(int N,int M,int Nf,double *Y,int Niter,int randomize,int Nt);
 
+/* calculate manifold average of 2Nx2 size blocks, for each M direction, using Nf blocks
+   and project this average back to each of the Nf solutions using the original Y
+   (this is the opposite operation from above function)
+   Y: 2Nx2 x M x Nf values (complex), passed as double
+   N: no of stations : block 2Nx2
+   M: no of directions , each direction will have own unitary ambiguity
+   Nf : how many blocks to average 
+   Niter: everaging iterations
+   randomize: if >0, use random starting point
+   Nt: threads
+*/
+extern int
+calculate_manifold_average_projectback(int N,int M,int Nf,double *Y,int Niter,int randomize,int Nt);
+
 
 /* find U to  minimize
   ||J-J1 U|| solving Procrustes problem
