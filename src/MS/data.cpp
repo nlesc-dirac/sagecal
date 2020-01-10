@@ -76,6 +76,8 @@ char *Data::MSpattern=NULL;
 int Data::stochastic_calib_epochs=0; /* if >1, how many epochs for running calib */
 int Data::stochastic_calib_minibatches=1; /* how many minibatches data is split, if =1, minibatch=fullbatch */
 int Data::stochastic_calib_bands=1; /* how many mini-bands the channels are split to, for bandpass calibration */
+/* federated averaging, global - local constraint regularization factor */
+double Data::federated_reg_alpha=0.1;
 
 /* distributed sagecal parameters */
 int Data::Nadmm=1;

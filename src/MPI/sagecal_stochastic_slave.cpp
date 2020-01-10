@@ -521,9 +521,10 @@ cout<<"Slave "<<myrank<<" has nothing to do"<<endl;
 
     memcpy(B,Bext,(size_t)(nsolbw*Npoly)*sizeof(double));
 
+    double alpha=Data::federated_reg_alpha;
     setweights(Mt*nsolbw,rhok,Data::admm_rho,Data::Nt);
-    /* find inverse of B for each cluster, solution */
-    find_prod_inverse_full(B,Bii,Npoly,nsolbw,Mt,rhok,Data::Nt);
+    /* find inverse of B for each cluster, solution, alpha is fed. avg. regularization */
+    find_prod_inverse_full_fed(B,Bii,Npoly,nsolbw,Mt,rhok,alpha,Data::Nt);
 
     free(ffreq);
     free(ffreq2);
@@ -741,11 +742,22 @@ cout<<"Slave "<<myrank<<" quitting"<<endl;
         }
         }
       }
+
+      /* now add fed. avg. of Zavgxalpha, column by column (8NM values) to z
+        at right location (shuffle). essentially the whole 8NMxNpoly values can be added in one step */
+      /* ordering Z,Zavg: 8N Npoly x M,  z: 8N M Npoly x 1
+        so transepose Npoly x M to M x Npoly from Z to z  */
+      for (ci=0; ci<Mt; ci++) {
+        for (cj=0; cj<Npoly; cj++) {
+         my_daxpy(8*iodata_vec[0].N,&Zavg[8*iodata_vec[0].N*Npoly*ci+8*iodata_vec[0].N*cj],alpha,&z[8*iodata_vec[0].N*M*cj+8*iodata_vec[0].N*ci]);
+        }
+      }
+
       my_dcopy(iodata_vec[0].N*8*Npoly*Mt,Z,1,Zold,1);
       update_global_z_multi(Z,iodata_vec[0].N,Mt,Npoly,z,Bii,Data::Nt);
 
       my_daxpy(iodata_vec[0].N*8*Npoly*Mt,Z,-1.0,Zold);
-      cout<<"ADMM : "<<nadmm<<" dual residual="<<my_dnrm2(iodata_vec[0].N*8*Npoly*Mt,Zold)/sqrt((double)8*iodata_vec[0].N*Npoly*Mt)<<endl;
+      cout<<myrank<<": ADMM : "<<nadmm<<" dual residual="<<my_dnrm2(iodata_vec[0].N*8*Npoly*Mt,Zold)/sqrt((double)8*iodata_vec[0].N*Npoly*Mt)<<endl;
 
       /* update Y <- Y+rho*(J-B.Z), but already Y=Y+rho J
         so, only need to add -rho B.Z */
@@ -775,7 +787,7 @@ cout<<"Slave "<<myrank<<" quitting"<<endl;
       my_dcopy(iodata_vec[0].N*8*Npoly*Mt,Z,1,Zold,1);
       my_daxpy(iodata_vec[0].N*8*Npoly*Mt,Zavg,-1.0,Zold);
       cout<<myrank<<":FEDA: "<<nadmm<<" dual residual="<<my_dnrm2(iodata_vec[0].N*8*Npoly*Mt,Zold)/sqrt((double)8*iodata_vec[0].N*Npoly*Mt)<<endl;
-      my_dcopy(iodata_vec[0].N*8*Npoly*Mt,Zavg,1,Z,1);
+      //my_dcopy(iodata_vec[0].N*8*Npoly*Mt,Zavg,1,Z,1);
      } /* admm */
 
      if (start_iter) { start_iter=0; }

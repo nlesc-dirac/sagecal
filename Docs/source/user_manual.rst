@@ -9,7 +9,7 @@ sagecal
 |     sagecal -f MSlist -s sky.txt -c cluster.txt
 |     
 |     Stochastic calibration:
-|     sagecal -d MS -s sky.txt -c cluster.txt -C epochs -M minibatches
+|     sagecal -d MS -s sky.txt -c cluster.txt -N epochs -M minibatches
 | 
 |     Show all options below:
 |     sagecal -h
@@ -60,7 +60,7 @@ Advanced options:
 - **-q solutions.txt**. If given, initialize solutions by reading this file (need to have the same format as a solution file, only solutions for 1 timeslot needed).
  
   | Stochastic mode:
-  | **-C epochs**. If >0, use stochastic calibration. Default: 0.
+  | **-N epochs**. If >0, use stochastic calibration. Default: 0.
   | **-M minibatches**. Must be >0, split data to this many minibatches. Default: 1.
   | **-w mini-bands**. Must be >0, split channels to this many mini-bands for bandpass calibration. Default: 1.
   |
@@ -69,6 +69,7 @@ Advanced options:
   | **-P consensus polynomial terms**. Default: 2.
   | **-Q consensus polynomial type** (0,1,2,3). Default: 2.
   | **-r regularization factor**. Default: 5.
+  | **-u regularization factor**. Must be >0, regularization in federated averaging between global and local value. Default: 0.1.
 
 | Note: 
 | - In stochastic mode, no hybrid solutions are allowed.

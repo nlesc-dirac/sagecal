@@ -158,6 +158,8 @@ namespace Data
     extern int stochastic_calib_epochs; /* if > 1, stochastic calibration */
     extern int stochastic_calib_minibatches; /* number of minibatches the data is split */
     extern int stochastic_calib_bands; /* number of bands to split channels for solutions over full band */
+    /* federated averaging, global - local constraint regularization factor */
+    extern double federated_reg_alpha;
 
     /* distributed sagecal parameters */
     extern int Nadmm; /* ADMM iterations >=1 */

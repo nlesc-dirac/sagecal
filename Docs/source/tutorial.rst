@@ -143,7 +143,7 @@ Within a few minutes, SAGECal will have completed initial calibration and we can
    module load wsclean (or a similar instruction, if necessary)
    wsclean -name after-initial-calibration -size 1024 1024 -scale 0.7amin -niter 10000 -mgain 0.8 -auto-threshold 3 sm.ms
 
-This will produce an image after-initial-calibration-image.fits, that looks like this:
+(Note that in order to make images, you can use any other imaging software such as casapy,excon etc.) The imaging step given is only one way of doing it. This will produce an image after-initial-calibration-image.fits, that looks like this:
 
 .. image:: image_after_initial_calibration.png
 
