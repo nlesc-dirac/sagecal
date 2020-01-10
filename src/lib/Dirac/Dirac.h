@@ -122,6 +122,8 @@ typedef struct persistent_data_t_ {
   double *rho; /* storage for product 1/y^T s */
   int nfilled; /* how many <= lbfgs_m of y,s pairs are filled? valid range 0...lbfgs_m, start value 0 */
   int vacant; /* next vacant offset, cycle in 0...lbfgs_m-1,0,1,...lbfgs_m-1 etc. start value 0 */
+  int lbfgs_m; /* LBFGS memory size */
+  int m; /* parameter size : so length of y,s: mxlbfgs_m, rho: lbfgs_m */
 
   int Nt; /* no. of threads */
 
@@ -156,6 +158,11 @@ lbfgs_persist_init(persistent_data_t *pt, int Nminibatch, int m, int n, int lbfg
 /* clearing persistent struct after running stochastic LBFGS */
 extern int 
 lbfgs_persist_clear(persistent_data_t *pt);
+
+/* reset persistent struct (no memory allocation, but reset everyting to original state)
+   needed sometimes to recover from a bad solution */
+extern int 
+lbfgs_persist_reset(persistent_data_t *pt);
 
 /* line search */
 /* func: scalar function
@@ -216,6 +223,8 @@ typedef struct persistent_data_t_ {
   double *rho; /* storage for product 1/y^T s */
   int nfilled; /* how many <= lbfgs_m of y,s pairs are filled? valid range 0...lbfgs_m, start value 0 */
   int vacant; /* next vacant offset, cycle in 0...lbfgs_m-1,0,1,...lbfgs_m-1 etc. start value 0 */
+  int lbfgs_m; /* LBFGS memory size */
+  int m; /* parameter size : so length of y,s: mxlbfgs_m, rho: lbfgs_m */
 
   int Nt; /* no. of threads */
 
@@ -258,6 +267,12 @@ lbfgs_persist_init(persistent_data_t *pt, int Nminibatch, int m, int n, int lbfg
 /* clearing persistent struct after running stochastic LBFGS */
 extern int 
 lbfgs_persist_clear(persistent_data_t *pt);
+
+/* reset persistent struct (no memory allocation, but reset everyting to original state)
+   needed sometimes to recover from a bad solution */
+extern int 
+lbfgs_persist_reset(persistent_data_t *pt);
+
 
 /* LBFGS routine,
  * user has to give cost_func() and grad_func()
@@ -1378,6 +1393,20 @@ random_permutation(int n, int weighted_iter, double *w);
 extern int
 calculate_manifold_average(int N,int M,int Nf,double *Y,int Niter,int randomize,int Nt);
 
+/* calculate manifold average of 2Nx2 size blocks, for each M direction, using Nf blocks
+   and project this average back to each of the Nf solutions using the original Y
+   (this is the opposite operation from above function)
+   Y: 2Nx2 x M x Nf values (complex), passed as double
+   N: no of stations : block 2Nx2
+   M: no of directions , each direction will have own unitary ambiguity
+   Nf : how many blocks to average 
+   Niter: everaging iterations
+   randomize: if >0, use random starting point
+   Nt: threads
+*/
+extern int
+calculate_manifold_average_projectback(int N,int M,int Nf,double *Y,int Niter,int randomize,int Nt);
+
 
 /* find U to  minimize
   ||J-J1 U|| solving Procrustes problem
@@ -1430,6 +1459,11 @@ find_prod_inverse(double *B, double *Bi, int Npoly, int Nf, double *fratio);
 */
 extern int
 find_prod_inverse_full(double *B, double *Bi, int Npoly, int Nf, int M, double *rho, int Nt);
+
+/* same as above, but add alphaxI to B^T B before inversion */
+extern int
+find_prod_inverse_full_fed(double *B, double *Bi, int Npoly, int Nf, int M, double *rho, double alpha, int Nt);
+
 
 /* update Z
    Z: 8NxNpoly x M double array (real and complex need to be updated separate)

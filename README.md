@@ -21,11 +21,11 @@
 - Distributed calibration using MPI - consensus optimization with data multiplexing
 - Tools to build sky models and restore sky models to images
 - Adaptive update of ADMM penalty (Barzilai-Borwein a.k.a. Spectral method)
+- Bandpass calibration and unprecedented RFI mitigation with stochastic LBFGS
+- Stochastic calibration for handling data at highest resolution (with federated averaging and consensus optimization)
 
 
-Read INSTALL for installation. This file gives a brief guide to use SAGECal.
-Warning: this file may be obsolete. use sagecal -h to see up-to-date options.
-
+Please read INSTALL.md for installation instructions, but 'cmake' should work in most cases. We give a brief guide to use SAGECal here but there is extensive documentation here.
 
 ## Contributing
 Read the [contributing guide](https://github.com/nlesc-dirac/sagecal/blob/master/CONTRIBUTING.md)

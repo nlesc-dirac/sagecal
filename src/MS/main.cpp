@@ -35,7 +35,7 @@ using namespace Data;
 
 void
 print_copyright(void) {
-  cout<<"SAGECal 0.7.0 (C) 2011-2020 Sarod Yatawatta"<<endl;
+  cout<<"SAGECal 0.7.1 (C) 2011-2020 Sarod Yatawatta"<<endl;
 }
 
 
@@ -46,7 +46,7 @@ print_help(void) {
    cout<<"or"<<endl;
    cout<<"sagecal -f MSlist -s sky.txt -c cluster.txt"<<endl;
    cout<<endl<<"Stochastic calibration:"<<endl;
-   cout<<"sagecal -d MS -s sky.txt -c cluster.txt -C epochs -M minibatches"<<endl;
+   cout<<"sagecal -d MS -s sky.txt -c cluster.txt -N epochs -M minibatches"<<endl;
    cout<<endl;
    cout << "-d MS name" << endl;
    cout << "-f MSlist: text file with MS names" << endl;
@@ -87,7 +87,7 @@ print_help(void) {
    cout << "-q solutions.txt: if given, initialize solutions by reading this file (need to have the same format as a solution file, only solutions for 1 timeslot needed)"<< endl;
 
    cout<<endl<<"Stochastic mode:"<<endl;
-   cout << "-C epochs, if >0, use stochastic calibration: default "<<Data::stochastic_calib_epochs<< endl;
+   cout << "-N epochs, if >0, use stochastic calibration: default "<<Data::stochastic_calib_epochs<< endl;
    cout << "-M minibatches, must be >0, split data to this many minibatches: default "<<Data::stochastic_calib_minibatches<< endl;
    cout << "-w mini-bands, must be >0, split channels to this many mini-bands for bandpass calibration: default "<<Data::stochastic_calib_bands<< endl;
 
@@ -111,7 +111,7 @@ ParseCmdLine(int ac, char **av) {
         print_help();
         exit(0);
     }
-    while((c=getopt(ac, av, ":a:b:c:d:e:f:g:j:k:l:m:n:o:p:q:r:s:t:w:x:y:z:A:B:C:D:E:F:H:I:J:L:M:O:P:Q:R:S:W:E:h"))!= -1)
+    while((c=getopt(ac, av, ":a:b:c:d:e:f:g:j:k:l:m:n:o:p:q:r:s:t:w:x:y:z:A:B:D:E:F:H:I:J:L:M:N:O:P:Q:R:S:W:E:h"))!= -1)
     {
         switch(c)
         {
@@ -214,7 +214,7 @@ ParseCmdLine(int ac, char **av) {
             case 'z':
                 ignorefile= optarg;
                 break;
-            case 'C':
+            case 'N':
                 Data::stochastic_calib_epochs= atoi(optarg);
                 break;
             case 'M':

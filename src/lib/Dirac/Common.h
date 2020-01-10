@@ -596,6 +596,10 @@ __attribute__ ((target(MIC)))
 extern void
 my_daxpy(int N, double *x, double a, double *y);
 
+/* BLAS y = a.x + y with different strides in x and y given by cx and cy */
+extern void
+my_daxpy_inc(int N, double *x, int cx, double a, double *y, int cy);
+
 /* BLAS y = a.x + y */
 #ifdef USE_MIC
 __attribute__ ((target(MIC)))

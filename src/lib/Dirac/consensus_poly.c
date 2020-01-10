@@ -292,6 +292,7 @@ typedef struct thread_data_prod_inv_ {
  double *B;
  double *Bi;
  double *rho;
+ double alpha; /* only used with fed. averaging */
 } thread_data_prod_inv_t;
 
 
@@ -350,9 +351,84 @@ sum_inv_threadfn(void *data) {
    /* find 1/singular values, and multiply columns of U with new singular values */
    for (ci=0; ci<t->Npoly; ci++) {
     if (S[ci]>CLM_EPSILON) {
-     S[ci]=1.0/S[ci];
+     S[ci]=1.0/S[ci]; 
     } else {
      S[ci]=0.0;
+    }
+    my_dscal(t->Npoly,S[ci],&U[ci*t->Npoly]);
+   }
+
+   /* find product U 1/S V^T */
+   my_dgemm('N','N',t->Npoly,t->Npoly,t->Npoly,1.0,U,t->Npoly,VT,t->Npoly,0.0,&(t->Bi[k*Np2]),t->Npoly);
+
+ }
+
+ free(U);
+ free(VT);
+ free(S);
+ free(WORK);
+ return NULL;
+}
+
+/* worker thread function for calculating sum and inverse
+  using also fed. averaging info */ 
+static void*
+sum_inv_fed_threadfn(void *data) {
+ thread_data_prod_inv_t *t=(thread_data_prod_inv_t*)data;
+ double w[1],*WORK,*U,*S,*VT;
+
+ int k,ci,status,lwork=1;
+ int Np2=t->Npoly*t->Npoly;
+ /* allocate memory for the SVD here */
+  if ((U=(double*)calloc((size_t)Np2,sizeof(double)))==0) {
+    printf("%s: %d: no free memory\n",__FILE__,__LINE__);
+    exit(1);
+  }
+  if ((VT=(double*)calloc((size_t)Np2,sizeof(double)))==0) {
+    printf("%s: %d: no free memory\n",__FILE__,__LINE__);
+    exit(1);
+  }
+  if ((S=(double*)calloc((size_t)t->Npoly,sizeof(double)))==0) {
+    printf("%s: %d: no free memory\n",__FILE__,__LINE__);
+    exit(1);
+  }
+
+  /* memory for SVD: use first location of Bi */
+  status=my_dgesvd('A','A',t->Npoly,t->Npoly,&(t->Bi[t->startM*Np2]),t->Npoly,S,U,t->Npoly,VT,t->Npoly,w,-1);
+  if (!status) {
+    lwork=(int)w[0];
+  } else {
+    printf("%s: %d: LAPACK error %d\n",__FILE__,__LINE__,status);
+    exit(1);
+  }
+  if ((WORK=(double*)calloc((size_t)lwork,sizeof(double)))==0) {
+    printf("%s: %d: no free memory\n",__FILE__,__LINE__);
+    exit(1);
+  }
+
+
+
+ /* iterate over clusters */
+ for (k=t->startM; k<=t->endM; k++) {
+   memset(&(t->Bi[k*Np2]),0,sizeof(double)*Np2);
+   /* find sum */
+   for (ci=0; ci<t->Nf; ci++) {
+    /* outer product */
+    my_dgemm('N','T',t->Npoly,t->Npoly,1,t->rho[k+ci*t->M],&t->B[ci*t->Npoly],t->Npoly,&t->B[ci*t->Npoly],t->Npoly,1.0,&(t->Bi[k*Np2]),t->Npoly);
+   }
+   /* find SVD */
+   status=my_dgesvd('A','A',t->Npoly,t->Npoly,&(t->Bi[k*Np2]),t->Npoly,S,U,t->Npoly,VT,t->Npoly,WORK,lwork);
+   if (status) {
+    printf("%s: %d: LAPACK error %d\n",__FILE__,__LINE__,status);
+    exit(1);
+   }
+
+   /* find 1/singular values, and multiply columns of U with new singular values */
+   for (ci=0; ci<t->Npoly; ci++) {
+    if (S[ci]>CLM_EPSILON) {
+     S[ci]=1.0/(S[ci]+t->alpha); /* 1.0/(S[]+alpha) for inverting (B^T B + alpha I) */
+    } else {
+     S[ci]=1.0/(t->alpha);
     }
     my_dscal(t->Npoly,S[ci],&U[ci*t->Npoly]);
    }
@@ -461,6 +537,88 @@ find_prod_inverse_full(double *B, double *Bi, int Npoly, int Nf, int M, double *
   return 0;
 }
 
+/* same as above, but add alphaxI to B^T B before inversion */
+int
+find_prod_inverse_full_fed(double *B, double *Bi, int Npoly, int Nf, int M, double *rho, double alpha, int Nt) {
+
+  pthread_attr_t attr;
+  pthread_t *th_array;
+  thread_data_prod_inv_t *threaddata;
+
+  int ci,Nthb0,Nthb,nth,nth1;
+  /* clusters per thread */
+  Nthb0=(M+Nt-1)/Nt;
+
+  /* setup threads */
+  pthread_attr_init(&attr);
+  pthread_attr_setdetachstate(&attr,PTHREAD_CREATE_JOINABLE);
+
+  if ((th_array=(pthread_t*)malloc((size_t)Nt*sizeof(pthread_t)))==0) {
+   fprintf(stderr,"%s: %d: No free memory\n",__FILE__,__LINE__);
+   exit(1);
+  }
+  if ((threaddata=(thread_data_prod_inv_t*)malloc((size_t)Nt*sizeof(thread_data_prod_inv_t)))==0) {
+    fprintf(stderr,"%s: %d: No free memory\n",__FILE__,__LINE__);
+    exit(1);
+  }
+
+
+  ci=0;
+  for (nth=0;  nth<Nt && ci<M; nth++) {
+    if (ci+Nthb0<M) { 
+     Nthb=Nthb0;
+    } else {
+     Nthb=M-ci;
+    }
+    threaddata[nth].B=B;
+    threaddata[nth].Bi=Bi;
+    threaddata[nth].rho=rho;
+    threaddata[nth].alpha=alpha;
+    threaddata[nth].Npoly=Npoly;
+    threaddata[nth].Nf=Nf;
+    threaddata[nth].M=M;
+    threaddata[nth].startM=ci;
+    threaddata[nth].endM=ci+Nthb-1;
+
+    pthread_create(&th_array[nth],&attr,sum_inv_fed_threadfn,(void*)(&threaddata[nth]));
+    ci=ci+Nthb;
+  }
+
+  for(nth1=0; nth1<nth; nth1++) {
+   pthread_join(th_array[nth1],NULL);
+  }
+  
+  pthread_attr_destroy(&attr);
+
+
+  free(th_array);
+  free(threaddata);
+
+#ifdef DEBUG
+  int k,cj;
+  for (k=0; k<M; k++) {
+    printf("dir_%d=",k);
+    for (cj=0; cj<Nf; cj++) {
+      printf("%lf ",rho[k+cj*M]);
+    }
+    printf("\n");
+  }
+  for (k=0; k<M; k++) {
+  printf("Bii_%d=[\n",k);
+  for (ci=0; ci<Npoly; ci++) {
+   for(cj=0; cj<Npoly; cj++) {
+    printf("%lf ",Bi[k*Npoly*Npoly+ci*Npoly+cj]);
+   }
+   printf("\n");
+  }
+  printf("];\n");
+
+  }
+#endif
+
+
+  return 0;
+}
 
 /* update Z
    Z: 8N Npoly x M double array (real and complex need to be updated separate)

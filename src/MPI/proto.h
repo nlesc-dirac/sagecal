@@ -80,7 +80,7 @@ typedef struct MPIData_ {
        int N; /* no of stations */
        int M; /* effective clusters */
        int tilesz;
-       int Nms; /* no. of MS (equivalent to slaves) */
+       int Nms; /* no. of MS (not necessarily equivalent to slaves) */
        int totalt; /* total no of time slots */
        double *freqs; /* channel freqs, size Nmsx 1 */
        double freq0; /* reference freq (use average) */
@@ -101,12 +101,18 @@ extern int
 sagecal_master(int argc, char **argv);
 
 
-
 /********* sagecal_slave.cpp ******************************************/
 extern int 
 sagecal_slave(int argc, char **argv);
 
 
+/********* sagecal_stochastic_master.cpp ******************************************/
+extern int 
+sagecal_stochastic_master(int argc, char **argv);
+
+/********* sagecal_stochastic_slave.cpp ******************************************/
+extern int 
+sagecal_stochastic_slave(int argc, char **argv);
 
 
 #endif /* __PROTO_H__ */
