@@ -562,6 +562,7 @@ cout<<"Slave "<<myrank<<" has nothing to do"<<endl;
     cublasHandle_t cbhandle;
     cusolverDnHandle_t solver_handle;
     init_task_hist(&thst);
+    attach_gpu_to_thread(select_work_gpu(MAX_GPU_ID,&thst), &cbhandle, &solver_handle);
 
     short *hbb;
     int *ptoclus;
@@ -686,10 +687,6 @@ cout<<"Slave "<<myrank<<" quitting"<<endl;
         /* updated values for xo, coh, freqs, Nchan, deltaf needed */
         /*  call LBFGS routine */
 
-      /* first attach to a GPU */
-#ifdef HAVE_CUDA
-      attach_gpu_to_thread(select_work_gpu(MAX_GPU_ID,&thst), &cbhandle, &solver_handle);
-#endif
       for (ii=0; ii<nsolbw; ii++) {
         /* find B.Z for this freq, for all clusters */
         for (ci=0; ci<Mt; ci++) {
@@ -714,9 +711,6 @@ cout<<"Slave "<<myrank<<" quitting"<<endl;
        resband[ii]=(res_00[0]>0.0 && res_01[0]>0.0 ? res_01[0]: CLM_DBL_MAX);
        printf("%d: admm=%d epoch=%d minibatch=%d band=%d primal %lf %lf %lf\n",myrank,nadmm,nepch,nmb,ii,my_dnrm2(8*iodata_vec[0].N*Mt,z),res_00[0],res_01[0]);
       }
-#ifdef HAVE_CUDA
-      detach_gpu_from_thread(cbhandle,solver_handle);
-#endif
       /* find average residual over bands*/
       res_0/=(double)nsolbw;
       res_1/=(double)nsolbw;
@@ -994,6 +988,7 @@ beam_vec[0].p_ra0,beam_vec[0].p_dec0,iodata_vec[0].freq0,beam_vec[0].sx,beam_vec
     /**********************************************************/
 
 #ifdef HAVE_CUDA
+   detach_gpu_from_thread(cbhandle,solver_handle);
    destroy_task_hist(&thst);
    free(hbb);
    free(ptoclus);
