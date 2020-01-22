@@ -296,12 +296,11 @@ run_minibatch_calibration(void) {
         cudaDeviceSetLimit(cudaLimitMallocHeapSize, Data::heapsize*1024*1024);
      }
     }
-    /* also attach to a GPU */
+    /* for attaching to a GPU */
     taskhist thst;
     cublasHandle_t cbhandle;
     cusolverDnHandle_t solver_handle;
     init_task_hist(&thst);
-    attach_gpu_to_thread(select_work_gpu(MAX_GPU_ID,&thst), &cbhandle, &solver_handle);
 
     short *hbb;
     int *ptoclus;
@@ -410,6 +409,10 @@ run_minibatch_calibration(void) {
         /* iterate over solutions covering full bandwidth */
         /* updated values for xo, coh, freqs, Nchan, deltaf needed */
         /*  call LBFGS routine */
+      /* first attach to a GPU */
+#ifdef HAVE_CUDA
+      attach_gpu_to_thread(select_work_gpu(MAX_GPU_ID,&thst), &cbhandle, &solver_handle);
+#endif
       for (ii=0; ii<nsolbw; ii++) {
 #ifdef HAVE_CUDA
        bfgsfit_minibatch_visibilities(iodata.u,iodata.v,iodata.w,&iodata.xo[iodata.Nbase*iodata.tilesz*8*chanstart[ii]],iodata.N,iodata.Nbase,iodata.tilesz,hbb,ptoclus,&coh[M*iodata.Nbase*iodata.tilesz*4*chanstart[ii]],M,Mt,&iodata.freqs[chanstart[ii]],nchan[ii],deltafch*(double)nchan[ii],&pfreq[iodata.N*8*Mt*ii],Data::Nt,Data::max_lbfgs,Data::lbfgs_m,Data::gpu_threads,Data::solver_mode,mean_nu,&res_00,&res_01,&ptdata_array[ii],nmb,minibatches);
@@ -421,6 +424,9 @@ run_minibatch_calibration(void) {
        resband[ii]=res_01;
        printf("epoch=%d minibatch=%d band=%d %lf %lf\n",nepch,nmb,ii,res_00,res_01);
       }
+#ifdef HAVE_CUDA
+     detach_gpu_from_thread(cbhandle,solver_handle);
+#endif
     /****************** end calibration **************************/
       /* find average residual over bands*/
       res_0/=(double)nsolbw;
@@ -570,7 +576,6 @@ beam.p_ra0,beam.p_dec0,iodata.freq0,beam.sx,beam.sy,beam.time_utc,beam.Nelem,bea
     free(chanstart);
 
 #ifdef HAVE_CUDA
-   detach_gpu_from_thread(cbhandle,solver_handle);
    destroy_task_hist(&thst);
    free(hbb);
    free(ptoclus);
