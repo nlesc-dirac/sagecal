@@ -520,7 +520,7 @@ run_minibatch_consensus_calibration(void) {
        res_1+=res_01;
        /* check also if any residuals are -ve, and make resband inf to trigger bad sol */
        resband[ii]=(res_00>0.0 && res_01>0.0 ? res_01: CLM_DBL_MAX);
-       printf("admm=%d epoch=%d minibatch=%d band=%d primal %lf %lf %lf\n",nadmm,nepch,nmb,ii,my_dnrm2(8*iodata.N*Mt,z),res_00,res_01);
+       printf("admm=%d epoch=%d minibatch=%d band=%d primal %lf %lf %lf\n",nadmm,nepch,nmb,ii,my_dnrm2(8*iodata.N*Mt,z)/sqrt((double)8*iodata.N*Mt),res_00,res_01);
       }
       /* find average residual over bands*/
       res_0/=(double)nsolbw;
