@@ -709,7 +709,7 @@ cout<<"Slave "<<myrank<<" quitting"<<endl;
        res_1+=res_01[0];
        /* check also if any residuals are -ve, and make resband inf to trigger bad sol */
        resband[ii]=(res_00[0]>0.0 && res_01[0]>0.0 ? res_01[0]: CLM_DBL_MAX);
-       printf("%d: admm=%d epoch=%d minibatch=%d band=%d primal %lf %lf %lf\n",myrank,nadmm,nepch,nmb,ii,my_dnrm2(8*iodata_vec[0].N*Mt,z),res_00[0],res_01[0]);
+       printf("%d: admm=%d epoch=%d minibatch=%d band=%d primal %lf %lf %lf\n",myrank,nadmm,nepch,nmb,ii,my_dnrm2(8*iodata_vec[0].N*Mt,z)/sqrt((double)8*iodata_vec[0].N*Mt),res_00[0],res_01[0]);
       }
       /* find average residual over bands*/
       res_0/=(double)nsolbw;
