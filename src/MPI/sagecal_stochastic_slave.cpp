@@ -421,7 +421,7 @@ cout<<"Slave "<<myrank<<" has nothing to do"<<endl;
 
 
     /* ADMM memory */
-    double *Z,*Zold,*Zavg,*Y,*z,*B,*Bii,*rhok;
+    double *Z,*Zold,*Zavg,*X,*Y,*z,*B,*Bii,*rhok;
     /* Z: 2Nx2 x Npoly x Mt */
     /* keep ordered by Mt (one direction together) */
     if ((Z=(double*)calloc((size_t)iodata_vec[0].N*8*Npoly*Mt,sizeof(double)))==0) {
@@ -433,6 +433,11 @@ cout<<"Slave "<<myrank<<" has nothing to do"<<endl;
      exit(1);
     }
     if ((Zavg=(double*)calloc((size_t)iodata_vec[0].N*8*Npoly*Mt,sizeof(double)))==0) {
+     fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
+     exit(1);
+    }
+    /* X: Lagrange multiplier for Z-Zavg constraint */
+    if ((X=(double*)calloc((size_t)iodata_vec[0].N*8*Npoly*Mt,sizeof(double)))==0) {
      fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
      exit(1);
     }
@@ -627,6 +632,7 @@ cout<<"Slave "<<myrank<<" quitting"<<endl;
 
 
      memset(Y,0,sizeof(double)*(size_t)iodata_vec[0].N*8*Mt*nsolbw);
+     memset(X,0,sizeof(double)*(size_t)iodata_vec[0].N*8*Mt*Npoly);
      for (int nadmm=0; nadmm<Nadmm; nadmm++) {
       for (int nepch=0; nepch<nepochs; nepch++) {
         for (int nmb=0; nmb<minibatches; nmb++) {
@@ -770,7 +776,10 @@ cout<<"Slave "<<myrank<<" quitting"<<endl;
          /*for(int cdb=0; cdb<8*iodata_vec[0].N; cdb++) {
          fprintf(fdebug,"%lf %lf\n",alpha*Zavg[8*iodata_vec[0].N*(Npoly*ci+cj)+cdb],z[8*iodata_vec[0].N*(M*cj+ci)+cdb]);
          }*/
+         /* add (alpha Zavg) */
          my_daxpy(8*iodata_vec[0].N,&Zavg[8*iodata_vec[0].N*(Npoly*ci+cj)],alpha,&z[8*iodata_vec[0].N*(M*cj+ci)]);
+         /* now add -X */
+         my_daxpy(8*iodata_vec[0].N,&X[8*iodata_vec[0].N*(Npoly*ci+cj)],-1.0,&z[8*iodata_vec[0].N*(M*cj+ci)]);
         }
        }
        /*fprintf(fdebug,"];\n");
@@ -818,9 +827,11 @@ cout<<"Slave "<<myrank<<" quitting"<<endl;
       fprintf(fdebug,"];\n");
       fclose(fdebug); */
 
-      /* find error */
+      /* find error (Z-Zavg) */
       my_dcopy(iodata_vec[0].N*8*Npoly*Mt,Z,1,Zold,1);
       my_daxpy(iodata_vec[0].N*8*Npoly*Mt,Zavg,-1.0,Zold);
+      /* update X <= X + alpha (Z-Zavg) */
+      my_daxpy(iodata_vec[0].N*8*Npoly*Mt,Zold,alpha,X);
       cout<<myrank<<":FEDA: "<<nadmm<<" dual residual="<<my_dnrm2(iodata_vec[0].N*8*Npoly*Mt,Zold)/sqrt((double)8*iodata_vec[0].N*Npoly*Mt)<<endl;
      } /* admm */
 
@@ -1063,6 +1074,7 @@ beam_vec[0].p_ra0,beam_vec[0].p_dec0,iodata_vec[0].freq0,beam_vec[0].sx,beam_vec
   free(Z);
   free(Zold);
   free(Zavg);
+  free(X);
   free(z);
   free(Y);
   free(B);
