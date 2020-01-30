@@ -382,7 +382,7 @@ run_minibatch_consensus_calibration(void) {
         cudaDeviceSetLimit(cudaLimitMallocHeapSize, Data::heapsize*1024*1024);
      }
     }
-    /* also attach to a GPU */
+    /* for attaching to a GPU */
     taskhist thst;
     cublasHandle_t cbhandle; 
     cusolverDnHandle_t solver_handle;
@@ -514,10 +514,13 @@ run_minibatch_consensus_calibration(void) {
 #else
         bfgsfit_minibatch_consensus(iodata.u,iodata.v,iodata.w,&iodata.xo[iodata.Nbase*iodata.tilesz*8*chanstart[ii]],iodata.N,iodata.Nbase,iodata.tilesz,barr,carr,&coh[M*iodata.Nbase*iodata.tilesz*4*chanstart[ii]],M,Mt,&iodata.freqs[chanstart[ii]],nchan[ii],deltafch*(double)nchan[ii],&pfreq[iodata.N*8*Mt*ii],&Y[iodata.N*8*Mt*ii],z,&rhok[ii*Mt],Data::Nt,Data::max_lbfgs,Data::lbfgs_m,Data::gpu_threads,Data::solver_mode,mean_nu,&res_00,&res_01,&ptdata_array[ii],nmb,minibatches);
 #endif
+       /* find primal residual ||p-z|| = ||J-BZ|| */
+       my_daxpy(8*iodata.N*Mt, &pfreq[iodata.N*8*Mt*ii], -1.0, z);
        res_0+=res_00;
        res_1+=res_01;
-       resband[ii]=res_01;
-       printf("admm=%d epoch=%d minibatch=%d band=%d %lf %lf\n",nadmm,nepch,nmb,ii,res_00,res_01);
+       /* check also if any residuals are -ve, and make resband inf to trigger bad sol */
+       resband[ii]=(res_00>0.0 && res_01>0.0 ? res_01: CLM_DBL_MAX);
+       printf("admm=%d epoch=%d minibatch=%d band=%d primal %lf %lf %lf\n",nadmm,nepch,nmb,ii,my_dnrm2(8*iodata.N*Mt,z)/sqrt((double)8*iodata.N*Mt),res_00,res_01);
       }
       /* find average residual over bands*/
       res_0/=(double)nsolbw;

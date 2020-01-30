@@ -296,7 +296,7 @@ run_minibatch_calibration(void) {
         cudaDeviceSetLimit(cudaLimitMallocHeapSize, Data::heapsize*1024*1024);
      }
     }
-    /* also attach to a GPU */
+    /* for attaching to a GPU */
     taskhist thst;
     cublasHandle_t cbhandle;
     cusolverDnHandle_t solver_handle;
