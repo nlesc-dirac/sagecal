@@ -421,7 +421,7 @@ cout<<"Slave "<<myrank<<" has nothing to do"<<endl;
 
 
     /* ADMM memory */
-    double *Z,*Zold,*Zavg,*Y,*z,*B,*Bii,*rhok;
+    double *Z,*Zold,*Zavg,*X,*Y,*z,*B,*Bii,*rhok;
     /* Z: 2Nx2 x Npoly x Mt */
     /* keep ordered by Mt (one direction together) */
     if ((Z=(double*)calloc((size_t)iodata_vec[0].N*8*Npoly*Mt,sizeof(double)))==0) {
@@ -433,6 +433,11 @@ cout<<"Slave "<<myrank<<" has nothing to do"<<endl;
      exit(1);
     }
     if ((Zavg=(double*)calloc((size_t)iodata_vec[0].N*8*Npoly*Mt,sizeof(double)))==0) {
+     fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
+     exit(1);
+    }
+    /* X: Lagrange multiplier for Z-Zavg constraint */
+    if ((X=(double*)calloc((size_t)iodata_vec[0].N*8*Npoly*Mt,sizeof(double)))==0) {
      fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
      exit(1);
     }
@@ -557,7 +562,7 @@ cout<<"Slave "<<myrank<<" has nothing to do"<<endl;
         cudaDeviceSetLimit(cudaLimitMallocHeapSize, Data::heapsize*1024*1024);
      }
     }
-    /* also attach to a GPU */
+    /* for attaching to a GPU */
     taskhist thst;
     cublasHandle_t cbhandle;
     cusolverDnHandle_t solver_handle;
@@ -627,6 +632,7 @@ cout<<"Slave "<<myrank<<" quitting"<<endl;
 
 
      memset(Y,0,sizeof(double)*(size_t)iodata_vec[0].N*8*Mt*nsolbw);
+     memset(X,0,sizeof(double)*(size_t)iodata_vec[0].N*8*Mt*Npoly);
      for (int nadmm=0; nadmm<Nadmm; nadmm++) {
       for (int nepch=0; nepch<nepochs; nepch++) {
         for (int nmb=0; nmb<minibatches; nmb++) {
@@ -686,6 +692,7 @@ cout<<"Slave "<<myrank<<" quitting"<<endl;
         /* iterate over solutions covering full bandwidth */
         /* updated values for xo, coh, freqs, Nchan, deltaf needed */
         /*  call LBFGS routine */
+
       for (ii=0; ii<nsolbw; ii++) {
         /* find B.Z for this freq, for all clusters */
         for (ci=0; ci<Mt; ci++) {
@@ -702,10 +709,13 @@ cout<<"Slave "<<myrank<<" quitting"<<endl;
 #else
         bfgsfit_minibatch_consensus(iodata_vec[0].u,iodata_vec[0].v,iodata_vec[0].w,&iodata_vec[0].xo[iodata_vec[0].Nbase*iodata_vec[0].tilesz*8*chanstart[ii]],iodata_vec[0].N,iodata_vec[0].Nbase,iodata_vec[0].tilesz,barr_vec[0],carr_vec[0],&coh_vec[0][M*iodata_vec[0].Nbase*iodata_vec[0].tilesz*4*chanstart[ii]],M,Mt,&iodata_vec[0].freqs[chanstart[ii]],nchan[ii],deltafch*(double)nchan[ii],&pfreq_vec[0][iodata_vec[0].N*8*Mt*ii],&Y[iodata_vec[0].N*8*Mt*ii],z,&rhok[ii*Mt],Data::Nt,Data::max_lbfgs,Data::lbfgs_m,Data::gpu_threads,Data::solver_mode,mean_nu,&res_00[0],&res_01[0],&ptdata_array[ii],nmb,minibatches);
 #endif
+       /* find primal residual ||p-z|| = ||J-BZ|| */
+       my_daxpy(8*iodata_vec[0].N*Mt, &pfreq_vec[0][iodata_vec[0].N*8*Mt*ii], -1.0, z);
        res_0+=res_00[0];
        res_1+=res_01[0];
-       resband[ii]=res_01[0];
-       printf("%d: admm=%d epoch=%d minibatch=%d band=%d %lf %lf\n",myrank,nadmm,nepch,nmb,ii,res_00[0],res_01[0]);
+       /* check also if any residuals are -ve, and make resband inf to trigger bad sol */
+       resband[ii]=(res_00[0]>0.0 && res_01[0]>0.0 ? res_01[0]: CLM_DBL_MAX);
+       printf("%d: admm=%d epoch=%d minibatch=%d band=%d primal %lf %lf %lf\n",myrank,nadmm,nepch,nmb,ii,my_dnrm2(8*iodata_vec[0].N*Mt,z)/sqrt((double)8*iodata_vec[0].N*Mt),res_00[0],res_01[0]);
       }
       /* find average residual over bands*/
       res_0/=(double)nsolbw;
@@ -731,9 +741,13 @@ cout<<"Slave "<<myrank<<" quitting"<<endl;
       }
 
       /* update Z : sum up B(Y+rho J) first*/
-      for (ci=0; ci<Npoly; ci++) {
+      if (!fband[0]) {
+       for (ci=0; ci<Npoly; ci++) {
         my_dcopy(8*iodata_vec[0].N*Mt,Y,1,&z[ci*8*iodata_vec[0].N*Mt],1);
         my_dscal(8*iodata_vec[0].N*Mt,B[ci],&z[ci*8*iodata_vec[0].N*Mt]);
+       }
+      } else {
+        memset(z,0,sizeof(double)*(size_t)iodata_vec[0].N*8*Mt*Npoly);
       }
       for (ii=1; ii<nsolbw; ii++) {
         if (!fband[ii]) { /* only update for good solutions */
@@ -746,11 +760,30 @@ cout<<"Slave "<<myrank<<" quitting"<<endl;
       /* now add fed. avg. of Zavgxalpha, column by column (8NM values) to z
         at right location (shuffle). essentially the whole 8NMxNpoly values can be added in one step */
       /* ordering Z,Zavg: 8N Npoly x M,  z: 8N M Npoly x 1
+        z: (8NM) (8NM) .. : Npoly times
+        Z: (8N Npoly) (8N Npoly) .. : M times
         so transepose Npoly x M to M x Npoly from Z to z  */
-      for (ci=0; ci<Mt; ci++) {
+      if (nadmm>0) { /* initial Zavg=0, so no need to add */
+
+       /*FILE *fdebug;
+       string filebuff=std::string("slave_")+to_string(myrank)+std::string("_debug.m\0");
+       fdebug=fopen(filebuff.c_str(),"a+");
+       fprintf(fdebug,"AZ_z_%d=[\n",nadmm);
+       */
+
+       for (ci=0; ci<Mt; ci++) {
         for (cj=0; cj<Npoly; cj++) {
-         my_daxpy(8*iodata_vec[0].N,&Zavg[8*iodata_vec[0].N*Npoly*ci+8*iodata_vec[0].N*cj],alpha,&z[8*iodata_vec[0].N*M*cj+8*iodata_vec[0].N*ci]);
+         /*for(int cdb=0; cdb<8*iodata_vec[0].N; cdb++) {
+         fprintf(fdebug,"%lf %lf\n",alpha*Zavg[8*iodata_vec[0].N*(Npoly*ci+cj)+cdb],z[8*iodata_vec[0].N*(M*cj+ci)+cdb]);
+         }*/
+         /* add (alpha Zavg) */
+         my_daxpy(8*iodata_vec[0].N,&Zavg[8*iodata_vec[0].N*(Npoly*ci+cj)],alpha,&z[8*iodata_vec[0].N*(M*cj+ci)]);
+         /* now add -X */
+         my_daxpy(8*iodata_vec[0].N,&X[8*iodata_vec[0].N*(Npoly*ci+cj)],-1.0,&z[8*iodata_vec[0].N*(M*cj+ci)]);
         }
+       }
+       /*fprintf(fdebug,"];\n");
+       fclose(fdebug); */
       }
 
       my_dcopy(iodata_vec[0].N*8*Npoly*Mt,Z,1,Zold,1);
@@ -783,11 +816,23 @@ cout<<"Slave "<<myrank<<" quitting"<<endl;
       MPI_Send(Z, iodata_vec[0].N*8*Npoly*Mt, MPI_DOUBLE, 0,TAG_MSAUX, MPI_COMM_WORLD);
       MPI_Recv(Zavg, iodata_vec[0].N*8*Npoly*Mt, MPI_DOUBLE, 0,TAG_MSAUX, MPI_COMM_WORLD,&status);
 
-      /* find error */
+       /*FILE *fdebug;
+       string filebuff=std::string("slave_")+to_string(myrank)+std::string("_debug.m\0");
+       fdebug=fopen(filebuff.c_str(),"a+");
+
+      fprintf(fdebug,"Z_Zavg_%d=[\n",nadmm);
+      for(ci=0; ci<8*iodata_vec[0].N*Mt*Npoly; ci++) {
+        fprintf(fdebug,"%lf %lf\n",Z[ci],Zavg[ci]);
+      }
+      fprintf(fdebug,"];\n");
+      fclose(fdebug); */
+
+      /* find error (Z-Zavg) */
       my_dcopy(iodata_vec[0].N*8*Npoly*Mt,Z,1,Zold,1);
       my_daxpy(iodata_vec[0].N*8*Npoly*Mt,Zavg,-1.0,Zold);
+      /* update X <= X + alpha (Z-Zavg) */
+      my_daxpy(iodata_vec[0].N*8*Npoly*Mt,Zold,alpha,X);
       cout<<myrank<<":FEDA: "<<nadmm<<" dual residual="<<my_dnrm2(iodata_vec[0].N*8*Npoly*Mt,Zold)/sqrt((double)8*iodata_vec[0].N*Npoly*Mt)<<endl;
-      //my_dcopy(iodata_vec[0].N*8*Npoly*Mt,Zavg,1,Z,1);
      } /* admm */
 
      if (start_iter) { start_iter=0; }
@@ -1029,6 +1074,7 @@ beam_vec[0].p_ra0,beam_vec[0].p_dec0,iodata_vec[0].freq0,beam_vec[0].sx,beam_vec
   free(Z);
   free(Zold);
   free(Zavg);
+  free(X);
   free(z);
   free(Y);
   free(B);

@@ -301,12 +301,6 @@ cout<<"Freq range (MHz) ["<<min_f*1e-6<<","<<max_f*1e-6<<"]"<<endl;
      fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
      exit(1);
     }
-    /* need a copy */
-    double *Zavg;
-    if ((Zavg=(double*)calloc((size_t)iodata.N*8*Npoly*iodata.M,sizeof(double)))==0) {
-     fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
-     exit(1);
-    }
 
    /**********************************************************/
     /* determine how many iterations are needed */
@@ -348,7 +342,8 @@ cout<<"Freq range (MHz) ["<<min_f*1e-6<<","<<max_f*1e-6<<"]"<<endl;
     /* find the average over quotient manifold, say Zav 
       and project it back to Z for each freq, Z : 2N.Npoly x 2 blocks, 
      total nslaves, per each M direction : Z input and output */
-    calculate_manifold_average_projectback(iodata.N*Npoly,iodata.M,nslaves,Z,20,Data::randomize,Data::Nt);
+    /* first admm use more iterations, otherwise just a few (does not help in later loops) */
+    calculate_manifold_average_projectback(iodata.N*Npoly,iodata.M,nslaves,Z,(nadmm>0?2:10),Data::randomize,Data::Nt);
     /* send  back to all slaves */
     for (int cm=0; cm<nslaves; cm++) {
      MPI_Send(&Z[cm*iodata.N*8*Npoly*iodata.M], iodata.N*8*Npoly*iodata.M, MPI_DOUBLE, cm+1,TAG_MSAUX, MPI_COMM_WORLD);
@@ -382,9 +377,8 @@ cout<<"Freq range (MHz) ["<<min_f*1e-6<<","<<max_f*1e-6<<"]"<<endl;
 
    delete [] iodata.freqs;
    free(Z);
-   free(Zavg);
   /**********************************************************/
 
-   cout<<"Masted Done."<<endl;    
+   cout<<"Done."<<endl;    
    return 0;
 }
