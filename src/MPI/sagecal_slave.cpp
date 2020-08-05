@@ -122,7 +122,8 @@ cout<<"Error in checking files matching pattern "<<buf1<<". Exiting."<<endl;
         delete [] buf;
       }
      } else {
-cout<<"Slave "<<myrank<<" has nothing to do"<<endl;
+cerr<<"Error: Worker "<<myrank<<" has nothing to do"<<endl;
+cerr<<"Error: Worker "<<myrank<<": Recheck your allocation or reduce number of workers"<<endl;
        return 0;
      }
 
@@ -474,7 +475,7 @@ cout<<"Slave "<<myrank<<" has nothing to do"<<endl;
      MPI_Recv(&msgcode,1,MPI_INT,0,TAG_CTRL,MPI_COMM_WORLD,&status);
      /* assume all MS are the same size */  
      if (msgcode==CTRL_END || !msitr[0]->more()) {
-cout<<"Slave "<<myrank<<" quitting"<<endl;
+cout<<"Worker "<<myrank<<" quitting"<<endl;
       break;
      } else if (msgcode==CTRL_SKIP) {
       /* skip to next timeslot */

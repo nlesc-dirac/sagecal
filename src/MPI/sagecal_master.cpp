@@ -209,7 +209,7 @@ cout<<"Master received all "<<totalfiles<<" files"<<endl;
    int mintotal=0;
    for (int cm=0; cm<nslaves; cm++) {
     int thistotal=Send[cm]-Sbegin[cm]+1;
-    cout<<"Slave "<<cm+1<<" MS range "<<Sbegin[cm]<<":"<<Send[cm]<<" total "<<thistotal<<endl;
+    cout<<"Worker "<<cm+1<<" MS range "<<Sbegin[cm]<<":"<<Send[cm]<<" total "<<thistotal<<endl;
     if (mintotal<thistotal) { mintotal=thistotal; }
    }
    //print a warning if no of ADMM iterations is too low
@@ -240,7 +240,7 @@ cout<<"Master received all "<<totalfiles<<" files"<<endl;
          MPI_Recv(bufint, 6, /* MS-id, N,Mo(actual clusters),M(with hybrid),tilesz,totalt */
            MPI_INT, cm+1, TAG_MSAUX, MPI_COMM_WORLD, &status);
          int thismsid=bufint[0];
-cout<<"Slave "<<cm+1<<" MS="<<thismsid<<" N="<<bufint[1]<<" M="<<bufint[2]<<"/"<<bufint[3]<<" tilesz="<<bufint[4]<<" totaltime="<<bufint[5]<<endl;
+cout<<"Worker "<<cm+1<<" MS="<<thismsid<<" N="<<bufint[1]<<" M="<<bufint[2]<<"/"<<bufint[3]<<" tilesz="<<bufint[4]<<" totaltime="<<bufint[5]<<endl;
          if (cm==0 && ct==0) { /* update metadata */
           iodata.N=bufint[1];
           Mo=bufint[2];
@@ -250,7 +250,7 @@ cout<<"Slave "<<cm+1<<" MS="<<thismsid<<" N="<<bufint[1]<<" M="<<bufint[2]<<"/"<
 
          } else { /* check metadata for problem consistency */
            if ((iodata.N != bufint[1]) || (iodata.M != bufint[3]) || (iodata.tilesz != bufint[4])) {
-            cout<<"Slave "<<cm+1<<" parameters do not match  N="<<bufint[1]<<" M="<<bufint[3]<<" tilesz="<<bufint[4]<<endl;
+            cout<<"Worker "<<cm+1<<" parameters do not match  N="<<bufint[1]<<" M="<<bufint[3]<<" tilesz="<<bufint[4]<<endl;
             exit(1);
            }
            if (iodata.totalt<bufint[5]) {
@@ -262,7 +262,7 @@ cout<<"Slave "<<cm+1<<" MS="<<thismsid<<" N="<<bufint[1]<<" M="<<bufint[2]<<"/"<
            MPI_DOUBLE, cm+1, TAG_MSAUX, MPI_COMM_WORLD, &status);
          iodata.freqs[thismsid]=bufdouble[0];
          iodata.freq0 +=bufdouble[0];
-         cout<<"Slave "<<cm+1<<" MS="<<thismsid<<" frequency (MHz)="<<bufdouble[0]*1e-6<<endl;
+         cout<<"Worker "<<cm+1<<" MS="<<thismsid<<" frequency (MHz)="<<bufdouble[0]*1e-6<<endl;
         }
      }
    }
