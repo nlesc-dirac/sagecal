@@ -636,13 +636,13 @@ cout<<"Reference frequency (MHz)="<<iodata.freq0*1.0e-6<<endl;
 	       }
 	      }
 
+        if (Data::aadmm) {
         /* BB : get updated rho from slaves */
         for (int cm=0; cm<nslaves; cm++) {
            if (Sbegin[cm]>=0) {
             int mmid=Sbegin[cm]+Scurrent[cm];
             MPI_Recv(arhoslave,Mo,MPI_DOUBLE,cm+1,TAG_RHO_UPDATE,MPI_COMM_WORLD,&status);
             /* now copy this to proper locations, using chunkvec as guide */
-            //MPI_Recv(&rhok[mmid*iodata.M],iodata.M,MPI_DOUBLE,cm+1,TAG_RHO_UPDATE,MPI_COMM_WORLD,&status);
             int chk1=0;
             double *rhoptr=&rhok[mmid*iodata.M];
             for (int chk2=0; chk2<Mo; chk2++) {
@@ -653,6 +653,7 @@ cout<<"Reference frequency (MHz)="<<iodata.freq0*1.0e-6<<endl;
             }
            }
         }
+        }
   
         /* go to the next MS in the next ADMM iteration */
         for (int cm=0; cm<nslaves; cm++) {
@@ -661,6 +662,71 @@ cout<<"Reference frequency (MHz)="<<iodata.freq0*1.0e-6<<endl;
            Scurrent[cm]=(Sbegin[cm]+Scurrent[cm]>=Send[cm]?0:Scurrent[cm]+1);
           }
         }
+      }
+      
+      if (Data::use_global_solution) {
+      cout<<"Using Global"<<endl;
+
+      /* get back final solutions from each worker */
+      /* get Y_i+rho J_i */
+      for(int cm=0; cm<nslaves; cm++) {
+            if (Sbegin[cm]>=0) {
+             int scount=Send[cm]-Sbegin[cm]+1;
+             for (int ct1=0; ct1<scount; ct1++) {
+              int mmid=Sbegin[cm]+ct1;
+              MPI_Recv(&Y[mmid*iodata.N*8*iodata.M], iodata.N*8*iodata.M, MPI_DOUBLE, cm+1,TAG_YDATA, MPI_COMM_WORLD, &status);
+             }
+            }
+      }
+
+
+      /* recalculate Z based on final solutions */
+  
+         /* update Z */
+         /* add to 8NM vector, multiplied by Npoly different scalars, Nms times */
+         for (int ci=0; ci<Npoly; ci++) {
+           my_dcopy(8*iodata.N*iodata.M,Y,1,&z[ci*8*iodata.N*iodata.M],1);
+           my_dscal(8*iodata.N*iodata.M,B[ci],&z[ci*8*iodata.N*iodata.M]);
+         }
+         for (int cm=1; cm<iodata.Nms; cm++) {
+           for (int ci=0; ci<Npoly; ci++) {
+            /* Note: no weighting of Y is needed, because slave has already weighted their rho (we have rho J here) */
+            my_daxpy(8*iodata.N*iodata.M, &Y[cm*8*iodata.N*iodata.M], B[cm*Npoly+ci], &z[ci*8*iodata.N*iodata.M]);
+           }
+         }
+         /* no need to scale by 1/rho here, because Bii is already divided by 1/rho */
+
+         /* find product z_tilde x Bi^T, z_tilde with proper reshaping */
+         my_dcopy(iodata.N*8*Npoly*iodata.M,Z,1,Zerr,1);
+         update_global_z_multi(Z,iodata.N,iodata.M,Npoly,z,Bii,Data::Nt);
+         /* find dual error ||Zold-Znew|| (note Zerr is destroyed here)  */
+         my_daxpy(iodata.N*8*Npoly*iodata.M,Z,-1.0,Zerr);
+         /* dual residual per one real parameter */
+         if (Data::verbose) {
+          cout<<"ADMM : "<<Nadmm<<" dual residual="<<my_dnrm2(iodata.N*8*Npoly*iodata.M,Zerr)/sqrt((double)8*iodata.N*Npoly*iodata.M)<<endl;
+         } else {
+          cout<<"Timeslot:"<<ct<<" ADMM:"<<Nadmm<<endl;
+         }
+
+      /* calculate global solution for each MS and send them to workers */
+
+           for(int cm=0; cm<nslaves; cm++) {
+            if (Sbegin[cm]>=0) {
+             int scount=Send[cm]-Sbegin[cm]+1;
+
+              for (int ct1=0; ct1<scount; ct1++) {
+               int mmid=Sbegin[cm]+ct1;
+               for (int p=0; p<iodata.M; p++) {
+                memset(&z[8*iodata.N*p],0,sizeof(double)*(size_t)iodata.N*8);
+                for (int ci=0; ci<Npoly; ci++) {
+                 my_daxpy(8*iodata.N, &Z[p*8*iodata.N*Npoly+ci*8*iodata.N], B[mmid*Npoly+ci], &z[8*iodata.N*p]);
+                }
+               }
+               MPI_Send(z, iodata.N*8*iodata.M, MPI_DOUBLE, cm+1,TAG_CONSENSUS, MPI_COMM_WORLD);
+              }
+             }
+           }
+
       }
 
       /* wait till all slaves are done writing data */

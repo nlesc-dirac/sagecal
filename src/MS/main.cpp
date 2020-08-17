@@ -96,6 +96,7 @@ print_help(void) {
    cout << "-P consensus polynomial terms: default " <<Data::Npoly<< endl;
    cout << "-Q consensus polynomial type (0,1,2,3): default " <<Data::PolyType<< endl;
    cout << "-r regularization factor: default " <<Data::admm_rho<< endl;
+   cout << "-U 0,1: if >0, use global solution for final residual calculation: default " <<Data::use_global_solution << endl;
    cout << "Note: In stochastic mode, no hybrid solutions are allowed."<<endl<<"All clusters should have 1 in the second column of cluster file."<<endl;
 
    cout <<"Report bugs to <sarod@users.sf.net>"<<endl;
@@ -111,7 +112,7 @@ ParseCmdLine(int ac, char **av) {
         print_help();
         exit(0);
     }
-    while((c=getopt(ac, av, ":a:b:c:d:e:f:g:j:k:l:m:n:o:p:q:r:s:t:w:x:y:z:A:B:D:E:F:H:I:J:L:M:N:O:P:Q:R:S:W:E:h"))!= -1)
+    while((c=getopt(ac, av, ":a:b:c:d:e:f:g:j:k:l:m:n:o:p:q:r:s:t:w:x:y:z:A:B:D:E:F:H:I:J:L:M:N:O:P:Q:R:S:U:W:E:h"))!= -1)
     {
         switch(c)
         {
@@ -234,6 +235,9 @@ ParseCmdLine(int ac, char **av) {
                 break;
             case 'r':
                 admm_rho= atof(optarg);
+                break;
+            case 'U':
+                Data::use_global_solution= atoi(optarg);
                 break;
             case 'D':
                 DoDiag= atoi(optarg);

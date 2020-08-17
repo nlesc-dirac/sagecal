@@ -90,6 +90,7 @@ print_help(void) {
    cout << "-V if given, enable verbose output: default "<<Data::verbose<<endl;
    //cout << "-M if given, evaluate AIC/MDL criteria for polynomials starting from 1 term to the one given by -P and suggest the best polynomial terms to use based on the minimum AIC/MDL: default "<<Data::mdl<<endl;
    cout << "-q solutions.txt: if given, initialize solutions by reading this file (need to have the same format as a solution file, only solutions for 1 timeslot needed)"<< endl;
+   cout << "-U 0,1: if >0, use global solution for final residual calculation: default " <<Data::use_global_solution << endl;
    cout<<endl<<"Stochastic mode:"<<endl;
    cout << "-N epochs, if >0, use stochastic calibration: default "<<Data::stochastic_calib_epochs<< endl;
    cout << "-M minibatches, must be >0, split data to this many minibatches: default "<<Data::stochastic_calib_minibatches<< endl;
@@ -102,7 +103,7 @@ print_help(void) {
 void 
 ParseCmdLine(int ac, char **av) {
     int c;
-    while((c=getopt(ac, av, ":c:e:f:g:j:k:l:m:n:o:p:q:r:s:t:u:w:x:y:A:B:C:E:F:G:H:I:J:K:L:M:N:O:P:Q:R:S:T:W:E:MVh"))!= -1)
+    while((c=getopt(ac, av, ":c:e:f:g:j:k:l:m:n:o:p:q:r:s:t:u:w:x:y:A:B:C:E:F:G:H:I:J:K:L:M:N:O:P:Q:R:S:T:U:W:E:MVh"))!= -1)
     {
         switch(c)
         {
@@ -234,6 +235,9 @@ ParseCmdLine(int ac, char **av) {
                 break;
             case 'u':
                 Data::federated_reg_alpha= atof(optarg);
+                break;
+            case 'U':
+                Data::use_global_solution= atoi(optarg);
                 break;
             case 'h': 
                 print_help();
