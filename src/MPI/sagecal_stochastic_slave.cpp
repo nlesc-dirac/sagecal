@@ -140,7 +140,7 @@ cerr<<"Error: Worker "<<myrank<<": Recheck your allocation or reduce number of w
 
 
     /* how many solutions over the bandwidth?
-       channels divided to get this many solutions */
+       channels (of each MS) divided to get this many solutions */
     int nsolbw=Data::stochastic_calib_bands;
     int *chanstart,*nchan;
 
@@ -351,7 +351,6 @@ cerr<<"Error: Worker "<<myrank<<": Recheck your allocation or reduce number of w
    /* how much can the residual increase before resetting solutions, 
       use a lower value here (original 5) for more robustness, also because this is a log() cost */
    double res_ratio=1.5; /* how much can the residual increase before resetting solutions, set higher than stand alone mode */
-    res_0=res_1=0.0;
     for(int cm=0; cm<mymscount; cm++) {
      res_00[cm]=res_01[cm]=0.0;
      /* previous residual */
@@ -369,6 +368,13 @@ cerr<<"Error: Worker "<<myrank<<": Recheck your allocation or reduce number of w
     }
     /* bandwidth per channel */
     double deltafch=iodata_vec[0].deltaf/(double)iodata_vec[0].Nchan;
+    /* check for other MS */
+    for (int cm=1; cm<mymscount; cm++) {
+     double deltafch1=iodata_vec[cm].deltaf/(double)iodata_vec[cm].Nchan;
+     if (deltafch1!=deltafch) {
+      cout<<"Warning: channel bandwidth of MS "<<cm<<" does not match other MS"<<endl;
+     }
+    }
 
     vector<MSIter*> msitr;
     vector<MeasurementSet*> msvector;
@@ -449,13 +455,15 @@ cerr<<"Error: Worker "<<myrank<<": Recheck your allocation or reduce number of w
     }
     /* copy of Y+rho J, Mt times, for each solution */
     /* keep ordered by M (one direction together) */
-    if ((Y=(double*)calloc((size_t)iodata_vec[0].N*8*Mt*nsolbw,sizeof(double)))==0) {
+    /* multiplied by mymscount for all MS */
+    if ((Y=(double*)calloc((size_t)iodata_vec[0].N*8*Mt*nsolbw*mymscount,sizeof(double)))==0) {
      fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
      exit(1);
     }
 
     /* Npoly terms, for each solution, so Npoly x nsolbw */
-    if ((B=(double*)calloc((size_t)Npoly*nsolbw,sizeof(double)))==0) {
+    /* multiplied by mymscount for all MS */
+    if ((B=(double*)calloc((size_t)Npoly*nsolbw*mymscount,sizeof(double)))==0) {
      fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
      exit(1);
     }
@@ -465,29 +473,33 @@ cerr<<"Error: Worker "<<myrank<<": Recheck your allocation or reduce number of w
      exit(1);
     }
     /* each Mt block is for one freq */
-    if ((rhok=(double*)calloc((size_t)Mt*nsolbw,sizeof(double)))==0) {
+    /* multiplied by mymscount for all MS */
+    if ((rhok=(double*)calloc((size_t)Mt*nsolbw*mymscount,sizeof(double)))==0) {
      fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
      exit(1);
     }
 
     /* freq. vector at each solution is taken */
+    /* multiplied by mymscount for all MS */
     double *ffreq;
-    if ((ffreq=(double*)calloc((size_t)nsolbw,sizeof(double)))==0) {
+    if ((ffreq=(double*)calloc((size_t)nsolbw*mymscount,sizeof(double)))==0) {
      fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
      exit(1);
     }
     /* also find the min,max freq values where solution is taken */
     double min_f,max_f;
     min_f=1e15; max_f=-1e15;
+    for(int cm=0; cm<mymscount; cm++) {
     for (ii=0; ii<nsolbw; ii++) {
       /* consider the case where frequencies are non regular */
       for (int fii=0; fii<nchan[ii]; fii++) {
-        ffreq[ii]+=iodata_vec[0].freqs[chanstart[ii]+fii];
+        ffreq[cm*nsolbw+ii]+=iodata_vec[cm].freqs[chanstart[ii]+fii];
       }
-      ffreq[ii]/=(double)(nchan[ii]); /* mean */
-      printf("%d %lf %lf\n",ii,ffreq[ii],iodata_vec[0].freq0);
-      min_f=(min_f>ffreq[ii]?ffreq[ii]:min_f);
-      max_f=(max_f<ffreq[ii]?ffreq[ii]:max_f);
+      ffreq[cm*nsolbw+ii]/=(double)(nchan[ii]); /* mean */
+      printf("%d %lf %lf\n",ii,ffreq[cm*nsolbw+ii],iodata_vec[cm].freq0);
+      min_f=(min_f>ffreq[cm*nsolbw+ii]?ffreq[cm*nsolbw+ii]:min_f);
+      max_f=(max_f<ffreq[cm*nsolbw+ii]?ffreq[cm*nsolbw+ii]:max_f);
+    }
     }
 
     /* send min,max freq to master */
@@ -505,45 +517,46 @@ cerr<<"Error: Worker "<<myrank<<": Recheck your allocation or reduce number of w
     min_f=bufdouble[0];
     max_f=bufdouble[1];
     double ref_f=bufdouble[2];
-    printf("%d New range %lf %lf %lf\n",myrank,min_f,max_f,ref_f);
+    printf("%d New range %lf %lf %lf\n",myrank,min_f/1e6,max_f/1e6,ref_f/1e6);
     delete [] bufdouble;
     /* resize memory so that polynomials are generated for expanded freq range [min_f,ffreq,max_f] */
+    /* multiplied by mymscount for all MS */
     double *Bext, *ffreq2;
-    if ((Bext=(double*)calloc((size_t)Npoly*(nsolbw+2),sizeof(double)))==0) {
+    if ((Bext=(double*)calloc((size_t)Npoly*(nsolbw*mymscount+2),sizeof(double)))==0) {
      fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
      exit(1);
     }
-    if ((ffreq2=(double*)calloc((size_t)(nsolbw+2),sizeof(double)))==0) {
+    if ((ffreq2=(double*)calloc((size_t)(nsolbw*mymscount+2),sizeof(double)))==0) {
      fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
      exit(1);
     }
-    memcpy(ffreq2,ffreq,(size_t)(nsolbw)*sizeof(double));
-    ffreq2[nsolbw]=min_f;
-    ffreq2[nsolbw+1]=max_f;
+    memcpy(ffreq2,ffreq,(size_t)(nsolbw*mymscount)*sizeof(double));
+    ffreq2[nsolbw*mymscount]=min_f;
+    ffreq2[nsolbw*mymscount+1]=max_f;
 
 
     /* setup polynomials */
-    setup_polynomials(Bext, Npoly, nsolbw+2, ffreq2, ref_f,(Npoly==1?1:PolyType));
+    setup_polynomials(Bext, Npoly, nsolbw*mymscount+2, ffreq2, ref_f,(Npoly==1?1:PolyType));
 
-    memcpy(B,Bext,(size_t)(nsolbw*Npoly)*sizeof(double));
+    memcpy(B,Bext,(size_t)(nsolbw*mymscount*Npoly)*sizeof(double));
 
     double alpha=Data::federated_reg_alpha;
-    setweights(Mt*nsolbw,rhok,Data::admm_rho,Data::Nt);
+    setweights(Mt*nsolbw*mymscount,rhok,Data::admm_rho,Data::Nt);
     /* find inverse of B for each cluster, solution, alpha is fed. avg. regularization */
-    find_prod_inverse_full_fed(B,Bii,Npoly,nsolbw,Mt,rhok,alpha,Data::Nt);
+    find_prod_inverse_full_fed(B,Bii,Npoly,nsolbw*mymscount,Mt,rhok,alpha,Data::Nt);
 
     free(ffreq);
     free(ffreq2);
     free(Bext);
 
-    /* vector for keeping residual of each miniband and flag vector */
+    /* vector for keeping residual of each miniband x MS and flag vector */
     double *resband;
     int *fband;
-    if ((resband=(double*)calloc((size_t)nsolbw,sizeof(double)))==0) {
+    if ((resband=(double*)calloc((size_t)nsolbw*mymscount,sizeof(double)))==0) {
      fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
      exit(1);
     }
-    if ((fband=(int*)calloc((size_t)nsolbw,sizeof(int)))==0) {
+    if ((fband=(int*)calloc((size_t)nsolbw*mymscount,sizeof(int)))==0) {
      fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
      exit(1);
     }
@@ -598,17 +611,20 @@ cerr<<"Error: Worker "<<myrank<<": Recheck your allocation or reduce number of w
       /* persistent memory between batches (y,s) pairs
        and info about online var(||grad||) estimate */
       persistent_data_t *ptdata_array;
-      if ((ptdata_array=(persistent_data_t*)calloc((size_t)nsolbw,sizeof(persistent_data_t)))==0) {
+      if ((ptdata_array=(persistent_data_t*)calloc((size_t)nsolbw*mymscount,sizeof(persistent_data_t)))==0) {
          fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
          exit(1);
       }
+
+      for(int cm=0; cm<mymscount; cm++) {
       for (ii=0; ii<nsolbw; ii++) {
-        lbfgs_persist_init(&ptdata_array[ii],minibatches,iodata_vec[0].N*8*Mt,iodata_vec[0].Nbase*iodata_vec[0].tilesz,Data::lbfgs_m,Data::gpu_threads);
+        lbfgs_persist_init(&ptdata_array[cm*nsolbw+ii],minibatches,iodata_vec[cm].N*8*Mt,iodata_vec[cm].Nbase*iodata_vec[cm].tilesz,Data::lbfgs_m,Data::gpu_threads);
 #ifdef HAVE_CUDA
         /* pointers to cublas/solver */
-        ptdata_array[ii].cbhandle=&cbhandle;
-        ptdata_array[ii].solver_handle=&solver_handle;
+        ptdata_array[cm*nsolbw+ii].cbhandle=&cbhandle;
+        ptdata_array[cm*nsolbw+ii].solver_handle=&solver_handle;
 #endif
+      }
       }
 
 
@@ -632,42 +648,43 @@ cout<<"Worker "<<myrank<<" quitting"<<endl;
      }
 
 
-     memset(Y,0,sizeof(double)*(size_t)iodata_vec[0].N*8*Mt*nsolbw);
+     memset(Y,0,sizeof(double)*(size_t)iodata_vec[0].N*8*Mt*nsolbw*mymscount);
      memset(X,0,sizeof(double)*(size_t)iodata_vec[0].N*8*Mt*Npoly);
      for (int nadmm=0; nadmm<Nadmm; nadmm++) {
       for (int nepch=0; nepch<nepochs; nepch++) {
         for (int nmb=0; nmb<minibatches; nmb++) {
+        for(int cm=0; cm<mymscount; cm++) {
 /******************************* work on minibatch *****************************/
         if (!doBeam) {
-         Data::loadDataMinibatch(msitr[0]->table(),iodata_vec[0],nmb,&iodata_vec[0].fratio);
+         Data::loadDataMinibatch(msitr[cm]->table(),iodata_vec[cm],nmb,&iodata_vec[cm].fratio);
         } else {
-         Data::loadDataMinibatch(msitr[0]->table(),iodata_vec[0],beam_vec[0],nmb,&iodata_vec[0].fratio);
+         Data::loadDataMinibatch(msitr[cm]->table(),iodata_vec[cm],beam_vec[cm],nmb,&iodata_vec[cm].fratio);
         }
         /* rescale u,v,w by 1/c NOT to wavelengths, that is done later in prediction */
-        my_dscal(iodata_vec[0].Nbase*iodata_vec[0].tilesz,inv_c,iodata_vec[0].u);
-        my_dscal(iodata_vec[0].Nbase*iodata_vec[0].tilesz,inv_c,iodata_vec[0].v);
-        my_dscal(iodata_vec[0].Nbase*iodata_vec[0].tilesz,inv_c,iodata_vec[0].w);
+        my_dscal(iodata_vec[cm].Nbase*iodata_vec[cm].tilesz,inv_c,iodata_vec[cm].u);
+        my_dscal(iodata_vec[cm].Nbase*iodata_vec[cm].tilesz,inv_c,iodata_vec[cm].v);
+        my_dscal(iodata_vec[cm].Nbase*iodata_vec[cm].tilesz,inv_c,iodata_vec[cm].w);
 
 
         /* and set x[]=0 for flagged values */
-        preset_flags_and_data(iodata_vec[0].Nbase*iodata_vec[0].tilesz,iodata_vec[0].flag,barr_vec[0],iodata_vec[0].x,Data::Nt);
+        preset_flags_and_data(iodata_vec[cm].Nbase*iodata_vec[cm].tilesz,iodata_vec[cm].flag,barr_vec[cm],iodata_vec[cm].x,Data::Nt);
 #ifdef HAVE_CUDA
         /* update baseline flags */
-        rearrange_baselines(iodata_vec[0].Nbase*iodata_vec[0].tilesz, barr_vec[0], hbb, Nt);
+        rearrange_baselines(iodata_vec[cm].Nbase*iodata_vec[cm].tilesz, barr_vec[cm], hbb, Nt);
 #endif
 
         /* precess source locations (also beam pointing) from J2000 to JAPP if we do any beam predictions,
            using first time slot as epoch */
         if (doBeam && !sources_precessed) {
-         precess_source_locations(beam_vec[0].time_utc[iodata_vec[0].tilesz/2],carr_vec[0],M,&beam_vec[0].p_ra0,&beam_vec[0].p_dec0,Data::Nt);
-         sources_precessed=1;
+         precess_source_locations(beam_vec[cm].time_utc[iodata_vec[cm].tilesz/2],carr_vec[cm],M,&beam_vec[cm].p_ra0,&beam_vec[cm].p_dec0,Data::Nt);
+         if (cm==mymscount-1) {sources_precessed=1;} /* wait till all MS are handled */
         }
 
     /****************** calibration **************************/
     /* coherency calculation need to be done per channel */
 #ifndef HAVE_CUDA
     if (!doBeam) {
-     precalculate_coherencies_multifreq(iodata_vec[0].u,iodata_vec[0].v,iodata_vec[0].w,coh_vec[0],iodata_vec[0].N,iodata_vec[0].Nbase*iodata_vec[0].tilesz,barr_vec[0],carr_vec[0],M,iodata_vec[0].freqs,iodata_vec[0].Nchan,iodata_vec[0].deltaf,iodata_vec[0].deltat,iodata_vec[0].dec0,Data::min_uvcut,Data::max_uvcut,Data::Nt);
+     precalculate_coherencies_multifreq(iodata_vec[cm].u,iodata_vec[cm].v,iodata_vec[cm].w,coh_vec[cm],iodata_vec[cm].N,iodata_vec[cm].Nbase*iodata_vec[cm].tilesz,barr_vec[cm],carr_vec[cm],M,iodata_vec[cm].freqs,iodata_vec[cm].Nchan,iodata_vec[cm].deltaf,iodata_vec[cm].deltat,iodata_vec[cm].dec0,Data::min_uvcut,Data::max_uvcut,Data::Nt);
     } else {
      //precalculate_coherencies_multifreq_withbeam(iodata.u,iodata.v,iodata.w,coh,iodata.N,iodata.Nbase*iodata.tilesz,barr,carr,M,iodata.freqs,iodata.Nchan,iodata.deltaf,iodata.deltat,iodata.dec0,Data::min_uvcut,Data::max_uvcut,
   //beam.p_ra0,beam.p_dec0,iodata.freq0,beam.sx,beam.sy,beam.time_utc,iodata.tilesz,beam.Nelem,beam.xx,beam.yy,beam.zz,Data::Nt);
@@ -676,11 +693,11 @@ cout<<"Worker "<<myrank<<" quitting"<<endl;
 #ifdef HAVE_CUDA
    if (GPUpredict) {
      /* note we need to use bandwith per channel here */
-     precalculate_coherencies_multifreq_withbeam_gpu(iodata_vec[0].u,iodata_vec[0].v,iodata_vec[0].w,coh_vec[0],iodata_vec[0].N,iodata_vec[0].Nbase*iodata_vec[0].tilesz,barr_vec[0],carr_vec[0],M,iodata_vec[0].freqs,iodata_vec[0].Nchan,deltafch,iodata_vec[0].deltat,iodata_vec[0].dec0,Data::min_uvcut,Data::max_uvcut,
-  beam_vec[0].p_ra0,beam_vec[0].p_dec0,iodata_vec[0].freq0,beam_vec[0].sx,beam_vec[0].sy,beam_vec[0].time_utc,iodata_vec[0].tilesz,beam_vec[0].Nelem,beam_vec[0].xx,beam_vec[0].yy,beam_vec[0].zz,doBeam,Data::Nt);
+     precalculate_coherencies_multifreq_withbeam_gpu(iodata_vec[cm].u,iodata_vec[cm].v,iodata_vec[cm].w,coh_vec[cm],iodata_vec[cm].N,iodata_vec[cm].Nbase*iodata_vec[cm].tilesz,barr_vec[cm],carr_vec[cm],M,iodata_vec[cm].freqs,iodata_vec[cm].Nchan,deltafch,iodata_vec[cm].deltat,iodata_vec[cm].dec0,Data::min_uvcut,Data::max_uvcut,
+  beam_vec[cm].p_ra0,beam_vec[cm].p_dec0,iodata_vec[cm].freq0,beam_vec[cm].sx,beam_vec[cm].sy,beam_vec[cm].time_utc,iodata_vec[cm].tilesz,beam_vec[cm].Nelem,beam_vec[cm].xx,beam_vec[cm].yy,beam_vec[cm].zz,doBeam,Data::Nt);
    } else {
     if (!doBeam) {
-     precalculate_coherencies_multifreq(iodata_vec[0].u,iodata_vec[0].v,iodata_vec[0].w,coh_vec[0],iodata_vec[0].N,iodata_vec[0].Nbase*iodata_vec[0].tilesz,barr_vec[0],carr_vec[0],M,iodata_vec[0].freqs,iodata_vec[0].Nchan,iodata_vec[0].deltaf,iodata_vec[0].deltat,iodata_vec[0].dec0,Data::min_uvcut,Data::max_uvcut,Data::Nt);
+     precalculate_coherencies_multifreq(iodata_vec[cm].u,iodata_vec[cm].v,iodata_vec[cm].w,coh_vec[cm],iodata_vec[cm].N,iodata_vec[cm].Nbase*iodata_vec[cm].tilesz,barr_vec[cm],carr_vec[cm],M,iodata_vec[cm].freqs,iodata_vec[cm].Nchan,iodata_vec[cm].deltaf,iodata_vec[cm].deltat,iodata_vec[cm].dec0,Data::min_uvcut,Data::max_uvcut,Data::Nt);
     } else {
      //precalculate_coherencies_withbeam(iodata.u,iodata.v,iodata.w,coh,iodata.N,iodata.Nbase*iodata.tilesz,barr,carr,M,iodata.freq0,iodata.deltaf,iodata.deltat,iodata.dec0,Data::min_uvcut,Data::max_uvcut,
   //beam.p_ra0,beam.p_dec0,iodata.freq0,beam.sx,beam.sy,beam.time_utc,iodata.tilesz,beam.Nelem,beam.xx,beam.yy,beam.zz,Data::Nt);
@@ -694,51 +711,55 @@ cout<<"Worker "<<myrank<<" quitting"<<endl;
         /* updated values for xo, coh, freqs, Nchan, deltaf needed */
         /*  call LBFGS routine */
 
+      res_0=res_1=0.0;
       for (ii=0; ii<nsolbw; ii++) {
         /* find B.Z for this freq, for all clusters */
         for (ci=0; ci<Mt; ci++) {
-         memset(&z[8*iodata_vec[0].N*ci],0,sizeof(double)*(size_t)iodata_vec[0].N*8);
+         memset(&z[8*iodata_vec[cm].N*ci],0,sizeof(double)*(size_t)iodata_vec[cm].N*8);
          for (int npp=0; npp<Npoly; npp++) {
-          my_daxpy(8*iodata_vec[0].N, &Z[ci*8*iodata_vec[0].N*Npoly+npp*8*iodata_vec[0].N], B[ii*Npoly+npp], &z[8*iodata_vec[0].N*ci]);
+          my_daxpy(8*iodata_vec[cm].N, &Z[ci*8*iodata_vec[cm].N*Npoly+npp*8*iodata_vec[cm].N], B[cm*Npoly*nsolbw+ii*Npoly+npp], &z[8*iodata_vec[cm].N*ci]);
          }
         }
         /* now z : 8NMt values = B Z */
         /* Y[ii*8*iodata.N*Mt] : 8NMt values */
         /* rhok[ii*Mt] : Mt values */
 #ifdef HAVE_CUDA
-        bfgsfit_minibatch_consensus(iodata_vec[0].u,iodata_vec[0].v,iodata_vec[0].w,&iodata_vec[0].xo[iodata_vec[0].Nbase*iodata_vec[0].tilesz*8*chanstart[ii]],iodata_vec[0].N,iodata_vec[0].Nbase,iodata_vec[0].tilesz,hbb,ptoclus,&coh_vec[0][M*iodata_vec[0].Nbase*iodata_vec[0].tilesz*4*chanstart[ii]],M,Mt,&iodata_vec[0].freqs[chanstart[ii]],nchan[ii],deltafch*(double)nchan[ii],&pfreq_vec[0][iodata_vec[0].N*8*Mt*ii],&Y[iodata_vec[0].N*8*Mt*ii],z,&rhok[ii*Mt],Data::Nt,Data::max_lbfgs,Data::lbfgs_m,Data::gpu_threads,Data::solver_mode,mean_nu,&res_00[0],&res_01[0],&ptdata_array[ii],nmb,minibatches);
+        bfgsfit_minibatch_consensus(iodata_vec[cm].u,iodata_vec[cm].v,iodata_vec[cm].w,&iodata_vec[cm].xo[iodata_vec[cm].Nbase*iodata_vec[cm].tilesz*8*chanstart[ii]],iodata_vec[cm].N,iodata_vec[cm].Nbase,iodata_vec[cm].tilesz,hbb,ptoclus,&coh_vec[cm][M*iodata_vec[cm].Nbase*iodata_vec[cm].tilesz*4*chanstart[ii]],M,Mt,&iodata_vec[cm].freqs[chanstart[ii]],nchan[ii],deltafch*(double)nchan[ii],&pfreq_vec[cm][iodata_vec[cm].N*8*Mt*ii],&Y[iodata_vec[cm].N*8*Mt*(ii+cm*nsolbw)],z,&rhok[cm*Mt*nsolbw+ii*Mt],Data::Nt,Data::max_lbfgs,Data::lbfgs_m,Data::gpu_threads,Data::solver_mode,mean_nu,&res_00[cm],&res_01[cm],&ptdata_array[cm*nsolbw+ii],nmb,minibatches);
 #else
-        bfgsfit_minibatch_consensus(iodata_vec[0].u,iodata_vec[0].v,iodata_vec[0].w,&iodata_vec[0].xo[iodata_vec[0].Nbase*iodata_vec[0].tilesz*8*chanstart[ii]],iodata_vec[0].N,iodata_vec[0].Nbase,iodata_vec[0].tilesz,barr_vec[0],carr_vec[0],&coh_vec[0][M*iodata_vec[0].Nbase*iodata_vec[0].tilesz*4*chanstart[ii]],M,Mt,&iodata_vec[0].freqs[chanstart[ii]],nchan[ii],deltafch*(double)nchan[ii],&pfreq_vec[0][iodata_vec[0].N*8*Mt*ii],&Y[iodata_vec[0].N*8*Mt*ii],z,&rhok[ii*Mt],Data::Nt,Data::max_lbfgs,Data::lbfgs_m,Data::gpu_threads,Data::solver_mode,mean_nu,&res_00[0],&res_01[0],&ptdata_array[ii],nmb,minibatches);
+        bfgsfit_minibatch_consensus(iodata_vec[cm].u,iodata_vec[cm].v,iodata_vec[cm].w,&iodata_vec[cm].xo[iodata_vec[cm].Nbase*iodata_vec[cm].tilesz*8*chanstart[ii]],iodata_vec[cm].N,iodata_vec[cm].Nbase,iodata_vec[cm].tilesz,barr_vec[cm],carr_vec[cm],&coh_vec[cm][M*iodata_vec[cm].Nbase*iodata_vec[cm].tilesz*4*chanstart[ii]],M,Mt,&iodata_vec[cm].freqs[chanstart[ii]],nchan[ii],deltafch*(double)nchan[ii],&pfreq_vec[cm][iodata_vec[cm].N*8*Mt*ii],&Y[iodata_vec[cm].N*8*Mt*(ii+cm*nsolbw)],z,&rhok[cm*Mt*nsolbw+ii*Mt],Data::Nt,Data::max_lbfgs,Data::lbfgs_m,Data::gpu_threads,Data::solver_mode,mean_nu,&res_00[cm],&res_01[cm],&ptdata_array[cm*nsolbw+ii],nmb,minibatches);
 #endif
        /* find primal residual ||p-z|| = ||J-BZ|| */
-       my_daxpy(8*iodata_vec[0].N*Mt, &pfreq_vec[0][iodata_vec[0].N*8*Mt*ii], -1.0, z);
-       res_0+=res_00[0];
-       res_1+=res_01[0];
+       my_daxpy(8*iodata_vec[cm].N*Mt, &pfreq_vec[cm][iodata_vec[cm].N*8*Mt*ii], -1.0, z);
+       res_0+=res_00[cm];
+       res_1+=res_01[cm];
        /* check also if any residuals are -ve, and make resband inf to trigger bad sol */
-       resband[ii]=(res_00[0]>0.0 && res_01[0]>0.0 ? res_01[0]: CLM_DBL_MAX);
-       printf("%d: admm=%d epoch=%d minibatch=%d band=%d primal %lf %lf %lf\n",myrank,nadmm,nepch,nmb,ii,my_dnrm2(8*iodata_vec[0].N*Mt,z)/sqrt((double)8*iodata_vec[0].N*Mt),res_00[0],res_01[0]);
+       resband[cm*nsolbw+ii]=(res_00[cm]>0.0 && res_01[cm]>0.0 ? res_01[cm]: CLM_DBL_MAX);
+       printf("%d: %d: admm=%d epoch=%d minibatch=%d band=%d primal %lf %lf %lf\n",myrank,cm,nadmm,nepch,nmb,ii,my_dnrm2(8*iodata_vec[cm].N*Mt,z)/sqrt((double)8*iodata_vec[cm].N*Mt),res_00[cm],res_01[cm]);
       }
-      /* find average residual over bands*/
+      /* find average residual over bands */
       res_0/=(double)nsolbw;
       res_1/=(double)nsolbw;
       /* Examine bands where residual is far higher
          and exclude these bands when updating Z */
       for (ii=0; ii<nsolbw; ii++) {
         /* flag minibands with higher residual */
-        fband[ii]=(resband[ii]>res_ratio*res_1?1:0);
+        fband[cm*nsolbw+ii]=(resband[cm*nsolbw+ii]>res_ratio*res_1?1:0);
       }
     /****************** end calibration **************************/
+      } /* end loop over MS */
 
     
     /****************** ADMM update **************************/
 
       /* Y <- Y+ rho J */
+      for(int cm=0; cm<mymscount; cm++) {
       for (ii=0; ii<nsolbw; ii++) {
-        if (!fband[ii]) { /* only update for good solutions */
+        if (!fband[cm*nsolbw+ii]) { /* only update for good solutions */
          for (ci=0; ci<Mt; ci++) {
-          my_daxpy(8*iodata_vec[0].N, &pfreq_vec[0][ii*8*iodata_vec[0].N*Mt+ci*8*iodata_vec[0].N], rhok[ii*Mt+ci], &Y[ii*8*iodata_vec[0].N*Mt+ci*8*iodata_vec[0].N]);
+          my_daxpy(8*iodata_vec[cm].N, &pfreq_vec[cm][ii*8*iodata_vec[cm].N*Mt+ci*8*iodata_vec[0].N], rhok[cm*Mt*nsolbw+ii*Mt+ci], &Y[(cm*nsolbw+ii)*8*iodata_vec[0].N*Mt+ci*8*iodata_vec[0].N]);
          }
         }
+      }
       }
 
       /* update Z : sum up B(Y+rho J) first*/
@@ -750,7 +771,7 @@ cout<<"Worker "<<myrank<<" quitting"<<endl;
       } else {
         memset(z,0,sizeof(double)*(size_t)iodata_vec[0].N*8*Mt*Npoly);
       }
-      for (ii=1; ii<nsolbw; ii++) {
+      for (ii=1; ii<nsolbw*mymscount; ii++) {
         if (!fband[ii]) { /* only update for good solutions */
         for(ci=0; ci<Npoly; ci++) {
           my_daxpy(8*iodata_vec[0].N*Mt, &Y[ii*8*iodata_vec[0].N*Mt], B[ii*Npoly+ci], &z[ci*8*iodata_vec[0].N*Mt]);
@@ -795,15 +816,18 @@ cout<<"Worker "<<myrank<<" quitting"<<endl;
 
       /* update Y <- Y+rho*(J-B.Z), but already Y=Y+rho J
         so, only need to add -rho B.Z */
+
+      for(int cm=0; cm<mymscount; cm++) {
       for (ii=0; ii<nsolbw; ii++) {
-        if (!fband[ii]) { /* only update for good solutions */
+        if (!fband[cm*nsolbw+ii]) { /* only update for good solutions */
       for (ci=0; ci<Mt; ci++) {
        memset(&z[8*iodata_vec[0].N*ci],0,sizeof(double)*(size_t)iodata_vec[0].N*8);
        for (int npp=0; npp<Npoly; npp++) {
-        my_daxpy(8*iodata_vec[0].N, &Z[ci*8*iodata_vec[0].N*Npoly+npp*8*iodata_vec[0].N], B[ii*Npoly+npp], &z[8*iodata_vec[0].N*ci]);
+        my_daxpy(8*iodata_vec[0].N, &Z[ci*8*iodata_vec[0].N*Npoly+npp*8*iodata_vec[0].N], B[cm*nsolbw*Npoly+ii*Npoly+npp], &z[8*iodata_vec[0].N*ci]);
        }
 
-       my_daxpy(8*iodata_vec[0].N, &z[ci*8*iodata_vec[0].N], -rhok[ii*Mt+ci], &Y[ii*8*iodata_vec[0].N*Mt+ci*8*iodata_vec[0].N]);
+       my_daxpy(8*iodata_vec[0].N, &z[ci*8*iodata_vec[0].N], -rhok[cm*nsolbw*Mt+ii*Mt+ci], &Y[(cm*nsolbw+ii)*8*iodata_vec[0].N*Mt+ci*8*iodata_vec[0].N]);
+      }
       }
       }
       }
@@ -836,53 +860,71 @@ cout<<"Worker "<<myrank<<" quitting"<<endl;
       cout<<myrank<<":FEDA: "<<nadmm<<" dual residual="<<my_dnrm2(iodata_vec[0].N*8*Npoly*Mt,Zold)/sqrt((double)8*iodata_vec[0].N*Npoly*Mt)<<endl;
      } /* admm */
 
+     if (Data::use_global_solution) {
+      cout<<"Using Global"<<endl;
+      for(int cm=0; cm<mymscount; cm++) {
+      for (ii=0; ii<nsolbw; ii++) {
+        /* find B.Z for this freq, for all clusters */
+        for (ci=0; ci<Mt; ci++) {
+         memset(&z[8*iodata_vec[0].N*ci],0,sizeof(double)*(size_t)iodata_vec[0].N*8);
+         for (int npp=0; npp<Npoly; npp++) {
+          my_daxpy(8*iodata_vec[0].N, &Z[ci*8*iodata_vec[0].N*Npoly+npp*8*iodata_vec[0].N], B[cm*nsolbw*Npoly+ii*Npoly+npp], &z[8*iodata_vec[0].N*ci]);
+         }
+        }
+        /* overwrite local solution J with global solution B Z */
+        memcpy(&pfreq_vec[cm][iodata_vec[cm].N*8*Mt*ii],z,(size_t)iodata_vec[cm].N*8*Mt*sizeof(double));
+      }
+     }
+     }
+
      if (start_iter) { start_iter=0; }
 
     /**********************************************************/
     /* also write back in minibatches */
-    for (int nmb=0; nmb<minibatches; nmb++) {
+    for(int cm=0; cm<mymscount; cm++) {
+     for (int nmb=0; nmb<minibatches; nmb++) {
      /* need to load the same data before calculating the residual */
      if (!doBeam) {
-        Data::loadDataMinibatch(msitr[0]->table(),iodata_vec[0],nmb,&iodata_vec[0].fratio);
+        Data::loadDataMinibatch(msitr[cm]->table(),iodata_vec[cm],nmb,&iodata_vec[cm].fratio);
      } else {
-        Data::loadDataMinibatch(msitr[0]->table(),iodata_vec[0],beam_vec[0],nmb,&iodata_vec[0].fratio);
+        Data::loadDataMinibatch(msitr[cm]->table(),iodata_vec[cm],beam_vec[cm],nmb,&iodata_vec[cm].fratio);
      }
      /* calculate residual */
         /* rescale u,v,w by 1/c NOT to wavelengths, that is done later in prediction */
-        my_dscal(iodata_vec[0].Nbase*iodata_vec[0].tilesz,inv_c,iodata_vec[0].u);
-        my_dscal(iodata_vec[0].Nbase*iodata_vec[0].tilesz,inv_c,iodata_vec[0].v);
-        my_dscal(iodata_vec[0].Nbase*iodata_vec[0].tilesz,inv_c,iodata_vec[0].w);
+        my_dscal(iodata_vec[cm].Nbase*iodata_vec[cm].tilesz,inv_c,iodata_vec[cm].u);
+        my_dscal(iodata_vec[cm].Nbase*iodata_vec[cm].tilesz,inv_c,iodata_vec[cm].v);
+        my_dscal(iodata_vec[cm].Nbase*iodata_vec[cm].tilesz,inv_c,iodata_vec[cm].w);
 
 #ifndef HAVE_CUDA
       for (ii=0; ii<nsolbw; ii++) {
      if (!doBeam) {
-       calculate_residuals_multifreq(iodata_vec[0].u,iodata_vec[0].v,iodata_vec[0].w,&pfreq_vec[0][iodata_vec[0].N*8*Mt*ii],&iodata_vec[0].xo[iodata_vec[0].Nbase*iodata_vec[0].tilesz*8*chanstart[ii]],iodata_vec[0].N,iodata_vec[0].Nbase,iodata_vec[0].tilesz,barr_vec[0],carr_vec[0],M,&iodata_vec[0].freqs[chanstart[ii]],nchan[ii],deltafch*(double)nchan[ii],iodata_vec[0].deltat,iodata_vec[0].dec0,Data::Nt,Data::ccid,Data::rho,Data::phaseOnly);
+       calculate_residuals_multifreq(iodata_vec[cm].u,iodata_vec[cm].v,iodata_vec[cm].w,&pfreq_vec[cm][iodata_vec[cm].N*8*Mt*ii],&iodata_vec[cm].xo[iodata_vec[cm].Nbase*iodata_vec[cm].tilesz*8*chanstart[ii]],iodata_vec[cm].N,iodata_vec[cm].Nbase,iodata_vec[cm].tilesz,barr_vec[cm],carr_vec[cm],M,&iodata_vec[cm].freqs[chanstart[ii]],nchan[ii],deltafch*(double)nchan[ii],iodata_vec[cm].deltat,iodata_vec[cm].dec0,Data::Nt,Data::ccid,Data::rho,Data::phaseOnly);
      } else {
-      calculate_residuals_multifreq_withbeam(iodata_vec[0].u,iodata_vec[0].v,iodata_vec[0].w,&pfreq_vec[0][iodata_vec[0].N*8*Mt*ii],&iodata_vec[0].xo[iodata_vec[0].Nbase*iodata_vec[0].tilesz*8*chanstart[ii]],iodata_vec[0].N,iodata_vec[0].Nbase,iodata_vec[0].tilesz,barr_vec[0],carr_vec[0],M,&iodata_vec[0].freqs[chanstart[ii]],nchan[ii],deltafch*(double)nchan[ii],iodata_vec[0].deltat,iodata_vec[0].dec0,
-beam_vec[0].p_ra0,beam_vec[0].p_dec0,iodata_vec[0].freq0,beam_vec[0].sx,beam_vec[0].sy,beam_vec[0].time_utc,beam_vec[0].Nelem,beam_vec[0].xx,beam_vec[0].yy,beam_vec[0].zz,Data::Nt,Data::ccid,Data::rho,Data::phaseOnly);
+      calculate_residuals_multifreq_withbeam(iodata_vec[cm].u,iodata_vec[cm].v,iodata_vec[cm].w,&pfreq_vec[cm][iodata_vec[cm].N*8*Mt*ii],&iodata_vec[cm].xo[iodata_vec[cm].Nbase*iodata_vec[cm].tilesz*8*chanstart[ii]],iodata_vec[cm].N,iodata_vec[cm].Nbase,iodata_vec[cm].tilesz,barr_vec[cm],carr_vec[cm],M,&iodata_vec[cm].freqs[chanstart[ii]],nchan[ii],deltafch*(double)nchan[ii],iodata_vec[cm].deltat,iodata_vec[cm].dec0,
+beam_vec[cm].p_ra0,beam_vec[cm].p_dec0,iodata_vec[cm].freq0,beam_vec[cm].sx,beam_vec[cm].sy,beam_vec[cm].time_utc,beam_vec[cm].Nelem,beam_vec[cm].xx,beam_vec[cm].yy,beam_vec[cm].zz,Data::Nt,Data::ccid,Data::rho,Data::phaseOnly);
      }
       }
 #endif
 #ifdef HAVE_CUDA
       for (ii=0; ii<nsolbw; ii++) {
     if (GPUpredict) {
-      calculate_residuals_multifreq_withbeam_gpu(iodata_vec[0].u,iodata_vec[0].v,iodata_vec[0].w,&pfreq_vec[0][iodata_vec[0].N*8*Mt*ii],&iodata_vec[0].xo[iodata_vec[0].Nbase*iodata_vec[0].tilesz*8*chanstart[ii]],iodata_vec[0].N,iodata_vec[0].Nbase,iodata_vec[0].tilesz,barr_vec[0],carr_vec[0],M,&iodata_vec[0].freqs[chanstart[ii]],nchan[ii],deltafch*(double)nchan[ii],iodata_vec[0].deltat,iodata_vec[0].dec0,
-beam_vec[0].p_ra0,beam_vec[0].p_dec0,iodata_vec[0].freq0,beam_vec[0].sx,beam_vec[0].sy,beam_vec[0].time_utc,beam_vec[0].Nelem,beam_vec[0].xx,beam_vec[0].yy,beam_vec[0].zz,doBeam,Data::Nt,Data::ccid,Data::rho,Data::phaseOnly);
+      calculate_residuals_multifreq_withbeam_gpu(iodata_vec[cm].u,iodata_vec[cm].v,iodata_vec[cm].w,&pfreq_vec[cm][iodata_vec[cm].N*8*Mt*ii],&iodata_vec[cm].xo[iodata_vec[cm].Nbase*iodata_vec[cm].tilesz*8*chanstart[ii]],iodata_vec[cm].N,iodata_vec[cm].Nbase,iodata_vec[cm].tilesz,barr_vec[cm],carr_vec[cm],M,&iodata_vec[cm].freqs[chanstart[ii]],nchan[ii],deltafch*(double)nchan[ii],iodata_vec[cm].deltat,iodata_vec[cm].dec0,
+beam_vec[cm].p_ra0,beam_vec[cm].p_dec0,iodata_vec[cm].freq0,beam_vec[cm].sx,beam_vec[cm].sy,beam_vec[cm].time_utc,beam_vec[cm].Nelem,beam_vec[cm].xx,beam_vec[cm].yy,beam_vec[cm].zz,doBeam,Data::Nt,Data::ccid,Data::rho,Data::phaseOnly);
     } else {
      if (!doBeam) {
-       calculate_residuals_multifreq(iodata_vec[0].u,iodata_vec[0].v,iodata_vec[0].w,&pfreq_vec[0][iodata_vec[0].N*8*Mt*ii],&iodata_vec[0].xo[iodata_vec[0].Nbase*iodata_vec[0].tilesz*8*chanstart[ii]],iodata_vec[0].N,iodata_vec[0].Nbase,iodata_vec[0].tilesz,barr_vec[0],carr_vec[0],M,&iodata_vec[0].freqs[chanstart[ii]],nchan[ii],deltafch*(double)nchan[ii],iodata_vec[0].deltat,iodata_vec[0].dec0,Data::Nt,Data::ccid,Data::rho,Data::phaseOnly);
+       calculate_residuals_multifreq(iodata_vec[cm].u,iodata_vec[cm].v,iodata_vec[cm].w,&pfreq_vec[cm][iodata_vec[cm].N*8*Mt*ii],&iodata_vec[cm].xo[iodata_vec[cm].Nbase*iodata_vec[cm].tilesz*8*chanstart[ii]],iodata_vec[cm].N,iodata_vec[cm].Nbase,iodata_vec[cm].tilesz,barr_vec[cm],carr_vec[cm],M,&iodata_vec[cm].freqs[chanstart[ii]],nchan[ii],deltafch*(double)nchan[ii],iodata_vec[cm].deltat,iodata_vec[cm].dec0,Data::Nt,Data::ccid,Data::rho,Data::phaseOnly);
      } else {
-      calculate_residuals_multifreq_withbeam(iodata_vec[0].u,iodata_vec[0].v,iodata_vec[0].w,&pfreq_vec[0][iodata_vec[0].N*8*Mt*ii],&iodata_vec[0].xo[iodata_vec[0].Nbase*iodata_vec[0].tilesz*8*chanstart[ii]],iodata_vec[0].N,iodata_vec[0].Nbase,iodata_vec[0].tilesz,barr_vec[0],carr_vec[0],M,&iodata_vec[0].freqs[chanstart[ii]],nchan[ii],deltafch*(double)nchan[ii],iodata_vec[0].deltat,iodata_vec[0].dec0,
-beam_vec[0].p_ra0,beam_vec[0].p_dec0,iodata_vec[0].freq0,beam_vec[0].sx,beam_vec[0].sy,beam_vec[0].time_utc,beam_vec[0].Nelem,beam_vec[0].xx,beam_vec[0].yy,beam_vec[0].zz,Data::Nt,Data::ccid,Data::rho,Data::phaseOnly);
+      calculate_residuals_multifreq_withbeam(iodata_vec[cm].u,iodata_vec[cm].v,iodata_vec[cm].w,&pfreq_vec[cm][iodata_vec[cm].N*8*Mt*ii],&iodata_vec[cm].xo[iodata_vec[cm].Nbase*iodata_vec[cm].tilesz*8*chanstart[ii]],iodata_vec[cm].N,iodata_vec[cm].Nbase,iodata_vec[cm].tilesz,barr_vec[cm],carr_vec[cm],M,&iodata_vec[cm].freqs[chanstart[ii]],nchan[ii],deltafch*(double)nchan[ii],iodata_vec[cm].deltat,iodata_vec[cm].dec0,
+beam_vec[cm].p_ra0,beam_vec[cm].p_dec0,iodata_vec[cm].freq0,beam_vec[cm].sx,beam_vec[cm].sy,beam_vec[cm].time_utc,beam_vec[cm].Nelem,beam_vec[cm].xx,beam_vec[cm].yy,beam_vec[cm].zz,Data::Nt,Data::ccid,Data::rho,Data::phaseOnly);
      }
     }
     }
 #endif
 
 
-    Data::writeDataMinibatch(msitr[0]->table(),iodata_vec[0],nmb);
+    Data::writeDataMinibatch(msitr[cm]->table(),iodata_vec[cm],nmb);
 
-
+    }
     }
     for(int cm=0; cm<iodata_vec[0].Nms; cm++) {
       (*msitr[cm])++;
@@ -899,7 +941,7 @@ beam_vec[0].p_ra0,beam_vec[0].p_dec0,iodata_vec[0].freq0,beam_vec[0].sx,beam_vec
        for (ci=M-1; ci>=0; ci--) {
          for (ck=0; ck<carr_vec[cm][ci].nchunk; ck++) {
           /* print solution */
-          fprintf(sfp_vec[cm]," %e",pfreq_vec[cm][iodata_vec[0].N*8*Mt*ii+carr_vec[cm][ci].p[ck]+cj]);
+          fprintf(sfp_vec[cm]," %e",pfreq_vec[cm][iodata_vec[cm].N*8*Mt*ii+carr_vec[cm][ci].p[ck]+cj]);
          }
        }
      }
@@ -908,14 +950,15 @@ beam_vec[0].p_ra0,beam_vec[0].p_dec0,iodata_vec[0].freq0,beam_vec[0].sx,beam_vec
      }
 
    /* Reset solutions in mini-bands with bad residuals */
+   for(int cm=0; cm<mymscount; cm++) {
    for (ii=0; ii<nsolbw; ii++) {
-       if (fband[ii]) {
+       if (fband[cm*nsolbw+ii]) {
         cout<<"Resetting solution for band "<<ii<<endl;
-        memcpy(&pfreq_vec[0][iodata_vec[0].N*8*Mt*ii],pinit,(size_t)iodata_vec[0].N*8*Mt*sizeof(double));
-        lbfgs_persist_reset(&ptdata_array[ii]);
+        memcpy(&pfreq_vec[cm][iodata_vec[cm].N*8*Mt*ii],pinit,(size_t)iodata_vec[cm].N*8*Mt*sizeof(double));
+        lbfgs_persist_reset(&ptdata_array[cm*nsolbw+ii]);
        }
    }
-
+   }
 
 
      /* do some quality control */
@@ -974,7 +1017,7 @@ beam_vec[0].p_ra0,beam_vec[0].p_dec0,iodata_vec[0].freq0,beam_vec[0].sx,beam_vec
     }
 
     /* free persistent memory */
-    for (ii=0; ii<nsolbw; ii++) {
+    for (ii=0; ii<nsolbw*mymscount; ii++) {
        lbfgs_persist_clear(&ptdata_array[ii]);
     }
     free(ptdata_array);
