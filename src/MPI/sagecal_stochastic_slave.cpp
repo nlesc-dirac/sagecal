@@ -953,7 +953,7 @@ beam_vec[cm].p_ra0,beam_vec[cm].p_dec0,iodata_vec[cm].freq0,beam_vec[cm].sx,beam
    for(int cm=0; cm<mymscount; cm++) {
    for (ii=0; ii<nsolbw; ii++) {
        if (fband[cm*nsolbw+ii]) {
-        cout<<"Resetting solution for band "<<ii<<endl;
+        cout<<myrank<<": Resetting solution for MS "<<cm<<" band "<<ii<<endl;
         memcpy(&pfreq_vec[cm][iodata_vec[cm].N*8*Mt*ii],pinit,(size_t)iodata_vec[cm].N*8*Mt*sizeof(double));
         lbfgs_persist_reset(&ptdata_array[cm*nsolbw+ii]);
        }
@@ -969,7 +969,7 @@ beam_vec[cm].p_ra0,beam_vec[cm].p_dec0,iodata_vec[cm].freq0,beam_vec[cm].sx,beam
     /* do not reset if initial residual is 0, because by def final one will be higher */
      for(int cm=0; cm<mymscount; cm++) {
       if (res_00[cm]!=0.0 && (res_01[cm]==0.0 || !isfinite(res_01[cm]) || res_01[cm]>res_ratio*res_prev[cm])) {
-        cout<<"Resetting Solution "<<cm<<endl;
+        cout<<myrank<<": Resetting Solution "<<cm<<endl;
         /* reset solutions so next iteration has default initial values */
         for (ii=0; ii<nsolbw; ii++) {
          memcpy(&pfreq_vec[cm][iodata_vec[0].N*8*Mt*ii],pinit,(size_t)iodata_vec[cm].N*8*Mt*sizeof(double));

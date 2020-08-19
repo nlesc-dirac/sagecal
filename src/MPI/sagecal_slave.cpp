@@ -868,7 +868,7 @@ cout<<myrank<<" : "<<cm<<": downweight ratio ("<<iodata_vec[cm].fratio<<") based
     /* do not reset if initial residual is 0, because by def final one will be higher */
      for(int cm=0; cm<mymscount; cm++) {
       if (res_00[cm]!=0.0 && (res_01[cm]==0.0 || !isfinite(res_01[cm]) || res_01[cm]>res_ratio*res_prev[cm])) {
-        cout<<"Resetting Solution "<<cm<<endl;
+        cout<<myrank<<": Resetting Solution "<<cm<<endl;
         /* reset solutions so next iteration has default initial values */
         memcpy(p_vec[cm],pinit,(size_t)iodata_vec[cm].N*8*Mt*sizeof(double));
         /* also assume iterations have restarted from scratch */
