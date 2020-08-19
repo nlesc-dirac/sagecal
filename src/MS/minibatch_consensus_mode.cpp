@@ -582,8 +582,20 @@ run_minibatch_consensus_calibration(void) {
       } /* epoch */
       } /* admm */
 
+      if (Data::use_global_solution) {
+       cout<<"Using Global"<<endl;
+       for (ii=0; ii<nsolbw; ii++) {
+       for (ci=0; ci<Mt; ci++) {
+       memset(&z[8*iodata.N*ci],0,sizeof(double)*(size_t)iodata.N*8);
+       for (int npp=0; npp<Npoly; npp++) {
+        my_daxpy(8*iodata.N, &Z[ci*8*iodata.N*Npoly+npp*8*iodata.N], B[ii*Npoly+npp], &z[8*iodata.N*ci]);
+       }
 
-  
+       memcpy(&pfreq[ii*8*iodata.N*Mt], z, (size_t)8*iodata.N*Mt*sizeof(double));
+      }
+      }
+      }
+
 
       if (start_iter) { start_iter=0; }
 

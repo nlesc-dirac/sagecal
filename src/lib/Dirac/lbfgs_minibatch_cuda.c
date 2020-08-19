@@ -1267,7 +1267,7 @@ cuda_linesearch_backtrack(
   product *=c;
 
   int ci=0;
-  while (ci<15 && fnew>fold+alphak*product) { /* FIXME: using higher iterations here gives worse results */
+  while (ci<15 && (isnan(fnew) || fnew>fold+alphak*product)) { /* FIXME: using higher iterations here gives worse results */
      alphak *=0.5;
 ///     my_dcopy(m,xk,1,xk1,1);
     err=cudaMemcpy(xk1, xk, m*sizeof(double), cudaMemcpyDeviceToDevice);

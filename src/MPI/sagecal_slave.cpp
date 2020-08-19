@@ -122,7 +122,8 @@ cout<<"Error in checking files matching pattern "<<buf1<<". Exiting."<<endl;
         delete [] buf;
       }
      } else {
-cout<<"Slave "<<myrank<<" has nothing to do"<<endl;
+cerr<<"Error: Worker "<<myrank<<" has nothing to do"<<endl;
+cerr<<"Error: Worker "<<myrank<<": Recheck your allocation or reduce number of workers"<<endl;
        return 0;
      }
 
@@ -474,7 +475,7 @@ cout<<"Slave "<<myrank<<" has nothing to do"<<endl;
      MPI_Recv(&msgcode,1,MPI_INT,0,TAG_CTRL,MPI_COMM_WORLD,&status);
      /* assume all MS are the same size */  
      if (msgcode==CTRL_END || !msitr[0]->more()) {
-cout<<"Slave "<<myrank<<" quitting"<<endl;
+cout<<"Worker "<<myrank<<" quitting"<<endl;
       break;
      } else if (msgcode==CTRL_SKIP) {
       /* skip to next timeslot */
@@ -703,7 +704,6 @@ cout<<myrank<<" : "<<cm<<": downweight ratio ("<<iodata_vec[cm].fratio<<") based
       /* for initial ADMM iteration, get back Y with common unitary ambiguity (for all MS) */
       if (admm==0) {
        for(int cm=0; cm<mymscount; cm++) {
-        //MPI_Recv(Y_vec[mmid], iodata_vec[mmid].N*8*Mt, MPI_DOUBLE, 0,TAG_YDATA, MPI_COMM_WORLD, &status);
         MPI_Recv(Y_vec[cm], iodata_vec[cm].N*8*Mt, MPI_DOUBLE, 0,TAG_YDATA, MPI_COMM_WORLD, &status);
        }
       }
@@ -768,12 +768,14 @@ cout<<myrank<<" : "<<cm<<": downweight ratio ("<<iodata_vec[cm].fratio<<") based
       if (Data::aadmm && ((mymscount>1 && admm>=mymscount)|| (mymscount==1 && admm>1 && admm%2==0))) {
        update_rho_bb(arho_vec[mmid],arhoupper_vec[mmid],iodata_vec[mmid].N,M,Mt,carr_vec[mmid],Yhat,Yhat0_vec[mmid],p_vec[mmid],J0_vec[mmid],Data::Nt);
       }
+      if (Data::aadmm) {
       /* BB : send updated rho to master */
       MPI_Send(arho_vec[mmid],M,MPI_DOUBLE,0,TAG_RHO_UPDATE,MPI_COMM_WORLD);
 
       /* BB : store current Yhat and J as reference (k0) values */
       my_dcopy(iodata_vec[mmid].N*8*Mt, Yhat, 1, Yhat0_vec[mmid], 1);
       my_dcopy(iodata_vec[mmid].N*8*Mt, p_vec[mmid], 1, J0_vec[mmid], 1);
+      }
 
       /* calculate primal residual J-BZ */
       my_dcopy(iodata_vec[mmid].N*8*Mt, p_vec[mmid], 1, pres, 1);
@@ -787,6 +789,29 @@ cout<<myrank<<" : "<<cm<<": downweight ratio ("<<iodata_vec[cm].fratio<<") based
      }
      /******************** END ADMM *******************************/
 
+     if (Data::use_global_solution) {
+     cout<<"Using Global"<<endl;
+     /* send final solution of each MS to master */
+     /* calculate Y <= Y + rho J */
+     for(int cm=0; cm<mymscount; cm++) {
+       ck=0;
+       for (ci=0; ci<M; ci++) {
+        if (arho_vec[cm][ci]>0.0) {
+         my_daxpy(iodata_vec[cm].N*8*carr_vec[cm][ci].nchunk, &p_vec[cm][ck], arho_vec[cm][ci], &Y_vec[cm][ck]);
+        }
+        ck+=iodata_vec[cm].N*8*carr_vec[cm][ci].nchunk;
+       }
+
+       MPI_Send(Y_vec[cm], iodata_vec[cm].N*8*Mt, MPI_DOUBLE, 0,TAG_YDATA, MPI_COMM_WORLD);
+     }
+     /* get back global solution for each MS from master,
+        and replace local solution to calculate residuals  */
+
+       for(int cm=0; cm<mymscount; cm++) {
+         MPI_Recv(p_vec[cm], iodata_vec[cm].N*8*Mt, MPI_DOUBLE, 0,TAG_CONSENSUS, MPI_COMM_WORLD, &status);
+       }
+
+     }
      /* write residuals to output */
      for(int cm=0; cm<mymscount; cm++) {
 #ifndef HAVE_CUDA
@@ -843,7 +868,7 @@ cout<<myrank<<" : "<<cm<<": downweight ratio ("<<iodata_vec[cm].fratio<<") based
     /* do not reset if initial residual is 0, because by def final one will be higher */
      for(int cm=0; cm<mymscount; cm++) {
       if (res_00[cm]!=0.0 && (res_01[cm]==0.0 || !isfinite(res_01[cm]) || res_01[cm]>res_ratio*res_prev[cm])) {
-        cout<<"Resetting Solution "<<cm<<endl;
+        cout<<myrank<<": Resetting Solution "<<cm<<endl;
         /* reset solutions so next iteration has default initial values */
         memcpy(p_vec[cm],pinit,(size_t)iodata_vec[cm].N*8*Mt*sizeof(double));
         /* also assume iterations have restarted from scratch */
