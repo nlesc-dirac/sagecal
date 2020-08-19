@@ -12,7 +12,7 @@
 
 ## Features
 
-- Levenberg-Marquardt, LBFGS, Riemannian Trust Region, Nesterov's accelerated gradient descent algorithms
+- Levenberg-Marquardt, (stochastic) LBFGS, Riemannian Trust Region, Nesterov's accelerated gradient descent algorithms
 - GPU acceleration using CUDA
 - Fast and accurate interferometric calibration
 - Gaussian and Student's t noise models
@@ -192,7 +192,5 @@ So for this cluster, there will be more than 1 column in the solution file, the 
 
 
 ### Additional Info
-See [LOFAR Cookbook Chapter](https://support.astron.nl/LOFARImagingCookbook/sagecal.html).
-
-Please cite this code using the DOI.
-[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.1289316.svg)](https://doi.org/10.5281/zenodo.1289316)
+See a [Tutorial](http://sagecal.sourceforge.net/tutorial/html/index.html)
+and the [LOFAR Cookbook Chapter](https://support.astron.nl/LOFARImagingCookbook/sagecal.html).
