@@ -462,7 +462,7 @@ linesearch_backtrack(
   fold=func(xk,m,adata); /* add threshold to make iterations stop at some point FIXME: is this correct/needed? */
   product=c*my_ddot(m,pk,gk);
   int ci=0;
-  while (ci<15 && fnew>fold+alphak*product) {
+  while (ci<15 && (isnan(fnew) || fnew>fold+alphak*product)) {
      alphak *=0.5;
      my_dcopy(m,xk,1,xk1,1);
      my_daxpy(m,pk,alphak,xk1);

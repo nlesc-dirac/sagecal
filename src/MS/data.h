@@ -160,6 +160,8 @@ namespace Data
     extern int stochastic_calib_bands; /* number of bands to split channels for solutions over full band */
     /* federated averaging, global - local constraint regularization factor */
     extern double federated_reg_alpha;
+    /* if 1, use gloabal solution instead of local solution for each MS in residual/correction */
+    extern int use_global_solution;
 
     /* distributed sagecal parameters */
     extern int Nadmm; /* ADMM iterations >=1 */

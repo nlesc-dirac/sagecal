@@ -78,6 +78,8 @@ int Data::stochastic_calib_minibatches=1; /* how many minibatches data is split,
 int Data::stochastic_calib_bands=1; /* how many mini-bands the channels are split to, for bandpass calibration */
 /* federated averaging, global - local constraint regularization factor */
 double Data::federated_reg_alpha=0.1;
+/* if 1, use gloabal solution instead of local solution for each MS in residual/correction */
+int Data::use_global_solution=0;
 
 /* distributed sagecal parameters */
 int Data::Nadmm=1;

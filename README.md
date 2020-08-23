@@ -119,13 +119,13 @@ sagecal -d my_data.MS -s my_skymodel -c my_clustering -n no.of.threads -t 60 -p 
 Use your solution interval (-t 60) so that its big enough to get a decent solution and not too big to make the parameters vary too much. (about 20 minutes per solution is reasonable).
 
 Note: It is also possible to calibrate more than one MS together. See section 4 below.
-Note: To fully use GPU acceleration use -E 1 option.
+Note: To fully use GPU acceleration use ```-E 1``` option.
 
 Simulations:
-With -a 1, only a simulation of the sky model is done.
-With -a 1 and -p 'solutions_file', simulation is done with the sky model corrupted with solutions in 'solutions_file'.
-With -a 1 and -p 'solutions_file' and -z 'ignore_file', simulation is done with the solutions in the 'solutions_file', but ignoring the cluster ids in the 'ignore_file'.
-Eg. If you need to ignore cluster ids '-1', '10', '999', create a text file :
+With ```-a 1```, only a simulation of the sky model is done.
+With ```-a 1``` and ```-p``` 'solutions_file', simulation is done with the sky model corrupted with solutions in 'solutions_file'.
+With ```-a 1``` and ```-p``` 'solutions_file' and ```-z``` 'ignore_file', simulation is done with the solutions in the 'solutions_file', but ignoring the cluster ids in the 'ignore_file'.
+E.g., If you need to ignore cluster ids '-1', '10', '999', create a text file :
 
 ```
 -1
@@ -134,6 +134,9 @@ Eg. If you need to ignore cluster ids '-1', '10', '999', create a text file :
 ```
 
 and use it as the 'ignore_file'.
+
+Bandpass correction using **stochastic** calibration with consensus:
+Use ```-N 1``` combined with options for ```-M```,```-w``` (see also section 4 below).
 
 
 ### 4) Distributed calibration
@@ -147,7 +150,7 @@ Use mpirun to run sagecal-mpi, example:
 ```
 
 Specific options : 
-```-np 11``` : 11 processes : starts 10 slaves + 1 master
+```-np 11``` : 11 processes : starts 10 workers + 1 master
 
 ```./machines``` : will list the host names of the 11 (or fewer) nodes used ( 1st name is the master ) : normally the node where you invoke mpirun
 
@@ -163,13 +166,17 @@ Specific options :
 
 ```-G textfile```: each cluster can have a different regularization factor, instead of using ```-r``` option when the regularization is the same for all clusters.
 
+```-N 1```: enable **stochastic** calibration (minibatches of data), combined with options ```-M```, ```-w``` and ```-u```.
+
+```-U 1```: use global solution instead of local solution for residual calculation.
+
 MPI specific options:
 
 ```/scratch/users/sarod``` : this is where MPI stores temp files (default is probably ```/tmp```).
 
 ```--mca*```: various options to tune the networking and scheduling.
 
-Note: the number of slaves (-np option) can be lower than the number of MS calibrated. The program will divide the workload among the number of available slaves.
+Note: the number of workers (-np option) can be lower than the number of MS calibrated. The program will divide the workload among the number of available workers.
 
 
 The rest of the options are similar to sagecal.
