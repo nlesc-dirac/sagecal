@@ -1571,23 +1571,27 @@ predictwithgain_threadfn_multifreq(void *data) {
     G2[2]=(pm[sta2*8+4])+_Complex_I*(pm[sta2*8+5]);
     G2[3]=(pm[sta2*8+6])+_Complex_I*(pm[sta2*8+7]);
 
+    /* iterate over frequencies */
+    for (cf=0; cf<t->Nchan; cf++) {
      /* now do correction, if any */
-     C[0]=t->x[8*ci]+_Complex_I*t->x[8*ci+1];
-     C[1]=t->x[8*ci+2]+_Complex_I*t->x[8*ci+3];
-     C[2]=t->x[8*ci+4]+_Complex_I*t->x[8*ci+5];
-     C[3]=t->x[8*ci+6]+_Complex_I*t->x[8*ci+7];
+     C[0]=t->x[8*ci+cf*Ntilebase*8]+_Complex_I*t->x[8*ci+1+cf*Ntilebase*8];
+     C[1]=t->x[8*ci+2+cf*Ntilebase*8]+_Complex_I*t->x[8*ci+3+cf*Ntilebase*8];
+     C[2]=t->x[8*ci+4+cf*Ntilebase*8]+_Complex_I*t->x[8*ci+5+cf*Ntilebase*8];
+     C[3]=t->x[8*ci+6+cf*Ntilebase*8]+_Complex_I*t->x[8*ci+7+cf*Ntilebase*8];
      /* T1=G1*C  */
      amb(G1,C,T1);
      /* T2=T1*G2' */
      ambt(T1,G2,T2);
-     t->x[8*ci]=creal(T2[0]);
-     t->x[8*ci+1]=cimag(T2[0]);
-     t->x[8*ci+2]=creal(T2[1]);
-     t->x[8*ci+3]=cimag(T2[1]);
-     t->x[8*ci+4]=creal(T2[2]);
-     t->x[8*ci+5]=cimag(T2[2]);
-     t->x[8*ci+6]=creal(T2[3]);
-     t->x[8*ci+7]=cimag(T2[3]);
+     t->x[8*ci+cf*Ntilebase*8]=creal(T2[0]);
+     t->x[8*ci+1+cf*Ntilebase*8]=cimag(T2[0]);
+     t->x[8*ci+2+cf*Ntilebase*8]=creal(T2[1]);
+     t->x[8*ci+3+cf*Ntilebase*8]=cimag(T2[1]);
+     t->x[8*ci+4+cf*Ntilebase*8]=creal(T2[2]);
+     t->x[8*ci+5+cf*Ntilebase*8]=cimag(T2[2]);
+     t->x[8*ci+6+cf*Ntilebase*8]=creal(T2[3]);
+     t->x[8*ci+7+cf*Ntilebase*8]=cimag(T2[3]);
+    }
+
    }
  }
  return NULL;

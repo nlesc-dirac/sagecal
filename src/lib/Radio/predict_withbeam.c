@@ -25,6 +25,30 @@
 #include <pthread.h>
 #include "Radio.h"
 
+/* Jones matrix multiplication 
+   C=A*B
+*/
+static void
+amb(complex double * __restrict a, complex double * __restrict b, complex double * __restrict c) {
+ c[0]=(a[0]*b[0]+a[1]*b[2]);
+ c[1]=(a[0]*b[1]+a[1]*b[3]);
+ c[2]=(a[2]*b[0]+a[3]*b[2]);
+ c[3]=(a[2]*b[1]+a[3]*b[3]);
+}
+
+
+/* Jones matrix multiplication 
+   C=A*B^H
+*/
+static void
+ambt(complex double * __restrict a, complex double * __restrict b, complex double * __restrict c) {
+ c[0]=a[0]*conj(b[0])+a[1]*conj(b[1]);
+ c[1]=a[0]*conj(b[2])+a[1]*conj(b[3]);
+ c[2]=a[2]*conj(b[0])+a[3]*conj(b[1]);
+ c[3]=a[2]*conj(b[2])+a[3]*conj(b[3]);
+}
+
+
 /* worker thread function for precalculation*/
 static void *
 precal_threadfn(void *data) {
@@ -381,7 +405,9 @@ visibilities_threadfn_multifreq(void *data) {
  double freq0;
  double *PHr=0,*PHi=0,*G=0,*II=0,*QQ=0,*UU=0,*VV=0; /* arrays to store calculations */
 
- complex double C[4];
+ complex double C[4],G1[4],G2[4],T1[4],T2[4];
+ int px;
+ double *pm;
  int Ntilebase=(t->Nbase)*(t->tilesz);
  double fdelta2=t->fdelta*0.5;
  for (ci=0; ci<t->Nb; ci++) {
@@ -400,6 +426,19 @@ visibilities_threadfn_multifreq(void *data) {
    /* iterate over the sky model and calculate contribution */
    /* if this baseline is flagged, we do not compute */
    cm=t->clus; /* only 1 cluster */
+   /* if p is given, use solutions as well */
+   if (t->p) {
+     px=(ci+t->boff)/((Ntilebase+t->carr[cm].nchunk-1)/t->carr[cm].nchunk);
+     pm=&(t->p[t->carr[cm].p[px]]);
+     G1[0]=(pm[sta1*8])+_Complex_I*(pm[sta1*8+1]);
+     G1[1]=(pm[sta1*8+2])+_Complex_I*(pm[sta1*8+3]);
+     G1[2]=(pm[sta1*8+4])+_Complex_I*(pm[sta1*8+5]);
+     G1[3]=(pm[sta1*8+6])+_Complex_I*(pm[sta1*8+7]);
+     G2[0]=(pm[sta2*8])+_Complex_I*(pm[sta2*8+1]);
+     G2[1]=(pm[sta2*8+2])+_Complex_I*(pm[sta2*8+3]);
+     G2[2]=(pm[sta2*8+4])+_Complex_I*(pm[sta2*8+5]);
+     G2[3]=(pm[sta2*8+6])+_Complex_I*(pm[sta2*8+7]);
+   }
       /* iterate over frequencies */
      for (cf=0; cf<t->Nchan; cf++) {
       freq0=t->freqs[cf];
@@ -548,6 +587,14 @@ visibilities_threadfn_multifreq(void *data) {
      free(UU);
      free(VV);
 
+     /* if solutions are given, use them */
+     if (t->p) {
+      /* form G1*C*G2' */
+      /* T1=G1*C  */
+      amb(G1,C,T1);
+      /* C=T1*G2' */
+      ambt(T1,G2,C);
+     }
 
 /***********************************************/
       if (t->add_to_data==SIMUL_ONLY || t->add_to_data==SIMUL_ADD) {
@@ -573,6 +620,42 @@ visibilities_threadfn_multifreq(void *data) {
       }
      }
 
+    /* if psuedoinverse is given, correct visibilities */
+     /* if valid cluster is given, correct with its solutions */
+   if (t->pinv) {
+    cm=t->ccid;
+    px=(ci+t->boff)/((Ntilebase+t->carr[cm].nchunk-1)/t->carr[cm].nchunk);
+    pm=&(t->pinv[8*t->N*px]);
+    G1[0]=(pm[sta1*8])+_Complex_I*(pm[sta1*8+1]);
+    G1[1]=(pm[sta1*8+2])+_Complex_I*(pm[sta1*8+3]);
+    G1[2]=(pm[sta1*8+4])+_Complex_I*(pm[sta1*8+5]);
+    G1[3]=(pm[sta1*8+6])+_Complex_I*(pm[sta1*8+7]);
+    G2[0]=(pm[sta2*8])+_Complex_I*(pm[sta2*8+1]);
+    G2[1]=(pm[sta2*8+2])+_Complex_I*(pm[sta2*8+3]);
+    G2[2]=(pm[sta2*8+4])+_Complex_I*(pm[sta2*8+5]);
+    G2[3]=(pm[sta2*8+6])+_Complex_I*(pm[sta2*8+7]);
+
+    /* iterate over frequencies */
+    for (cf=0; cf<t->Nchan; cf++) {
+     /* now do correction, if any */
+     C[0]=t->x[8*ci+cf*Ntilebase*8]+_Complex_I*t->x[8*ci+1+cf*Ntilebase*8];
+     C[1]=t->x[8*ci+2+cf*Ntilebase*8]+_Complex_I*t->x[8*ci+3+cf*Ntilebase*8];
+     C[2]=t->x[8*ci+4+cf*Ntilebase*8]+_Complex_I*t->x[8*ci+5+cf*Ntilebase*8];
+     C[3]=t->x[8*ci+6+cf*Ntilebase*8]+_Complex_I*t->x[8*ci+7+cf*Ntilebase*8];
+     /* T1=G1*C  */
+     amb(G1,C,T1);
+     /* T2=T1*G2' */
+     ambt(T1,G2,T2);
+     t->x[8*ci+cf*Ntilebase*8]=creal(T2[0]);
+     t->x[8*ci+1+cf*Ntilebase*8]=cimag(T2[0]);
+     t->x[8*ci+2+cf*Ntilebase*8]=creal(T2[1]);
+     t->x[8*ci+3+cf*Ntilebase*8]=cimag(T2[1]);
+     t->x[8*ci+4+cf*Ntilebase*8]=creal(T2[2]);
+     t->x[8*ci+5+cf*Ntilebase*8]=cimag(T2[2]);
+     t->x[8*ci+6+cf*Ntilebase*8]=creal(T2[3]);
+     t->x[8*ci+7+cf*Ntilebase*8]=cimag(T2[3]);
+    }
+   }
  }
  return NULL;
 }
@@ -736,29 +819,6 @@ double ph_ra0, double ph_dec0, double ph_freq0, double *longitude, double *latit
 
 }
 
-/* Jones matrix multiplication 
-   C=A*B
-*/
-static void
-amb(complex double * __restrict a, complex double * __restrict b, complex double * __restrict c) {
- c[0]=(a[0]*b[0]+a[1]*b[2]);
- c[1]=(a[0]*b[1]+a[1]*b[3]);
- c[2]=(a[2]*b[0]+a[3]*b[2]);
- c[3]=(a[2]*b[1]+a[3]*b[3]);
-}
-
-
-/* Jones matrix multiplication 
-   C=A*B^H
-*/
-static void
-ambt(complex double * __restrict a, complex double * __restrict b, complex double * __restrict c) {
- c[0]=a[0]*conj(b[0])+a[1]*conj(b[1]);
- c[1]=a[0]*conj(b[2])+a[1]*conj(b[3]);
- c[2]=a[2]*conj(b[0])+a[3]*conj(b[1]);
- c[3]=a[2]*conj(b[2])+a[3]*conj(b[3]);
-}
-
 /* invert matrix xx - 8x1 array
  * store it in   yy - 8x1 array
  */
@@ -795,6 +855,216 @@ mat_invert(double xx[8],double yy[8], double rho) {
  yy[5]=cimag(b[2]);
  yy[6]=creal(b[3]);
  yy[7]=cimag(b[3]);
+
+ return 0;
+}
+
+
+
+int
+predict_visibilities_multifreq_withsol_withbeam(double *u,double *v,double *w,double *p,double *x,int *ignorelist, int N,int Nbase,int tilesz,baseline_t *barr, clus_source_t *carr, int M,double *freqs,int Nchan, double fdelta,double tdelta, double dec0,
+double ph_ra0, double ph_dec0, double ph_freq0, double *longitude, double *latitude, double *time_utc, int *Nelem, double **xx, double **yy, double **zz, int Nt, int add_to_data,
+ int ccid, double rho,int phase_only) {
+
+  int nth,nth1,ci,ncl,Ns0;
+
+  int Nthb0,Nthb;
+  pthread_attr_t attr;
+  pthread_t *th_array;
+  thread_data_base_t *threaddata;
+  double *beamgain;
+  thread_data_arrayfac_t *beamdata;
+
+  int Nbase1=Nbase*tilesz;
+
+  int cm,cj;
+  double *pm,*pinv=0,*pphase=0;
+  cm=-1;
+  /* find if any cluster is specified for correction of data */
+  for (cj=0; cj<M; cj++) { /* clusters */
+    /* check if cluster id == ccid to do a correction */
+    if (carr[cj].id==ccid) {
+     cm=cj;
+     ci=1; /* correction cluster found */
+    }
+  }
+  if (cm>=0) { /* valid cluser for correction */
+   /* allocate memory for inverse J */
+   if ((pinv=(double*)malloc((size_t)8*N*carr[cm].nchunk*sizeof(double)))==0) {
+     fprintf(stderr,"%s: %d: No free memory\n",__FILE__,__LINE__);
+     exit(1);
+   }
+   if (!phase_only) {
+    for (cj=0; cj<carr[cm].nchunk; cj++) {
+     pm=&(p[carr[cm].p[cj]]); /* start of solutions */
+     /* invert N solutions */
+     for (ci=0; ci<N; ci++) {
+      mat_invert(&pm[8*ci],&pinv[8*ci+8*N*cj], rho);
+     }
+    }
+   } else {
+    /* joint diagonalize solutions and get only phases before inverting */
+    if ((pphase=(double*)malloc((size_t)8*N*sizeof(double)))==0) {
+     fprintf(stderr,"%s: %d: No free memory\n",__FILE__,__LINE__);
+     exit(1);
+    }
+    for (cj=0; cj<carr[cm].nchunk; cj++) {
+      pm=&(p[carr[cm].p[cj]]); /* start of solutions */
+      /* extract phase of pm, output to pphase */
+      extract_phases(pm,pphase,N,10);
+      /* invert N solutions */
+      for (ci=0; ci<N; ci++) {
+       mat_invert(&pphase[8*ci],&pinv[8*ci+8*N*cj], rho);
+      }
+    }
+    free(pphase);
+   }
+  }
+
+
+  /* calculate min baselines a thread can handle */
+  Nthb0=(Nbase1+Nt-1)/Nt;
+
+  /* setup threads */
+  pthread_attr_init(&attr);
+  pthread_attr_setdetachstate(&attr,PTHREAD_CREATE_JOINABLE);
+
+  if ((th_array=(pthread_t*)malloc((size_t)Nt*sizeof(pthread_t)))==0) {
+   fprintf(stderr,"%s: %d: No free memory\n",__FILE__,__LINE__);
+   exit(1);
+  }
+  if ((threaddata=(thread_data_base_t*)malloc((size_t)Nt*sizeof(thread_data_base_t)))==0) {
+    fprintf(stderr,"%s: %d: No free memory\n",__FILE__,__LINE__);
+    exit(1);
+  }
+  if ((beamdata=(thread_data_arrayfac_t*)malloc((size_t)Nt*sizeof(thread_data_arrayfac_t)))==0) {
+    fprintf(stderr,"%s: %d: No free memory\n",__FILE__,__LINE__);
+    exit(1);
+  }
+
+
+  if (add_to_data==SIMUL_ONLY) {
+   /* set output column to zero */
+   memset(x,0,sizeof(double)*8*Nbase*tilesz*Nchan);
+  }
+
+  /* iterate over threads, allocating baselines per thread */
+  ci=0;
+  for (nth=0;  nth<Nt && ci<Nbase1; nth++) {
+    /* this thread will handle baselines [ci:min(Nbase-1,ci+Nthb0-1)] */
+    /* determine actual no. of baselines */
+    if (ci+Nthb0<Nbase1) {
+     Nthb=Nthb0;
+    } else {
+     Nthb=Nbase1-ci;
+    }
+
+    threaddata[nth].N=N;
+    threaddata[nth].boff=ci;
+    threaddata[nth].Nb=Nthb;
+    threaddata[nth].barr=barr;
+    threaddata[nth].u=&(u[ci]);
+    threaddata[nth].v=&(v[ci]);
+    threaddata[nth].w=&(w[ci]);
+    threaddata[nth].carr=carr;
+    threaddata[nth].M=M;
+    threaddata[nth].x=&(x[8*ci]);
+    threaddata[nth].p=p;
+    threaddata[nth].pinv=pinv;
+    threaddata[nth].ccid=cm;
+    threaddata[nth].ignlist=ignorelist;
+    threaddata[nth].Nbase=Nbase;
+    threaddata[nth].tilesz=tilesz;
+    threaddata[nth].freqs=freqs;
+    threaddata[nth].Nchan=Nchan;
+    threaddata[nth].fdelta=fdelta/(double)Nchan;
+    threaddata[nth].tdelta=tdelta;
+    threaddata[nth].dec0=dec0;
+    threaddata[nth].add_to_data=add_to_data;
+    
+   
+    /* next baseline set */
+    ci=ci+Nthb;
+  }
+
+/******************** loop over clusters *****************************/
+  for (ncl=0; ncl<M; ncl++) {
+   /* ignore clusters flagged true in ignorelist */
+   if (!ignorelist[ncl]){
+   /* first precalculate arrayfactor for all sources in this cluster */
+   /* for each source : N*tilesz*Nchan beams, so for a cluster with M: M*N*Nchan*tilesz */
+   if ((beamgain=(double*)calloc((size_t)N*tilesz*carr[ncl].N*Nchan,sizeof(double)))==0) {
+    fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
+    exit(1);
+   }
+
+   Ns0=(carr[ncl].N+Nt-1)/Nt; /* sources per thread */
+    ci=0;
+    for (nth1=0;  nth1<Nt && ci<carr[ncl].N; nth1++) {
+     /* determine actual no. of sources */
+     if (ci+Ns0<carr[ncl].N) {
+      Nthb=Ns0;
+     } else {
+      Nthb=carr[ncl].N-ci;
+     }
+//printf("cluster %d th %d sources %d start %d\n",ncl,nth1,carr[ncl].N,ci);
+     beamdata[nth1].Ns=Nthb;
+     beamdata[nth1].soff=ci;
+     beamdata[nth1].Ntime=tilesz;
+     beamdata[nth1].time_utc=time_utc;
+     beamdata[nth1].N=N;
+     beamdata[nth1].longitude=longitude;
+     beamdata[nth1].latitude=latitude;
+     beamdata[nth1].ra0=ph_ra0;
+     beamdata[nth1].dec0=ph_dec0;
+     beamdata[nth1].freq0=ph_freq0;
+     beamdata[nth1].Nf=Nchan;
+     beamdata[nth1].freqs=freqs; 
+
+     beamdata[nth1].Nelem=Nelem;
+     beamdata[nth1].xx=xx;
+     beamdata[nth1].yy=yy;
+     beamdata[nth1].zz=zz;
+     beamdata[nth1].carr=carr;
+     beamdata[nth1].cid=ncl;
+     beamdata[nth1].barr=barr;
+
+     beamdata[nth1].beamgain=beamgain;
+     pthread_create(&th_array[nth1],&attr,precalbeam_threadfn,(void*)(&beamdata[nth1]));
+
+     ci=ci+Nthb;
+   }
+   /* now wait for threads to finish */
+   for(ci=0; ci<nth1; ci++) {
+    pthread_join(th_array[ci],NULL);
+   }
+
+
+   for(ci=0; ci<nth; ci++) {
+     threaddata[ci].clus=ncl;
+     threaddata[ci].arrayfactor=beamgain;
+     pthread_create(&th_array[ci],&attr,visibilities_threadfn_multifreq,(void*)(&threaddata[ci]));
+   }
+
+   /* now wait for threads to finish */
+   for(ci=0; ci<nth; ci++) {
+     pthread_join(th_array[ci],NULL);
+   }
+
+
+   free(beamgain);
+   }
+  }
+/******************** end loop over clusters *****************************/
+
+
+ pthread_attr_destroy(&attr);
+
+ if (pinv) free(pinv);
+ free(th_array);
+ free(threaddata);
+ free(beamdata);
+
 
  return 0;
 }
