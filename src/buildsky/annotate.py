@@ -142,7 +142,7 @@ def annotate_lsm_sky(infilename,clusterfilename,outfilename,clid=None,color='yel
         mdec=mysign*(abs(float(v.group('col5')))+float(v.group('col6'))/60.0+float(v.group('col7'))/3600.0)
         SR[str(v.group('col1'))]=(mra,mdec,float(v.group('col8')))
 
-  print 'Read %d sources'%len(SR)
+  print('Read %d sources'%len(SR))
 
   CL={} # clusters 
   pp=re.compile(r"""
@@ -161,14 +161,14 @@ def annotate_lsm_sky(infilename,clusterfilename,outfilename,clid=None,color='yel
        # iterate over list of source names (names can also have a '.')
        CL[str(v.group('col1'))]=re.split('[^a-zA-Z0-9_\.]+',re.sub('\n','',str(v.group('col3'))))
 
-  print 'Read %d clusters'%len(CL)
+  print('Read %d clusters'%len(CL))
 
 
   # region file
   outfile=open(outfilename,'w+')
 
   # which clusters to annotate
-  if CL.has_key(str(clid)):
+  if str(clid) in CL:
     annlist=(str(clid),)
   else:
     annlist=CL.keys()
@@ -179,7 +179,7 @@ def annotate_lsm_sky(infilename,clusterfilename,outfilename,clid=None,color='yel
   for clname in annlist:
     clinfo=CL[clname]
     for slname in clinfo:
-      if SR.has_key(slname):
+      if slname in SR:
         sinfo=SR[slname]
         if rname:
           sline='fk5;point('+str(sinfo[0])+','+str(sinfo[1])+') # point=x color='+color+' text={'+slname+'}\n'

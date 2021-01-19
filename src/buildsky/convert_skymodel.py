@@ -494,7 +494,7 @@ def convert_sky_bbs_lsm(infilename,outfilename):
      v=pp2.search(eachline)
      if v!= None:
 ################################################################################
-        print eachline
+        print(eachline)
         stype=v.group('col2')
         sname=str(v.group('col1'))
         bad_source=False
@@ -511,7 +511,7 @@ def convert_sky_bbs_lsm(infilename,outfilename):
           # also throw away bad Gaussians with zero bmaj or bmin
           if bmaj<1e-6 or bmin<1e-6:
             bad_source=True
-          print "%f %f %f"%(bmaj,bmin,bpa)
+          print("%f %f %f"%(bmaj,bmin,bpa))
         else:
           bmaj=0.0
           bmin=0.0
@@ -519,7 +519,7 @@ def convert_sky_bbs_lsm(infilename,outfilename):
         
         strline=strline+' 0 '+str(bmaj)+' '+str(bmin)+' '+str(bpa)
         strline=strline+' '+str(v.group('col17'))+'\n'
-        print strline
+        print(strline)
         # only write good sources
         if not bad_source:
           outfile.write(strline)
