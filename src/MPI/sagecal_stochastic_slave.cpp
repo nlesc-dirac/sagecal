@@ -171,7 +171,7 @@ cerr<<"Error: Worker "<<myrank<<": Recheck your allocation or reduce number of w
 
     /* cannot run ADMM if we have only one channel, so print error and exit */
     if (iodata_vec[0].Nchan==1) {
-      fprintf(stderr,"Not possible to run consensus optimization with only %d channels.\n Quitting.\n",iodata_vec[0].Nchan);
+      fprintf(stderr,"Not possible to run consensus optimization with only %d channels (in one subband).\n Quitting.\n",iodata_vec[0].Nchan);
       exit(1);
     }
 
