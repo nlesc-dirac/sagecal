@@ -249,7 +249,7 @@ precalbeam_threadfn(void *data) {
 int
 precalculate_coherencies_withbeam(double *u, double *v, double *w, complex double *x, int N,
    int Nbase, baseline_t *barr,  clus_source_t *carr, int M, double freq0, double fdelta, double tdelta, double dec0, double uvmin, double uvmax, 
- double ph_ra0, double ph_dec0, double ph_freq0, double *longitude, double *latitude, double *time_utc, int tilesz, int *Nelem, double **xx, double **yy, double **zz, int Nt) {
+ double ph_ra0, double ph_dec0, double ph_freq0, double *longitude, double *latitude, double *time_utc, int tilesz, int *Nelem, double **xx, double **yy, double **zz, elementcoeff *ecoeff, int doBeam, int Nt) {
 
   int nth,ci,ncl;
 
@@ -391,6 +391,16 @@ precalculate_coherencies_withbeam(double *u, double *v, double *w, complex doubl
 
 
  return 0;
+}
+
+
+/* FIXME: stub */
+int
+precalculate_coherencies_multifreq_withbeam(double *u, double *v, double *w, complex double *x, int N,
+   int Nbase, baseline_t *barr,  clus_source_t *carr, int M, double *freqs, int Nchan, double fdelta, double tdelta, double dec0, double uvmin, double uvmax,
+ double ph_ra0, double ph_dec0, double ph_freq0, double *longitude, double *latitude, double *time_utc, int tileze, int *Nelem, double **xx, double **yy, double **zz, elementcoeff *ecoeff, int doBeam, int Nt){
+
+  return 0;
 }
 
 
@@ -665,7 +675,7 @@ visibilities_threadfn_multifreq(void *data) {
 
 int
 predict_visibilities_multifreq_withbeam(double *u,double *v,double *w,double *x,int N,int Nbase,int tilesz,baseline_t *barr, clus_source_t *carr, int M,double *freqs,int Nchan, double fdelta,double tdelta, double dec0,
-double ph_ra0, double ph_dec0, double ph_freq0, double *longitude, double *latitude, double *time_utc, int *Nelem, double **xx, double **yy, double **zz, int Nt, int add_to_data) {
+double ph_ra0, double ph_dec0, double ph_freq0, double *longitude, double *latitude, double *time_utc, int *Nelem, double **xx, double **yy, double **zz, elementcoeff *ecoeff, int doBeam, int Nt, int add_to_data) {
   int nth,nth1,ci,ncl,Ns0;
 
   int Nthb0,Nthb;
@@ -863,7 +873,7 @@ mat_invert(double xx[8],double yy[8], double rho) {
 
 int
 predict_visibilities_multifreq_withsol_withbeam(double *u,double *v,double *w,double *p,double *x,int *ignorelist, int N,int Nbase,int tilesz,baseline_t *barr, clus_source_t *carr, int M,double *freqs,int Nchan, double fdelta,double tdelta, double dec0,
-double ph_ra0, double ph_dec0, double ph_freq0, double *longitude, double *latitude, double *time_utc, int *Nelem, double **xx, double **yy, double **zz, int Nt, int add_to_data,
+double ph_ra0, double ph_dec0, double ph_freq0, double *longitude, double *latitude, double *time_utc, int *Nelem, double **xx, double **yy, double **zz, elementcoeff *ecoeff, int doBeam, int Nt, int add_to_data,
  int ccid, double rho,int phase_only) {
 
   int nth,nth1,ci,ncl,Ns0;
@@ -1338,7 +1348,7 @@ residual_threadfn_multifreq(void *data) {
 
 int
 calculate_residuals_multifreq_withbeam(double *u,double *v,double *w,double *p,double *x,int N,int Nbase,int tilesz,baseline_t *barr, clus_source_t *carr, int M,double *freqs,int Nchan, double fdelta,double tdelta,double dec0,
-double ph_ra0, double ph_dec0, double ph_freq0, double *longitude, double *latitude, double *time_utc,int *Nelem, double **xx, double **yy, double **zz, int Nt, int ccid, double rho, int phase_only) {
+double ph_ra0, double ph_dec0, double ph_freq0, double *longitude, double *latitude, double *time_utc,int *Nelem, double **xx, double **yy, double **zz, elementcoeff *ecoeff, int doBeam, int Nt, int ccid, double rho, int phase_only) {
   int nth,nth1,ci,cj,ncl,Ns0;
 
   int Nthb0,Nthb;

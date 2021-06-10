@@ -325,6 +325,56 @@ extern int
 arraybeam(double ra, double dec, double ra0, double dec0, double f, double f0, int N, double *longitude, double *latitude, double time_jd, int *Nelem, double **x, double **y, double **z, double *beamgain);
 
 
+/****************************** elementbeam.c ************************************/
+/* element beam types */
+#ifndef ELEM_LBA
+#define ELEM_LBA 0 /* LOFAR LBA */
+#endif
+#ifndef ELEM_HBA
+#define ELEM_HBA 1 /* LOFAR HBA */
+#endif
+
+/* beam prediction flags */
+#ifndef DOBEAM_NONE
+#define DOBEAM_NONE 0
+#endif
+#ifndef DOBEAM_ARRAY
+#define DOBEAM_ARRAY 1
+#endif
+#ifndef DOBEAM_FULL
+#define DOBEAM_FULL 2
+#endif
+#ifndef DOBEAM_ELEMENT
+#define DOBEAM_ELEMENT 3
+#endif
+
+typedef struct elementcoff_ {
+  int M; /* model order 1,2,3.. */
+  int Nmodes; /* total modes = (M)(M+1)/2 */
+  double beta; /* scale factor */
+  complex double *pattern_phi; /* Nmodes x 1 array */
+  complex double *pattern_theta; /* Nmodes x 1 array */
+
+  double *preamble; /* Nmodesx1 array, to store preamble of mode basis */
+} elementcoeff;
+
+typedef struct elementval_{
+  complex double phi, theta; /* tuple for element beam Ejones */
+} elementval;
+
+/* get beam type LBA/HBA and frequency
+   return beam pattern coeff vectors for theta/phi patterns */
+extern int
+set_elementcoeffs(int element_type,  double frequency, elementcoeff *ecoeff);
+
+/* free storage */
+extern int
+free_elementcoeffs(elementcoeff ecoeff);
+
+/* calculate elementbeam values for given r,theta coordinates */
+extern elementval
+eval_elementcoeffs(double r, double theta, elementcoeff *ecoeff);
+
 /****************************** predict_withbeam.c ****************************/
 /* precalculate cluster coherencies
   u,v,w: u,v,w coordinates (wavelengths) size Nbase*tilesz x 1 
@@ -351,6 +401,9 @@ arraybeam(double ra, double dec, double ra0, double dec0, double f, double f0, i
   tilesz: how many tiles: == unique time_utc
   Nelem: Nx1 array, size of stations (elements)
   xx,yy,zz: Nx1 arrays of station element locations arrays xx[],yy[],zz[]
+
+  ecoeff: struct storing information used to calculate element beam pattern
+  doBeam: flag to determine if full (element+array), array only, or element only beam is calculated
   Nt: no of threads
 
   NOTE: prediction is done for all baselines, even flagged ones
@@ -360,28 +413,30 @@ arraybeam(double ra, double dec, double ra0, double dec0, double f, double f0, i
 extern int
 precalculate_coherencies_withbeam(double *u, double *v, double *w, complex double *x, int N,
    int Nbase, baseline_t *barr,  clus_source_t *carr, int M, double freq0, double fdelta, double tdelta, double dec0, double uvmin, double uvmax, 
- double ph_ra0, double ph_dec0, double ph_freq0, double *longitude, double *latitude, double *time_utc, int tileze, int *Nelem, double **xx, double **yy, double **zz, int Nt);
+ double ph_ra0, double ph_dec0, double ph_freq0, double *longitude, double *latitude, double *time_utc, int tileze, int *Nelem, double **xx, double **yy, double **zz, 
+ elementcoeff *ecoeff, int doBeam, int Nt);
 
 /* multi-freq version of precalculate_coherencies_withbeam */
 extern int
 precalculate_coherencies_multifreq_withbeam(double *u, double *v, double *w, complex double *x, int N,
    int Nbase, baseline_t *barr,  clus_source_t *carr, int M, double *freqs, int Nchan, double fdelta, double tdelta, double dec0, double uvmin, double uvmax, 
- double ph_ra0, double ph_dec0, double ph_freq0, double *longitude, double *latitude, double *time_utc, int tileze, int *Nelem, double **xx, double **yy, double **zz, int Nt);
+ double ph_ra0, double ph_dec0, double ph_freq0, double *longitude, double *latitude, double *time_utc, int tileze, int *Nelem, double **xx, double **yy, double **zz, elementcoeff *ecoeff, int doBeam, int Nt);
 
 
 extern int
 predict_visibilities_multifreq_withbeam(double *u,double *v,double *w,double *x,int N,int Nbase,int tilesz,baseline_t *barr, clus_source_t *carr, int M,double *freqs,int Nchan, double fdelta,double tdelta, double dec0,
- double ph_ra0, double ph_dec0, double ph_freq0, double *longitude, double *latitude, double *time_utc,int *Nelem, double **xx, double **yy, double **zz, int Nt, int add_to_data);
+ double ph_ra0, double ph_dec0, double ph_freq0, double *longitude, double *latitude, double *time_utc,int *Nelem, double **xx, double **yy, double **zz, elementcoeff *ecoeff, int doBeam, int Nt, int add_to_data);
 
 /* predict with beam and solutions */
 extern int
 predict_visibilities_multifreq_withsol_withbeam(double *u,double *v,double *w,double *p,double *x,int *ignorelist,int N,int Nbase,int tilesz,baseline_t *barr, clus_source_t *carr, int M,double *freqs,int Nchan, double fdelta,double tdelta,double dec0,
  double ph_ra0, double ph_dec0, double ph_freq0, double *longitude, double *latitude, double *time_utc,int *Nelem, double **xx, double **yy, double **zz,
+  elementcoeff *ecoeff, int doBeam,
   int Nt,int add_to_data, int ccid, double rho,int phase_only);
 
 extern int
 calculate_residuals_multifreq_withbeam(double *u,double *v,double *w,double *p,double *x,int N,int Nbase,int tilesz,baseline_t *barr, clus_source_t *carr, int M,double *freqs,int Nchan, double fdelta,double tdelta,double dec0,
-double ph_ra0, double ph_dec0, double ph_freq0, double *longitude, double *latitude, double *time_utc,int *Nelem, double **xx, double **yy, double **zz, int Nt, int ccid, double rho, int phase_only);
+double ph_ra0, double ph_dec0, double ph_freq0, double *longitude, double *latitude, double *time_utc,int *Nelem, double **xx, double **yy, double **zz, elementcoeff *ecoeff, int doBeam, int Nt, int ccid, double rho, int phase_only);
 
 
 /* change epoch of soure ra,dec from J2000 to JAPP */

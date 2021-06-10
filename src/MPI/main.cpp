@@ -34,7 +34,7 @@ using namespace Data;
 
 void
 print_copyright(void) {
-  cout<<"SAGECal-MPI 0.7.3 (C) 2011-2021 Sarod Yatawatta"<<endl;
+  cout<<"SAGECal-MPI 0.7.4 (C) 2011-2021 Sarod Yatawatta"<<endl;
 }
 
 
@@ -59,7 +59,7 @@ print_help(void) {
    cout << "-m LBFGS memory size : default " <<Data::lbfgs_m<< endl;
    cout << "-n no of worker threads : default "<<Data::Nt << endl;
    cout << "-t tile size : default " <<Data::TileSize<< endl;
-   cout << "-B 0,1 : if 1, predict array beam: default " <<Data::doBeam<< endl;
+   cout << "-B 0,1,2,3 : predict "<<DOBEAM_ARRAY<<": array beam, "<<DOBEAM_FULL<<": array+element beam, "<<DOBEAM_ELEMENT<<": element beam: default " <<Data::doBeam<< endl;
 #ifdef HAVE_CUDA
    cout << "-E 0,1 : if >0, use GPU for model computing: default " <<Data::GPUpredict<< endl;
 #endif
@@ -139,7 +139,7 @@ ParseCmdLine(int ac, char **av) {
                 break;
             case 'B':
                 doBeam= atoi(optarg);
-                if (doBeam>1) { doBeam=1; }
+                if (doBeam>3) { doBeam=1; }
                 break;
             case 'e':
                 max_emiter= atoi(optarg);

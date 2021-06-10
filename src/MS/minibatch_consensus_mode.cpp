@@ -67,6 +67,8 @@ run_minibatch_consensus_calibration(void) {
 
     Data::IOData iodata;
     Data::LBeam beam;
+    // struct to store element beam coeffs
+    elementcoeff ecoeff;
     iodata.tilesz=time_per_minibatch;//original was Data::TileSize;
     iodata.deltat=1.0;
     if (Data::TableName) {
@@ -80,6 +82,9 @@ run_minibatch_consensus_calibration(void) {
     fflush(stdout);
     if (Data::randomize) {
      srand(time(0)); /* use different seed */
+    }
+    if (doBeam==DOBEAM_FULL||doBeam==DOBEAM_ELEMENT) {
+     set_elementcoeffs((iodata.freq0<100e6?ELEM_LBA:ELEM_HBA), iodata.freq0, &ecoeff);
     }
 
     /* cannot run ADMM if we have only one channel, so print error and exit */
@@ -476,8 +481,8 @@ run_minibatch_consensus_calibration(void) {
     if (!doBeam) {
      precalculate_coherencies_multifreq(iodata.u,iodata.v,iodata.w,coh,iodata.N,iodata.Nbase*iodata.tilesz,barr,carr,M,iodata.freqs,iodata.Nchan,iodata.deltaf,iodata.deltat,iodata.dec0,Data::min_uvcut,Data::max_uvcut,Data::Nt);
     } else {
-     //precalculate_coherencies_multifreq_withbeam(iodata.u,iodata.v,iodata.w,coh,iodata.N,iodata.Nbase*iodata.tilesz,barr,carr,M,iodata.freqs,iodata.Nchan,iodata.deltaf,iodata.deltat,iodata.dec0,Data::min_uvcut,Data::max_uvcut,
-  //beam.p_ra0,beam.p_dec0,iodata.freq0,beam.sx,beam.sy,beam.time_utc,iodata.tilesz,beam.Nelem,beam.xx,beam.yy,beam.zz,Data::Nt);
+     precalculate_coherencies_multifreq_withbeam(iodata.u,iodata.v,iodata.w,coh,iodata.N,iodata.Nbase*iodata.tilesz,barr,carr,M,iodata.freqs,iodata.Nchan,iodata.deltaf,iodata.deltat,iodata.dec0,Data::min_uvcut,Data::max_uvcut,
+    beam.p_ra0,beam.p_dec0,iodata.freq0,beam.sx,beam.sy,beam.time_utc,iodata.tilesz,beam.Nelem,beam.xx,beam.yy,beam.zz,&ecoeff,doBeam,Data::Nt);
     }
 #endif
 #ifdef HAVE_CUDA
@@ -489,8 +494,8 @@ run_minibatch_consensus_calibration(void) {
     if (!doBeam) {
      precalculate_coherencies_multifreq(iodata.u,iodata.v,iodata.w,coh,iodata.N,iodata.Nbase*iodata.tilesz,barr,carr,M,iodata.freqs,iodata.Nchan,iodata.deltaf,iodata.deltat,iodata.dec0,Data::min_uvcut,Data::max_uvcut,Data::Nt);
     } else {
-     //precalculate_coherencies_withbeam(iodata.u,iodata.v,iodata.w,coh,iodata.N,iodata.Nbase*iodata.tilesz,barr,carr,M,iodata.freq0,iodata.deltaf,iodata.deltat,iodata.dec0,Data::min_uvcut,Data::max_uvcut,
-  //beam.p_ra0,beam.p_dec0,iodata.freq0,beam.sx,beam.sy,beam.time_utc,iodata.tilesz,beam.Nelem,beam.xx,beam.yy,beam.zz,Data::Nt);
+     precalculate_coherencies_withbeam(iodata.u,iodata.v,iodata.w,coh,iodata.N,iodata.Nbase*iodata.tilesz,barr,carr,M,iodata.freq0,iodata.deltaf,iodata.deltat,iodata.dec0,Data::min_uvcut,Data::max_uvcut,
+     beam.p_ra0,beam.p_dec0,iodata.freq0,beam.sx,beam.sy,beam.time_utc,iodata.tilesz,beam.Nelem,beam.xx,beam.yy,beam.zz,&ecoeff,doBeam,Data::Nt);
     }
    }
 #endif
@@ -623,7 +628,8 @@ run_minibatch_consensus_calibration(void) {
        calculate_residuals_multifreq(iodata.u,iodata.v,iodata.w,&pfreq[iodata.N*8*Mt*ii],&iodata.xo[iodata.Nbase*iodata.tilesz*8*chanstart[ii]],iodata.N,iodata.Nbase,iodata.tilesz,barr,carr,M,&iodata.freqs[chanstart[ii]],nchan[ii],deltafch*(double)nchan[ii],iodata.deltat,iodata.dec0,Data::Nt,Data::ccid,Data::rho,Data::phaseOnly);
      } else {
       calculate_residuals_multifreq_withbeam(iodata.u,iodata.v,iodata.w,&pfreq[iodata.N*8*Mt*ii],&iodata.xo[iodata.Nbase*iodata.tilesz*8*chanstart[ii]],iodata.N,iodata.Nbase,iodata.tilesz,barr,carr,M,&iodata.freqs[chanstart[ii]],nchan[ii],deltafch*(double)nchan[ii],iodata.deltat,iodata.dec0,
-beam.p_ra0,beam.p_dec0,iodata.freq0,beam.sx,beam.sy,beam.time_utc,beam.Nelem,beam.xx,beam.yy,beam.zz,Data::Nt,Data::ccid,Data::rho,Data::phaseOnly);
+beam.p_ra0,beam.p_dec0,iodata.freq0,beam.sx,beam.sy,beam.time_utc,beam.Nelem,beam.xx,beam.yy,beam.zz, 
+  &ecoeff,doBeam,Data::Nt,Data::ccid,Data::rho,Data::phaseOnly);
      }
       }
 #endif
@@ -637,7 +643,8 @@ beam.p_ra0,beam.p_dec0,iodata.freq0,beam.sx,beam.sy,beam.time_utc,beam.Nelem,bea
        calculate_residuals_multifreq(iodata.u,iodata.v,iodata.w,&pfreq[iodata.N*8*Mt*ii],&iodata.xo[iodata.Nbase*iodata.tilesz*8*chanstart[ii]],iodata.N,iodata.Nbase,iodata.tilesz,barr,carr,M,&iodata.freqs[chanstart[ii]],nchan[ii],deltafch*(double)nchan[ii],iodata.deltat,iodata.dec0,Data::Nt,Data::ccid,Data::rho,Data::phaseOnly);
      } else {
       calculate_residuals_multifreq_withbeam(iodata.u,iodata.v,iodata.w,&pfreq[iodata.N*8*Mt*ii],&iodata.xo[iodata.Nbase*iodata.tilesz*8*chanstart[ii]],iodata.N,iodata.Nbase,iodata.tilesz,barr,carr,M,&iodata.freqs[chanstart[ii]],nchan[ii],deltafch*(double)nchan[ii],iodata.deltat,iodata.dec0,
-beam.p_ra0,beam.p_dec0,iodata.freq0,beam.sx,beam.sy,beam.time_utc,beam.Nelem,beam.xx,beam.yy,beam.zz,Data::Nt,Data::ccid,Data::rho,Data::phaseOnly);
+beam.p_ra0,beam.p_dec0,iodata.freq0,beam.sx,beam.sy,beam.time_utc,beam.Nelem,beam.xx,beam.yy,beam.zz,
+ &ecoeff,doBeam,Data::Nt,Data::ccid,Data::rho,Data::phaseOnly);
      }
     }
     }
@@ -816,6 +823,9 @@ beam.p_ra0,beam.p_dec0,iodata.freq0,beam.sx,beam.sy,beam.time_utc,beam.Nelem,bea
   free(rhok);
   free(resband);
   free(fband);
+  if (doBeam==DOBEAM_FULL||doBeam==DOBEAM_ELEMENT) {
+   free_elementcoeffs(ecoeff);
+  }
   /**********************************************************/
 
    cout<<"Done."<<endl;
