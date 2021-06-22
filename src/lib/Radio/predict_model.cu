@@ -272,7 +272,7 @@ calculate_uv_mode_vectors_scalar00(float u, float v, float beta, int n0, float *
   fact=(float *)malloc((size_t)(n0)*sizeof(float));
   fact[0]=1.0f;
   for (xci=1; xci<(n0); xci++) {
-    fact[xci]=(xci+1.0f)*fact[xci-1];
+    fact[xci]=((float)xci)*fact[xci-1];
   }
 
   /* setup array to store calculated shapelet value */
@@ -423,7 +423,7 @@ shapelet_contrib__(int *dd, float u, float v, float w) {
   }
   fact[0]=1.0f;
   for (ci=1; ci<dp->n0; ci++) {
-    fact[ci]=((float)ci+1.0f)*fact[ci-1];
+    fact[ci]=((float)ci)*fact[ci-1];
   }
 
 
