@@ -1,39 +1,26 @@
-di 28 aug 2018  9:37:58 CEST
+zo  8 aug 2021  8:57:59 CEST
 # SAGECal Installation
 
 ## Cmake Build
 
-### Requirements
-#### Ubuntu 20.04
+#### Ubuntu 20.04 (quick install)
 ```
  sudo apt-get install -y git cmake g++ pkg-config libcfitsio-bin libcfitsio-dev libopenblas-base libopenblas-dev wcslib-dev wcslib-tools libglib2.0-dev libcasa-casa4 casacore-dev casacore-data casacore-tools gfortran libopenmpi-dev libfftw3-dev
 
 ```
+Run cmake (with GPU support) for example like
 ```
-cmake .. -DHAVE_CUDA=ON -DCMAKE_CXX_FLAGS='-DMAX_GPU_ID=0' -DCMAKE_CXX_COMPILER=g++-8  -DCUDA_NVCC_FLAGS='-gencode arch=compute_75,code=sm_75'
+ mkdir build && cd build
+ cmake .. -DHAVE_CUDA=ON -DCMAKE_CXX_FLAGS='-DMAX_GPU_ID=0' -DCMAKE_CXX_COMPILER=g++-8  -DCUDA_NVCC_FLAGS='-gencode arch=compute_75,code=sm_75'
 ```
 If you get **-lgfortran is not found** error, run the following in the build directory
 ```
-cd dist/lib
-ln -s /usr/lib/x86_64-linux-gnu/libgfortran.so.5 libgfortran.so
+ cd dist/lib
+ ln -s /usr/lib/x86_64-linux-gnu/libgfortran.so.5 libgfortran.so
 ```
 to make a symbolic link to libgfortran.so.5 or whatever version that is installed.
 
-#### Ubuntu (tested with 16.04)
-- Add KERN repository. Instructions can also be found at [http://kernsuite.info/](http://kernsuite.info/)
-```
-    sudo apt-get install software-properties-common
-    sudo add-apt-repository -s ppa:kernsuite/kern-3
-    sudo apt-add-repository multiverse
-    sudo apt-get update
-```
-
-- Install following packages:
-```
-    sudo apt-get install -y git cmake g++ pkg-config libcfitsio-bin libcfitsio-dev libopenblas-base libopenblas-dev wcslib-dev wcslib-tools libglib2.0-dev libcasa-casa2 casacore-dev casacore-data casacore-tools gfortran libopenmpi-dev
-```
-#### Other systems
-
+### Requirements
 #### das5
 
 Load the modules below before compiling SageCal.
@@ -58,7 +45,7 @@ make install
 ```
 $INSTALL_PATH is where you want to install SageCal.
 
-
+#### Other systems
 
 - Install equivalent packages for your distribution
     - g++
