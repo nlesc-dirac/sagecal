@@ -152,8 +152,10 @@ typedef struct thread_data_base_ {
   double *freqs;
   int Nchan;
 
-  /* following used for calculating beam */
-  double *arrayfactor; /* storage for precomputed beam */
+  /* following used for calculating beam (can be NULL) */
+  double *arrayfactor; /* storage for precomputed array beam */
+  double *elementbeam; /* storage for precomputed element beam */
+  int beamMode; /* which part of beam to apply */
   /* if clus==0, reset memory before adding */
 
 } thread_data_base_t;
@@ -178,7 +180,9 @@ typedef struct thread_data_arrayfac_ {
   clus_source_t *carr; /* sky model, with clusters Mx1 */
   int cid; /* cluster id to calculate beam */
   baseline_t *barr; /* pointer to baseline-> stations mapping array */
-  double *beamgain; /* output */
+  double *beamgain; /* output : arrayfactor */
+  double *elementgain; /* output : element beam */
+  int beamMode; /* which part of beam to calculate */
 } thread_data_arrayfac_t;
 
 

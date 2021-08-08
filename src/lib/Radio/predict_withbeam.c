@@ -127,10 +127,6 @@ precal_threadfn(void *data) {
 
      /* term due to shape of source, also multiplied by freq/time smearing */
      for (cn=0; cn<t->carr[cm].N; cn++) {
-       /* get array factor for these 2 stations, at given time */
-       double af1=t->arrayfactor[cn*(t->N*t->tilesz)+tslot*t->N+sta1];
-       double af2=t->arrayfactor[cn*(t->N*t->tilesz)+tslot*t->N+sta2];
-
        /* freq smearing : extra term delta * sinc(delta/2 * phterm) */
        if (G[cn]!=0.0) {
          double smfac=G[cn]*fdelta2;
@@ -139,8 +135,16 @@ precal_threadfn(void *data) {
        } else {
          G[cn]=1.0;
        }
-       G[cn]*=af1*af2;
      }
+     if (t->beamMode==DOBEAM_ARRAY || t->beamMode==DOBEAM_FULL) {
+      for (cn=0; cn<t->carr[cm].N; cn++) {
+       /* get array factor for these 2 stations, at given time */
+       double af1=t->arrayfactor[cn*(t->N*t->tilesz)+tslot*t->N+sta1];
+       double af2=t->arrayfactor[cn*(t->N*t->tilesz)+tslot*t->N+sta2];
+       G[cn] *=af1*af2;
+      }
+     }
+
 
      /* multiply (re,im) phase term with smearing/shape factor */
      for (cn=0; cn<t->carr[cm].N; cn++) {
@@ -178,18 +182,43 @@ precal_threadfn(void *data) {
        VV[cn]=t->carr[cm].sV[cn];
      }
 
-     /* add up terms together */
-     for (cn=0; cn<t->carr[cm].N; cn++) {
-       complex double Ph,IIl,QQl,UUl,VVl;
-       Ph=(PHr[cn]+_Complex_I*PHi[cn]);
-       IIl=Ph*II[cn];
-       QQl=Ph*QQ[cn];
-       UUl=Ph*UU[cn];
-       VVl=Ph*VV[cn];
-       C[0]+=IIl+QQl;
-       C[1]+=UUl+_Complex_I*VVl;
-       C[2]+=UUl-_Complex_I*VVl;
-       C[3]+=IIl-QQl;
+     if (t->beamMode==DOBEAM_ELEMENT || t->beamMode==DOBEAM_FULL) {
+       /* add up terms together with Ejones multiplication */
+       for (cn=0; cn<t->carr[cm].N; cn++) {
+         complex double *E1=(complex double*)&t->elementbeam[cn*(t->N*8*t->tilesz)+tslot*t->N*8+sta1]; /* 8 values */
+         complex double *E2=(complex double*)&t->elementbeam[cn*(t->N*8*t->tilesz)+tslot*t->N*8+sta2]; /* 8 values */
+         complex double Ph,IIl,QQl,UUl,VVl;
+         Ph=(PHr[cn]+_Complex_I*PHi[cn]);
+         IIl=Ph*II[cn];
+         QQl=Ph*QQ[cn];
+         UUl=Ph*UU[cn];
+         VVl=Ph*VV[cn];
+	 complex double C0[4],T1[4];
+         C0[0]+=IIl+QQl;
+         C0[1]+=UUl+_Complex_I*VVl;
+         C0[2]+=UUl-_Complex_I*VVl;
+         C0[3]+=IIl-QQl;
+	 amb(E1,C0,T1);
+	 ambt(T1,E2,C0);
+	 C[0]+=C0[0];
+         C[1]+=C0[1];
+         C[2]+=C0[2];
+         C[3]+=C0[3];
+       }
+     } else {
+       /* add up terms together */
+       for (cn=0; cn<t->carr[cm].N; cn++) {
+         complex double Ph,IIl,QQl,UUl,VVl;
+         Ph=(PHr[cn]+_Complex_I*PHi[cn]);
+         IIl=Ph*II[cn];
+         QQl=Ph*QQ[cn];
+         UUl=Ph*UU[cn];
+         VVl=Ph*VV[cn];
+         C[0]+=IIl+QQl;
+         C[1]+=UUl+_Complex_I*VVl;
+         C[2]+=UUl-_Complex_I*VVl;
+         C[3]+=IIl-QQl;
+       }
      }
 
 
@@ -228,19 +257,49 @@ precalbeam_threadfn(void *data) {
  thread_data_arrayfac_t *t=(thread_data_arrayfac_t*)data;
  
  int cm,cn,ct,cf;
- /* ordering of beamgain : Nstationxtime x source */
+ /* ordering of beamgain : Nstation x time x source */
+ /* ordering of elementgain : 8*Nstation x time x source */
+ /* valid cases beamgain !=NULL && elementgain==NULL : only array beam
+    beamgain==NULL && elementgain!=NULL : only element beam
+    beamgain!=NULL && elementgain!=NULL : full array+element beam */
  cm=t->cid;  /* predict for only this cluster */
- for (cn=t->soff; cn<t->soff+t->Ns; cn++) {
-  //printf("clus=%d src=%d total=%d freq=%d %e %e \n",cm,cn,t->Ns,t->Nf,t->carr[cm].ra[cn],t->carr[cm].sI[cn]);
-  /* iterate over frequencies */
-  for (cf=0; cf<t->Nf; cf++) {
-   /* iterate over all timeslots */
-   for (ct=0;ct<t->Ntime;ct++) {
-    arraybeam(t->carr[cm].ra[cn], t->carr[cm].dec[cn], t->ra0, t->dec0, t->freqs[cf], t->freq0, t->N, t->longitude, t->latitude, t->time_utc[ct], t->Nelem, t->xx, t->yy, t->zz, &(t->beamgain[cn*(t->N*t->Ntime*t->Nf)+cf*(t->N*t->Ntime)+ct*t->N]));
+ if (t->beamMode==DOBEAM_ARRAY) {
+  printf("Only array beam\n");
+  for (cn=t->soff; cn<t->soff+t->Ns; cn++) {
+   //printf("clus=%d src=%d total=%d freq=%d %e %e \n",cm,cn,t->Ns,t->Nf,t->carr[cm].ra[cn],t->carr[cm].sI[cn]);
+   /* iterate over frequencies */
+   for (cf=0; cf<t->Nf; cf++) {
+    /* iterate over all timeslots */
+    for (ct=0;ct<t->Ntime;ct++) {
+     arraybeam(t->carr[cm].ra[cn], t->carr[cm].dec[cn], t->ra0, t->dec0, t->freqs[cf], t->freq0, t->N, t->longitude, t->latitude, t->time_utc[ct], t->Nelem, t->xx, t->yy, t->zz, &(t->beamgain[cn*(t->N*t->Ntime*t->Nf)+cf*(t->N*t->Ntime)+ct*t->N]));
+    }
    }
   }
+ } else if (t->beamMode==DOBEAM_ELEMENT) {
+  printf("Only element beam\n");
+  for (cn=t->soff; cn<t->soff+t->Ns; cn++) {
+   /* iterate over frequencies */
+   for (cf=0; cf<t->Nf; cf++) {
+    /* iterate over all timeslots */
+    for (ct=0;ct<t->Ntime;ct++) {
+     //elementbeam(t->carr[cm].ra[cn], t->carr[cm].dec[cn], t->ra0, t->dec0, t->freqs[cf], t->freq0, t->N, t->longitude, t->latitude, t->time_utc[ct], t->Nelem, t->xx, t->yy, t->zz, &(t->beamgain[cn*(t->N*t->Ntime*t->Nf)+cf*(t->N*t->Ntime)+ct*t->N]));
+    }
+   }
+  }
+ } else if (t->beamMode==DOBEAM_FULL) {
+  printf("Array and element beam\n");
+  for (cn=t->soff; cn<t->soff+t->Ns; cn++) {
+   /* iterate over frequencies */
+   for (cf=0; cf<t->Nf; cf++) {
+    /* iterate over all timeslots */
+    for (ct=0;ct<t->Ntime;ct++) {
+     //array_element_beam(t->carr[cm].ra[cn], t->carr[cm].dec[cn], t->ra0, t->dec0, t->freqs[cf], t->freq0, t->N, t->longitude, t->latitude, t->time_utc[ct], t->Nelem, t->xx, t->yy, t->zz, &(t->beamgain[cn*(t->N*t->Ntime*t->Nf)+cf*(t->N*t->Ntime)+ct*t->N]));
+    }
+   }
+  }
+ } else {
+  fprintf(stderr,"%s: %d: Invalid mode for beam calculation\n",__FILE__,__LINE__);
  }
-
  return NULL;
 }
 
@@ -257,7 +316,7 @@ precalculate_coherencies_withbeam(double *u, double *v, double *w, complex doubl
   pthread_attr_t attr;
   pthread_t *th_array;
   thread_data_base_t *threaddata;
-  double *beamgain;
+  double *beamgain,*elementgain;
   thread_data_arrayfac_t *beamdata;
 
   /* calculate min baselines a thread can handle */
@@ -318,9 +377,22 @@ precalculate_coherencies_withbeam(double *u, double *v, double *w, complex doubl
   for (ncl=0; ncl<M; ncl++) {
    /* first precalculate arrayfactor for all sources in this cluster */
    /* for each source : N*tilesz beams, so for a cluster with M: M*N*tilesz */
-   if ((beamgain=(double*)calloc((size_t)N*tilesz*carr[ncl].N,sizeof(double)))==0) {
+   beamgain=elementgain=NULL;
+   if (doBeam==DOBEAM_ARRAY || doBeam==DOBEAM_FULL) {
+    if ((beamgain=(double*)calloc((size_t)N*tilesz*carr[ncl].N,sizeof(double)))==0) {
     fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
     exit(1);
+    }
+   } 
+   if (doBeam==DOBEAM_ELEMENT || doBeam==DOBEAM_FULL) {
+    /* element beam is common to all stations,
+       but az,el might be different, so
+       per direction 8 values (2x2 complex): 8N*tilesz, for a cluster with M sources
+       M*8N*tilesz */
+    if ((elementgain=(double*)calloc((size_t)8*N*tilesz*carr[ncl].N,sizeof(double)))==0) {
+    fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
+    exit(1);
+    }
    }
 
    Ns0=(carr[ncl].N+Nt-1)/Nt; /* sources per thread */
@@ -356,6 +428,8 @@ precalculate_coherencies_withbeam(double *u, double *v, double *w, complex doubl
      beamdata[nth1].barr=barr;
   
      beamdata[nth1].beamgain=beamgain;
+     beamdata[nth1].elementgain=elementgain;
+     beamdata[nth1].beamMode=doBeam;
      pthread_create(&th_array[nth1],&attr,precalbeam_threadfn,(void*)(&beamdata[nth1]));
      
      ci=ci+Nthb;
@@ -380,6 +454,7 @@ precalculate_coherencies_withbeam(double *u, double *v, double *w, complex doubl
    }
 
    free(beamgain);
+   free(elementgain);
   }
 /******************** end loop over clusters *****************************/
 
@@ -504,10 +579,14 @@ visibilities_threadfn_multifreq(void *data) {
        } else {
          G[cn]=1.0;
        }
+     }
+     if (t->beamMode==DOBEAM_ARRAY || t->beamMode==DOBEAM_FULL) {
+      for (cn=0; cn<t->carr[cm].N; cn++) {
        /* get array factor for these 2 stations, at given time */
        double af1=t->arrayfactor[cn*(t->N*t->tilesz*t->Nchan)+cf*(t->N*t->tilesz)+tslot*t->N+sta1];
        double af2=t->arrayfactor[cn*(t->N*t->tilesz*t->Nchan)+cf*(t->N*t->tilesz)+tslot*t->N+sta2];
        G[cn] *=af1*af2;
+      }
      }
 
      /* multiply (re,im) phase term with smearing/shape factor */
@@ -575,19 +654,45 @@ visibilities_threadfn_multifreq(void *data) {
        }
      }
 
-     /* add up terms together */
-     for (cn=0; cn<t->carr[cm].N; cn++) {
+     if (t->beamMode==DOBEAM_ELEMENT || t->beamMode==DOBEAM_FULL) {
+      /* add up terms together with Ejones multiplication */
+      for (cn=0; cn<t->carr[cm].N; cn++) {
+       complex double *E1=(complex double*)&t->elementbeam[cn*(t->N*8*t->tilesz*t->Nchan)+cf*(t->N*8*t->tilesz)+tslot*t->N*8+sta1]; /* 8 values */
+       complex double *E2=(complex double*)&t->elementbeam[cn*(t->N*8*t->tilesz*t->Nchan)+cf*(t->N*8*t->tilesz)+tslot*t->N*8+sta2]; /* 8 values */
        complex double Ph,IIl,QQl,UUl,VVl;
        Ph=(PHr[cn]+_Complex_I*PHi[cn]);
        IIl=Ph*II[cn];
        QQl=Ph*QQ[cn];
        UUl=Ph*UU[cn];
        VVl=Ph*VV[cn];
-       C[0]+=IIl+QQl;
-       C[1]+=UUl+_Complex_I*VVl;
-       C[2]+=UUl-_Complex_I*VVl;
-       C[3]+=IIl-QQl;
+       complex double C0[4];
+       C0[0]=IIl+QQl;
+       C0[1]=UUl+_Complex_I*VVl;
+       C0[2]=UUl-_Complex_I*VVl;
+       C0[3]=IIl-QQl;
+       amb(E1,C0,T1);
+       ambt(T1,E2,C0);
+       C[0]+=C0[0];
+       C[1]+=C0[1];
+       C[2]+=C0[2];
+       C[3]+=C0[3];
+      }
+     } else {
+      /* add up terms together */
+      for (cn=0; cn<t->carr[cm].N; cn++) {
+        complex double Ph,IIl,QQl,UUl,VVl;
+        Ph=(PHr[cn]+_Complex_I*PHi[cn]);
+        IIl=Ph*II[cn];
+        QQl=Ph*QQ[cn];
+        UUl=Ph*UU[cn];
+        VVl=Ph*VV[cn];
+        C[0]+=IIl+QQl;
+        C[1]+=UUl+_Complex_I*VVl;
+        C[2]+=UUl-_Complex_I*VVl;
+        C[3]+=IIl-QQl;
+      }
      }
+
 
      free(PHr);
      free(PHi);
@@ -682,7 +787,7 @@ double ph_ra0, double ph_dec0, double ph_freq0, double *longitude, double *latit
   pthread_attr_t attr;
   pthread_t *th_array;
   thread_data_base_t *threaddata;
-  double *beamgain;
+  double *beamgain,*elementgain;
   thread_data_arrayfac_t *beamdata;
 
   int Nbase1=Nbase*tilesz;
@@ -755,11 +860,23 @@ double ph_ra0, double ph_dec0, double ph_freq0, double *longitude, double *latit
   for (ncl=0; ncl<M; ncl++) {
    /* first precalculate arrayfactor for all sources in this cluster */
    /* for each source : N*tilesz*Nchan beams, so for a cluster with M: M*N*Nchan*tilesz */
-   if ((beamgain=(double*)calloc((size_t)N*tilesz*carr[ncl].N*Nchan,sizeof(double)))==0) {
-    fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
-    exit(1);
+   beamgain=elementgain=NULL;
+   if (doBeam==DOBEAM_ARRAY || doBeam==DOBEAM_FULL) {
+    if ((beamgain=(double*)calloc((size_t)N*tilesz*carr[ncl].N*Nchan,sizeof(double)))==0) {
+     fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
+     exit(1);
+    }
    }
-
+   if (doBeam==DOBEAM_ELEMENT || doBeam==DOBEAM_FULL) {
+    /* element beam is common to all stations,
+       but az,el might be different, so
+       per direction 8 values (2x2 complex): 8N*tilesz*Nchan, for a cluster with M sources
+       M*8N*Nchan*tilesz */
+       if ((elementgain=(double*)calloc((size_t)8*N*tilesz*carr[ncl].N*Nchan,sizeof(double)))==0) {
+        fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
+        exit(1);
+        }
+   }
    Ns0=(carr[ncl].N+Nt-1)/Nt; /* sources per thread */
     ci=0;
     for (nth1=0;  nth1<Nt && ci<carr[ncl].N; nth1++) {
@@ -792,6 +909,8 @@ double ph_ra0, double ph_dec0, double ph_freq0, double *longitude, double *latit
      beamdata[nth1].barr=barr;
 
      beamdata[nth1].beamgain=beamgain;
+     beamdata[nth1].elementgain=elementgain;
+     beamdata[nth1].beamMode=doBeam;
      pthread_create(&th_array[nth1],&attr,precalbeam_threadfn,(void*)(&beamdata[nth1]));
 
      ci=ci+Nthb;
@@ -805,6 +924,8 @@ double ph_ra0, double ph_dec0, double ph_freq0, double *longitude, double *latit
    for(ci=0; ci<nth; ci++) {
      threaddata[ci].clus=ncl;
      threaddata[ci].arrayfactor=beamgain;
+     threaddata[ci].elementbeam=elementgain;
+     threaddata[ci].beamMode=doBeam;
      pthread_create(&th_array[ci],&attr,visibilities_threadfn_multifreq,(void*)(&threaddata[ci]));
    }
 
@@ -815,6 +936,7 @@ double ph_ra0, double ph_dec0, double ph_freq0, double *longitude, double *latit
 
 
    free(beamgain);
+   free(elementgain);
   }
 /******************** end loop over clusters *****************************/
 
@@ -882,7 +1004,7 @@ double ph_ra0, double ph_dec0, double ph_freq0, double *longitude, double *latit
   pthread_attr_t attr;
   pthread_t *th_array;
   thread_data_base_t *threaddata;
-  double *beamgain;
+  double *beamgain,*elementgain;
   thread_data_arrayfac_t *beamdata;
 
   int Nbase1=Nbase*tilesz;
@@ -1001,11 +1123,24 @@ double ph_ra0, double ph_dec0, double ph_freq0, double *longitude, double *latit
   for (ncl=0; ncl<M; ncl++) {
    /* ignore clusters flagged true in ignorelist */
    if (!ignorelist[ncl]){
+    beamgain=elementgain=NULL;
    /* first precalculate arrayfactor for all sources in this cluster */
    /* for each source : N*tilesz*Nchan beams, so for a cluster with M: M*N*Nchan*tilesz */
-   if ((beamgain=(double*)calloc((size_t)N*tilesz*carr[ncl].N*Nchan,sizeof(double)))==0) {
+   if (doBeam==DOBEAM_ARRAY || doBeam==DOBEAM_FULL) {
+    if ((beamgain=(double*)calloc((size_t)N*tilesz*carr[ncl].N*Nchan,sizeof(double)))==0) {
     fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
     exit(1);
+    }
+   }
+   if (doBeam==DOBEAM_ELEMENT || doBeam==DOBEAM_FULL) {
+    /* element beam is common to all stations,
+       but az,el might be different, so
+       per direction 8 values (2x2 complex): 8N*tilesz*Nchan, for a cluster with M sources
+       M*8N*Nchan*tilesz */
+     if ((elementgain=(double*)calloc((size_t)8*N*tilesz*carr[ncl].N*Nchan,sizeof(double)))==0) {
+     fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
+     exit(1);
+     }
    }
 
    Ns0=(carr[ncl].N+Nt-1)/Nt; /* sources per thread */
@@ -1040,6 +1175,8 @@ double ph_ra0, double ph_dec0, double ph_freq0, double *longitude, double *latit
      beamdata[nth1].barr=barr;
 
      beamdata[nth1].beamgain=beamgain;
+     beamdata[nth1].elementgain=elementgain;
+     beamdata[nth1].beamMode=doBeam;
      pthread_create(&th_array[nth1],&attr,precalbeam_threadfn,(void*)(&beamdata[nth1]));
 
      ci=ci+Nthb;
@@ -1053,6 +1190,8 @@ double ph_ra0, double ph_dec0, double ph_freq0, double *longitude, double *latit
    for(ci=0; ci<nth; ci++) {
      threaddata[ci].clus=ncl;
      threaddata[ci].arrayfactor=beamgain;
+     threaddata[ci].elementbeam=elementgain;
+     threaddata[ci].beamMode=doBeam;
      pthread_create(&th_array[ci],&attr,visibilities_threadfn_multifreq,(void*)(&threaddata[ci]));
    }
 
@@ -1063,6 +1202,7 @@ double ph_ra0, double ph_dec0, double ph_freq0, double *longitude, double *latit
 
 
    free(beamgain);
+   free(elementgain);
    }
   }
 /******************** end loop over clusters *****************************/
@@ -1355,7 +1495,7 @@ double ph_ra0, double ph_dec0, double ph_freq0, double *longitude, double *latit
   pthread_attr_t attr;
   pthread_t *th_array;
   thread_data_base_t *threaddata;
-  double *beamgain;
+  double *beamgain,*elementgain;
   thread_data_arrayfac_t *beamdata;
 
   int Nbase1=Nbase*tilesz;
@@ -1467,10 +1607,24 @@ double ph_ra0, double ph_dec0, double ph_freq0, double *longitude, double *latit
   for (ncl=0; ncl<M; ncl++) {
    /* first precalculate arrayfactor for all sources in this cluster */
    /* for each source : N*tilesz*Nchan beams, so for a cluster with M: M*N*Nchan*tilesz */
-   if ((beamgain=(double*)calloc((size_t)N*tilesz*carr[ncl].N*Nchan,sizeof(double)))==0) {
+   beamgain=elementgain=NULL;
+   if (doBeam==DOBEAM_ARRAY || doBeam==DOBEAM_FULL) {
+    if ((beamgain=(double*)calloc((size_t)N*tilesz*carr[ncl].N*Nchan,sizeof(double)))==0) {
+     fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
+     exit(1);
+    }
+   }
+   if (doBeam==DOBEAM_ELEMENT || doBeam==DOBEAM_FULL) {
+    /* element beam is common to all stations,
+       but az,el might be different, so
+       per direction 8 values (2x2 complex): 8N*tilesz*Nchan, for a cluster with M sources
+       M*8N*Nchan*tilesz */
+    if ((elementgain=(double*)calloc((size_t)8*N*tilesz*carr[ncl].N*Nchan,sizeof(double)))==0) {
     fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
     exit(1);
+    }
    }
+
    Ns0=(carr[ncl].N+Nt-1)/Nt; /* sources per thread */
 
     ci=0;
@@ -1503,6 +1657,8 @@ double ph_ra0, double ph_dec0, double ph_freq0, double *longitude, double *latit
      beamdata[nth1].barr=barr;
 
      beamdata[nth1].beamgain=beamgain;
+     beamdata[nth1].elementgain=elementgain;
+     beamdata[nth1].beamMode=doBeam;
      pthread_create(&th_array[nth1],&attr,precalbeam_threadfn,(void*)(&beamdata[nth1]));
 
      ci=ci+Nthb;
@@ -1516,6 +1672,8 @@ double ph_ra0, double ph_dec0, double ph_freq0, double *longitude, double *latit
    for(ci=0; ci<nth; ci++) {
      threaddata[ci].clus=ncl;
      threaddata[ci].arrayfactor=beamgain;
+     threaddata[ci].elementbeam=elementgain;
+     threaddata[ci].beamMode=doBeam;
      pthread_create(&th_array[ci],&attr,residual_threadfn_multifreq,(void*)(&threaddata[ci]));
    }
    /* now wait for threads to finish */
@@ -1524,6 +1682,7 @@ double ph_ra0, double ph_dec0, double ph_freq0, double *longitude, double *latit
    }
 
    free(beamgain);
+   free(elementgain);
   }
 
   /* now run with a -ve cluster id if correction is needed */
