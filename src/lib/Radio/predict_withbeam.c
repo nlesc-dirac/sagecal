@@ -186,8 +186,8 @@ precal_threadfn(void *data) {
      if (t->beamMode==DOBEAM_ELEMENT || t->beamMode==DOBEAM_FULL) {
        /* add up terms together with Ejones multiplication */
        for (cn=0; cn<t->carr[cm].N; cn++) {
-         complex double *E1=(complex double*)&t->elementbeam[cn*(t->N*8*t->tilesz)+tslot*t->N*8+sta1]; /* 8 values */
-         complex double *E2=(complex double*)&t->elementbeam[cn*(t->N*8*t->tilesz)+tslot*t->N*8+sta2]; /* 8 values */
+         complex double *E1=(complex double*)&t->elementbeam[cn*(t->N*8*t->tilesz)+tslot*t->N*8+sta1*8]; /* 8 values */
+         complex double *E2=(complex double*)&t->elementbeam[cn*(t->N*8*t->tilesz)+tslot*t->N*8+sta2*8]; /* 8 values */
          complex double Ph,IIl,QQl,UUl,VVl;
          Ph=(PHr[cn]+_Complex_I*PHi[cn]);
          IIl=Ph*II[cn];
@@ -399,8 +399,8 @@ precal_threadfn_multifreq(void *data) {
      if (t->beamMode==DOBEAM_ELEMENT || t->beamMode==DOBEAM_FULL) {
        /* add up terms together with Ejones multiplication */
        for (cn=0; cn<t->carr[cm].N; cn++) {
-         complex double *E1=(complex double*)&t->elementbeam[cn*(t->N*8*t->tilesz)+tslot*t->N*8+sta1]; /* 8 values */
-         complex double *E2=(complex double*)&t->elementbeam[cn*(t->N*8*t->tilesz)+tslot*t->N*8+sta2]; /* 8 values */
+         complex double *E1=(complex double*)&t->elementbeam[cn*(t->N*8*t->tilesz)+tslot*t->N*8+sta1*8]; /* 8 values */
+         complex double *E2=(complex double*)&t->elementbeam[cn*(t->N*8*t->tilesz)+tslot*t->N*8+sta2*8]; /* 8 values */
          complex double Ph,IIl,QQl,UUl,VVl;
          Ph=(PHr[cn]+_Complex_I*PHi[cn]);
          IIl=Ph*II[cn];
@@ -1030,8 +1030,8 @@ visibilities_threadfn_multifreq(void *data) {
      if (t->beamMode==DOBEAM_ELEMENT || t->beamMode==DOBEAM_FULL) {
       /* add up terms together with Ejones multiplication */
       for (cn=0; cn<t->carr[cm].N; cn++) {
-       complex double *E1=(complex double*)&t->elementbeam[cn*(t->N*8*t->tilesz*t->Nchan)+cf*(t->N*8*t->tilesz)+tslot*t->N*8+sta1]; /* 8 values */
-       complex double *E2=(complex double*)&t->elementbeam[cn*(t->N*8*t->tilesz*t->Nchan)+cf*(t->N*8*t->tilesz)+tslot*t->N*8+sta2]; /* 8 values */
+       complex double *E1=(complex double*)&t->elementbeam[cn*(t->N*8*t->tilesz*t->Nchan)+cf*(t->N*8*t->tilesz)+tslot*t->N*8+sta1*8]; /* 8 values */
+       complex double *E2=(complex double*)&t->elementbeam[cn*(t->N*8*t->tilesz*t->Nchan)+cf*(t->N*8*t->tilesz)+tslot*t->N*8+sta2*8]; /* 8 values */
        complex double Ph,IIl,QQl,UUl,VVl;
        Ph=(PHr[cn]+_Complex_I*PHi[cn]);
        IIl=Ph*II[cn];
@@ -1787,8 +1787,8 @@ residual_threadfn_multifreq(void *data) {
     if (t->beamMode==DOBEAM_ELEMENT || t->beamMode==DOBEAM_FULL) {
      /* add up terms together with Ejones multiplication */
      for (cn=0; cn<t->carr[cm].N; cn++) {
-       complex double *E1=(complex double*)&t->elementbeam[cn*(t->N*8*t->tilesz*t->Nchan)+cf*(t->N*8*t->tilesz)+tslot*t->N*8+sta1]; /* 8 values */
-       complex double *E2=(complex double*)&t->elementbeam[cn*(t->N*8*t->tilesz*t->Nchan)+cf*(t->N*8*t->tilesz)+tslot*t->N*8+sta2]; /* 8 values */
+       complex double *E1=(complex double*)&t->elementbeam[cn*(t->N*8*t->tilesz*t->Nchan)+cf*(t->N*8*t->tilesz)+tslot*t->N*8+sta1*8]; /* 8 values */
+       complex double *E2=(complex double*)&t->elementbeam[cn*(t->N*8*t->tilesz*t->Nchan)+cf*(t->N*8*t->tilesz)+tslot*t->N*8+sta2*8]; /* 8 values */
        complex double Ph,IIl,QQl,UUl,VVl;
        Ph=(PHr[cn]+_Complex_I*PHi[cn]);
        IIl=Ph*II[cn];
