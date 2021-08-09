@@ -284,17 +284,17 @@ precal_threadfn_multifreq(void *data) {
     exit(1);
    }
 #endif
-   /* reset memory only for initial cluster
-    * because we iterate over clusters */
-   if (t->clus==0) {
-    memset(&(t->coh[4*M*ci]),0,sizeof(complex double)*4*M);
-   }
    /* even if this baseline is flagged, we do compute */
    cm=t->clus;  /* predict for only 1 cluster */
    /* iterate over frequencies */
    /* calculate coherencies for each freq */
    for (nchan=0; nchan<t->Nchan; nchan++) {
       freq0=t->freqs[nchan];
+     /* reset memory only for initial cluster
+      * because we iterate over clusters */
+     if (t->clus==0) {
+      memset(&(t->coh[4*M*ci+nchan*chanoff]),0,sizeof(complex double)*4*M);
+     }
 /***********************************************/
    memset(C,0,sizeof(complex double)*4);
    /* iterate over the sky model and calculate contribution */
@@ -498,7 +498,7 @@ precalbeam_threadfn(void *data) {
    for (cf=0; cf<t->Nf; cf++) {
     /* iterate over all timeslots */
     for (ct=0;ct<t->Ntime;ct++) {
-     //elementbeam(t->carr[cm].ra[cn], t->carr[cm].dec[cn], t->ra0, t->dec0, t->freqs[cf], t->freq0, t->N, t->longitude, t->latitude, t->time_utc[ct], t->Nelem, t->xx, t->yy, t->zz, &(t->beamgain[cn*(t->N*t->Ntime*t->Nf)+cf*(t->N*t->Ntime)+ct*t->N]));
+     element_beam(t->carr[cm].ra[cn], t->carr[cm].dec[cn], t->freqs[cf], t->freq0, t->N, t->longitude, t->latitude, t->time_utc[ct], t->ecoeff, &(t->elementgain[cn*(t->N*8*t->Ntime*t->Nf)+cf*(t->N*8*t->Ntime)+ct*t->N*8]));
     }
    }
   }
@@ -509,7 +509,7 @@ precalbeam_threadfn(void *data) {
    for (cf=0; cf<t->Nf; cf++) {
     /* iterate over all timeslots */
     for (ct=0;ct<t->Ntime;ct++) {
-     //array_element_beam(t->carr[cm].ra[cn], t->carr[cm].dec[cn], t->ra0, t->dec0, t->freqs[cf], t->freq0, t->N, t->longitude, t->latitude, t->time_utc[ct], t->Nelem, t->xx, t->yy, t->zz, &(t->beamgain[cn*(t->N*t->Ntime*t->Nf)+cf*(t->N*t->Ntime)+ct*t->N]));
+     array_element_beam(t->carr[cm].ra[cn], t->carr[cm].dec[cn], t->ra0, t->dec0, t->freqs[cf], t->freq0, t->N, t->longitude, t->latitude, t->time_utc[ct], t->Nelem, t->xx, t->yy, t->zz, t->ecoeff, &(t->beamgain[cn*(t->N*t->Ntime*t->Nf)+cf*(t->N*t->Ntime)+ct*t->N]),&(t->elementgain[cn*(t->N*8*t->Ntime*t->Nf)+cf*(t->N*8*t->Ntime)+ct*t->N*8]));
     }
    }
   }
@@ -643,6 +643,7 @@ precalculate_coherencies_withbeam(double *u, double *v, double *w, complex doubl
      beamdata[nth1].cid=ncl;
      beamdata[nth1].barr=barr;
   
+     beamdata[nth1].ecoeff=ecoeff;
      beamdata[nth1].beamgain=beamgain;
      beamdata[nth1].elementgain=elementgain;
      beamdata[nth1].beamMode=doBeam;
@@ -810,6 +811,7 @@ precalculate_coherencies_multifreq_withbeam(double *u, double *v, double *w, com
      beamdata[nth1].cid=ncl;
      beamdata[nth1].barr=barr;
 
+     beamdata[nth1].ecoeff=ecoeff;
      beamdata[nth1].beamgain=beamgain;
      beamdata[nth1].elementgain=elementgain;
      beamdata[nth1].beamMode=doBeam;
@@ -1282,6 +1284,7 @@ double ph_ra0, double ph_dec0, double ph_freq0, double *longitude, double *latit
      beamdata[nth1].cid=ncl;
      beamdata[nth1].barr=barr;
 
+     beamdata[nth1].ecoeff=ecoeff;
      beamdata[nth1].beamgain=beamgain;
      beamdata[nth1].elementgain=elementgain;
      beamdata[nth1].beamMode=doBeam;
@@ -1548,6 +1551,7 @@ double ph_ra0, double ph_dec0, double ph_freq0, double *longitude, double *latit
      beamdata[nth1].cid=ncl;
      beamdata[nth1].barr=barr;
 
+     beamdata[nth1].ecoeff=ecoeff;
      beamdata[nth1].beamgain=beamgain;
      beamdata[nth1].elementgain=elementgain;
      beamdata[nth1].beamMode=doBeam;
@@ -2060,6 +2064,7 @@ double ph_ra0, double ph_dec0, double ph_freq0, double *longitude, double *latit
      beamdata[nth1].cid=ncl;
      beamdata[nth1].barr=barr;
 
+     beamdata[nth1].ecoeff=ecoeff;
      beamdata[nth1].beamgain=beamgain;
      beamdata[nth1].elementgain=elementgain;
      beamdata[nth1].beamMode=doBeam;

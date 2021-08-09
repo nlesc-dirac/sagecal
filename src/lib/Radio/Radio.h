@@ -325,39 +325,16 @@ extern int
 arraybeam(double ra, double dec, double ra0, double dec0, double f, double f0, int N, double *longitude, double *latitude, double time_jd, int *Nelem, double **x, double **y, double **z, double *beamgain);
 
 
+/*
+  ecoeff: elementcoeff struct of element beam coefficients
+  elementgain: 8Nx1 array of element beam EJones along the source direction
+  */
+extern int
+array_element_beam(double ra, double dec, double ra0, double dec0, double f, double f0, int N, double *longitude, double *latitude, double time_jd, int *Nelem, double **x, double **y, double **z, elementcoeff *ecoeff, double *beamgain, double *elementgain);
+
+extern int
+element_beam(double ra, double dec, double f, double f0, int N, double *longitude, double *latitude, double time_jd, elementcoeff *ecoeff, double *elementgain);
 /****************************** elementbeam.c ************************************/
-/* element beam types */
-#ifndef ELEM_LBA
-#define ELEM_LBA 0 /* LOFAR LBA */
-#endif
-#ifndef ELEM_HBA
-#define ELEM_HBA 1 /* LOFAR HBA */
-#endif
-
-/* beam prediction flags */
-#ifndef DOBEAM_NONE
-#define DOBEAM_NONE 0
-#endif
-#ifndef DOBEAM_ARRAY
-#define DOBEAM_ARRAY 1
-#endif
-#ifndef DOBEAM_FULL
-#define DOBEAM_FULL 2
-#endif
-#ifndef DOBEAM_ELEMENT
-#define DOBEAM_ELEMENT 3
-#endif
-
-typedef struct elementcoff_ {
-  int M; /* model order 1,2,3.. */
-  int Nmodes; /* total modes = (M)(M+1)/2 */
-  double beta; /* scale factor */
-  complex double *pattern_phi; /* Nmodes x 1 array */
-  complex double *pattern_theta; /* Nmodes x 1 array */
-
-  double *preamble; /* Nmodesx1 array, to store preamble of mode basis */
-} elementcoeff;
-
 typedef struct elementval_{
   complex double phi, theta; /* tuple for element beam Ejones */
 } elementval;
