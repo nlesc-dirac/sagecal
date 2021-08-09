@@ -480,7 +480,6 @@ precalbeam_threadfn(void *data) {
     beamgain!=NULL && elementgain!=NULL : full array+element beam */
  cm=t->cid;  /* predict for only this cluster */
  if (t->beamMode==DOBEAM_ARRAY) {
-  printf("Only array beam\n");
   for (cn=t->soff; cn<t->soff+t->Ns; cn++) {
    //printf("clus=%d src=%d total=%d freq=%d %e %e \n",cm,cn,t->Ns,t->Nf,t->carr[cm].ra[cn],t->carr[cm].sI[cn]);
    /* iterate over frequencies */
@@ -492,7 +491,6 @@ precalbeam_threadfn(void *data) {
    }
   }
  } else if (t->beamMode==DOBEAM_ELEMENT) {
-  printf("Only element beam\n");
   for (cn=t->soff; cn<t->soff+t->Ns; cn++) {
    /* iterate over frequencies */
    for (cf=0; cf<t->Nf; cf++) {
@@ -503,7 +501,6 @@ precalbeam_threadfn(void *data) {
    }
   }
  } else if (t->beamMode==DOBEAM_FULL) {
-  printf("Array and element beam\n");
   for (cn=t->soff; cn<t->soff+t->Ns; cn++) {
    /* iterate over frequencies */
    for (cf=0; cf<t->Nf; cf++) {

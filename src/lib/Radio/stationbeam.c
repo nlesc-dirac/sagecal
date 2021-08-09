@@ -185,24 +185,24 @@ array_element_beam(double ra, double dec, double ra0, double dec0, double f, dou
             Etheta(gamma,beta-pi/2) Ehpi(gamma,beta-pi/2) ]; */
    elementval evalX=eval_elementcoeffs(theta,az-M_PI_4,ecoeff);
    elementval evalY=eval_elementcoeffs(theta,az-M_PI_4-M_PI_2,ecoeff);
-   elementgain[ci]=creal(evalX.theta);
-   elementgain[ci+1]=cimag(evalX.theta);
-   elementgain[ci+2]=creal(evalX.phi);
-   elementgain[ci+3]=cimag(evalX.phi);
-   elementgain[ci+4]=creal(evalY.theta);
-   elementgain[ci+5]=cimag(evalY.theta);
-   elementgain[ci+6]=creal(evalY.phi);
-   elementgain[ci+7]=cimag(evalY.phi);
+   elementgain[8*ci]=creal(evalX.theta);
+   elementgain[8*ci+1]=cimag(evalX.theta);
+   elementgain[8*ci+2]=creal(evalX.phi);
+   elementgain[8*ci+3]=cimag(evalX.phi);
+   elementgain[8*ci+4]=creal(evalY.theta);
+   elementgain[8*ci+5]=cimag(evalY.theta);
+   elementgain[8*ci+6]=creal(evalY.phi);
+   elementgain[8*ci+7]=cimag(evalY.phi);
    } else {
     beamgain[ci]=0.0;
-    elementgain[ci]=0.0;
-    elementgain[ci+1]=0.0;
-    elementgain[ci+2]=0.0;
-    elementgain[ci+3]=0.0;
-    elementgain[ci+4]=0.0;
-    elementgain[ci+5]=0.0;
-    elementgain[ci+6]=0.0;
-    elementgain[ci+7]=0.0;
+    elementgain[8*ci]=0.0;
+    elementgain[8*ci+1]=0.0;
+    elementgain[8*ci+2]=0.0;
+    elementgain[8*ci+3]=0.0;
+    elementgain[8*ci+4]=0.0;
+    elementgain[8*ci+5]=0.0;
+    elementgain[8*ci+6]=0.0;
+    elementgain[8*ci+7]=0.0;
    }
   }
  
@@ -235,23 +235,23 @@ element_beam(double ra, double dec, double f, double f0, int N, double *longitud
             Etheta(gamma,beta-pi/2) Ehpi(gamma,beta-pi/2) ]; */
    elementval evalX=eval_elementcoeffs(theta,az-M_PI_4,ecoeff);
    elementval evalY=eval_elementcoeffs(theta,az-M_PI_4-M_PI_2,ecoeff);
-   elementgain[ci]=creal(evalX.theta);
-   elementgain[ci+1]=cimag(evalX.theta);
-   elementgain[ci+2]=creal(evalX.phi);
-   elementgain[ci+3]=cimag(evalX.phi);
-   elementgain[ci+4]=creal(evalY.theta);
-   elementgain[ci+5]=cimag(evalY.theta);
-   elementgain[ci+6]=creal(evalY.phi);
-   elementgain[ci+7]=cimag(evalY.phi);
+   elementgain[8*ci]=creal(evalX.theta);
+   elementgain[8*ci+1]=cimag(evalX.theta);
+   elementgain[8*ci+2]=creal(evalX.phi);
+   elementgain[8*ci+3]=cimag(evalX.phi);
+   elementgain[8*ci+4]=creal(evalY.theta);
+   elementgain[8*ci+5]=cimag(evalY.theta);
+   elementgain[8*ci+6]=creal(evalY.phi);
+   elementgain[8*ci+7]=cimag(evalY.phi);
    } else {
-    elementgain[ci]=0.0;
-    elementgain[ci+1]=0.0;
-    elementgain[ci+2]=0.0;
-    elementgain[ci+3]=0.0;
-    elementgain[ci+4]=0.0;
-    elementgain[ci+5]=0.0;
-    elementgain[ci+6]=0.0;
-    elementgain[ci+7]=0.0;
+    elementgain[8*ci]=0.0;
+    elementgain[8*ci+1]=0.0;
+    elementgain[8*ci+2]=0.0;
+    elementgain[8*ci+3]=0.0;
+    elementgain[8*ci+4]=0.0;
+    elementgain[8*ci+5]=0.0;
+    elementgain[8*ci+6]=0.0;
+    elementgain[8*ci+7]=0.0;
    }
   }
  
