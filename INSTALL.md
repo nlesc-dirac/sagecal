@@ -1,8 +1,7 @@
-zo  8 aug 2021  8:57:59 CEST
+di 10 aug 2021 13:25:10 CEST
 # SAGECal Installation
 
 ## Cmake Build
-
 #### Ubuntu 20.04 (quick install)
 ```
  sudo apt-get install -y git cmake g++ pkg-config libcfitsio-bin libcfitsio-dev libopenblas-base libopenblas-dev wcslib-dev wcslib-tools libglib2.0-dev libcasa-casa4 casacore-dev casacore-data casacore-tools gfortran libopenmpi-dev libfftw3-dev
@@ -11,8 +10,16 @@ zo  8 aug 2021  8:57:59 CEST
 Run cmake (with GPU support) for example like
 ```
  mkdir build && cd build
- cmake .. -DHAVE_CUDA=ON -DCMAKE_CXX_FLAGS='-DMAX_GPU_ID=0' -DCMAKE_CXX_COMPILER=g++-8  -DCUDA_NVCC_FLAGS='-gencode arch=compute_75,code=sm_75'
+ cmake .. -DHAVE_CUDA=ON -DCMAKE_CXX_FLAGS='-DMAX_GPU_ID=0' -DCMAKE_CXX_COMPILER=g++-8  -DCMAKE_C_FLAGS='-DMAX_GPU_ID=0' -DCMAKE_C_COMPILER=gcc-8 -DCUDA_NVCC_FLAGS='-gencode arch=compute_75,code=sm_75'
 ```
+where *MAX_GPU_ID=0* is when there is only one GPU (ordinal 0). If you have more GPUs, increase this number to 1,2, and so on. This will produce *sagecal_gpu* and *sagecal-mpi_gpu* binary files (after running *make* of course).
+
+CPU only version can be build as
+```
+ cmake .. -DCMAKE_CXX_COMPILER=g++-8 -DCMAKE_C_COMPILER=gcc-8
+```
+which will produce *sagecal* and *sagecal-mpi*.
+
 If you get **-lgfortran is not found** error, run the following in the build directory
 ```
  cd dist/lib
@@ -20,7 +27,7 @@ If you get **-lgfortran is not found** error, run the following in the build dir
 ```
 to make a symbolic link to libgfortran.so.5 or whatever version that is installed.
 
-### Requirements
+### Requirements for older installations
 #### das5
 
 Load the modules below before compiling SageCal.
