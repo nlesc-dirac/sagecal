@@ -467,10 +467,19 @@ precalculate_coherencies_multifreq_withbeam_gpu(double *u, double *v, double *w,
 #ifndef GPU_HEAP_SIZE
 #define GPU_HEAP_SIZE 32 
 #endif
+/* shared memory size for element beam coefficients */
+#ifndef ELEMENT_MAX_SIZE
+#define ELEMENT_MAX_SIZE 64 // should be > (BEAM_ELEM_MODES*(BEAM_ELEM_MODES+1)/2)
+#endif
+
 
 extern void
 cudakernel_array_beam(int N, int T, int K, int F, double *freqs, float *longitude, float *latitude,
  double *time_utc, int *Nelem, float **xx, float **yy, float **zz, float *ra, float *dec, float ph_ra0, float  ph_dec0, float ph_freq0, float *beam);
+
+extern void
+cudakernel_element_beam(int N, int T, int K, int F, double *freqs, float *longitude, float *latitude,
+ double *time_utc, float *ra, float *dec, int Nmodes, int M, float beta, float *pattern_phi, float *pattern_theta, float *pattern_preamble, float *elementbeam);
 
 extern void
 cudakernel_coherencies(int B, int N, int T, int K, int F, double *u, double *v, double *w,baseline_t *barr, double *freqs, float *beam, double *ll, double *mm, double *nn, double *sI, double *sQ, double *sU, double *sV,

@@ -216,15 +216,15 @@ eval_elementcoeffs(double r, double theta, elementcoeff *ecoeff) {
      double s,c;
      sincos(-(double)m*theta,&s,&c);
 
-     /* find product of real terms */
-     double pr=rm*Lg*ex;
+     /* find product of real terms (including the preamble) */
+     double pr=rm*Lg*ex*ecoeff->preamble[idx];
      double re,im;
      /* basis function re+j*im */
      re=pr*c;
      im=pr*s; 
 
-     eval.phi+=ecoeff->preamble[idx]*ecoeff->pattern_phi[idx]*(re+_Complex_I*im);   
-     eval.theta+=ecoeff->preamble[idx]*ecoeff->pattern_theta[idx]*(re+_Complex_I*im);   
+     eval.phi+=ecoeff->pattern_phi[idx]*(re+_Complex_I*im);
+     eval.theta+=ecoeff->pattern_theta[idx]*(re+_Complex_I*im);
      idx++;
     }
   }

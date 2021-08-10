@@ -76,6 +76,59 @@ radec2azel_gmst__(float ra, float dec, float longitude, float latitude, float th
   *az=azd;
 }
 
+/* generalized Laguerre polynomial L_p^q(x) */
+/* for calculating L_{n-|m|/2}^|m| (x) */
+__device__ float
+L_g1(int p, int q, float x) {
+  /* max p: (n-|m|)/2 = n/2 */
+  if(p==0) return 1.0f;
+  if(p==1) return 1.0f-x+(float)q;
+  /* else, use two variables to store past values */
+  float L_p=0.0f,L_p_1,L_p_2;
+  L_p_2=1.0f;
+  L_p_1=1.0f-x+(float)q;
+  for (int i=2; i<=p; i++) {
+   float p_1=1.0f/(float)i;
+   L_p=(2.0f+p_1*((float)q-1.0f-x))*L_p_1-(1.0f+p_1*(q-1))*L_p_2;
+   L_p_2=L_p_1;
+   L_p_1=L_p;
+  }
+  return L_p;
+}
+
+/* evaluate element value using coefficient arrays */
+__device__ float4
+eval_elementcoeff(float r, float theta, int M, float beta, float2 *pattern_theta,
+     float2 *pattern_phi, float *pattern_preamble) {
+  float4 eval={0.f,0.f,0.f,0.f};
+  float rb=powf(r/beta,2);
+  float ex=exp(-0.5f*rb);
+
+  int idx=0;
+  for (int n=0; n<M; n++) {
+    for (int m=-n; m<=n; m+=2) {
+      int absm=m>0?m:-m; /* |m| */
+      float Lg=L_g1((n-absm)/2,absm,rb);
+      float rm=powf(M_PI_4+r,(float)absm);
+      float s,c;
+      sincosf(-(float)m*theta,&s,&c);
+      float pr=rm*Lg*ex*pattern_preamble[idx];
+      float2 reim;
+      reim.x=pr*c;
+      reim.y=pr*s;
+      float2 prod1=cuCmulf(pattern_theta[idx],reim);
+      float2 prod2=cuCmulf(pattern_phi[idx],reim);
+      eval.x+=prod1.x;
+      eval.y+=prod1.y;
+      eval.z+=prod2.x;
+      eval.w+=prod2.y;
+      idx++;
+    }
+  }
+
+  return eval;
+}
+
 /* use compiler directives to use/not use shared memory */
 /* ARRAY_MAX_ELEM : define this in header file beforehand, if using shared memory */
 /* master kernel to calculate beam */
@@ -176,6 +229,94 @@ kernel_array_beam(int N, int T, int K, int F,
    int boffset=itm*N*K*F+isrc*N*F+ifrq*N+istat;
    beam[boffset]=sqrtf(ssum*ssum+csum*csum);
    //printf("thread %d stat %d src %d freq %d time %d : %lf longitude=%lf latitude=%lf time=%lf freq=%lf elem=%d ra=%lf dec=%lf beam=%lf\n",n,istat,isrc,ifrq,itm,time_utc[itm],longitude[istat],latitude[istat],time_utc[itm],freqs[ifrq],Nelem[istat],ra[isrc],dec[isrc],beam[boffset]);
+  }
+
+}
+
+__global__ void 
+kernel_element_beam(int N, int T, int K, int F, 
+ const double *__restrict__ freqs, const float *__restrict__ longitude, const float *__restrict__ latitude,
+ const double *__restrict__ time_utc,
+ const float *__restrict__ ra, const float *__restrict__ dec, 
+ int Nmodes, int M, float beta, const float *__restrict__ pattern_phi,
+ const float *__restrict__ pattern_theta,const float *__restrict__ pattern_preamble,
+ float *beam) {
+
+    /* global thread index, x-dimension (data) */
+    int x=threadIdx.x+blockDim.x*blockIdx.x;
+    /* y-dimension is station */
+    int istat=blockIdx.y;
+
+    // find respective source,freq,time for this thread
+    int n1 = x;
+    int isrc=n1/(T*F);
+    n1=n1-isrc*(T*F);
+    int ifrq=n1/(T);
+    n1=n1-ifrq*(T);
+    int itm=n1;
+
+     //using shared memory
+    #if (ARRAY_USE_SHMEM==1)
+      __shared__ cuFloatComplex sh_phi[ELEMENT_MAX_SIZE];
+      __shared__ cuFloatComplex sh_theta[ELEMENT_MAX_SIZE];
+      __shared__ float sh_preamble[ELEMENT_MAX_SIZE];
+      for (int i=threadIdx.x; i<Nmodes; i+=blockDim.x) {
+        sh_phi[i].x = __ldg(&pattern_phi[2*i]);
+        sh_phi[i].y =__ldg(&pattern_phi[2*i+1]);
+        sh_theta[i].x = __ldg(&pattern_theta[2*i]);
+        sh_theta[i].y = __ldg(&pattern_theta[2*i+1]);
+        sh_preamble[i] = __ldg(&pattern_preamble[i]);
+      }
+      __syncthreads();
+    #endif
+
+  //check data limit
+  if (x<(K*T*F)) {
+
+/*********************************************************************/
+   /* time is already converted to thetaGMST */
+   float thetaGMST=(float)__ldg(&time_utc[itm]);
+   /* find az,el */
+   float az,el,r,theta;
+   radec2azel_gmst__(__ldg(&ra[isrc]),__ldg(&dec[isrc]), __ldg(&longitude[istat]), __ldg(&latitude[istat]), thetaGMST, &az, &el);
+   /* transform : r= pi/2-el, phi=az-pi/4 for element beam */
+   r=M_PI_2-el;
+   theta=az-M_PI_4; 
+/*********************************************************************/
+   if (el>0.0f) {
+            #if (ARRAY_USE_SHMEM == 1)
+      float4 evalX=eval_elementcoeff(r, theta, M, beta, sh_theta,
+                sh_phi, sh_preamble);
+      float4 evalY=eval_elementcoeff(r, theta-M_PI_2, M, beta, sh_theta,
+                sh_phi, sh_preamble);
+            #else
+      float4 evalX=eval_elementcoeff(r, theta, M, beta, (float2*)pattern_theta,
+                (float2*)pattern_phi, pattern_preamble);
+      float4 evalY=eval_elementcoeff(r, theta-M_PI_2, M, beta, (float2*)pattern_theta,
+                (float2*)pattern_phi, pattern_preamble);
+            #endif
+
+   /* store output EJones 8 values */ 
+   int boffset=itm*N*K*F+isrc*N*F+ifrq*N+istat;
+   beam[8*boffset]=evalX.x;
+   beam[8*boffset+1]=evalX.y;
+   beam[8*boffset+2]=evalX.z;
+   beam[8*boffset+3]=evalX.w;
+   beam[8*boffset+4]=evalY.x;
+   beam[8*boffset+5]=evalY.y;
+   beam[8*boffset+6]=evalY.z;
+   beam[8*boffset+7]=evalY.w;
+   } else {
+   int boffset=itm*N*K*F+isrc*N*F+ifrq*N+istat;
+   beam[8*boffset]=0.0f;
+   beam[8*boffset+1]=0.0f;
+   beam[8*boffset+2]=0.0f;
+   beam[8*boffset+3]=0.0f;
+   beam[8*boffset+4]=0.0f;
+   beam[8*boffset+5]=0.0f;
+   beam[8*boffset+6]=0.0f;
+   beam[8*boffset+7]=0.0f;
+   }
   }
 
 }
@@ -1232,6 +1373,56 @@ cudakernel_array_beam(int N, int T, int K, int F, double *freqs, float *longitud
   }
 #endif
 }
+
+/* element beam parameters
+  N: no of stations
+  T: no of time slots
+  K: no of sources
+  F: no of frequencies
+  freqs: frequencies Fx1
+  longitude, latitude: Nx1 station locations
+  time_utc: Tx1 time
+  ra,dec: Kx1 source positions
+ * Nmodes : M(M+1)/2
+ * M: model order
+ * beta: scale
+ * pattern_phi, pattern_theta: Nmodes x 1 complex, 2Nmodes x 1 float arrays
+ * pattern_preamble: Nmodes x 1 float array
+  beam: output element beam values 8*NxTxKxF values
+ */
+void
+cudakernel_element_beam(int N, int T, int K, int F, double *freqs, float *longitude, float *latitude,
+ double *time_utc, float *ra, float *dec, int Nmodes, int M, float beta, float *pattern_phi, float *pattern_theta, float *pattern_preamble, float *beam) {
+#ifdef CUDA_DBG
+  cudaError_t error;
+  error = cudaGetLastError();
+#endif
+  // Set a heap size of 128 megabytes. Note that this must
+  // be done before any kernel is launched. 
+  //cudaDeviceSetLimit(cudaLimitMallocHeapSize, 128*1024*1024);
+  // for an array of max 24*16 x 2  double, the default 8MB is ok
+
+  int ThreadsPerBlock=DEFAULT_TH_PER_BK;
+  /* note: make sure we do not exceed max no of blocks available, otherwise (too many sources, loop over source id) */
+
+  /* 2D grid of threads: x dim->data, y dim-> stations */
+  dim3 grid(1, 1, 1);
+  grid.x = (int)ceilf((K*T*F) / (float)ThreadsPerBlock);
+  grid.y = N;
+
+  kernel_element_beam<<<grid,ThreadsPerBlock>>>(N,T,K,F,freqs,longitude,latitude,time_utc,ra,dec,Nmodes,M,beta,pattern_phi,pattern_theta,pattern_preamble,beam);
+  cudaDeviceSynchronize();
+
+#ifdef CUDA_DBG
+  error = cudaGetLastError();
+  if(error != cudaSuccess) {
+    // print the CUDA error message and exit
+    fprintf(stderr,"CUDA error: %s :%s: %d\n", cudaGetErrorString(error),__FILE__,__LINE__);
+    exit(-1);
+  }
+#endif
+}
+
 
 
 /* 

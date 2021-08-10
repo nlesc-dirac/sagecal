@@ -786,7 +786,6 @@ predictvis_threadfn(void *data) {
   cudaError_t err;
   int ci,ncl,cj;
 
-
   err=cudaSetDevice(card);
   checkCudaError(err,__FILE__,__LINE__);
 
@@ -799,6 +798,8 @@ predictvis_threadfn(void *data) {
   int *Nelemd;
   float **xx_p=0,**yy_p=0,**zz_p=0;
   float **xxd,**yyd,**zzd;
+  /* storage for element beam coefficients */
+  float *pattern_phid=0, *pattern_thetad=0, *preambled=0;
   /* allocate memory in GPU */
   err=cudaMalloc((void**) &cohd, t->Nbase*8*t->Nf*sizeof(double)); /* coherencies only for 1 cluster, Nf freq, used to store sum of clusters*/
   checkCudaError(err,__FILE__,__LINE__);
@@ -832,7 +833,7 @@ predictvis_threadfn(void *data) {
 
 
   /* check if beam is actually calculated */
-  if (t->dobeam==DOBEAM_ARRAY || t->dobeam==DOBEAM_FULL) {
+  if (t->dobeam==DOBEAM_ARRAY || t->dobeam==DOBEAM_FULL || t->dobeam==DOBEAM_ELEMENT) {
   dtofcopy(t->N,&longd,t->longitude);
   dtofcopy(t->N,&latd,t->latitude);
   err=cudaMalloc((void**) &timed, t->tilesz*sizeof(double));
@@ -841,7 +842,8 @@ predictvis_threadfn(void *data) {
   checkCudaError(err,__FILE__,__LINE__);
   /* convert time jd to GMST angle */
   cudakernel_convert_time(t->tilesz,timed);
-
+  }
+  if (t->dobeam==DOBEAM_ARRAY || t->dobeam==DOBEAM_FULL) {
   err=cudaMemcpy(Nelemd, t->Nelem, t->N*sizeof(int), cudaMemcpyHostToDevice);
   checkCudaError(err,__FILE__,__LINE__);
 
@@ -888,8 +890,14 @@ predictvis_threadfn(void *data) {
   checkCudaError(err,__FILE__,__LINE__);
   }
 
+  if (t->dobeam==DOBEAM_ELEMENT || t->dobeam==DOBEAM_FULL) {
+  dtofcopy(2*t->ecoeff->Nmodes,&pattern_phid,(double*)t->ecoeff->pattern_phi);
+  dtofcopy(2*t->ecoeff->Nmodes,&pattern_thetad,(double*)t->ecoeff->pattern_theta);
+  dtofcopy(t->ecoeff->Nmodes,&preambled,t->ecoeff->preamble);
+  }
 
-  float *beamd;
+  float *beamd; /* array beam */
+  float *elementd; /* element beam */
   double *lld,*mmd,*nnd;
   double *sId; float *rad,*decd;
   double *sQd,*sUd,*sVd;
@@ -912,6 +920,12 @@ predictvis_threadfn(void *data) {
        beamd=0;
      }
 
+     if (t->dobeam==DOBEAM_ELEMENT || t->dobeam==DOBEAM_FULL) {
+      err=cudaMalloc((void**)&elementd, t->N*8*t->tilesz*t->carr[ncl].N*t->Nf*sizeof(float));
+      checkCudaError(err,__FILE__,__LINE__);
+     } else {
+      elementd=0;
+     }
 
      /* copy cluster details to GPU */
      err=cudaMalloc((void**)&styped, t->carr[ncl].N*sizeof(unsigned char));
@@ -952,7 +966,7 @@ predictvis_threadfn(void *data) {
      }
 
 
-     if (t->dobeam==DOBEAM_ARRAY || t->dobeam==DOBEAM_FULL) {
+     if (t->dobeam==DOBEAM_ARRAY || t->dobeam==DOBEAM_FULL || t->dobeam==DOBEAM_ELEMENT) {
       dtofcopy(t->carr[ncl].N,&rad,t->carr[ncl].ra);
       dtofcopy(t->carr[ncl].N,&decd,t->carr[ncl].dec);
      } else {
@@ -1057,9 +1071,16 @@ predictvis_threadfn(void *data) {
      checkCudaError(err,__FILE__,__LINE__);
 
 
-     if (t->dobeam==DOBEAM_ARRAY || t->dobeam==DOBEAM_FULL) {
-      /* now calculate beam for all sources in this cluster */
+     if (t->dobeam==DOBEAM_ARRAY) {
+      /* calculate array beam for all sources in this cluster */
       cudakernel_array_beam(t->N,t->tilesz,t->carr[ncl].N,t->Nf,freqsd,longd,latd,timed,Nelemd,xxd,yyd,zzd,rad,decd,(float)t->ph_ra0,(float)t->ph_dec0,(float)t->ph_freq0,beamd);
+     } else if (t->dobeam==DOBEAM_ELEMENT) {
+      /* calculate element beam for all sources in this cluster */
+      cudakernel_element_beam(t->N,t->tilesz,t->carr[ncl].N,t->Nf,freqsd,longd,latd,timed,rad,decd,t->ecoeff->Nmodes,t->ecoeff->M,t->ecoeff->beta,pattern_phid,pattern_thetad,preambled,elementd);
+     } else if (t->dobeam==DOBEAM_FULL) {
+      /* calculate array+element beam for all sources in this cluster */
+      cudakernel_array_beam(t->N,t->tilesz,t->carr[ncl].N,t->Nf,freqsd,longd,latd,timed,Nelemd,xxd,yyd,zzd,rad,decd,(float)t->ph_ra0,(float)t->ph_dec0,(float)t->ph_freq0,beamd);
+      cudakernel_element_beam(t->N,t->tilesz,t->carr[ncl].N,t->Nf,freqsd,longd,latd,timed,rad,decd,t->ecoeff->Nmodes,t->ecoeff->M,t->ecoeff->beta,pattern_phid,pattern_thetad,preambled,elementd);
      }
 
 
@@ -1103,6 +1124,10 @@ predictvis_threadfn(void *data) {
       err=cudaFree(beamd);
       checkCudaError(err,__FILE__,__LINE__);
      }
+     if (t->dobeam==DOBEAM_ELEMENT || t->dobeam==DOBEAM_FULL) {
+      err=cudaFree(elementd);
+      checkCudaError(err,__FILE__,__LINE__);
+     }
      err=cudaFree(lld);
      checkCudaError(err,__FILE__,__LINE__);
      err=cudaFree(mmd);
@@ -1119,7 +1144,7 @@ predictvis_threadfn(void *data) {
      err=cudaFree(sVd);
      checkCudaError(err,__FILE__,__LINE__);
      }
-     if (t->dobeam==DOBEAM_ARRAY || t->dobeam==DOBEAM_FULL) {
+     if (t->dobeam==DOBEAM_ARRAY || t->dobeam==DOBEAM_FULL || t->dobeam==DOBEAM_ELEMENT) {
       err=cudaFree(rad);
       checkCudaError(err,__FILE__,__LINE__);
       err=cudaFree(decd);
@@ -1167,16 +1192,17 @@ predictvis_threadfn(void *data) {
   err=cudaFree(freqsd);
   checkCudaError(err,__FILE__,__LINE__);
 
-  if (t->dobeam==DOBEAM_ARRAY || t->dobeam==DOBEAM_FULL) {
+  if (t->dobeam==DOBEAM_ARRAY || t->dobeam==DOBEAM_FULL || t->dobeam==DOBEAM_ELEMENT) {
   err=cudaFree(longd);
   checkCudaError(err,__FILE__,__LINE__);
   err=cudaFree(latd);
   checkCudaError(err,__FILE__,__LINE__);
   err=cudaFree(timed);
   checkCudaError(err,__FILE__,__LINE__);
+  }
+  if (t->dobeam==DOBEAM_ARRAY || t->dobeam==DOBEAM_FULL) {
   err=cudaFree(Nelemd);
   checkCudaError(err,__FILE__,__LINE__);
-
 
   for (ci=0; ci<t->N; ci++) {
     err=cudaFree(xx_p[ci]);
@@ -1198,6 +1224,15 @@ predictvis_threadfn(void *data) {
   free(yy_p);
   free(zz_p);
   }
+  if (t->dobeam==DOBEAM_ELEMENT || t->dobeam==DOBEAM_FULL) {
+   err=cudaFree(pattern_phid);
+   checkCudaError(err,__FILE__,__LINE__);
+   err=cudaFree(pattern_thetad);
+   checkCudaError(err,__FILE__,__LINE__);
+   err=cudaFree(preambled);
+   checkCudaError(err,__FILE__,__LINE__);
+  }
+
 
   cudaDeviceSynchronize();
   /* reset error state */
@@ -1219,7 +1254,7 @@ double ph_ra0, double ph_dec0, double ph_freq0, double *longitude, double *latit
   taskhist thst;
   init_task_hist(&thst);
 
-  /* oversubsribe GPU */
+  /* oversubscribe GPU */
   int Ngpu=MAX_GPU_ID+1;
 
   /* calculate min clusters thread can handle */
