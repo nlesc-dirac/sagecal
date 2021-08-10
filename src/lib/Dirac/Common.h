@@ -186,7 +186,7 @@ typedef struct thread_data_base_ {
   /* following used for calculating beam (can be NULL) */
   double *arrayfactor; /* storage for precomputed array beam */
   double *elementbeam; /* storage for precomputed element beam */
-  int beamMode; /* which part of beam to apply */
+  int dobeam; /* which part of beam to apply */
   /* if clus==0, reset memory before adding */
 
 } thread_data_base_t;
@@ -214,7 +214,7 @@ typedef struct thread_data_arrayfac_ {
   double *beamgain; /* output : arrayfactor */
   double *elementgain; /* output : element beam */
   elementcoeff *ecoeff; /* element beam coefficients */
-  int beamMode; /* which part of beam to calculate */
+  int dobeam; /* which part of beam to calculate */
 } thread_data_arrayfac_t;
 
 

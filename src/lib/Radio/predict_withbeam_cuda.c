@@ -92,7 +92,7 @@ typedef struct thread_data_pred_t_ {
   double dec0; /* phase center dec */
 
   /* following used in beam prediction */
-  int dobeam;
+  int dobeam; /* which part of beam to apply */
   double ph_ra0,ph_dec0; /* beam pointing */
   double ph_freq0; /* beam central freq */
   double *longitude,*latitude; /* Nx1 array of station locations */
@@ -100,6 +100,7 @@ typedef struct thread_data_pred_t_ {
   int tilesz;
   int *Nelem; /* Nx1 array of station sizes */
   double **xx,**yy,**zz; /* Nx1 arrays of station element coords */
+  elementcoeff *ecoeff; /* element beam coefficients */
 
   int Ns; /* total no of sources (clusters) per thread */
   int soff; /* starting source for this thread */
@@ -216,7 +217,7 @@ precalcoh_threadfn(void *data) {
   checkCudaError(err,__FILE__,__LINE__);
 
 
-  if (t->dobeam) {
+  if (t->dobeam==DOBEAM_ARRAY || t->dobeam==DOBEAM_FULL) {
   dtofcopy(t->N,&longd,t->longitude);
   dtofcopy(t->N,&latd,t->latitude);
   err=cudaMalloc((void**) &timed, t->tilesz*sizeof(double));
@@ -289,7 +290,7 @@ precalcoh_threadfn(void *data) {
 /******************* begin loop over clusters **************************/
   for (ncl=t->soff; ncl<t->soff+t->Ns; ncl++) {
 
-     if (t->dobeam) {
+     if (t->dobeam==DOBEAM_ARRAY || t->dobeam==DOBEAM_FULL) {
       /* allocate memory for this clusters beam */
       err=cudaMalloc((void**)&beamd, t->N*t->tilesz*t->carr[ncl].N*t->Nf*sizeof(float));
       checkCudaError(err,__FILE__,__LINE__);
@@ -337,7 +338,7 @@ precalcoh_threadfn(void *data) {
 
 
 
-     if (t->dobeam) {
+     if (t->dobeam==DOBEAM_ARRAY || t->dobeam==DOBEAM_FULL) {
       dtofcopy(t->carr[ncl].N,&rad,t->carr[ncl].ra);
       dtofcopy(t->carr[ncl].N,&decd,t->carr[ncl].dec);
      } else {
@@ -439,7 +440,7 @@ precalcoh_threadfn(void *data) {
      err=cudaMemcpy(dev_p, host_p, t->carr[ncl].N*sizeof(int*), cudaMemcpyHostToDevice);
      checkCudaError(err,__FILE__,__LINE__);
 
-     if (t->dobeam) {
+     if (t->dobeam==DOBEAM_ARRAY || t->dobeam==DOBEAM_FULL) {
      /* now calculate beam for all sources in this cluster */
       cudakernel_array_beam(t->N,t->tilesz,t->carr[ncl].N,t->Nf,freqsd,longd,latd,timed,Nelemd,xxd,yyd,zzd,rad,decd,(float)t->ph_ra0,(float)t->ph_dec0,(float)t->ph_freq0,beamd);
      }
@@ -486,7 +487,7 @@ precalcoh_threadfn(void *data) {
      err=cudaFree(dev_p);
      checkCudaError(err,__FILE__,__LINE__);
 
-     if (t->dobeam) {
+     if (t->dobeam==DOBEAM_ARRAY || t->dobeam==DOBEAM_FULL) {
       err=cudaFree(beamd);
       checkCudaError(err,__FILE__,__LINE__);
      }
@@ -506,7 +507,7 @@ precalcoh_threadfn(void *data) {
      err=cudaFree(sVd);
      checkCudaError(err,__FILE__,__LINE__);
      }
-     if (t->dobeam) {
+     if (t->dobeam==DOBEAM_ARRAY || t->dobeam==DOBEAM_FULL) {
       err=cudaFree(rad);
       checkCudaError(err,__FILE__,__LINE__);
       err=cudaFree(decd);
@@ -554,7 +555,7 @@ precalcoh_threadfn(void *data) {
   err=cudaFree(freqsd);
   checkCudaError(err,__FILE__,__LINE__);
   
-  if (t->dobeam) {
+  if (t->dobeam==DOBEAM_ARRAY || t->dobeam==DOBEAM_FULL) {
   err=cudaFree(longd);
   checkCudaError(err,__FILE__,__LINE__);
   err=cudaFree(latd);
@@ -614,7 +615,7 @@ resetflags_threadfn(void *data) {
 int
 precalculate_coherencies_withbeam_gpu(double *u, double *v, double *w, complex double *x, int N,
    int Nbase, baseline_t *barr,  clus_source_t *carr, int M, double freq0, double fdelta, double tdelta, double dec0, double uvmin, double uvmax, 
- double ph_ra0, double ph_dec0, double ph_freq0, double *longitude, double *latitude, double *time_utc, int tilesz, int *Nelem, double **xx, double **yy, double **zz, int dobeam, int Nt) {
+ double ph_ra0, double ph_dec0, double ph_freq0, double *longitude, double *latitude, double *time_utc, int tilesz, int *Nelem, double **xx, double **yy, double **zz, elementcoeff *ecoeff, int dobeam, int Nt) {
 
   int nth,ci;
 
@@ -691,6 +692,7 @@ precalculate_coherencies_withbeam_gpu(double *u, double *v, double *w, complex d
      threaddata[nth].Ns=Nthb;
      threaddata[nth].soff=ci;
 
+     threaddata[nth].ecoeff=ecoeff;
     
      pthread_create(&th_array[nth],&attr,precalcoh_threadfn,(void*)(&threaddata[nth]));
      /* next source set */
@@ -830,7 +832,7 @@ predictvis_threadfn(void *data) {
 
 
   /* check if beam is actually calculated */
-  if (t->dobeam) {
+  if (t->dobeam==DOBEAM_ARRAY || t->dobeam==DOBEAM_FULL) {
   dtofcopy(t->N,&longd,t->longitude);
   dtofcopy(t->N,&latd,t->latitude);
   err=cudaMalloc((void**) &timed, t->tilesz*sizeof(double));
@@ -903,7 +905,7 @@ predictvis_threadfn(void *data) {
 /******************* begin loop over clusters **************************/
   for (ncl=t->soff; ncl<t->soff+t->Ns; ncl++) {
      /* allocate memory for this clusters beam */
-     if (t->dobeam) {
+     if (t->dobeam==DOBEAM_ARRAY || t->dobeam==DOBEAM_FULL) {
       err=cudaMalloc((void**)&beamd, t->N*t->tilesz*t->carr[ncl].N*t->Nf*sizeof(float));
       checkCudaError(err,__FILE__,__LINE__);
      } else {
@@ -950,7 +952,7 @@ predictvis_threadfn(void *data) {
      }
 
 
-     if (t->dobeam) {
+     if (t->dobeam==DOBEAM_ARRAY || t->dobeam==DOBEAM_FULL) {
       dtofcopy(t->carr[ncl].N,&rad,t->carr[ncl].ra);
       dtofcopy(t->carr[ncl].N,&decd,t->carr[ncl].dec);
      } else {
@@ -1055,7 +1057,7 @@ predictvis_threadfn(void *data) {
      checkCudaError(err,__FILE__,__LINE__);
 
 
-     if (t->dobeam) {
+     if (t->dobeam==DOBEAM_ARRAY || t->dobeam==DOBEAM_FULL) {
       /* now calculate beam for all sources in this cluster */
       cudakernel_array_beam(t->N,t->tilesz,t->carr[ncl].N,t->Nf,freqsd,longd,latd,timed,Nelemd,xxd,yyd,zzd,rad,decd,(float)t->ph_ra0,(float)t->ph_dec0,(float)t->ph_freq0,beamd);
      }
@@ -1097,7 +1099,7 @@ predictvis_threadfn(void *data) {
      err=cudaFree(dev_p);
      checkCudaError(err,__FILE__,__LINE__);
 
-     if (t->dobeam) {
+     if (t->dobeam==DOBEAM_ARRAY || t->dobeam==DOBEAM_FULL) {
       err=cudaFree(beamd);
       checkCudaError(err,__FILE__,__LINE__);
      }
@@ -1117,7 +1119,7 @@ predictvis_threadfn(void *data) {
      err=cudaFree(sVd);
      checkCudaError(err,__FILE__,__LINE__);
      }
-     if (t->dobeam) {
+     if (t->dobeam==DOBEAM_ARRAY || t->dobeam==DOBEAM_FULL) {
       err=cudaFree(rad);
       checkCudaError(err,__FILE__,__LINE__);
       err=cudaFree(decd);
@@ -1165,7 +1167,7 @@ predictvis_threadfn(void *data) {
   err=cudaFree(freqsd);
   checkCudaError(err,__FILE__,__LINE__);
 
-  if (t->dobeam) {
+  if (t->dobeam==DOBEAM_ARRAY || t->dobeam==DOBEAM_FULL) {
   err=cudaFree(longd);
   checkCudaError(err,__FILE__,__LINE__);
   err=cudaFree(latd);
@@ -1206,7 +1208,7 @@ predictvis_threadfn(void *data) {
 
 int
 predict_visibilities_multifreq_withbeam_gpu(double *u,double *v,double *w,double *x,int N,int Nbase,int tilesz,baseline_t *barr, clus_source_t *carr, int M,double *freqs,int Nchan, double fdelta,double tdelta, double dec0,
-double ph_ra0, double ph_dec0, double ph_freq0, double *longitude, double *latitude, double *time_utc, int *Nelem, double **xx, double **yy, double **zz, int dobeam, int Nt, int add_to_data) {
+double ph_ra0, double ph_dec0, double ph_freq0, double *longitude, double *latitude, double *time_utc, int *Nelem, double **xx, double **yy, double **zz, elementcoeff *ecoeff, int dobeam, int Nt, int add_to_data) {
 
   int nth,ci;
 
@@ -1298,6 +1300,7 @@ double ph_ra0, double ph_dec0, double ph_freq0, double *longitude, double *latit
      threaddata[nth].Ns=Nthb;
      threaddata[nth].soff=ci;
 
+     threaddata[nth].ecoeff=ecoeff;
     
      pthread_create(&th_array[nth],&attr,predictvis_threadfn,(void*)(&threaddata[nth]));
      /* next source set */
@@ -1389,7 +1392,7 @@ residual_threadfn(void *data) {
 
 
   /* check if beam is actually calculated */
-  if (t->dobeam) {
+  if (t->dobeam==DOBEAM_ARRAY || t->dobeam==DOBEAM_FULL) {
   dtofcopy(t->N,&longd,t->longitude);
   dtofcopy(t->N,&latd,t->latitude);
   err=cudaMalloc((void**) &timed, t->tilesz*sizeof(double));
@@ -1466,7 +1469,7 @@ residual_threadfn(void *data) {
      /* check if cluster id >=0 to do a subtraction */
      if (t->carr[ncl].id>=0) {
      /* allocate memory for this clusters beam */
-     if (t->dobeam) {
+     if (t->dobeam==DOBEAM_ARRAY || t->dobeam==DOBEAM_FULL) {
       err=cudaMalloc((void**)&beamd, t->N*t->tilesz*t->carr[ncl].N*t->Nf*sizeof(float));
       checkCudaError(err,__FILE__,__LINE__);
      } else {
@@ -1519,7 +1522,7 @@ residual_threadfn(void *data) {
      }
 
 
-     if (t->dobeam) {
+     if (t->dobeam==DOBEAM_ARRAY || t->dobeam==DOBEAM_FULL) {
       dtofcopy(t->carr[ncl].N,&rad,t->carr[ncl].ra);
       dtofcopy(t->carr[ncl].N,&decd,t->carr[ncl].dec);
      } else {
@@ -1624,7 +1627,7 @@ residual_threadfn(void *data) {
      checkCudaError(err,__FILE__,__LINE__);
 
 
-     if (t->dobeam) {
+     if (t->dobeam==DOBEAM_ARRAY || t->dobeam==DOBEAM_FULL) {
       /* now calculate beam for all sources in this cluster */
       cudakernel_array_beam(t->N,t->tilesz,t->carr[ncl].N,t->Nf,freqsd,longd,latd,timed,Nelemd,xxd,yyd,zzd,rad,decd,(float)t->ph_ra0,(float)t->ph_dec0,(float)t->ph_freq0,beamd);
      }
@@ -1666,7 +1669,7 @@ residual_threadfn(void *data) {
      err=cudaFree(dev_p);
      checkCudaError(err,__FILE__,__LINE__);
 
-     if (t->dobeam) {
+     if (t->dobeam==DOBEAM_ARRAY || t->dobeam==DOBEAM_FULL) {
       err=cudaFree(beamd);
       checkCudaError(err,__FILE__,__LINE__);
      }
@@ -1688,7 +1691,7 @@ residual_threadfn(void *data) {
      err=cudaFree(sVd);
      checkCudaError(err,__FILE__,__LINE__);
      }
-     if (t->dobeam) {
+     if (t->dobeam==DOBEAM_ARRAY || t->dobeam==DOBEAM_FULL) {
       err=cudaFree(rad);
       checkCudaError(err,__FILE__,__LINE__);
       err=cudaFree(decd);
@@ -1737,7 +1740,7 @@ residual_threadfn(void *data) {
   err=cudaFree(freqsd);
   checkCudaError(err,__FILE__,__LINE__);
 
-  if (t->dobeam) {
+  if (t->dobeam==DOBEAM_ARRAY || t->dobeam==DOBEAM_FULL) {
   err=cudaFree(longd);
   checkCudaError(err,__FILE__,__LINE__);
   err=cudaFree(latd);
@@ -1849,7 +1852,7 @@ correct_threadfn(void *data) {
 */
 int
 calculate_residuals_multifreq_withbeam_gpu(double *u,double *v,double *w,double *p,double *x,int N,int Nbase,int tilesz,baseline_t *barr, clus_source_t *carr, int M,double *freqs,int Nchan, double fdelta,double tdelta, double dec0,
-double ph_ra0, double ph_dec0, double ph_freq0, double *longitude, double *latitude, double *time_utc, int *Nelem, double **xx, double **yy, double **zz, int dobeam, int Nt, int ccid, double rho, int phase_only) {
+double ph_ra0, double ph_dec0, double ph_freq0, double *longitude, double *latitude, double *time_utc, int *Nelem, double **xx, double **yy, double **zz, elementcoeff *ecoeff, int dobeam, int Nt, int ccid, double rho, int phase_only) {
 
   int nth,ci;
 
@@ -1936,7 +1939,8 @@ double ph_ra0, double ph_dec0, double ph_freq0, double *longitude, double *latit
      threaddata[nth].Ns=Nthb;
      threaddata[nth].soff=ci;
 
-    
+     threaddata[nth].ecoeff=ecoeff;
+
      pthread_create(&th_array[nth],&attr,residual_threadfn,(void*)(&threaddata[nth]));
      /* next source set */
      ci=ci+Nthb;
@@ -2117,7 +2121,7 @@ predict_threadfn(void *data) {
 
 
   /* check if beam is actually calculated */
-  if (t->dobeam) {
+  if (t->dobeam==DOBEAM_ARRAY || t->dobeam==DOBEAM_FULL) {
   dtofcopy(t->N,&longd,t->longitude);
   dtofcopy(t->N,&latd,t->latitude);
   err=cudaMalloc((void**) &timed, t->tilesz*sizeof(double));
@@ -2194,7 +2198,7 @@ predict_threadfn(void *data) {
      /* check if cluster id is not part of the ignore list */
      if (!t->ignlist[ncl]) {
      /* allocate memory for this clusters beam */
-     if (t->dobeam) {
+     if (t->dobeam==DOBEAM_ARRAY || t->dobeam==DOBEAM_FULL) {
       err=cudaMalloc((void**)&beamd, t->N*t->tilesz*t->carr[ncl].N*t->Nf*sizeof(float));
       checkCudaError(err,__FILE__,__LINE__);
      } else {
@@ -2247,7 +2251,7 @@ predict_threadfn(void *data) {
      }
 
 
-     if (t->dobeam) {
+     if (t->dobeam==DOBEAM_ARRAY || t->dobeam==DOBEAM_FULL) {
       dtofcopy(t->carr[ncl].N,&rad,t->carr[ncl].ra);
       dtofcopy(t->carr[ncl].N,&decd,t->carr[ncl].dec);
      } else {
@@ -2352,7 +2356,7 @@ predict_threadfn(void *data) {
      checkCudaError(err,__FILE__,__LINE__);
 
 
-     if (t->dobeam) {
+     if (t->dobeam==DOBEAM_ARRAY || t->dobeam==DOBEAM_FULL) {
       /* now calculate beam for all sources in this cluster */
       cudakernel_array_beam(t->N,t->tilesz,t->carr[ncl].N,t->Nf,freqsd,longd,latd,timed,Nelemd,xxd,yyd,zzd,rad,decd,(float)t->ph_ra0,(float)t->ph_dec0,(float)t->ph_freq0,beamd);
      }
@@ -2394,7 +2398,7 @@ predict_threadfn(void *data) {
      err=cudaFree(dev_p);
      checkCudaError(err,__FILE__,__LINE__);
 
-     if (t->dobeam) {
+     if (t->dobeam==DOBEAM_ARRAY || t->dobeam==DOBEAM_FULL) {
       err=cudaFree(beamd);
       checkCudaError(err,__FILE__,__LINE__);
      }
@@ -2416,7 +2420,7 @@ predict_threadfn(void *data) {
      err=cudaFree(sVd);
      checkCudaError(err,__FILE__,__LINE__);
      }
-     if (t->dobeam) {
+     if (t->dobeam==DOBEAM_ARRAY || t->dobeam==DOBEAM_FULL) {
       err=cudaFree(rad);
       checkCudaError(err,__FILE__,__LINE__);
       err=cudaFree(decd);
@@ -2465,7 +2469,7 @@ predict_threadfn(void *data) {
   err=cudaFree(freqsd);
   checkCudaError(err,__FILE__,__LINE__);
 
-  if (t->dobeam) {
+  if (t->dobeam==DOBEAM_ARRAY || t->dobeam==DOBEAM_FULL) {
   err=cudaFree(longd);
   checkCudaError(err,__FILE__,__LINE__);
   err=cudaFree(latd);
@@ -2513,7 +2517,7 @@ predict_threadfn(void *data) {
 */
 int
 predict_visibilities_withsol_withbeam_gpu(double *u,double *v,double *w,double *p,double *x, int *ignorelist, int N,int Nbase,int tilesz,baseline_t *barr, clus_source_t *carr, int M,double *freqs,int Nchan, double fdelta,double tdelta, double dec0,
-double ph_ra0, double ph_dec0, double ph_freq0, double *longitude, double *latitude, double *time_utc, int *Nelem, double **xx, double **yy, double **zz, int dobeam, int Nt, int add_to_data, int ccid, double rho, int phase_only) {
+double ph_ra0, double ph_dec0, double ph_freq0, double *longitude, double *latitude, double *time_utc, int *Nelem, double **xx, double **yy, double **zz, elementcoeff *ecoeff, int dobeam, int Nt, int add_to_data, int ccid, double rho, int phase_only) {
 
   int nth,ci;
 
@@ -2603,6 +2607,8 @@ double ph_ra0, double ph_dec0, double ph_freq0, double *longitude, double *latit
      /* which clusters to ignore */
      threaddata[nth].ignlist=ignorelist;
     
+     threaddata[nth].ecoeff=ecoeff;
+
      pthread_create(&th_array[nth],&attr,predict_threadfn,(void*)(&threaddata[nth]));
      /* next source set */
      ci=ci+Nthb;
@@ -2788,7 +2794,7 @@ precalcoh_multifreq_threadfn(void *data) {
   checkCudaError(err,__FILE__,__LINE__);
 
 
-  if (t->dobeam) {
+  if (t->dobeam==DOBEAM_ARRAY || t->dobeam==DOBEAM_FULL) {
   dtofcopy(t->N,&longd,t->longitude);
   dtofcopy(t->N,&latd,t->latitude);
   err=cudaMalloc((void**) &timed, t->tilesz*sizeof(double));
@@ -2861,7 +2867,7 @@ precalcoh_multifreq_threadfn(void *data) {
 /******************* begin loop over clusters **************************/
   for (ncl=t->soff; ncl<t->soff+t->Ns; ncl++) {
 
-     if (t->dobeam) {
+     if (t->dobeam==DOBEAM_ARRAY || t->dobeam==DOBEAM_FULL) {
       /* allocate memory for this clusters beam */
       err=cudaMalloc((void**)&beamd, t->N*t->tilesz*t->carr[ncl].N*t->Nf*sizeof(float));
       checkCudaError(err,__FILE__,__LINE__);
@@ -2909,7 +2915,7 @@ precalcoh_multifreq_threadfn(void *data) {
 
 
 
-     if (t->dobeam) {
+     if (t->dobeam==DOBEAM_ARRAY || t->dobeam==DOBEAM_FULL) {
       dtofcopy(t->carr[ncl].N,&rad,t->carr[ncl].ra);
       dtofcopy(t->carr[ncl].N,&decd,t->carr[ncl].dec);
      } else {
@@ -3011,7 +3017,7 @@ precalcoh_multifreq_threadfn(void *data) {
      err=cudaMemcpy(dev_p, host_p, t->carr[ncl].N*sizeof(int*), cudaMemcpyHostToDevice);
      checkCudaError(err,__FILE__,__LINE__);
 
-     if (t->dobeam) {
+     if (t->dobeam==DOBEAM_ARRAY || t->dobeam==DOBEAM_FULL) {
      /* now calculate beam for all sources in this cluster */
       cudakernel_array_beam(t->N,t->tilesz,t->carr[ncl].N,t->Nf,freqsd,longd,latd,timed,Nelemd,xxd,yyd,zzd,rad,decd,(float)t->ph_ra0,(float)t->ph_dec0,(float)t->ph_freq0,beamd);
      }
@@ -3061,7 +3067,7 @@ precalcoh_multifreq_threadfn(void *data) {
      err=cudaFree(dev_p);
      checkCudaError(err,__FILE__,__LINE__);
 
-     if (t->dobeam) {
+     if (t->dobeam==DOBEAM_ARRAY || t->dobeam==DOBEAM_FULL) {
       err=cudaFree(beamd);
       checkCudaError(err,__FILE__,__LINE__);
      }
@@ -3081,7 +3087,7 @@ precalcoh_multifreq_threadfn(void *data) {
      err=cudaFree(sVd);
      checkCudaError(err,__FILE__,__LINE__);
      }
-     if (t->dobeam) {
+     if (t->dobeam==DOBEAM_ARRAY || t->dobeam==DOBEAM_FULL) {
       err=cudaFree(rad);
       checkCudaError(err,__FILE__,__LINE__);
       err=cudaFree(decd);
@@ -3129,7 +3135,7 @@ precalcoh_multifreq_threadfn(void *data) {
   err=cudaFree(freqsd);
   checkCudaError(err,__FILE__,__LINE__);
   
-  if (t->dobeam) {
+  if (t->dobeam==DOBEAM_ARRAY || t->dobeam==DOBEAM_FULL) {
   err=cudaFree(longd);
   checkCudaError(err,__FILE__,__LINE__);
   err=cudaFree(latd);
@@ -3172,7 +3178,7 @@ precalcoh_multifreq_threadfn(void *data) {
 int
 precalculate_coherencies_multifreq_withbeam_gpu(double *u, double *v, double *w, complex double *x, int N,
    int Nbase, baseline_t *barr,  clus_source_t *carr, int M, double *freqs, int Nchan, double fdelta, double tdelta, double dec0, double uvmin, double uvmax, 
- double ph_ra0, double ph_dec0, double ph_freq0, double *longitude, double *latitude, double *time_utc, int tilesz, int *Nelem, double **xx, double **yy, double **zz, int dobeam, int Nt) {
+ double ph_ra0, double ph_dec0, double ph_freq0, double *longitude, double *latitude, double *time_utc, int tilesz, int *Nelem, double **xx, double **yy, double **zz, elementcoeff *ecoeff, int dobeam, int Nt) {
 
   int nth,ci;
 
@@ -3249,7 +3255,8 @@ precalculate_coherencies_multifreq_withbeam_gpu(double *u, double *v, double *w,
      threaddata[nth].Ns=Nthb;
      threaddata[nth].soff=ci;
 
-    
+     threaddata[nth].ecoeff=ecoeff;
+
      pthread_create(&th_array[nth],&attr,precalcoh_multifreq_threadfn,(void*)(&threaddata[nth]));
      /* next source set */
      ci=ci+Nthb;

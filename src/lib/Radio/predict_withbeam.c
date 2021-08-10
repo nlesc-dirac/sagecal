@@ -137,7 +137,7 @@ precal_threadfn(void *data) {
          G[cn]=1.0;
        }
      }
-     if (t->beamMode==DOBEAM_ARRAY || t->beamMode==DOBEAM_FULL) {
+     if (t->dobeam==DOBEAM_ARRAY || t->dobeam==DOBEAM_FULL) {
       for (cn=0; cn<t->carr[cm].N; cn++) {
        /* get array factor for these 2 stations, at given time */
        double af1=t->arrayfactor[cn*(t->N*t->tilesz)+tslot*t->N+sta1];
@@ -183,7 +183,7 @@ precal_threadfn(void *data) {
        VV[cn]=t->carr[cm].sV[cn];
      }
 
-     if (t->beamMode==DOBEAM_ELEMENT || t->beamMode==DOBEAM_FULL) {
+     if (t->dobeam==DOBEAM_ELEMENT || t->dobeam==DOBEAM_FULL) {
        /* add up terms together with Ejones multiplication */
        for (cn=0; cn<t->carr[cm].N; cn++) {
          complex double *E1=(complex double*)&t->elementbeam[cn*(t->N*8*t->tilesz)+tslot*t->N*8+sta1*8]; /* 8 values */
@@ -350,7 +350,7 @@ precal_threadfn_multifreq(void *data) {
          G[cn]=1.0;
        }
      }
-     if (t->beamMode==DOBEAM_ARRAY || t->beamMode==DOBEAM_FULL) {
+     if (t->dobeam==DOBEAM_ARRAY || t->dobeam==DOBEAM_FULL) {
       for (cn=0; cn<t->carr[cm].N; cn++) {
        /* get array factor for these 2 stations, at given time */
        double af1=t->arrayfactor[cn*(t->N*t->tilesz)+tslot*t->N+sta1];
@@ -396,7 +396,7 @@ precal_threadfn_multifreq(void *data) {
        VV[cn]=t->carr[cm].sV[cn];
      }
 
-     if (t->beamMode==DOBEAM_ELEMENT || t->beamMode==DOBEAM_FULL) {
+     if (t->dobeam==DOBEAM_ELEMENT || t->dobeam==DOBEAM_FULL) {
        /* add up terms together with Ejones multiplication */
        for (cn=0; cn<t->carr[cm].N; cn++) {
          complex double *E1=(complex double*)&t->elementbeam[cn*(t->N*8*t->tilesz)+tslot*t->N*8+sta1*8]; /* 8 values */
@@ -479,7 +479,7 @@ precalbeam_threadfn(void *data) {
     beamgain==NULL && elementgain!=NULL : only element beam
     beamgain!=NULL && elementgain!=NULL : full array+element beam */
  cm=t->cid;  /* predict for only this cluster */
- if (t->beamMode==DOBEAM_ARRAY) {
+ if (t->dobeam==DOBEAM_ARRAY) {
   for (cn=t->soff; cn<t->soff+t->Ns; cn++) {
    //printf("clus=%d src=%d total=%d freq=%d %e %e \n",cm,cn,t->Ns,t->Nf,t->carr[cm].ra[cn],t->carr[cm].sI[cn]);
    /* iterate over frequencies */
@@ -490,7 +490,7 @@ precalbeam_threadfn(void *data) {
     }
    }
   }
- } else if (t->beamMode==DOBEAM_ELEMENT) {
+ } else if (t->dobeam==DOBEAM_ELEMENT) {
   for (cn=t->soff; cn<t->soff+t->Ns; cn++) {
    /* iterate over frequencies */
    for (cf=0; cf<t->Nf; cf++) {
@@ -500,7 +500,7 @@ precalbeam_threadfn(void *data) {
     }
    }
   }
- } else if (t->beamMode==DOBEAM_FULL) {
+ } else if (t->dobeam==DOBEAM_FULL) {
   for (cn=t->soff; cn<t->soff+t->Ns; cn++) {
    /* iterate over frequencies */
    for (cf=0; cf<t->Nf; cf++) {
@@ -643,7 +643,7 @@ precalculate_coherencies_withbeam(double *u, double *v, double *w, complex doubl
      beamdata[nth1].ecoeff=ecoeff;
      beamdata[nth1].beamgain=beamgain;
      beamdata[nth1].elementgain=elementgain;
-     beamdata[nth1].beamMode=doBeam;
+     beamdata[nth1].dobeam=doBeam;
      pthread_create(&th_array[nth1],&attr,precalbeam_threadfn,(void*)(&beamdata[nth1]));
      
      ci=ci+Nthb;
@@ -660,7 +660,7 @@ precalculate_coherencies_withbeam(double *u, double *v, double *w, complex doubl
      threaddata[ci].clus=ncl;
      threaddata[ci].arrayfactor=beamgain;
      threaddata[ci].elementbeam=elementgain;
-     threaddata[ci].beamMode=doBeam;
+     threaddata[ci].dobeam=doBeam;
      pthread_create(&th_array[ci],&attr,precal_threadfn,(void*)(&threaddata[ci]));
    }
 
@@ -811,7 +811,7 @@ precalculate_coherencies_multifreq_withbeam(double *u, double *v, double *w, com
      beamdata[nth1].ecoeff=ecoeff;
      beamdata[nth1].beamgain=beamgain;
      beamdata[nth1].elementgain=elementgain;
-     beamdata[nth1].beamMode=doBeam;
+     beamdata[nth1].dobeam=doBeam;
      pthread_create(&th_array[nth1],&attr,precalbeam_threadfn,(void*)(&beamdata[nth1]));
 
      ci=ci+Nthb;
@@ -826,7 +826,7 @@ precalculate_coherencies_multifreq_withbeam(double *u, double *v, double *w, com
      threaddata[ci].clus=ncl;
      threaddata[ci].arrayfactor=beamgain;
      threaddata[ci].elementbeam=elementgain;
-     threaddata[ci].beamMode=doBeam;
+     threaddata[ci].dobeam=doBeam;
      pthread_create(&th_array[ci],&attr,precal_threadfn_multifreq,(void*)(&threaddata[ci]));
    }
 
@@ -953,7 +953,7 @@ visibilities_threadfn_multifreq(void *data) {
          G[cn]=1.0;
        }
      }
-     if (t->beamMode==DOBEAM_ARRAY || t->beamMode==DOBEAM_FULL) {
+     if (t->dobeam==DOBEAM_ARRAY || t->dobeam==DOBEAM_FULL) {
       for (cn=0; cn<t->carr[cm].N; cn++) {
        /* get array factor for these 2 stations, at given time */
        double af1=t->arrayfactor[cn*(t->N*t->tilesz*t->Nchan)+cf*(t->N*t->tilesz)+tslot*t->N+sta1];
@@ -1027,7 +1027,7 @@ visibilities_threadfn_multifreq(void *data) {
        }
      }
 
-     if (t->beamMode==DOBEAM_ELEMENT || t->beamMode==DOBEAM_FULL) {
+     if (t->dobeam==DOBEAM_ELEMENT || t->dobeam==DOBEAM_FULL) {
       /* add up terms together with Ejones multiplication */
       for (cn=0; cn<t->carr[cm].N; cn++) {
        complex double *E1=(complex double*)&t->elementbeam[cn*(t->N*8*t->tilesz*t->Nchan)+cf*(t->N*8*t->tilesz)+tslot*t->N*8+sta1*8]; /* 8 values */
@@ -1284,7 +1284,7 @@ double ph_ra0, double ph_dec0, double ph_freq0, double *longitude, double *latit
      beamdata[nth1].ecoeff=ecoeff;
      beamdata[nth1].beamgain=beamgain;
      beamdata[nth1].elementgain=elementgain;
-     beamdata[nth1].beamMode=doBeam;
+     beamdata[nth1].dobeam=doBeam;
      pthread_create(&th_array[nth1],&attr,precalbeam_threadfn,(void*)(&beamdata[nth1]));
 
      ci=ci+Nthb;
@@ -1299,7 +1299,7 @@ double ph_ra0, double ph_dec0, double ph_freq0, double *longitude, double *latit
      threaddata[ci].clus=ncl;
      threaddata[ci].arrayfactor=beamgain;
      threaddata[ci].elementbeam=elementgain;
-     threaddata[ci].beamMode=doBeam;
+     threaddata[ci].dobeam=doBeam;
      pthread_create(&th_array[ci],&attr,visibilities_threadfn_multifreq,(void*)(&threaddata[ci]));
    }
 
@@ -1551,7 +1551,7 @@ double ph_ra0, double ph_dec0, double ph_freq0, double *longitude, double *latit
      beamdata[nth1].ecoeff=ecoeff;
      beamdata[nth1].beamgain=beamgain;
      beamdata[nth1].elementgain=elementgain;
-     beamdata[nth1].beamMode=doBeam;
+     beamdata[nth1].dobeam=doBeam;
      pthread_create(&th_array[nth1],&attr,precalbeam_threadfn,(void*)(&beamdata[nth1]));
 
      ci=ci+Nthb;
@@ -1566,7 +1566,7 @@ double ph_ra0, double ph_dec0, double ph_freq0, double *longitude, double *latit
      threaddata[ci].clus=ncl;
      threaddata[ci].arrayfactor=beamgain;
      threaddata[ci].elementbeam=elementgain;
-     threaddata[ci].beamMode=doBeam;
+     threaddata[ci].dobeam=doBeam;
      pthread_create(&th_array[ci],&attr,visibilities_threadfn_multifreq,(void*)(&threaddata[ci]));
    }
 
@@ -1710,7 +1710,7 @@ residual_threadfn_multifreq(void *data) {
        }
      }
 
-     if (t->beamMode==DOBEAM_ARRAY || t->beamMode==DOBEAM_FULL) {
+     if (t->dobeam==DOBEAM_ARRAY || t->dobeam==DOBEAM_FULL) {
       for (cn=0; cn<t->carr[cm].N; cn++) {
        /* get array factor for these 2 stations, at given time */
        double af1=t->arrayfactor[cn*(t->N*t->tilesz*t->Nchan)+cf*(t->N*t->tilesz)+tslot*t->N+sta1];
@@ -1784,7 +1784,7 @@ residual_threadfn_multifreq(void *data) {
        }
      }
 
-    if (t->beamMode==DOBEAM_ELEMENT || t->beamMode==DOBEAM_FULL) {
+    if (t->dobeam==DOBEAM_ELEMENT || t->dobeam==DOBEAM_FULL) {
      /* add up terms together with Ejones multiplication */
      for (cn=0; cn<t->carr[cm].N; cn++) {
        complex double *E1=(complex double*)&t->elementbeam[cn*(t->N*8*t->tilesz*t->Nchan)+cf*(t->N*8*t->tilesz)+tslot*t->N*8+sta1*8]; /* 8 values */
@@ -2064,7 +2064,7 @@ double ph_ra0, double ph_dec0, double ph_freq0, double *longitude, double *latit
      beamdata[nth1].ecoeff=ecoeff;
      beamdata[nth1].beamgain=beamgain;
      beamdata[nth1].elementgain=elementgain;
-     beamdata[nth1].beamMode=doBeam;
+     beamdata[nth1].dobeam=doBeam;
      pthread_create(&th_array[nth1],&attr,precalbeam_threadfn,(void*)(&beamdata[nth1]));
 
      ci=ci+Nthb;
@@ -2079,7 +2079,7 @@ double ph_ra0, double ph_dec0, double ph_freq0, double *longitude, double *latit
      threaddata[ci].clus=ncl;
      threaddata[ci].arrayfactor=beamgain;
      threaddata[ci].elementbeam=elementgain;
-     threaddata[ci].beamMode=doBeam;
+     threaddata[ci].dobeam=doBeam;
      pthread_create(&th_array[ci],&attr,residual_threadfn_multifreq,(void*)(&threaddata[ci]));
    }
    /* now wait for threads to finish */
