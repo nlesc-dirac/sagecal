@@ -150,7 +150,7 @@ namespace Data
     extern int whiten;
     extern int DoSim; /* if 1, simulation mode */
     extern int doChan; /* if 1, solve for each channel in multi channel data */
-    extern int doBeam; /* if 1, predict (LOFAR) beam array factor */
+    extern int doBeam; /* if 1, predict (LOFAR) beam array factor, 2, array+element beam, 3, element beam */
     extern int DoDiag; /* if >0, enables diagnostics (Leverage) 1: write leverage as output (no residual), 2: only calculate fractions of leverage/noise */
     extern int phaseOnly; /* if >0, and if any correction is done, extract phase and do phase only correction */
 

@@ -227,7 +227,7 @@ calculate_mode_vectors(double *x, int Nx, double *y, int Ny, int *M, double
 	}
   fact[0]=1.0;
 	for (xci=1; xci<(*n0); xci++) {
-		fact[xci]=(xci+1)*fact[xci-1];
+		fact[xci]=(xci)*fact[xci-1];
 	}
 
 #ifdef DEBUG
@@ -512,7 +512,7 @@ calculate_mode_vectors_bi(double *x, double *y, int N,  double beta, int n0, dou
 	}
   fact[0]=1;
 	for (xci=1; xci<(n0); xci++) {
-		fact[xci]=(xci+1)*fact[xci-1];
+		fact[xci]=(xci)*fact[xci-1];
 	}
 
 #ifdef DEBUG

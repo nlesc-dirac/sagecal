@@ -325,6 +325,33 @@ extern int
 arraybeam(double ra, double dec, double ra0, double dec0, double f, double f0, int N, double *longitude, double *latitude, double time_jd, int *Nelem, double **x, double **y, double **z, double *beamgain);
 
 
+/*
+  ecoeff: elementcoeff struct of element beam coefficients
+  elementgain: 8Nx1 array of element beam EJones along the source direction
+  */
+extern int
+array_element_beam(double ra, double dec, double ra0, double dec0, double f, double f0, int N, double *longitude, double *latitude, double time_jd, int *Nelem, double **x, double **y, double **z, elementcoeff *ecoeff, double *beamgain, double *elementgain);
+
+extern int
+element_beam(double ra, double dec, double f, double f0, int N, double *longitude, double *latitude, double time_jd, elementcoeff *ecoeff, double *elementgain);
+/****************************** elementbeam.c ************************************/
+typedef struct elementval_{
+  complex double phi, theta; /* tuple for element beam Ejones */
+} elementval;
+
+/* get beam type LBA/HBA and frequency
+   return beam pattern coeff vectors for theta/phi patterns */
+extern int
+set_elementcoeffs(int element_type,  double frequency, elementcoeff *ecoeff);
+
+/* free storage */
+extern int
+free_elementcoeffs(elementcoeff ecoeff);
+
+/* calculate elementbeam values for given r,theta coordinates */
+extern elementval
+eval_elementcoeffs(double r, double theta, elementcoeff *ecoeff);
+
 /****************************** predict_withbeam.c ****************************/
 /* precalculate cluster coherencies
   u,v,w: u,v,w coordinates (wavelengths) size Nbase*tilesz x 1 
@@ -351,6 +378,9 @@ arraybeam(double ra, double dec, double ra0, double dec0, double f, double f0, i
   tilesz: how many tiles: == unique time_utc
   Nelem: Nx1 array, size of stations (elements)
   xx,yy,zz: Nx1 arrays of station element locations arrays xx[],yy[],zz[]
+
+  ecoeff: struct storing information used to calculate element beam pattern
+  doBeam: flag to determine if full (element+array), array only, or element only beam is calculated
   Nt: no of threads
 
   NOTE: prediction is done for all baselines, even flagged ones
@@ -360,28 +390,30 @@ arraybeam(double ra, double dec, double ra0, double dec0, double f, double f0, i
 extern int
 precalculate_coherencies_withbeam(double *u, double *v, double *w, complex double *x, int N,
    int Nbase, baseline_t *barr,  clus_source_t *carr, int M, double freq0, double fdelta, double tdelta, double dec0, double uvmin, double uvmax, 
- double ph_ra0, double ph_dec0, double ph_freq0, double *longitude, double *latitude, double *time_utc, int tileze, int *Nelem, double **xx, double **yy, double **zz, int Nt);
+ double ph_ra0, double ph_dec0, double ph_freq0, double *longitude, double *latitude, double *time_utc, int tileze, int *Nelem, double **xx, double **yy, double **zz, 
+ elementcoeff *ecoeff, int doBeam, int Nt);
 
 /* multi-freq version of precalculate_coherencies_withbeam */
 extern int
 precalculate_coherencies_multifreq_withbeam(double *u, double *v, double *w, complex double *x, int N,
    int Nbase, baseline_t *barr,  clus_source_t *carr, int M, double *freqs, int Nchan, double fdelta, double tdelta, double dec0, double uvmin, double uvmax, 
- double ph_ra0, double ph_dec0, double ph_freq0, double *longitude, double *latitude, double *time_utc, int tileze, int *Nelem, double **xx, double **yy, double **zz, int Nt);
+ double ph_ra0, double ph_dec0, double ph_freq0, double *longitude, double *latitude, double *time_utc, int tileze, int *Nelem, double **xx, double **yy, double **zz, elementcoeff *ecoeff, int doBeam, int Nt);
 
 
 extern int
 predict_visibilities_multifreq_withbeam(double *u,double *v,double *w,double *x,int N,int Nbase,int tilesz,baseline_t *barr, clus_source_t *carr, int M,double *freqs,int Nchan, double fdelta,double tdelta, double dec0,
- double ph_ra0, double ph_dec0, double ph_freq0, double *longitude, double *latitude, double *time_utc,int *Nelem, double **xx, double **yy, double **zz, int Nt, int add_to_data);
+ double ph_ra0, double ph_dec0, double ph_freq0, double *longitude, double *latitude, double *time_utc,int *Nelem, double **xx, double **yy, double **zz, elementcoeff *ecoeff, int doBeam, int Nt, int add_to_data);
 
 /* predict with beam and solutions */
 extern int
 predict_visibilities_multifreq_withsol_withbeam(double *u,double *v,double *w,double *p,double *x,int *ignorelist,int N,int Nbase,int tilesz,baseline_t *barr, clus_source_t *carr, int M,double *freqs,int Nchan, double fdelta,double tdelta,double dec0,
  double ph_ra0, double ph_dec0, double ph_freq0, double *longitude, double *latitude, double *time_utc,int *Nelem, double **xx, double **yy, double **zz,
+  elementcoeff *ecoeff, int doBeam,
   int Nt,int add_to_data, int ccid, double rho,int phase_only);
 
 extern int
 calculate_residuals_multifreq_withbeam(double *u,double *v,double *w,double *p,double *x,int N,int Nbase,int tilesz,baseline_t *barr, clus_source_t *carr, int M,double *freqs,int Nchan, double fdelta,double tdelta,double dec0,
-double ph_ra0, double ph_dec0, double ph_freq0, double *longitude, double *latitude, double *time_utc,int *Nelem, double **xx, double **yy, double **zz, int Nt, int ccid, double rho, int phase_only);
+double ph_ra0, double ph_dec0, double ph_freq0, double *longitude, double *latitude, double *time_utc,int *Nelem, double **xx, double **yy, double **zz, elementcoeff *ecoeff, int doBeam, int Nt, int ccid, double rho, int phase_only);
 
 
 /* change epoch of soure ra,dec from J2000 to JAPP */
@@ -391,29 +423,31 @@ precess_source_locations(double jd_tdb, clus_source_t *carr, int M, double *ra_b
 
 /****************************** predict_withbeam_cuda.c ****************************/
 #ifdef HAVE_CUDA
-/* if dobeam==0, beam calculation is off */
+/* if dobeam==0, beam calculation is off
+   else, flag to determine if full (element+array), array only, or element only beam is calculated
+ */
 extern int
 precalculate_coherencies_withbeam_gpu(double *u, double *v, double *w, complex double *x, int N,
    int Nbase, baseline_t *barr,  clus_source_t *carr, int M, double freq0, double fdelta, double tdelta, double dec0, double uvmin, double uvmax, 
- double ph_ra0, double ph_dec0, double ph_freq0, double *longitude, double *latitude, double *time_utc, int tileze, int *Nelem, double **xx, double **yy, double **zz, int dobeam, int Nt);
+ double ph_ra0, double ph_dec0, double ph_freq0, double *longitude, double *latitude, double *time_utc, int tileze, int *Nelem, double **xx, double **yy, double **zz, elementcoeff *ecoeff, int dobeam, int Nt);
 
 extern int
 predict_visibilities_multifreq_withbeam_gpu(double *u,double *v,double *w,double *x,int N,int Nbase,int tilesz,baseline_t *barr, clus_source_t *carr, int M,double *freqs,int Nchan, double fdelta,double tdelta, double dec0,
- double ph_ra0, double ph_dec0, double ph_freq0, double *longitude, double *latitude, double *time_utc,int *Nelem, double **xx, double **yy, double **zz, int dobeam, int Nt, int add_to_data);
+ double ph_ra0, double ph_dec0, double ph_freq0, double *longitude, double *latitude, double *time_utc,int *Nelem, double **xx, double **yy, double **zz, elementcoeff *ecoeff, int dobeam, int Nt, int add_to_data);
 
 extern int
 calculate_residuals_multifreq_withbeam_gpu(double *u,double *v,double *w,double *p,double *x,int N,int Nbase,int tilesz,baseline_t *barr, clus_source_t *carr, int M,double *freqs,int Nchan, double fdelta,double tdelta, double dec0,
- double ph_ra0, double ph_dec0, double ph_freq0, double *longitude, double *latitude, double *time_utc,int *Nelem, double **xx, double **yy, double **zz, int dobeam, int Nt, int ccid, double rho, int phase_only);
+ double ph_ra0, double ph_dec0, double ph_freq0, double *longitude, double *latitude, double *time_utc,int *Nelem, double **xx, double **yy, double **zz, elementcoeff *ecoeff, int dobeam, int Nt, int ccid, double rho, int phase_only);
 
 extern int
 predict_visibilities_withsol_withbeam_gpu(double *u,double *v,double *w,double *p,double *x, int *ignorelist, int N,int Nbase,int tilesz,baseline_t *barr, clus_source_t *carr, int M,double *freqs,int Nchan, double fdelta,double tdelta, double dec0,
-double ph_ra0, double ph_dec0, double ph_freq0, double *longitude, double *latitude, double *time_utc, int *Nelem, double **xx, double **yy, double **zz, int dobeam, int Nt, int add_to_data, int ccid, double rho, int phase_only);
+double ph_ra0, double ph_dec0, double ph_freq0, double *longitude, double *latitude, double *time_utc, int *Nelem, double **xx, double **yy, double **zz, elementcoeff *ecoeff, int dobeam, int Nt, int add_to_data, int ccid, double rho, int phase_only);
 
 /* note fdelta is bandwidth per channel here, not the full bandwidth */
 extern int
 precalculate_coherencies_multifreq_withbeam_gpu(double *u, double *v, double *w, complex double *x, int N,
    int Nbase, baseline_t *barr,  clus_source_t *carr, int M, double *freqs,int Nchan, double fdelta, double tdelta, double dec0, double uvmin, double uvmax, 
- double ph_ra0, double ph_dec0, double ph_freq0, double *longitude, double *latitude, double *time_utc, int tileze, int *Nelem, double **xx, double **yy, double **zz, int dobeam, int Nt);
+ double ph_ra0, double ph_dec0, double ph_freq0, double *longitude, double *latitude, double *time_utc, int tileze, int *Nelem, double **xx, double **yy, double **zz, elementcoeff *ecoeff, int dobeam, int Nt);
 
 
 #endif /*!HAVE_CUDA */
@@ -433,17 +467,26 @@ precalculate_coherencies_multifreq_withbeam_gpu(double *u, double *v, double *w,
 #ifndef GPU_HEAP_SIZE
 #define GPU_HEAP_SIZE 32 
 #endif
+/* shared memory size for element beam coefficients */
+#ifndef ELEMENT_MAX_SIZE
+#define ELEMENT_MAX_SIZE 64 // should be > (BEAM_ELEM_MODES*(BEAM_ELEM_MODES+1)/2)
+#endif
+
 
 extern void
 cudakernel_array_beam(int N, int T, int K, int F, double *freqs, float *longitude, float *latitude,
  double *time_utc, int *Nelem, float **xx, float **yy, float **zz, float *ra, float *dec, float ph_ra0, float  ph_dec0, float ph_freq0, float *beam);
 
 extern void
-cudakernel_coherencies(int B, int N, int T, int K, int F, double *u, double *v, double *w,baseline_t *barr, double *freqs, float *beam, double *ll, double *mm, double *nn, double *sI, double *sQ, double *sU, double *sV,
+cudakernel_element_beam(int N, int T, int K, int F, double *freqs, float *longitude, float *latitude,
+ double *time_utc, float *ra, float *dec, int Nmodes, int M, float beta, float *pattern_phi, float *pattern_theta, float *pattern_preamble, float *elementbeam);
+
+extern void
+cudakernel_coherencies(int B, int N, int T, int K, int F, double *u, double *v, double *w,baseline_t *barr, double *freqs, float *beam, float *element, double *ll, double *mm, double *nn, double *sI, double *sQ, double *sU, double *sV,
   unsigned char *stype, double *sI0, double *sQ0, double *sU0, double *sV0, double *f0, double *spec_idx, double *spec_idx1, double *spec_idx2, int **exs, double deltaf, double deltat, double dec0, double *coh, int dobeam);
 
 extern void
-cudakernel_residuals(int B, int N, int T, int K, int F, double *u, double *v, double *w, double *p, int nchunk, baseline_t *barr, double *freqs, float *beam, double *ll, double *mm, double *nn, double *sI, double *sQ, double *sU, double *sV,
+cudakernel_residuals(int B, int N, int T, int K, int F, double *u, double *v, double *w, double *p, int nchunk, baseline_t *barr, double *freqs, float *beam, float *element, double *ll, double *mm, double *nn, double *sI, double *sQ, double *sU, double *sV,
   unsigned char *stype, double *sI0, double *sQ0, double *sU0, double *sV0, double *f0, double *spec_idx, double *spec_idx1, double *spec_idx2, int **exs, double deltaf, double deltat, double dec0, double *coh,int dobeam);
 
 /* B: total baselines
