@@ -482,11 +482,11 @@ cudakernel_element_beam(int N, int T, int K, int F, double *freqs, float *longit
  double *time_utc, float *ra, float *dec, int Nmodes, int M, float beta, float *pattern_phi, float *pattern_theta, float *pattern_preamble, float *elementbeam);
 
 extern void
-cudakernel_coherencies(int B, int N, int T, int K, int F, double *u, double *v, double *w,baseline_t *barr, double *freqs, float *beam, double *ll, double *mm, double *nn, double *sI, double *sQ, double *sU, double *sV,
+cudakernel_coherencies(int B, int N, int T, int K, int F, double *u, double *v, double *w,baseline_t *barr, double *freqs, float *beam, float *element, double *ll, double *mm, double *nn, double *sI, double *sQ, double *sU, double *sV,
   unsigned char *stype, double *sI0, double *sQ0, double *sU0, double *sV0, double *f0, double *spec_idx, double *spec_idx1, double *spec_idx2, int **exs, double deltaf, double deltat, double dec0, double *coh, int dobeam);
 
 extern void
-cudakernel_residuals(int B, int N, int T, int K, int F, double *u, double *v, double *w, double *p, int nchunk, baseline_t *barr, double *freqs, float *beam, double *ll, double *mm, double *nn, double *sI, double *sQ, double *sU, double *sV,
+cudakernel_residuals(int B, int N, int T, int K, int F, double *u, double *v, double *w, double *p, int nchunk, baseline_t *barr, double *freqs, float *beam, float *element, double *ll, double *mm, double *nn, double *sI, double *sQ, double *sU, double *sV,
   unsigned char *stype, double *sI0, double *sQ0, double *sU0, double *sV0, double *f0, double *spec_idx, double *spec_idx1, double *spec_idx2, int **exs, double deltaf, double deltat, double dec0, double *coh,int dobeam);
 
 /* B: total baselines
