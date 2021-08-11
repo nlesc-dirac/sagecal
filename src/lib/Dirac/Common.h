@@ -66,6 +66,37 @@ typedef struct exinfo_shapelet_ {
 #define PROJ_CUT 0.998
 #endif
 
+/* element beam types */
+#ifndef ELEM_LBA
+#define ELEM_LBA 0 /* LOFAR LBA */
+#endif
+#ifndef ELEM_HBA
+#define ELEM_HBA 1 /* LOFAR HBA */
+#endif
+
+/* beam prediction flags */
+#ifndef DOBEAM_NONE
+#define DOBEAM_NONE 0
+#endif
+#ifndef DOBEAM_ARRAY
+#define DOBEAM_ARRAY 1
+#endif
+#ifndef DOBEAM_FULL
+#define DOBEAM_FULL 2
+#endif
+#ifndef DOBEAM_ELEMENT
+#define DOBEAM_ELEMENT 3
+#endif
+
+typedef struct elementcoff_ {
+  int M; /* model order 1,2,3.. */
+  int Nmodes; /* total modes = (M)(M+1)/2 */
+  double beta; /* scale factor */
+  complex double *pattern_phi; /* Nmodes x 1 array */
+  complex double *pattern_theta; /* Nmodes x 1 array */
+
+  double *preamble; /* Nmodesx1 array, to store preamble of mode basis */
+} elementcoeff;
 
 /* struct for a cluster GList item */
 typedef struct clust_t_{
@@ -152,8 +183,10 @@ typedef struct thread_data_base_ {
   double *freqs;
   int Nchan;
 
-  /* following used for calculating beam */
-  double *arrayfactor; /* storage for precomputed beam */
+  /* following used for calculating beam (can be NULL) */
+  double *arrayfactor; /* storage for precomputed array beam */
+  double *elementbeam; /* storage for precomputed element beam */
+  int dobeam; /* which part of beam to apply */
   /* if clus==0, reset memory before adding */
 
 } thread_data_base_t;
@@ -178,7 +211,10 @@ typedef struct thread_data_arrayfac_ {
   clus_source_t *carr; /* sky model, with clusters Mx1 */
   int cid; /* cluster id to calculate beam */
   baseline_t *barr; /* pointer to baseline-> stations mapping array */
-  double *beamgain; /* output */
+  double *beamgain; /* output : arrayfactor */
+  double *elementgain; /* output : element beam */
+  elementcoeff *ecoeff; /* element beam coefficients */
+  int dobeam; /* which part of beam to calculate */
 } thread_data_arrayfac_t;
 
 

@@ -62,7 +62,7 @@ calculate_uv_mode_vectors_scalar(double u, double v, double beta, int n0, double
 	}
   fact[0]=1.0;
 	for (xci=1; xci<(n0); xci++) {
-		fact[xci]=(xci+1)*fact[xci-1];
+		fact[xci]=(xci)*fact[xci-1];
 	}
 
 	/* setup array to store calculated shapelet value */
