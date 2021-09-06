@@ -182,5 +182,7 @@ namespace Data
     extern int servermode; /* 0: client, 1: server, else default operation */
     extern char *servername; /* server host name or ip address */
     extern char *portnumber; /* which port number to use for communication */
+
+    extern int spatialreg; /* if >0, enable spatial regularization */
 }
 #endif //__DATA_H__

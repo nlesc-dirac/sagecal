@@ -139,7 +139,7 @@ sagecal_master(int argc, char **argv) {
     }
 
 
-cout<<"Master received all "<<totalfiles<<" files"<<endl;
+   cout<<"Master received all "<<totalfiles<<" files"<<endl;
    // check if we have more slaves than there are files, print a warning and exit
    if (totalfiles < nslaves) {
     cout<<"Error: The total number of datasets "<<totalfiles<<" is lower than the slaves used ("<<nslaves<<")."<<endl;
@@ -225,11 +225,13 @@ cout<<"Master received all "<<totalfiles<<" files"<<endl;
    iodata.Nms=totalfiles;
    /**** get info from slaves ***************************************/
    int *bufint=new int[6];
-   double *bufdouble=new double[1];
+   double *bufdouble=new double[1+(Data::spatialreg?2:0)];
    iodata.freqs=new double[iodata.Nms];
    iodata.freq0=0.0;
    iodata.N=iodata.M=iodata.totalt=0;
    int Mo=0;
+   /* extra parameters for spatial regularization*/
+   double ra0=0.0,dec0=0.0;
 
    /* use iodata to store the results, also check for consistency of results */
    for (int cm=0; cm<nslaves; cm++) {
@@ -240,7 +242,7 @@ cout<<"Master received all "<<totalfiles<<" files"<<endl;
          MPI_Recv(bufint, 6, /* MS-id, N,Mo(actual clusters),M(with hybrid),tilesz,totalt */
            MPI_INT, cm+1, TAG_MSAUX, MPI_COMM_WORLD, &status);
          int thismsid=bufint[0];
-cout<<"Worker "<<cm+1<<" MS="<<thismsid<<" N="<<bufint[1]<<" M="<<bufint[2]<<"/"<<bufint[3]<<" tilesz="<<bufint[4]<<" totaltime="<<bufint[5]<<endl;
+    cout<<"Worker "<<cm+1<<" MS="<<thismsid<<" N="<<bufint[1]<<" M="<<bufint[2]<<"/"<<bufint[3]<<" tilesz="<<bufint[4]<<" totaltime="<<bufint[5]<<endl;
          if (cm==0 && ct==0) { /* update metadata */
           iodata.N=bufint[1];
           Mo=bufint[2];
@@ -258,10 +260,22 @@ cout<<"Worker "<<cm+1<<" MS="<<thismsid<<" N="<<bufint[1]<<" M="<<bufint[2]<<"/"
             iodata.totalt=bufint[5];
            }
          }
-         MPI_Recv(bufdouble, 1, /* freq */
+         /* freq, if spatialreg>0, ra0, dec0 */
+         MPI_Recv(bufdouble, 1+(Data::spatialreg?2:0), /* freq, ra0, dec0 */
            MPI_DOUBLE, cm+1, TAG_MSAUX, MPI_COMM_WORLD, &status);
          iodata.freqs[thismsid]=bufdouble[0];
          iodata.freq0 +=bufdouble[0];
+         if (Data::spatialreg) {
+           if (cm==0 && ct==0) {
+            ra0=bufdouble[1];
+            dec0=bufdouble[2];
+           } else {
+             /* check ra0,dec0 for sanity */
+             if (ra0!=bufdouble[1] || dec0!=bufdouble[2]) {
+              cout<<"Warning: worker "<<cm+1<<" parameters do not match  ra0="<<bufdouble[1]<<" dec0="<<bufdouble[2]<<endl;
+             }
+           }
+         }
          cout<<"Worker "<<cm+1<<" MS="<<thismsid<<" frequency (MHz)="<<bufdouble[0]*1e-6<<endl;
         }
      }
@@ -269,8 +283,16 @@ cout<<"Worker "<<cm+1<<" MS="<<thismsid<<" N="<<bufint[1]<<" M="<<bufint[2]<<"/"
    iodata.freq0/=(double)iodata.Nms;
    delete [] bufint;
    delete [] bufdouble;
-cout<<"Reference frequency (MHz)="<<iodata.freq0*1.0e-6<<endl;
+   cout<<"Reference frequency (MHz)="<<iodata.freq0*1.0e-6<<endl;
 
+   clus_source_t *carr;
+   if (Data::spatialreg) {
+     cout<<"SP: reading sky model"<<endl;
+     int M1;
+     read_sky_cluster(Data::SkyModel,Data::Clusters,&carr,&M1,iodata.freq0,ra0,dec0,Data::format);
+     cout<<"M1="<<M1<<" M="<<Mo<<endl;
+     /* FIXME: Note: we use hybrid cluster size as M, as we have this many solutions */
+   }
     /* ADMM memory : allocated together for all MS */
     double *Z,*Y,*z;
     /* Z: 2Nx2 x Npoly x M */
@@ -309,6 +331,11 @@ cout<<"Reference frequency (MHz)="<<iodata.freq0*1.0e-6<<endl;
      exit(1);
     }
     
+    /*SP: spatial update */
+    if (Data::spatialreg) {
+      cout<<"SP allocate mem"<<endl;
+    }
+
     /* file for saving solutions */
     FILE *sfp=0;
     if (solfile) {
@@ -587,6 +614,10 @@ cout<<"Reference frequency (MHz)="<<iodata.freq0*1.0e-6<<endl;
           cout<<"Timeslot:"<<ct<<" ADMM:"<<admm<<endl;
          }
 
+         if (Data::spatialreg) {
+           /*SP: spatial update */
+           cout<<"SP update "<<endl;
+         }
          /* find the MDL if admm==0 */
          /* At admm=0, Y = 0 + rho J, possibly projected to a common unitary ambiguity
             so estimate Z for different polynomial degrees, find ||rho J - rho B Z||^2 error
@@ -743,7 +774,6 @@ cout<<"Reference frequency (MHz)="<<iodata.freq0*1.0e-6<<endl;
      if (solfile) {
       for (int p=0; p<iodata.N*8*Npoly; p++) {
        fprintf(sfp,"%d ",p);
-       //for (int ppi=0; ppi<iodata.M; ppi++) {
        for (int ppi=iodata.M-1; ppi>=0; ppi--) { /* reverse ordering */
         fprintf(sfp," %e",Z[ppi*iodata.N*8*Npoly+p]);
        }
@@ -792,6 +822,67 @@ cout<<"Reference frequency (MHz)="<<iodata.freq0*1.0e-6<<endl;
    free(rhok);
    free(Bii);
    free(chunkvec);
+
+   if (Data::spatialreg) {
+      cout<<"SP deallocate mem"<<endl;
+      exinfo_gaussian *exg;
+      exinfo_disk *exd;
+      exinfo_ring *exr;
+      exinfo_shapelet *exs;
+
+      for (int ci=0; ci<Mo; ci++) {
+       free(carr[ci].ll);
+       free(carr[ci].mm);
+       free(carr[ci].nn);
+       free(carr[ci].sI);
+       free(carr[ci].sQ);
+       free(carr[ci].sU);
+       free(carr[ci].sV);
+       //Do not free(carr[ci].p) as it is not allocated;
+       free(carr[ci].ra);
+       free(carr[ci].dec);
+       for (int cj=0; cj<carr[ci].N; cj++) {
+        /* do a proper typecast before freeing */
+        switch (carr[ci].stype[cj]) {
+          case STYPE_GAUSSIAN:
+           exg=(exinfo_gaussian*)carr[ci].ex[cj];
+           if (exg) { free(exg); carr[ci].ex[cj]=0; }
+           break;
+          case STYPE_DISK:
+           exd=(exinfo_disk*)carr[ci].ex[cj];
+           if (exd) { free(exd); carr[ci].ex[cj]=0; }
+           break;
+          case STYPE_RING:
+           exr=(exinfo_ring*)carr[ci].ex[cj];
+           if (exr) { free(exr); carr[ci].ex[cj]=0; }
+           break;
+          case STYPE_SHAPELET:
+           exs=(exinfo_shapelet*)carr[ci].ex[cj];
+           if (exs)  {
+            if (exs->modes) {
+            free(exs->modes);
+           }
+           free(exs);
+           carr[ci].ex[cj]=0;
+           }
+           break;
+          default:
+           break;
+        }
+      }
+      free(carr[ci].ex);
+      free(carr[ci].stype);
+      free(carr[ci].sI0);
+      free(carr[ci].sQ0);
+      free(carr[ci].sU0);
+      free(carr[ci].sV0);
+      free(carr[ci].f0);
+      free(carr[ci].spec_idx);
+      free(carr[ci].spec_idx1);
+      free(carr[ci].spec_idx2);
+     }
+     free(carr);
+   }
   /**********************************************************/
 
    cout<<"Done."<<endl;    

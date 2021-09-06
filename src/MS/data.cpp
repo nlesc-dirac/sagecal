@@ -99,6 +99,7 @@ int Data::GPUpredict=0; /* use CPU for model calculation, if GPU not specified *
 #ifdef HAVE_CUDA
 int Data::heapsize=GPU_HEAP_SIZE; /* heap size in GPU (MB) to be used in malloc() */
 #endif
+int Data::spatialreg=0; /* if >0, enable spatial regularization */
 
 int Data::servermode=-1; /* by default, no client-server mode */
 char *Data::servername=NULL;
