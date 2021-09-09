@@ -306,7 +306,6 @@ sagecal_master(int argc, char **argv) {
     fprintf(dfp,"G=%d;\nK=%d;\n",G,iodata.M);
 #endif
 
-     cout<<"SP: reading sky model"<<endl;
      int M1;
      read_sky_cluster(Data::SkyModel,Data::Clusters,&carr,&M1,iodata.freq0,ra0,dec0,Data::format);
      /* Note: we use hybrid cluster size as M, as we have this many solutions */
@@ -445,7 +444,6 @@ sagecal_master(int argc, char **argv) {
     double *X=0; /* Lagrange multiplier for spatial reg Z=Zbar, 2*2*Npoly*N x 2 x M (double) */
     /*SP: spatial update */
     if (Data::spatialreg) {
-      cout<<"SP allocate mem"<<endl;
       if ((Zbar=(complex double*)calloc((size_t)iodata.N*4*Npoly*iodata.M,sizeof(complex double)))==0) {
        fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
        exit(1);
@@ -749,7 +747,6 @@ sagecal_master(int argc, char **argv) {
 
          if (Data::spatialreg) {
            /*SP: spatial update */
-           cout<<"SP update "<<endl;
            /* 1. update Zbar  from global sol Z (copy) */
            memcpy(Zbar,Z,iodata.N*8*Npoly*iodata.M*sizeof(double));
            /* 2. update Zspat taking proximal step (FISTA) */
@@ -977,7 +974,6 @@ sagecal_master(int argc, char **argv) {
    free(chunkvec);
 
    if (Data::spatialreg) {
-      cout<<"SP deallocate mem"<<endl;
       exinfo_gaussian *exg;
       exinfo_disk *exd;
       exinfo_ring *exr;
