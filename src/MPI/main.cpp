@@ -95,8 +95,8 @@ print_help(void) {
    cout << "-N epochs, if >0, use stochastic calibration: default "<<Data::stochastic_calib_epochs<< endl;
    cout << "-M minibatches, must be >0, split data to this many minibatches: default "<<Data::stochastic_calib_minibatches<< endl;
    cout << "-w mini-bands, must be >0, split channels to this many mini-bands for bandpass calibration: default "<<Data::stochastic_calib_bands<< endl;
-   cout << "-u alpha, must be >0, alpha is the regularization factor used in passing global Z to local value: default "<<Data::federated_reg_alpha<< endl;
-   cout << "-X 0,1: if >0, enable spatial regularization: default:"<<Data::spatialreg<<endl;
+   cout << "-u alpha, must be >0, alpha is the regularization factor used in passing global Z to local value and in spatial regularization: default "<<Data::federated_reg_alpha<< endl;
+   cout << "-X lambda,mu,n0: if defined, enable spatial regularization: (lambda: L2, mu: L1, n0: model order with n0^2 modes):  default:"<<Data::spatialreg<<endl;
    cout <<"Report bugs to <sarod@users.sf.net>"<<endl;
 }
 
@@ -240,8 +240,24 @@ ParseCmdLine(int ac, char **av) {
             case 'U':
                 Data::use_global_solution= atoi(optarg);
                 break;
-            case 'X':
-                spatialreg=atoi(optarg);
+            case 'X': //lambda,mu,n0 : 3 parameters
+                {
+                spatialreg=0;
+                //parse parameters
+                char lambda_[128];
+                char mu_[128];
+                char n0_[128];
+                int matched=sscanf(optarg,"%127[^,],%127[^,],%127[^,]",lambda_,mu_,n0_);
+                if (matched==3) {
+                  spatialreg=1;
+                  sscanf(lambda_,"%lf",&sh_lambda);
+                  sscanf(mu_,"%lf",&sh_mu);
+                  sscanf(n0_,"%d",&sh_n0);
+                } else {
+                  cout<<"Error: -X option has invalid parameters"<<endl;
+                  exit(1);
+                }
+                }
                 break;
             case 'h': 
                 print_help();
