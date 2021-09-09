@@ -184,5 +184,7 @@ namespace Data
     extern char *portnumber; /* which port number to use for communication */
 
     extern int spatialreg; /* if >0, enable spatial regularization */
+    extern double sh_lambda,sh_mu; /* spatial regularization L2,L1 penalties */
+    extern int sh_n0; /* basis model order */
 }
 #endif //__DATA_H__
