@@ -11,6 +11,7 @@ set (objects
     rtr_solve
     rtr_solve_robust_admm
     updatenu
+    fista
 )
 
 if(HAVE_CUDA)
