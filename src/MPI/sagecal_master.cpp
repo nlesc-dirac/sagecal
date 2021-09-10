@@ -764,7 +764,7 @@ sagecal_master(int argc, char **argv) {
             memset(X,0,sizeof(double)*(size_t)iodata.N*8*Npoly*iodata.M);
            }
            my_daxpy(iodata.N*8*Npoly*iodata.M,Zerr,Data::federated_reg_alpha,X);
-           printf("SP alpha=%lf err=%lf / %lf\n",Data::federated_reg_alpha,my_dnrm2(iodata.N*8*Npoly*iodata.M,Zerr),my_dnrm2(iodata.N*8*Npoly*iodata.M,Z));
+           printf("SP alpha=%lf ||Z-Zbar||=%lf ||Z||=%lf ||X||=%lf\n",Data::federated_reg_alpha,my_dnrm2(iodata.N*8*Npoly*iodata.M,Zerr),my_dnrm2(iodata.N*8*Npoly*iodata.M,Z),my_dnrm2(iodata.N*8*Npoly*iodata.M,X));
            /* 5. feed Zbar and X to next update of Z
              already done above*/
          }
@@ -876,6 +876,11 @@ sagecal_master(int argc, char **argv) {
            }
          }
          /* no need to scale by 1/rho here, because Bii is already divided by 1/rho */
+         /* add (alpha Zbar - X) if spatial regularization is enabled */
+         if (Data::spatialreg) {
+           my_daxpy(iodata.N*8*Npoly*iodata.M,(double*)Zbar,Data::federated_reg_alpha,z);
+           my_daxpy(iodata.N*8*Npoly*iodata.M,X,-1.0,z);
+         }
 
          /* find product z_tilde x Bi^T, z_tilde with proper reshaping */
          my_dcopy(iodata.N*8*Npoly*iodata.M,Z,1,Zerr,1);
