@@ -292,7 +292,7 @@ typedef struct thread_data_prod_inv_ {
  double *B;
  double *Bi;
  double *rho;
- double alpha; /* only used with fed. averaging */
+ double alpha; /* only used with fed. averaging and spatial regularization */
 } thread_data_prod_inv_t;
 
 

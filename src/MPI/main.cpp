@@ -34,7 +34,7 @@ using namespace Data;
 
 void
 print_copyright(void) {
-  cout<<"SAGECal-MPI 0.7.5 (C) 2011-2021 Sarod Yatawatta"<<endl;
+  cout<<"SAGECal-MPI 0.7.6 (C) 2011-2021 Sarod Yatawatta"<<endl;
 }
 
 
@@ -49,7 +49,7 @@ print_help(void) {
    cout << "-c cluster.txt: cluster file"<< endl;
    cout<<endl;
    cout<<"Other options:"<<endl;
-   cout << "-p solutions.txt: if given, save (global) solutions in this file, but slaves will always write to 'XXX.MS.solutions'"<< endl;
+   cout << "-p solutions.txt: if given, save (global) solutions in this file, workers will always write to 'XXX.MS.solutions'."<<endl<<"If spatial regularization is enabled 'spatial_'+solutions.txt will contain the global spatial model."<< endl;
    cout << "-F sky model format: 0: LSM, 1: LSM with 3 order spectra : default "<< Data::format<<endl;
    cout << "-I input column (DATA/CORRECTED_DATA/...) : default " <<Data::DataField<< endl;
    cout << "-O ouput column (DATA/CORRECTED_DATA/...) : default " <<Data::OutField<< endl;
@@ -95,7 +95,8 @@ print_help(void) {
    cout << "-N epochs, if >0, use stochastic calibration: default "<<Data::stochastic_calib_epochs<< endl;
    cout << "-M minibatches, must be >0, split data to this many minibatches: default "<<Data::stochastic_calib_minibatches<< endl;
    cout << "-w mini-bands, must be >0, split channels to this many mini-bands for bandpass calibration: default "<<Data::stochastic_calib_bands<< endl;
-   cout << "-u alpha, must be >0, alpha is the regularization factor used in passing global Z to local value: default "<<Data::federated_reg_alpha<< endl;
+   cout << "-u alpha, must be >0, alpha is the regularization factor used in passing global Z to local value and in spatial regularization: default "<<Data::federated_reg_alpha<< endl;
+   cout << "-X lambda,mu,n0: if defined, enable spatial regularization: (lambda: L2, mu: L1, n0: model order with n0^2 modes):  default:"<<Data::spatialreg<<endl;
    cout <<"Report bugs to <sarod@users.sf.net>"<<endl;
 }
 
@@ -103,7 +104,7 @@ print_help(void) {
 void 
 ParseCmdLine(int ac, char **av) {
     int c;
-    while((c=getopt(ac, av, ":c:e:f:g:j:k:l:m:n:o:p:q:r:s:t:u:w:x:y:A:B:C:E:F:G:H:I:J:K:L:M:N:O:P:Q:R:S:T:U:W:E:MVh"))!= -1)
+    while((c=getopt(ac, av, ":c:e:f:g:j:k:l:m:n:o:p:q:r:s:t:u:w:x:y:A:B:C:E:F:G:H:I:J:K:L:M:N:O:P:Q:R:S:T:U:W:X:MVh"))!= -1)
     {
         switch(c)
         {
@@ -238,6 +239,25 @@ ParseCmdLine(int ac, char **av) {
                 break;
             case 'U':
                 Data::use_global_solution= atoi(optarg);
+                break;
+            case 'X': //lambda,mu,n0 : 3 parameters
+                {
+                spatialreg=0;
+                //parse parameters
+                char lambda_[128];
+                char mu_[128];
+                char n0_[128];
+                int matched=sscanf(optarg,"%127[^,],%127[^,],%127[^,]",lambda_,mu_,n0_);
+                if (matched==3) {
+                  spatialreg=1;
+                  sscanf(lambda_,"%lf",&sh_lambda);
+                  sscanf(mu_,"%lf",&sh_mu);
+                  sscanf(n0_,"%d",&sh_n0);
+                } else {
+                  cout<<"Error: -X option has invalid parameters"<<endl;
+                  exit(1);
+                }
+                }
                 break;
             case 'h': 
                 print_help();

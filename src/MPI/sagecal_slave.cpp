@@ -347,9 +347,10 @@ cerr<<"Error: Worker "<<myrank<<": Recheck your allocation or reduce number of w
 
 
     /**** send info to master ***************************************/
-    /* send msid, freq (freq0), no. stations (N), total timeslots (totalt), no. of clusters (M), true no. of clusters with hybrid (Mt), integration time (deltat), bandwidth (deltaf) */
+    /* send msid, freq (freq0), no. stations (N), total timeslots (totalt), no. of clusters (M), true no. of clusters with hybrid (Mt), integration time (deltat),
+     * if spatialreg is >0, also ra0, dec0 */
     int *bufint=new int[6];
-    double *bufdouble=new double[1];
+    double *bufdouble=new double[1+(Data::spatialreg?2:0)];
     for(int cm=0; cm<mymscount; cm++) {
      bufint[0]=myids[cm];
      bufint[1]=iodata_vec[cm].N;
@@ -358,8 +359,12 @@ cerr<<"Error: Worker "<<myrank<<": Recheck your allocation or reduce number of w
      bufint[4]=iodata_vec[cm].tilesz;
      bufint[5]=iodata_vec[cm].totalt;
      bufdouble[0]=iodata_vec[cm].freq0;
+     if (Data::spatialreg) {
+      bufdouble[1]=iodata_vec[cm].ra0;
+      bufdouble[2]=iodata_vec[cm].dec0;
+     }
      MPI_Send(bufint, 6, MPI_INT, 0,TAG_MSAUX, MPI_COMM_WORLD);
-     MPI_Send(bufdouble, 1, MPI_DOUBLE, 0,TAG_MSAUX, MPI_COMM_WORLD);
+     MPI_Send(bufdouble, 1+(Data::spatialreg?2:0), MPI_DOUBLE, 0,TAG_MSAUX, MPI_COMM_WORLD);
     }
 
     delete [] bufint;

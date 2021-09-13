@@ -1539,6 +1539,21 @@ sagefit_visibilities_admm_dual_pt_flt(double *u, double *v, double *w, double *x
 extern void
 openblas_set_num_threads(int num_threads);
 
+/****************************** fista.c ****************************/
+/* 
+ * FISTA: fast iterative shrinkage thresholding (Beck&Teboulle 2009)
+ * solve
+ * Z = arg min sum_k \| Z_k - Z Phi_k\|^2 + \lambda \|Z\|^2 + \mu \|Z\|_1
+ *
+ * Z : 2*Npoly*N x 2G matrix to be estimated (output)
+ * Zbar: each of Z_k (M values) : 2*Npoly*N x 2 (times M)
+ * Phikk : sum_k Phi_k x Phi_k^H + \lambda I : 2G x 2G
+ * Phi: each of Phi_K (M values) : 2G x 2 (times M)
+ * mu: L1 constraint
+ * maxiter: max iterations
+ */
+extern int 
+update_spatialreg_fista(complex double *Z, complex double *Zbar, complex double *Phikk, complex double *Phi, int N, int M, int Npoly, int G, double mu, int maxiter);
 /****************************** lmfit.c ****************************/
 /****************************** lmfit_cuda.c ****************************/
 /* minimization (or vector cost) function (multithreaded) */

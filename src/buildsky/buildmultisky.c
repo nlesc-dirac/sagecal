@@ -1302,7 +1302,7 @@ write_world_coords_f(const char *imgfile, GHashTable *pixtable, double minpix, i
  int ra_h,ra_m,dec_d,dec_m;
 
  double fluxscale,total_model_flux,peak_abs;
- double fratio,fratio1,fratio2;
+ double fratio0,fratio1,fratio2;
 
  double mean_bmaj,mean_bmin,mean_bpa,mean_bpax,mean_bpay,mean_freq;
 
@@ -1509,10 +1509,10 @@ write_world_coords_f(const char *imgfile, GHashTable *pixtable, double minpix, i
            peak_abs=fabs(ppix->sI[ii]);
           }
          }
-         fratio=log(freqs[ii]/ref_freq);
-         fratio1=fratio*fratio;
-         fratio2=fratio1*fratio;
-         fluxscale+=peak_abs/fabs(exp(log(srcx->sI)+srcx->sP*fratio+srcx->sP1*fratio1+srcx->sP2*fratio2));
+         fratio0=log(freqs[ii]/ref_freq);
+         fratio1=fratio0*fratio0;
+         fratio2=fratio1*fratio0;
+         fluxscale+=peak_abs/fabs(exp(log(srcx->sI)+srcx->sP*fratio0+srcx->sP1*fratio1+srcx->sP2*fratio2));
         } 
         fluxscale/=(double)Nf;
         printf("scale=%lf\n",fluxscale);
