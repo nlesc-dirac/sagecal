@@ -460,10 +460,18 @@ sagecal_master(int argc, char **argv) {
 
     /* file for saving solutions */
     FILE *sfp=0;
+    FILE *sp_sfp=0;
     if (solfile) {
      if ((sfp=fopen(solfile,"w+"))==0) {
        fprintf(stderr,"%s: %d: no file\n",__FILE__,__LINE__);
        exit(1);
+     }
+     if (Data::spatialreg) {
+      string filebuff=std::string("spatial_")+std::string(solfile);
+      if ((sp_sfp=fopen(filebuff.c_str(),"w+"))==0) {
+       fprintf(stderr,"%s: %d: no file\n",__FILE__,__LINE__);
+       exit(1);
+      }
      }
     }
 
@@ -472,6 +480,21 @@ sagecal_master(int argc, char **argv) {
       fprintf(sfp,"# solution file (Z) created by SAGECal\n");
       fprintf(sfp,"# reference_freq(MHz) polynomial_order stations clusters effective_clusters\n");
       fprintf(sfp,"%lf %d %d %d %d\n",iodata.freq0*1e-6,Npoly,iodata.N,Mo,iodata.M);
+      if (Data::spatialreg) {
+        fprintf(sp_sfp,"# spatial regularization solution file (Zspat) created by SAGECal\n");
+        fprintf(sp_sfp,"# Top two rows are the polar coordinates of the centroids (rad)\n");
+        fprintf(sp_sfp,"# reference_freq(MHz) polynomial_order(freq) polynomial_order(spatial) stations clusters effective_clusters\n");
+        fprintf(sp_sfp,"%lf %d %d %d %d %d\n",iodata.freq0*1e-6,Npoly,G,iodata.N,Mo,iodata.M);
+        /* write spatial centroids to solution file */
+        for (int ci=0; ci<iodata.M; ci++) {
+          fprintf(sp_sfp," %lf",ll[ci]);
+        }
+        fprintf(sp_sfp,"\n");
+        for (int ci=0; ci<iodata.M; ci++) {
+          fprintf(sp_sfp," %lf",mm[ci]);
+        }
+        fprintf(sp_sfp,"\n");
+      }
     }
 
 
@@ -764,7 +787,7 @@ sagecal_master(int argc, char **argv) {
             memset(X,0,sizeof(double)*(size_t)iodata.N*8*Npoly*iodata.M);
            }
            my_daxpy(iodata.N*8*Npoly*iodata.M,Zerr,Data::federated_reg_alpha,X);
-           printf("SP alpha=%lf ||Z-Zbar||=%lf ||Z||=%lf ||X||=%lf\n",Data::federated_reg_alpha,my_dnrm2(iodata.N*8*Npoly*iodata.M,Zerr),my_dnrm2(iodata.N*8*Npoly*iodata.M,Z),my_dnrm2(iodata.N*8*Npoly*iodata.M,X));
+           printf("SP: alpha=%lf ||Z-Zbar||=%lf ||Z||=%lf ||X||=%lf\n",Data::federated_reg_alpha,my_dnrm2(iodata.N*8*Npoly*iodata.M,Zerr),my_dnrm2(iodata.N*8*Npoly*iodata.M,Z),my_dnrm2(iodata.N*8*Npoly*iodata.M,X));
            /* 5. feed Zbar and X to next update of Z
              already done above*/
          }
@@ -927,6 +950,7 @@ sagecal_master(int argc, char **argv) {
     /* write Z to solution file, same format as J, but we have Npoly times more
        values per timeslot per column */
      if (solfile) {
+      /* 2Nx2 x Npoly x M */
       for (int p=0; p<iodata.N*8*Npoly; p++) {
        fprintf(sfp,"%d ",p);
        for (int ppi=iodata.M-1; ppi>=0; ppi--) { /* reverse ordering */
@@ -934,15 +958,23 @@ sagecal_master(int argc, char **argv) {
        }
        fprintf(sfp,"\n");
       }
+      if (Data::spatialreg) {
+       /* 2N*Npoly x 2G */
+       double *Zspre=(double*)Zspat;
+       for (int p=0; p<iodata.N*8*Npoly; p++) {
+        fprintf(sp_sfp,"%d ",p);
+        for (int ppi=0; ppi<G; ppi++) {
+         fprintf(sp_sfp," %e",Zspre[ppi*iodata.N*8*Npoly+p]);
+        }
+        fprintf(sp_sfp,"\n");
+       }
+      }
      }
      if (resetcount>nslaves/2) {
        /* if most slaves have reset, print a warning only */
-       //memset(Z,0,sizeof(double)*(size_t)iodata.N*8*Npoly*iodata.M);
        cout<<"Warning: Most slaves did not converge."<<endl;
      }
-
-
-    }
+    } /* time */
 
     /* send end signal to each slave */
     msgcode=CTRL_END;
@@ -952,6 +984,9 @@ sagecal_master(int argc, char **argv) {
 
     if (solfile) {
       fclose(sfp);
+      if (Data::spatialreg) {
+        fclose(sp_sfp);
+      }
     }
 
 
