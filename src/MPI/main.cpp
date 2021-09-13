@@ -34,7 +34,7 @@ using namespace Data;
 
 void
 print_copyright(void) {
-  cout<<"SAGECal-MPI 0.7.5 (C) 2011-2021 Sarod Yatawatta"<<endl;
+  cout<<"SAGECal-MPI 0.7.6 (C) 2011-2021 Sarod Yatawatta"<<endl;
 }
 
 
@@ -49,7 +49,7 @@ print_help(void) {
    cout << "-c cluster.txt: cluster file"<< endl;
    cout<<endl;
    cout<<"Other options:"<<endl;
-   cout << "-p solutions.txt: if given, save (global) solutions in this file, but slaves will always write to 'XXX.MS.solutions'"<< endl;
+   cout << "-p solutions.txt: if given, save (global) solutions in this file, workers will always write to 'XXX.MS.solutions'."<<endl<<"If spatial regularization is enabled 'spatial_'+solutions.txt will contain the global spatial model."<< endl;
    cout << "-F sky model format: 0: LSM, 1: LSM with 3 order spectra : default "<< Data::format<<endl;
    cout << "-I input column (DATA/CORRECTED_DATA/...) : default " <<Data::DataField<< endl;
    cout << "-O ouput column (DATA/CORRECTED_DATA/...) : default " <<Data::OutField<< endl;
