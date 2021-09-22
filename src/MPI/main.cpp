@@ -96,7 +96,7 @@ print_help(void) {
    cout << "-M minibatches, must be >0, split data to this many minibatches: default "<<Data::stochastic_calib_minibatches<< endl;
    cout << "-w mini-bands, must be >0, split channels to this many mini-bands for bandpass calibration: default "<<Data::stochastic_calib_bands<< endl;
    cout << "-u alpha, must be >0, alpha is the regularization factor used in passing global Z to local value and in spatial regularization: default "<<Data::federated_reg_alpha<< endl;
-   cout << "-X lambda,mu,n0: if defined, enable spatial regularization: (lambda: L2, mu: L1, n0: model order with n0^2 modes):  default:"<<Data::spatialreg<<endl;
+   cout << "-X lambda,mu,n0,fista_maxiter,cadence: if defined, enable spatial regularization: (lambda: L2, mu: L1, n0: model order with n0^2 modes, fista_maxiter: FISTA iterations, cadence: update cadence):  default:"<<Data::spatialreg<<endl;
    cout <<"Report bugs to <sarod@users.sf.net>"<<endl;
 }
 
@@ -240,19 +240,32 @@ ParseCmdLine(int ac, char **av) {
             case 'U':
                 Data::use_global_solution= atoi(optarg);
                 break;
-            case 'X': //lambda,mu,n0 : 3 parameters
+            case 'X': //lambda,mu,n0,fista_maxiter,admm_cadence: 5 parameters
                 {
                 spatialreg=0;
                 //parse parameters
                 char lambda_[128];
                 char mu_[128];
                 char n0_[128];
-                int matched=sscanf(optarg,"%127[^,],%127[^,],%127[^,]",lambda_,mu_,n0_);
-                if (matched==3) {
-                  spatialreg=1;
+                char maxit_[128];
+                char cadence_[128];
+                int matched=sscanf(optarg,"%127[^,],%127[^,],%127[^,],%127[^,],%127[^,]",lambda_,mu_,n0_,maxit_,cadence_);
+                if (matched==5) {
                   sscanf(lambda_,"%lf",&sh_lambda);
                   sscanf(mu_,"%lf",&sh_mu);
                   sscanf(n0_,"%d",&sh_n0);
+                  sscanf(maxit_,"%d",&fista_maxiter);
+                  sscanf(cadence_,"%d",&admm_cadence);
+                  /* sanity check */
+                  if (sh_lambda>=0.0 && sh_mu>=0.0 && sh_n0>0 && fista_maxiter>0 && admm_cadence>0) {
+                  spatialreg=1;
+                  cout<<"Enabling spatial regularization with"<<endl;
+                  cout<<"lambda="<<sh_lambda<<" mu="<<sh_mu<<" n0="<<sh_n0<<" FISTA iter="<<fista_maxiter<<" cadence="<<admm_cadence<<endl;
+                  } else {
+                    cout<<"Error: one (or more) of the values for -X are invalid"<<endl;
+                    cout<<"lambda="<<sh_lambda<<" mu="<<sh_mu<<" n0="<<sh_n0<<" FISTA iter="<<fista_maxiter<<" cadence="<<admm_cadence<<endl;
+                    exit(1);
+                  }
                 } else {
                   cout<<"Error: -X option has invalid parameters"<<endl;
                   exit(1);

@@ -768,12 +768,12 @@ sagecal_master(int argc, char **argv) {
           cout<<"Timeslot:"<<ct<<" ADMM:"<<admm<<endl;
          }
 
-         if (Data::spatialreg) {
+         if (Data::spatialreg && !(admm%admm_cadence)) {
            /*SP: spatial update */
            /* 1. update Zbar  from global sol Z (copy) */
            memcpy(Zbar,Z,iodata.N*8*Npoly*iodata.M*sizeof(double));
            /* 2. update Zspat taking proximal step (FISTA) */
-           update_spatialreg_fista(Zspat,Zbar,Phikk,Phi,iodata.N,iodata.M,Npoly,G,sh_mu, 4);
+           update_spatialreg_fista(Zspat,Zbar,Phikk,Phi,iodata.N,iodata.M,Npoly,G,sh_mu, fista_maxiter);
            /* 3. update Zbar from Zspat, Z_k = Z Phi_k */
            for (int cm=0; cm<iodata.M; cm++) {
              my_zgemm('N','N',2*Npoly*iodata.N,2,2*G,1.0,Zspat,2*Npoly*iodata.N,&Phi[cm*2*G*2],2*G,0.0,&Zbar[cm*2*Npoly*iodata.N*2],2*Npoly*iodata.N);
@@ -787,7 +787,7 @@ sagecal_master(int argc, char **argv) {
             memset(X,0,sizeof(double)*(size_t)iodata.N*8*Npoly*iodata.M);
            }
            my_daxpy(iodata.N*8*Npoly*iodata.M,Zerr,Data::federated_reg_alpha,X);
-           printf("SP: alpha=%lf ||Z-Zbar||=%lf ||Z||=%lf ||X||=%lf\n",Data::federated_reg_alpha,my_dnrm2(iodata.N*8*Npoly*iodata.M,Zerr),my_dnrm2(iodata.N*8*Npoly*iodata.M,Z),my_dnrm2(iodata.N*8*Npoly*iodata.M,X));
+           printf("SP: alpha=%lf ||Z-Zbar||=%lf ||Z||=%lf ||X||=%lf\n",Data::federated_reg_alpha,my_dnrm2(iodata.N*8*Npoly*iodata.M,Zerr)/((double)iodata.N*8*Npoly*iodata.M),my_dnrm2(iodata.N*8*Npoly*iodata.M,Z)/((double)iodata.N*8*Npoly*iodata.M),my_dnrm2(iodata.N*8*Npoly*iodata.M,X)/((double)iodata.N*8*Npoly*iodata.M));
            /* 5. feed Zbar and X to next update of Z
              already done above*/
          }
