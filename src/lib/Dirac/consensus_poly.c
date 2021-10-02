@@ -292,7 +292,7 @@ typedef struct thread_data_prod_inv_ {
  double *B;
  double *Bi;
  double *rho;
- double alpha; /* only used with fed. averaging and spatial regularization */
+ double *alpha; /* Mx1 array, only used with fed. averaging and spatial regularization */
 } thread_data_prod_inv_t;
 
 
@@ -426,9 +426,9 @@ sum_inv_fed_threadfn(void *data) {
    /* find 1/singular values, and multiply columns of U with new singular values */
    for (ci=0; ci<t->Npoly; ci++) {
     if (S[ci]>CLM_EPSILON) {
-     S[ci]=1.0/(S[ci]+t->alpha); /* 1.0/(S[]+alpha) for inverting (B^T B + alpha I) */
+     S[ci]=1.0/(S[ci]+t->alpha[k]); /* 1.0/(S[]+alpha) for inverting (B^T B + alpha I) */
     } else {
-     S[ci]=1.0/(t->alpha);
+     S[ci]=1.0/(t->alpha[k]);
     }
     my_dscal(t->Npoly,S[ci],&U[ci*t->Npoly]);
    }
@@ -539,7 +539,7 @@ find_prod_inverse_full(double *B, double *Bi, int Npoly, int Nf, int M, double *
 
 /* same as above, but add alphaxI to B^T B before inversion */
 int
-find_prod_inverse_full_fed(double *B, double *Bi, int Npoly, int Nf, int M, double *rho, double alpha, int Nt) {
+find_prod_inverse_full_fed(double *B, double *Bi, int Npoly, int Nf, int M, double *rho, double *alpha, int Nt) {
 
   pthread_attr_t attr;
   pthread_t *th_array;
