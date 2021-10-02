@@ -556,6 +556,7 @@ sagecal_master(int argc, char **argv) {
     /* rho for each freq can be different (per each direction),
        so need to store each value, each column is Mx1 rho of one freq */
     double *rhok,*Bii;
+    double *alphak=0; /* alpha array Mx1, for spatial regularization */
     if ((rhok=(double*)calloc((size_t)iodata.Nms*iodata.M,sizeof(double)))==0) {
      fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
      exit(1);
@@ -563,6 +564,18 @@ sagecal_master(int argc, char **argv) {
     /* initilized with default values */
     for(int cm=0; cm<iodata.Nms; cm++) {
        my_dcopy(iodata.M,arho,1,&rhok[cm*iodata.M],1);
+    }
+    if (Data::spatialreg) {
+     if ((alphak=(double*)calloc((size_t)iodata.M,sizeof(double)))==0) {
+      fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
+      exit(1);
+     }
+     /* scale up/down each alpha based on initial rho value,
+      * for cluster with max rho, scale is 1 */
+     double maxalpha=my_idamax(iodata.M,arho,1);
+     for (int cm=0; cm<iodata.M; cm++) {
+       alphak[cm]=Data::federated_reg_alpha*arho[cm]/maxalpha;
+     }
     }
     /* pseudoinverse  M values of NpolyxNpoly matrices */
     if ((Bii=(double*)calloc((size_t)iodata.M*Npoly*Npoly,sizeof(double)))==0) {
@@ -654,7 +667,7 @@ sagecal_master(int argc, char **argv) {
          if (!Data::spatialreg) {
           find_prod_inverse_full(B,Bii,Npoly,iodata.Nms,iodata.M,rhok,Data::Nt);
          } else {
-          find_prod_inverse_full_fed(B,Bii,Npoly,iodata.Nms,iodata.M,rhok,Data::federated_reg_alpha,Data::Nt);
+          find_prod_inverse_full_fed(B,Bii,Npoly,iodata.Nms,iodata.M,rhok,alphak,Data::Nt);
          }
 
          /* send which MS to work on */
@@ -751,7 +764,10 @@ sagecal_master(int argc, char **argv) {
          /* no need to scale by 1/rho above, because Bii is already divided by 1/rho */
          /* add (alpha Zbar - X) if spatial regularization is enabled */
          if (Data::spatialreg && admm>0) {
-           my_daxpy(iodata.N*8*Npoly*iodata.M,(double*)Zbar,Data::federated_reg_alpha,z);
+           //my_daxpy(iodata.N*8*Npoly*iodata.M,(double*)Zbar,Data::federated_reg_alpha,z);
+           for (int cm=0; cm<iodata.M; cm++) {
+             my_daxpy(iodata.N*8*Npoly,(double*)&Zbar[cm*2*Npoly*iodata.N*2],alphak[cm],&z[cm*4*Npoly*iodata.N*2]);
+           }
            my_daxpy(iodata.N*8*Npoly*iodata.M,X,-1.0,z);
          }
 
@@ -768,12 +784,12 @@ sagecal_master(int argc, char **argv) {
           cout<<"Timeslot:"<<ct<<" ADMM:"<<admm<<endl;
          }
 
-         if (Data::spatialreg) {
+         if (Data::spatialreg && !(admm%admm_cadence)) {
            /*SP: spatial update */
            /* 1. update Zbar  from global sol Z (copy) */
            memcpy(Zbar,Z,iodata.N*8*Npoly*iodata.M*sizeof(double));
            /* 2. update Zspat taking proximal step (FISTA) */
-           update_spatialreg_fista(Zspat,Zbar,Phikk,Phi,iodata.N,iodata.M,Npoly,G,sh_mu, 4);
+           update_spatialreg_fista(Zspat,Zbar,Phikk,Phi,iodata.N,iodata.M,Npoly,G,sh_mu, fista_maxiter);
            /* 3. update Zbar from Zspat, Z_k = Z Phi_k */
            for (int cm=0; cm<iodata.M; cm++) {
              my_zgemm('N','N',2*Npoly*iodata.N,2,2*G,1.0,Zspat,2*Npoly*iodata.N,&Phi[cm*2*G*2],2*G,0.0,&Zbar[cm*2*Npoly*iodata.N*2],2*Npoly*iodata.N);
@@ -786,8 +802,11 @@ sagecal_master(int argc, char **argv) {
            if (!admm) {
             memset(X,0,sizeof(double)*(size_t)iodata.N*8*Npoly*iodata.M);
            }
-           my_daxpy(iodata.N*8*Npoly*iodata.M,Zerr,Data::federated_reg_alpha,X);
-           printf("SP: alpha=%lf ||Z-Zbar||=%lf ||Z||=%lf ||X||=%lf\n",Data::federated_reg_alpha,my_dnrm2(iodata.N*8*Npoly*iodata.M,Zerr),my_dnrm2(iodata.N*8*Npoly*iodata.M,Z),my_dnrm2(iodata.N*8*Npoly*iodata.M,X));
+           for (int cm=0; cm<iodata.M; cm++) {
+             //my_daxpy(iodata.N*8*Npoly*iodata.M,Zerr,Data::federated_reg_alpha,X);
+             my_daxpy(iodata.N*8*Npoly,&Zerr[cm*iodata.N*8*Npoly],alphak[cm],&X[cm*iodata.N*8*Npoly]);
+           }
+           printf("SP: alpha=%lf ||Z-Zbar||=%lf ||Z||=%lf ||X||=%lf\n",Data::federated_reg_alpha,my_dnrm2(iodata.N*8*Npoly*iodata.M,Zerr)/((double)iodata.N*8*Npoly*iodata.M),my_dnrm2(iodata.N*8*Npoly*iodata.M,Z)/((double)iodata.N*8*Npoly*iodata.M),my_dnrm2(iodata.N*8*Npoly*iodata.M,X)/((double)iodata.N*8*Npoly*iodata.M));
            /* 5. feed Zbar and X to next update of Z
              already done above*/
          }
@@ -901,7 +920,10 @@ sagecal_master(int argc, char **argv) {
          /* no need to scale by 1/rho here, because Bii is already divided by 1/rho */
          /* add (alpha Zbar - X) if spatial regularization is enabled */
          if (Data::spatialreg) {
-           my_daxpy(iodata.N*8*Npoly*iodata.M,(double*)Zbar,Data::federated_reg_alpha,z);
+           //my_daxpy(iodata.N*8*Npoly*iodata.M,(double*)Zbar,Data::federated_reg_alpha,z);
+           for (int cm=0; cm<iodata.M; cm++) {
+             my_daxpy(iodata.N*8*Npoly,(double*)&Zbar[cm*2*Npoly*iodata.N*2],alphak[cm],&z[cm*4*Npoly*iodata.N*2]);
+           }
            my_daxpy(iodata.N*8*Npoly*iodata.M,X,-1.0,z);
          }
 
@@ -1079,6 +1101,7 @@ sagecal_master(int argc, char **argv) {
      free(Zbar);
      free(Zspat);
      free(X);
+     free(alphak);
    }
   /**********************************************************/
 

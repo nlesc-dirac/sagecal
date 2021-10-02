@@ -1460,9 +1460,10 @@ find_prod_inverse(double *B, double *Bi, int Npoly, int Nf, double *fratio);
 extern int
 find_prod_inverse_full(double *B, double *Bi, int Npoly, int Nf, int M, double *rho, int Nt);
 
-/* same as above, but add alphaxI to B^T B before inversion */
+/* same as above, but add alphaxI to B^T B before inversion 
+ * alpha: Mx1 array of alpha values */
 extern int
-find_prod_inverse_full_fed(double *B, double *Bi, int Npoly, int Nf, int M, double *rho, double alpha, int Nt);
+find_prod_inverse_full_fed(double *B, double *Bi, int Npoly, int Nf, int M, double *rho, double *alpha, int Nt);
 
 
 /* update Z
