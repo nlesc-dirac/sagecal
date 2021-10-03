@@ -572,9 +572,9 @@ sagecal_master(int argc, char **argv) {
      }
      /* scale up/down each alpha based on initial rho value,
       * for cluster with max rho, scale is 1 */
-     double maxalpha=my_idamax(iodata.M,arho,1);
+     double maxrho=arho[my_idamax(iodata.M,arho,1)-1];
      for (int cm=0; cm<iodata.M; cm++) {
-       alphak[cm]=Data::federated_reg_alpha*arho[cm]/maxalpha;
+       alphak[cm]=Data::federated_reg_alpha*arho[cm]/maxrho;
      }
     }
     /* pseudoinverse  M values of NpolyxNpoly matrices */
