@@ -181,8 +181,15 @@ Note: the number of workers (-np option) can be lower than the number of MS cali
 
 The rest of the options are similar to sagecal.
 
+### 5) Spatial regularization
+Spatial regularization (with distributed multi-directional calibration) enables the use of solutions along all directions in the sky as spatial regularization for calibration along each single direction. In other words, we construct a model of the systematic errors covering the full field of view (not explicitly but implicitly) and use this as an additional constraint. To turn this on, the following options are needed:
 
-### 5) Solution format
+```-X L2 penalty,L1 penalty,model order,FISTA iterations,update cadence``` : For example ```-X 0.01,1e-4,3,40,10``` will use 0.01 as the L2 penalty and 1e-4 as the L1 penalty for solving an elastic net regression to build a spatial model. The model will have 3x3=9 spatial basis functions. The elastic net model will be found using 40 FISTA iterations. The spatial model will be updated at every 10 ADMM iterations.
+
+```-u alpha``` : The regularization factor for the spatial constraint while solving the consensus problem. This factor is scaled according to the value of rho given to each cluster (see section 5 above). The cluster with the highest rho value will have the value of alpha given by ```-u```.
+
+
+### 6) Solution format
 All SAGECal solutions are stored as text files. Lines starting with '#' are comments.
 The first non-comment line includes some general information, i.e.
 freq(MHz) bandwidth(MHz) time_interval(min) stations clusters effective_clusters
