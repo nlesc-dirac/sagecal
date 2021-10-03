@@ -182,5 +182,11 @@ namespace Data
     extern int servermode; /* 0: client, 1: server, else default operation */
     extern char *servername; /* server host name or ip address */
     extern char *portnumber; /* which port number to use for communication */
+
+    extern int spatialreg; /* if >0, enable spatial regularization */
+    extern double sh_lambda,sh_mu; /* spatial regularization L2,L1 penalties */
+    extern int sh_n0; /* basis model order */
+    extern int fista_maxiter; /* FISTA maximum iterations */
+    extern int admm_cadence; /* Cadence (in ADMM iterations) to update spatial model */
 }
 #endif //__DATA_H__

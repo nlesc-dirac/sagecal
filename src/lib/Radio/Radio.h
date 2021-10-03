@@ -352,6 +352,18 @@ free_elementcoeffs(elementcoeff ecoeff);
 extern elementval
 eval_elementcoeffs(double r, double theta, elementcoeff *ecoeff);
 
+/* spherical harmonic basis functions
+ * n0: max modes, starts from 1,2,...
+ l=0,1,2,....,n0-1 : total n0
+ m=(0),(-1,0,1),(-2,-1,0,1,2),....(-l,-l+1,...,l-1,l) : total 2*l+1
+ total no of modes=(n0)^2
+ * th,ph: array of theta,phi values, both of size Nt (not a grid)
+ * range th: 0..pi/2, ph: 0..2*pi
+ * output: n0^2 (per each mode) x Nt vector
+ */
+extern int
+sharmonic_modes(int n0,double *th, double *ph, int Nt, complex double *output);
+
 /****************************** predict_withbeam.c ****************************/
 /* precalculate cluster coherencies
   u,v,w: u,v,w coordinates (wavelengths) size Nbase*tilesz x 1 

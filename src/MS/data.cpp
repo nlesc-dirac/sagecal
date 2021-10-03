@@ -99,6 +99,12 @@ int Data::GPUpredict=0; /* use CPU for model calculation, if GPU not specified *
 #ifdef HAVE_CUDA
 int Data::heapsize=GPU_HEAP_SIZE; /* heap size in GPU (MB) to be used in malloc() */
 #endif
+int Data::spatialreg=0; /* if >0, enable spatial regularization */
+int Data::sh_n0=0; /* basis model order */
+double Data::sh_lambda=0; /* L2 regularization */
+double Data::sh_mu=0; /* L1 regularization */
+int Data::fista_maxiter=4; /* FISTA maximum iterations */
+int Data::admm_cadence=4; /* Cadence (in ADMM iterations) to update spatial model */
 
 int Data::servermode=-1; /* by default, no client-server mode */
 char *Data::servername=NULL;

@@ -232,3 +232,264 @@ eval_elementcoeffs(double r, double theta, elementcoeff *ecoeff) {
 
  return eval;
 }
+
+
+
+/* Legendre function P(l,m,x) */
+static double
+P(int l, int m, double x) {
+ double pmm, somx2, fact, pmmp1, pll;
+ int i;
+ pmm=1.0;
+ if (m>0) {
+   somx2=sqrt((1.0-x)*(1.0+x));
+   fact=1.0;
+   for (i=1; i<=m; i++) {
+     pmm *=(-fact)*somx2;
+     fact +=2.0;
+   }
+ }
+ if (l==m) return pmm;
+
+ pmmp1=x*(2.0*m+1.0)*pmm;
+ 
+ if(l==m+1) return pmmp1;
+
+ pll=0.0;
+ for (i=m+2; i<=l; ++i) {
+   pll=((2.0*i-1.0)*x*pmmp1-(i+m-1.0)*pmm )/(i-m);
+   pmm=pmmp1;
+   pmmp1=pll;
+ }
+
+ return pll;
+} 
+
+/* spherical harmonic basis functions
+ * n0: max modes, starts from 1,2,...
+ l=0,1,2,....,n0-1 : total n0
+ m=(0),(-1,0,1),(-2,-1,0,1,2),....(-l,-l+1,...,l-1,l) : total 2*l+1
+ total no of modes=(n0)^2
+ * th,ph: array of theta,phi values, both of size Nt (not a grid)
+ * range th: 0..pi/2, ph: 0..2*pi
+ * output: n0^2 (per each mode) x Nt vector
+ */
+int
+sharmonic_modes(int n0,double *th, double *ph, int Nt, complex double *output) {
+ double *fact;
+ double **pream;
+ complex double **phgrid;
+ double ***Lg;
+ complex double ***M;
+ int l,m,zci, xlen, npm;
+ int nmodes=n0*n0;
+
+ /* factorial array, store from 0! to (2*(n0-1))! at the 
+ * respective position of the array - length 2*n0
+ * size  2*n0
+ */
+ if ((fact=(double*)calloc((size_t)(2*n0),sizeof(double)))==0) {
+    fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
+    exit(1);
+ }
+ fact[0]=1;
+ for (l=1; l<=(2*n0-1); l++) {
+    fact[l]=(l)*fact[l-1];
+ }
+
+
+#ifdef DEBUG
+ printf("Theta= ");
+ for (l=0; l<Nt; l++) {
+  printf("%lf ",th[l]);
+ } 
+ printf("\nPhi= ");
+ for (l=0; l<Nt; l++) {
+  printf("%lf ",ph[l]);
+ } 
+ printf("\n");
+#endif
+
+#ifdef DEBUG
+ printf("Fact = ");
+ for(l=0; l<2*n0; l++) {
+  printf("%lf ",fact[l]);
+ }
+ printf("\n");
+#endif
+
+ /* storage to calculate preamble, dependent only on l and |m| */
+ /* size n0 x [1,3,5,...] varying */
+ /* only for positive values of m */
+ if ((pream=(double**)calloc((size_t)(n0),sizeof(double*)))==0) {
+    fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
+    exit(1);
+ }
+ for (l=0; l<(n0); l++) {
+  /* for each l, |m| goes from 0,1,...,l*/
+  xlen=l+1;
+  if ((pream[l]=(double*)calloc((size_t)(xlen),sizeof(double)))==0) {
+    fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
+    exit(1);
+  }
+  for (m=0; m<=l; m++) {
+   pream[l][m]=0.5*sqrt((2.0*l+1.0)/M_PI*fact[l-m]/fact[l+m]);
+  }
+ }
+
+ free(fact);
+#ifdef DEBUG
+ printf("Pream=\n");
+ for (l=0; l<(n0); l++) {
+  for (m=0; m<=l; m++) {
+   printf("%lf ",pream[l][m]);
+  }
+  printf("\n");
+ }
+#endif
+
+ /* storage to calculate exp(j*m*phi) for all possible values */
+ /* only calculate m from 0 .. to n0-1 because negative is conjugate */
+ /* size Nt x (n0) */
+ if ((phgrid=(complex double**)calloc((size_t)(Nt),sizeof(complex double*)))==0) {
+    fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
+    exit(1);
+ }
+ for (l=0; l<(Nt); l++) {
+  if ((phgrid[l]=(complex double*)calloc((size_t)(n0),sizeof(complex double)))==0) {
+    fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
+    exit(1);
+  }
+  for (m=0; m<(n0); m++) {
+   phgrid[l][m]=cos(m*ph[l])+_Complex_I*sin(m*ph[l]);
+  }
+ }
+
+#ifdef DEBUG
+ printf("Phigrid=\n");
+ for (l=0; l<(Nt); l++) {
+  for (m=0; m<(n0); m++) {
+   printf("(%lf %lf) ",creal(phgrid[l][m]),cimag(phgrid[l][m]));
+  }
+  printf("\n");
+ }
+#endif
+ 
+ /* storage to calculate Legendre polynomical P(l,m,theta)
+  for given l,|m|,theta */
+ /* l in [0,..,n0-1] m in [0,..,l]
+  size n0 x [l+1] x  Nt */
+ if ((Lg=(double***)calloc((size_t)(n0),sizeof(double**)))==0) {
+    fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
+    exit(1);
+ }
+
+ for (l=0; l<(n0); l++) {
+  /* for each l, |m| goes from 0,...,l*/
+  xlen=l+1;
+  if ((Lg[l]=(double**)calloc((size_t)(xlen),sizeof(double*)))==0) {
+    fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
+    exit(1);
+  }
+  for (m=0; m<=l; m++) {
+    if ((Lg[l][m]=(double*)calloc((size_t)(Nt),sizeof(double)))==0) {
+     fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
+     exit(1);
+    } 
+
+    for (npm=0; npm<Nt; npm++) {
+      Lg[l][m][npm]=P(l,m,cos(th[npm]));
+    }
+  }
+ }
+ 
+
+
+#ifdef DEBUG
+ for (l=0; l<(n0); l++) {
+  for (m=0; m<=l; m++) {
+    for (npm=0; npm<Nt; npm++) {
+     printf("%lf ",Lg[l][m][npm]);
+    }
+    printf("\n");
+   }
+ }
+#endif
+
+ /* now form the product of pream(l,|m|) ,  Lg(l,|m|,theta), 
+ *  (m positive) and phgrid(l, m, phi) (take conjugate for m<0)
+ * size: n0 x [1, 3, 5, 7, 9, ..] x Nt 
+ */
+ if ((M=(complex double***)calloc((size_t)(n0),sizeof(complex double**)))==0) {
+    fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
+    exit(1);
+ }
+ for(l=0; l<n0; l++) {
+   if ((M[l]=(complex double**)calloc((size_t)(2*l+1),sizeof(complex double*)))==0) {
+     fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
+     exit(1);
+   }
+   for (m=0; m<=2*l; m++) {
+     if ((M[l][m]=(complex double*)calloc((size_t)(Nt),sizeof(complex double)))==0) {
+       fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
+       exit(1);
+     }
+   }
+ }
+
+ for(l=0; l<n0; l++) {
+  for (m=l; m<=2*l;m++) { /* index for positive value of m 0,1,2,...*/
+     npm=m-l;/* true value of m, for index m */
+     for (zci=0; zci<Nt; zci++) {
+        M[l][m][zci]=pream[l][npm]*phgrid[zci][npm]*Lg[l][npm][zci];
+     }
+  }
+  /* now, negative m take conjugate */
+  for (m=0; m<l; m++) { /* index for negative values of m ..,-2,-1 */
+     npm=2*l-m;/* true value of m, for index m */
+     for (zci=0; zci<Nt; zci++) {
+          M[l][m][zci]=conj(M[l][npm][zci]);
+     }
+  }
+
+ }
+
+ for(l=0; l<n0; l++) {
+  free(pream[l]);
+ }
+ free(pream);
+ for(l=0; l<Nt; l++) {
+  free(phgrid[l]);
+ }
+ free(phgrid);
+ for(l=0; l<n0; l++) {
+   xlen=l+1;
+   for(m=0; m<xlen; m++) {
+    free(Lg[l][m]);
+   }
+   free(Lg[l]);
+ }
+ free(Lg);
+
+
+ for (zci=0; zci<Nt; zci++) {
+    int idx=0;
+    for(l=0; l<n0; l++) {
+     for (m=0; m<=2*l; m++) {
+      output[nmodes*zci+idx]=M[l][m][zci];
+      idx++;
+     }
+    }
+ }
+
+
+ for(l=0; l<n0; l++) {
+   for (m=0; m<=2*l; m++) {
+     free(M[l][m]);
+   } 
+  free(M[l]);
+ }
+ free(M);
+
+ return 0;
+}

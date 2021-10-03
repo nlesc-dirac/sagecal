@@ -139,7 +139,7 @@ sagecal_master(int argc, char **argv) {
     }
 
 
-cout<<"Master received all "<<totalfiles<<" files"<<endl;
+   cout<<"Master received all "<<totalfiles<<" files"<<endl;
    // check if we have more slaves than there are files, print a warning and exit
    if (totalfiles < nslaves) {
     cout<<"Error: The total number of datasets "<<totalfiles<<" is lower than the slaves used ("<<nslaves<<")."<<endl;
@@ -225,11 +225,13 @@ cout<<"Master received all "<<totalfiles<<" files"<<endl;
    iodata.Nms=totalfiles;
    /**** get info from slaves ***************************************/
    int *bufint=new int[6];
-   double *bufdouble=new double[1];
+   double *bufdouble=new double[1+(Data::spatialreg?2:0)];
    iodata.freqs=new double[iodata.Nms];
    iodata.freq0=0.0;
    iodata.N=iodata.M=iodata.totalt=0;
    int Mo=0;
+   /* extra parameters for spatial regularization*/
+   double ra0=0.0,dec0=0.0;
 
    /* use iodata to store the results, also check for consistency of results */
    for (int cm=0; cm<nslaves; cm++) {
@@ -240,7 +242,7 @@ cout<<"Master received all "<<totalfiles<<" files"<<endl;
          MPI_Recv(bufint, 6, /* MS-id, N,Mo(actual clusters),M(with hybrid),tilesz,totalt */
            MPI_INT, cm+1, TAG_MSAUX, MPI_COMM_WORLD, &status);
          int thismsid=bufint[0];
-cout<<"Worker "<<cm+1<<" MS="<<thismsid<<" N="<<bufint[1]<<" M="<<bufint[2]<<"/"<<bufint[3]<<" tilesz="<<bufint[4]<<" totaltime="<<bufint[5]<<endl;
+    cout<<"Worker "<<cm+1<<" MS="<<thismsid<<" N="<<bufint[1]<<" M="<<bufint[2]<<"/"<<bufint[3]<<" tilesz="<<bufint[4]<<" totaltime="<<bufint[5]<<endl;
          if (cm==0 && ct==0) { /* update metadata */
           iodata.N=bufint[1];
           Mo=bufint[2];
@@ -258,10 +260,22 @@ cout<<"Worker "<<cm+1<<" MS="<<thismsid<<" N="<<bufint[1]<<" M="<<bufint[2]<<"/"
             iodata.totalt=bufint[5];
            }
          }
-         MPI_Recv(bufdouble, 1, /* freq */
+         /* freq, if spatialreg>0, ra0, dec0 */
+         MPI_Recv(bufdouble, 1+(Data::spatialreg?2:0), /* freq, ra0, dec0 */
            MPI_DOUBLE, cm+1, TAG_MSAUX, MPI_COMM_WORLD, &status);
          iodata.freqs[thismsid]=bufdouble[0];
          iodata.freq0 +=bufdouble[0];
+         if (Data::spatialreg) {
+           if (cm==0 && ct==0) {
+            ra0=bufdouble[1];
+            dec0=bufdouble[2];
+           } else {
+             /* check ra0,dec0 for sanity */
+             if (ra0!=bufdouble[1] || dec0!=bufdouble[2]) {
+              cout<<"Warning: worker "<<cm+1<<" parameters do not match  ra0="<<bufdouble[1]<<" dec0="<<bufdouble[2]<<endl;
+             }
+           }
+         }
          cout<<"Worker "<<cm+1<<" MS="<<thismsid<<" frequency (MHz)="<<bufdouble[0]*1e-6<<endl;
         }
      }
@@ -269,7 +283,122 @@ cout<<"Worker "<<cm+1<<" MS="<<thismsid<<" N="<<bufint[1]<<" M="<<bufint[2]<<"/"
    iodata.freq0/=(double)iodata.Nms;
    delete [] bufint;
    delete [] bufdouble;
-cout<<"Reference frequency (MHz)="<<iodata.freq0*1.0e-6<<endl;
+   cout<<"Reference frequency (MHz)="<<iodata.freq0*1.0e-6<<endl;
+
+//#define DEBUG1
+#ifdef DEBUG1
+    FILE *dfp;
+#endif
+   clus_source_t *carr;
+   double *ll=0,*mm=0; /* Mx1 centroid coords (polar) */
+   /* input parameter int sh_n0 spherical harmonic model order */
+   /* elastic net regularization parameters sh_lambda (L2), sh_mu (L1) */
+   int G=sh_n0*sh_n0; /* total modes */
+   complex double *phivec=0; /* vector to store spherical harmonic modes n0^2 per each  polar coordinate */
+   complex double *Phi=0; /* basis matrices 2Gx2, M times */
+   complex double *Phikk=0; /* sum of Phi_k x Phi_k^H : 2Gx2G */
+   if (Data::spatialreg) {
+#ifdef DEBUG1
+    if ((dfp=fopen("debug.m","w+"))==0) {
+      fprintf(stderr,"%s: %d: no file\n",__FILE__,__LINE__);
+      exit(1);
+    }
+    fprintf(dfp,"G=%d;\nK=%d;\n",G,iodata.M);
+#endif
+
+     int M1;
+     read_sky_cluster(Data::SkyModel,Data::Clusters,&carr,&M1,iodata.freq0,ra0,dec0,Data::format);
+     /* Note: we use hybrid cluster size as M, as we have this many solutions */
+     if ((ll=(double*)calloc((size_t)iodata.M,sizeof(double)))==0) {
+      fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
+      exit(1);
+     }
+     if ((mm=(double*)calloc((size_t)iodata.M,sizeof(double)))==0) {
+      fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
+      exit(1);
+     }
+     double *P;
+     double lmean,mmean;
+     /* find centroid of each cluster, weighted by P=|sI|+|sQ|+|sU|+|sV|
+      * for example, llmean=dot(P,ll)/N, N: sources */
+     int idx=0;
+     /* Note: cluster odering is in reverse */
+     for (int ci=0; ci<M1; ci++) {
+       if (carr[ci].N>1) {
+        if ((P=(double*)calloc((size_t)carr[ci].N,sizeof(double)))==0) {
+         fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
+         exit(1);
+        }
+        for (int cj=0; cj<carr[ci].N; cj++) {
+          P[cj]=fabs(carr[ci].sI[cj])+fabs(carr[ci].sQ[cj])+fabs(carr[ci].sU[cj])
+             +fabs(carr[ci].sV[cj]);
+        }
+        double sumP=my_dasum(carr[ci].N,P);
+        lmean=my_ddot(carr[ci].N,P,carr[ci].ll)/sumP;
+        mmean=my_ddot(carr[ci].N,P,carr[ci].mm)/sumP;
+        free(P);
+       } else {
+         /* just one source, so copy values */
+        lmean=carr[ci].ll[0];
+        mmean=carr[ci].mm[0];
+       }
+       /* transform l,m in [-1,1] to r in [0,pi/2],theta [0,2*pi] */
+       double rr=sqrt(lmean*lmean+mmean*mmean)*M_PI_2;
+       double tt=atan2(mmean,lmean);
+       /* copy coordinates to array, considering hybrid clustering */
+       for (int cj=0; cj<carr[ci].nchunk; cj++) {
+         ll[idx]=rr;
+         mm[idx]=tt;
+         idx++;
+       }
+     }
+     if ((phivec=(complex double*)calloc((size_t)iodata.M*G,sizeof(complex double)))==0) {
+      fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
+      exit(1);
+     }
+     sharmonic_modes(sh_n0,ll,mm,iodata.M,phivec);
+#ifdef DEBUG1
+     fprintf(dfp,"phi=[\n");
+     for (int ci=0; ci<iodata.M*G; ci++) {
+       fprintf(dfp,"%lf+j*(%lf)\n",creal(phivec[ci]),cimag(phivec[ci]));
+     }
+     fprintf(dfp,"];\n");
+#endif
+     if ((Phi=(complex double*)calloc((size_t)iodata.M*2*G*2,sizeof(complex double)))==0) {
+      fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
+      exit(1);
+     }
+     for (int ci=0; ci<iodata.M; ci++) {
+       memcpy(&Phi[ci*2*G*2],&phivec[ci*G],G*sizeof(complex double));
+       memcpy(&Phi[ci*2*G*2+3*G],&phivec[ci*G],G*sizeof(complex double));
+     }
+     if ((Phikk=(complex double*)calloc((size_t)2*G*2*G,sizeof(complex double)))==0) {
+      fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
+      exit(1);
+     }
+     /* find product Phik*Phik^H (2Gx2G) and add up */
+     for (int ci=0; ci<iodata.M; ci++) {
+       /* C= alpha * op(A)*op(B)+beta * C */
+       my_zgemm('N','C',2*G,2*G,2,1.0,&Phi[ci*2*G*2],2*G,&Phi[ci*2*G*2],2*G,1.0,Phikk,2*G);
+     }
+     /* add \lambda I to Phikk */
+     for (int ci=0; ci<2*G; ci++) {
+       Phikk[ci*2*G+ci]+=sh_lambda;
+     }
+#ifdef DEBUG1
+     fprintf(dfp,"Phikk=[\n");
+     for (int ci=0; ci<2*G*2*G; ci++) {
+       fprintf(dfp,"%lf+j*(%lf)\n",creal(Phikk[ci]),cimag(Phikk[ci]));
+     }
+     fprintf(dfp,"];\n");
+#endif
+   }
+#ifdef DEBUG1
+   if (Data::spatialreg) {
+    fclose(dfp);
+   }
+#endif
+
 
     /* ADMM memory : allocated together for all MS */
     double *Z,*Y,*z;
@@ -309,12 +438,40 @@ cout<<"Reference frequency (MHz)="<<iodata.freq0*1.0e-6<<endl;
      exit(1);
     }
     
+
+    complex double *Zbar=0; /* constraint for each direction, 2*Npoly*N x 2 x M */
+    complex double *Zspat=0; /* spatial constraint matrix, 2*Npoly*N x 2G */
+    double *X=0; /* Lagrange multiplier for spatial reg Z=Zbar, 2*2*Npoly*N x 2 x M (double) */
+    /*SP: spatial update */
+    if (Data::spatialreg) {
+      if ((Zbar=(complex double*)calloc((size_t)iodata.N*4*Npoly*iodata.M,sizeof(complex double)))==0) {
+       fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
+       exit(1);
+      }
+      if ((Zspat=(complex double*)calloc((size_t)iodata.N*4*Npoly*G,sizeof(complex double)))==0) {
+       fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
+       exit(1);
+      }
+      if ((X=(double*)calloc((size_t)iodata.N*8*Npoly*iodata.M,sizeof(double)))==0) {
+       fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
+       exit(1);
+      }
+    }
+
     /* file for saving solutions */
     FILE *sfp=0;
+    FILE *sp_sfp=0;
     if (solfile) {
      if ((sfp=fopen(solfile,"w+"))==0) {
        fprintf(stderr,"%s: %d: no file\n",__FILE__,__LINE__);
        exit(1);
+     }
+     if (Data::spatialreg) {
+      string filebuff=std::string("spatial_")+std::string(solfile);
+      if ((sp_sfp=fopen(filebuff.c_str(),"w+"))==0) {
+       fprintf(stderr,"%s: %d: no file\n",__FILE__,__LINE__);
+       exit(1);
+      }
      }
     }
 
@@ -323,6 +480,21 @@ cout<<"Reference frequency (MHz)="<<iodata.freq0*1.0e-6<<endl;
       fprintf(sfp,"# solution file (Z) created by SAGECal\n");
       fprintf(sfp,"# reference_freq(MHz) polynomial_order stations clusters effective_clusters\n");
       fprintf(sfp,"%lf %d %d %d %d\n",iodata.freq0*1e-6,Npoly,iodata.N,Mo,iodata.M);
+      if (Data::spatialreg) {
+        fprintf(sp_sfp,"# spatial regularization solution file (Zspat) created by SAGECal\n");
+        fprintf(sp_sfp,"# Top two rows are the polar coordinates of the centroids (rad)\n");
+        fprintf(sp_sfp,"# reference_freq(MHz) polynomial_order(freq) polynomial_order(spatial) stations clusters effective_clusters\n");
+        fprintf(sp_sfp,"%lf %d %d %d %d %d\n",iodata.freq0*1e-6,Npoly,G,iodata.N,Mo,iodata.M);
+        /* write spatial centroids to solution file */
+        for (int ci=0; ci<iodata.M; ci++) {
+          fprintf(sp_sfp," %lf",ll[ci]);
+        }
+        fprintf(sp_sfp,"\n");
+        for (int ci=0; ci<iodata.M; ci++) {
+          fprintf(sp_sfp," %lf",mm[ci]);
+        }
+        fprintf(sp_sfp,"\n");
+      }
     }
 
 
@@ -384,6 +556,7 @@ cout<<"Reference frequency (MHz)="<<iodata.freq0*1.0e-6<<endl;
     /* rho for each freq can be different (per each direction),
        so need to store each value, each column is Mx1 rho of one freq */
     double *rhok,*Bii;
+    double *alphak=0; /* alpha array Mx1, for spatial regularization */
     if ((rhok=(double*)calloc((size_t)iodata.Nms*iodata.M,sizeof(double)))==0) {
      fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
      exit(1);
@@ -391,6 +564,18 @@ cout<<"Reference frequency (MHz)="<<iodata.freq0*1.0e-6<<endl;
     /* initilized with default values */
     for(int cm=0; cm<iodata.Nms; cm++) {
        my_dcopy(iodata.M,arho,1,&rhok[cm*iodata.M],1);
+    }
+    if (Data::spatialreg) {
+     if ((alphak=(double*)calloc((size_t)iodata.M,sizeof(double)))==0) {
+      fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
+      exit(1);
+     }
+     /* scale up/down each alpha based on initial rho value,
+      * for cluster with max rho, scale is 1 */
+     double maxrho=arho[my_idamax(iodata.M,arho,1)-1];
+     for (int cm=0; cm<iodata.M; cm++) {
+       alphak[cm]=Data::federated_reg_alpha*arho[cm]/maxrho;
+     }
     }
     /* pseudoinverse  M values of NpolyxNpoly matrices */
     if ((Bii=(double*)calloc((size_t)iodata.M*Npoly*Npoly,sizeof(double)))==0) {
@@ -479,7 +664,11 @@ cout<<"Reference frequency (MHz)="<<iodata.freq0*1.0e-6<<endl;
        }
 #endif
          /* BB : update Bi since rho is possibly updated, see Note(x) above */
-         find_prod_inverse_full(B,Bii,Npoly,iodata.Nms,iodata.M,rhok,Data::Nt);
+         if (!Data::spatialreg) {
+          find_prod_inverse_full(B,Bii,Npoly,iodata.Nms,iodata.M,rhok,Data::Nt);
+         } else {
+          find_prod_inverse_full_fed(B,Bii,Npoly,iodata.Nms,iodata.M,rhok,alphak,Data::Nt);
+         }
 
          /* send which MS to work on */
          for(int cm=0; cm<nslaves; cm++) {
@@ -572,7 +761,15 @@ cout<<"Reference frequency (MHz)="<<iodata.freq0*1.0e-6<<endl;
             my_daxpy(8*iodata.N*iodata.M, &Y[cm*8*iodata.N*iodata.M], B[cm*Npoly+ci], &z[ci*8*iodata.N*iodata.M]);
            }
          }
-         /* no need to scale by 1/rho here, because Bii is already divided by 1/rho */
+         /* no need to scale by 1/rho above, because Bii is already divided by 1/rho */
+         /* add (alpha Zbar - X) if spatial regularization is enabled */
+         if (Data::spatialreg && admm>0) {
+           //my_daxpy(iodata.N*8*Npoly*iodata.M,(double*)Zbar,Data::federated_reg_alpha,z);
+           for (int cm=0; cm<iodata.M; cm++) {
+             my_daxpy(iodata.N*8*Npoly,(double*)&Zbar[cm*2*Npoly*iodata.N*2],alphak[cm],&z[cm*4*Npoly*iodata.N*2]);
+           }
+           my_daxpy(iodata.N*8*Npoly*iodata.M,X,-1.0,z);
+         }
 
          /* find product z_tilde x Bi^T, z_tilde with proper reshaping */
          my_dcopy(iodata.N*8*Npoly*iodata.M,Z,1,Zold,1);
@@ -587,6 +784,32 @@ cout<<"Reference frequency (MHz)="<<iodata.freq0*1.0e-6<<endl;
           cout<<"Timeslot:"<<ct<<" ADMM:"<<admm<<endl;
          }
 
+         if (Data::spatialreg && !(admm%admm_cadence)) {
+           /*SP: spatial update */
+           /* 1. update Zbar  from global sol Z (copy) */
+           memcpy(Zbar,Z,iodata.N*8*Npoly*iodata.M*sizeof(double));
+           /* 2. update Zspat taking proximal step (FISTA) */
+           update_spatialreg_fista(Zspat,Zbar,Phikk,Phi,iodata.N,iodata.M,Npoly,G,sh_mu, fista_maxiter);
+           /* 3. update Zbar from Zspat, Z_k = Z Phi_k */
+           for (int cm=0; cm<iodata.M; cm++) {
+             my_zgemm('N','N',2*Npoly*iodata.N,2,2*G,1.0,Zspat,2*Npoly*iodata.N,&Phi[cm*2*G*2],2*G,0.0,&Zbar[cm*2*Npoly*iodata.N*2],2*Npoly*iodata.N);
+           }
+           /* 4. update X comparing Zbar, Z */
+           /* Zerr=Z-Zbar */
+           my_dcopy(iodata.N*8*Npoly*iodata.M,Z,1,Zerr,1);
+           my_daxpy(iodata.N*8*Npoly*iodata.M,(double*)Zbar,-1.0,Zerr);
+           /* X = X + alpha (Z - Zbar) */
+           if (!admm) {
+            memset(X,0,sizeof(double)*(size_t)iodata.N*8*Npoly*iodata.M);
+           }
+           for (int cm=0; cm<iodata.M; cm++) {
+             //my_daxpy(iodata.N*8*Npoly*iodata.M,Zerr,Data::federated_reg_alpha,X);
+             my_daxpy(iodata.N*8*Npoly,&Zerr[cm*iodata.N*8*Npoly],alphak[cm],&X[cm*iodata.N*8*Npoly]);
+           }
+           printf("SP: alpha=%lf ||Z-Zbar||=%lf ||Z||=%lf ||X||=%lf\n",Data::federated_reg_alpha,my_dnrm2(iodata.N*8*Npoly*iodata.M,Zerr)/((double)iodata.N*8*Npoly*iodata.M),my_dnrm2(iodata.N*8*Npoly*iodata.M,Z)/((double)iodata.N*8*Npoly*iodata.M),my_dnrm2(iodata.N*8*Npoly*iodata.M,X)/((double)iodata.N*8*Npoly*iodata.M));
+           /* 5. feed Zbar and X to next update of Z
+             already done above*/
+         }
          /* find the MDL if admm==0 */
          /* At admm=0, Y = 0 + rho J, possibly projected to a common unitary ambiguity
             so estimate Z for different polynomial degrees, find ||rho J - rho B Z||^2 error
@@ -621,8 +844,8 @@ cout<<"Reference frequency (MHz)="<<iodata.freq0*1.0e-6<<endl;
 	         } else if (admm==0){//update and send B_i Z for all ms
 	           int scount=Send[cm]-Sbegin[cm]+1;
        
-	           for (int ct=0; ct<scount; ct++) {
-	            mmid = Sbegin[cm]+ct;
+	           for (int ct1=0; ct1<scount; ct1++) {
+	            mmid = Sbegin[cm]+ct1;
 	            for (int p=0; p<iodata.M; p++) {
 		            memset(&z[8*iodata.N*p],0,sizeof(double)*(size_t)iodata.N*8);
 		            for (int ci=0; ci<Npoly; ci++) {
@@ -695,6 +918,14 @@ cout<<"Reference frequency (MHz)="<<iodata.freq0*1.0e-6<<endl;
            }
          }
          /* no need to scale by 1/rho here, because Bii is already divided by 1/rho */
+         /* add (alpha Zbar - X) if spatial regularization is enabled */
+         if (Data::spatialreg) {
+           //my_daxpy(iodata.N*8*Npoly*iodata.M,(double*)Zbar,Data::federated_reg_alpha,z);
+           for (int cm=0; cm<iodata.M; cm++) {
+             my_daxpy(iodata.N*8*Npoly,(double*)&Zbar[cm*2*Npoly*iodata.N*2],alphak[cm],&z[cm*4*Npoly*iodata.N*2]);
+           }
+           my_daxpy(iodata.N*8*Npoly*iodata.M,X,-1.0,z);
+         }
 
          /* find product z_tilde x Bi^T, z_tilde with proper reshaping */
          my_dcopy(iodata.N*8*Npoly*iodata.M,Z,1,Zerr,1);
@@ -741,23 +972,31 @@ cout<<"Reference frequency (MHz)="<<iodata.freq0*1.0e-6<<endl;
     /* write Z to solution file, same format as J, but we have Npoly times more
        values per timeslot per column */
      if (solfile) {
+      /* 2Nx2 x Npoly x M */
       for (int p=0; p<iodata.N*8*Npoly; p++) {
        fprintf(sfp,"%d ",p);
-       //for (int ppi=0; ppi<iodata.M; ppi++) {
        for (int ppi=iodata.M-1; ppi>=0; ppi--) { /* reverse ordering */
         fprintf(sfp," %e",Z[ppi*iodata.N*8*Npoly+p]);
        }
        fprintf(sfp,"\n");
       }
+      if (Data::spatialreg) {
+       /* 2N*Npoly x 2G */
+       double *Zspre=(double*)Zspat;
+       for (int p=0; p<iodata.N*8*Npoly; p++) {
+        fprintf(sp_sfp,"%d ",p);
+        for (int ppi=0; ppi<G; ppi++) {
+         fprintf(sp_sfp," %e",Zspre[ppi*iodata.N*8*Npoly+p]);
+        }
+        fprintf(sp_sfp,"\n");
+       }
+      }
      }
      if (resetcount>nslaves/2) {
        /* if most slaves have reset, print a warning only */
-       //memset(Z,0,sizeof(double)*(size_t)iodata.N*8*Npoly*iodata.M);
        cout<<"Warning: Most slaves did not converge."<<endl;
      }
-
-
-    }
+    } /* time */
 
     /* send end signal to each slave */
     msgcode=CTRL_END;
@@ -767,6 +1006,9 @@ cout<<"Reference frequency (MHz)="<<iodata.freq0*1.0e-6<<endl;
 
     if (solfile) {
       fclose(sfp);
+      if (Data::spatialreg) {
+        fclose(sp_sfp);
+      }
     }
 
 
@@ -792,6 +1034,75 @@ cout<<"Reference frequency (MHz)="<<iodata.freq0*1.0e-6<<endl;
    free(rhok);
    free(Bii);
    free(chunkvec);
+
+   if (Data::spatialreg) {
+      exinfo_gaussian *exg;
+      exinfo_disk *exd;
+      exinfo_ring *exr;
+      exinfo_shapelet *exs;
+
+      for (int ci=0; ci<Mo; ci++) {
+       free(carr[ci].ll);
+       free(carr[ci].mm);
+       free(carr[ci].nn);
+       free(carr[ci].sI);
+       free(carr[ci].sQ);
+       free(carr[ci].sU);
+       free(carr[ci].sV);
+       //Do not free(carr[ci].p) as it is not allocated;
+       free(carr[ci].ra);
+       free(carr[ci].dec);
+       for (int cj=0; cj<carr[ci].N; cj++) {
+        /* do a proper typecast before freeing */
+        switch (carr[ci].stype[cj]) {
+          case STYPE_GAUSSIAN:
+           exg=(exinfo_gaussian*)carr[ci].ex[cj];
+           if (exg) { free(exg); carr[ci].ex[cj]=0; }
+           break;
+          case STYPE_DISK:
+           exd=(exinfo_disk*)carr[ci].ex[cj];
+           if (exd) { free(exd); carr[ci].ex[cj]=0; }
+           break;
+          case STYPE_RING:
+           exr=(exinfo_ring*)carr[ci].ex[cj];
+           if (exr) { free(exr); carr[ci].ex[cj]=0; }
+           break;
+          case STYPE_SHAPELET:
+           exs=(exinfo_shapelet*)carr[ci].ex[cj];
+           if (exs)  {
+            if (exs->modes) {
+            free(exs->modes);
+           }
+           free(exs);
+           carr[ci].ex[cj]=0;
+           }
+           break;
+          default:
+           break;
+        }
+      }
+      free(carr[ci].ex);
+      free(carr[ci].stype);
+      free(carr[ci].sI0);
+      free(carr[ci].sQ0);
+      free(carr[ci].sU0);
+      free(carr[ci].sV0);
+      free(carr[ci].f0);
+      free(carr[ci].spec_idx);
+      free(carr[ci].spec_idx1);
+      free(carr[ci].spec_idx2);
+     }
+     free(carr);
+     free(ll);
+     free(mm);
+     free(phivec);
+     free(Phi);
+     free(Phikk);
+     free(Zbar);
+     free(Zspat);
+     free(X);
+     free(alphak);
+   }
   /**********************************************************/
 
    cout<<"Done."<<endl;    
