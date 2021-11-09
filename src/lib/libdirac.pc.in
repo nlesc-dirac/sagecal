@@ -1,0 +1,17 @@
+# this template is filled-in by CMake `configure_file(... @ONLY)`
+# the `@....@` are filled in by CMake configure_file(), 
+# from variables set in your CMakeLists.txt or by CMake itself
+prefix="@CMAKE_INSTALL_PREFIX@"
+exec_prefix="${prefix}"
+libdir="${prefix}/lib"
+includedir="${prefix}/include"
+
+Name: @PROJECT_NAME@ libdirac
+Description: @CMAKE_PROJECT_DESCRIPTION@
+URL: https://github.com/nlesc-dirac/sagecal
+Version: @PROJECT_VERSION@
+Requires: @pc_req_public@
+Requires.private: @pc_req_private@
+Cflags: -I"${includedir}"
+Libs: -L"${libdir}" -ldirac
+Libs.private: -L"${libdir}" -ldirac
