@@ -21,7 +21,7 @@
 #include <cuComplex.h>
 #include <stdio.h>
 #include <cublas_v2.h>
-#include "GPUtune.h"
+#include "Dirac_GPUtune.h"
 
 /* enable this for checking for kernel failure */
 //#define CUDA_DBG

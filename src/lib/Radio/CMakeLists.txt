@@ -67,7 +67,7 @@ if(HAVE_CUDA)
         set(CUDA_SRC_FILES ${CUDA_SRC_FILES} ${SRC_FILE})
     endforeach (object)
 
-    CUDA_ADD_LIBRARY(radio ${CUDA_SRC_FILES} Radio.h ${CMAKE_CURRENT_SOURCE_DIR}/../Dirac/Common.h)
+    CUDA_ADD_LIBRARY(radio ${CUDA_SRC_FILES} Radio.h ${CMAKE_CURRENT_SOURCE_DIR}/../Dirac/Dirac_common.h)
 
     SET_TARGET_PROPERTIES(radio PROPERTIES SOVERSION 0.0)
     SET_TARGET_PROPERTIES(radio PROPERTIES CUDA_SEPARABLE_COMPILATION ON)
@@ -82,7 +82,7 @@ if(HAVE_CUDA)
 
 else()
 
-    add_library(radio ${objects} Radio.h ${CMAKE_CURRENT_SOURCE_DIR}/../Dirac/Common.h)
+  add_library(radio ${objects} Radio.h ${CMAKE_CURRENT_SOURCE_DIR}/../Dirac/Dirac_common.h)
     SET_TARGET_PROPERTIES(radio PROPERTIES SOVERSION 0.0)
 
     target_link_libraries(radio
