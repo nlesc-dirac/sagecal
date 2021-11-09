@@ -34,10 +34,10 @@ if(HAVE_CUDA)
 
     message (STATUS "Extra CUDA objects ... = ${extra_objects_cuda}")
 
-    foreach (object ${extra_objects_cuda})
-        file(GLOB CUDA_SRC_FILE ${object}.*)
-        CUDA_ADD_LIBRARY(${object} SHARED ${CUDA_SRC_FILE})
-    endforeach (object)
+    #foreach (object ${extra_objects_cuda})
+    #    file(GLOB CUDA_SRC_FILE ${object}.*)
+    #    CUDA_ADD_LIBRARY(${object} SHARED ${CUDA_SRC_FILE})
+    #endforeach (object)
 
     set(objects ${objects} ${extra_objects} ${extra_objects_cuda})
 
@@ -47,11 +47,11 @@ else()
     set (extra_objects
     )
 
-    foreach (object ${objects})
-        file(GLOB SRC_FILE ${object}.*)
-        add_library(${object} ${SRC_FILE})
-        SET_TARGET_PROPERTIES(${object} PROPERTIES SOVERSION 0.0)
-    endforeach (object)
+  #foreach (object ${objects})
+  #      file(GLOB SRC_FILE ${object}.*)
+  #      add_library(${object} ${SRC_FILE})
+  #      SET_TARGET_PROPERTIES(${object} PROPERTIES SOVERSION 0.0)
+  #  endforeach (object)
 
     set(objects ${objects} ${extra_objects})
 
