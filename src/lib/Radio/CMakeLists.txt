@@ -34,10 +34,10 @@ if(HAVE_CUDA)
 
     message (STATUS "Extra CUDA objects ... = ${extra_objects_cuda}")
 
-    foreach (object ${extra_objects_cuda})
-        file(GLOB CUDA_SRC_FILE ${object}.*)
-        CUDA_ADD_LIBRARY(${object} SHARED ${CUDA_SRC_FILE})
-    endforeach (object)
+    #foreach (object ${extra_objects_cuda})
+    #    file(GLOB CUDA_SRC_FILE ${object}.*)
+    #    CUDA_ADD_LIBRARY(${object} SHARED ${CUDA_SRC_FILE})
+    #endforeach (object)
 
     set(objects ${objects} ${extra_objects} ${extra_objects_cuda})
 
@@ -47,11 +47,11 @@ else()
     set (extra_objects
     )
 
-    foreach (object ${objects})
-        file(GLOB SRC_FILE ${object}.*)
-        add_library(${object} ${SRC_FILE})
-        SET_TARGET_PROPERTIES(${object} PROPERTIES SOVERSION 0.0)
-    endforeach (object)
+  #foreach (object ${objects})
+  #      file(GLOB SRC_FILE ${object}.*)
+  #      add_library(${object} ${SRC_FILE})
+  #      SET_TARGET_PROPERTIES(${object} PROPERTIES SOVERSION 0.0)
+  #  endforeach (object)
 
     set(objects ${objects} ${extra_objects})
 
@@ -67,7 +67,7 @@ if(HAVE_CUDA)
         set(CUDA_SRC_FILES ${CUDA_SRC_FILES} ${SRC_FILE})
     endforeach (object)
 
-    CUDA_ADD_LIBRARY(radio ${CUDA_SRC_FILES} Radio.h ${CMAKE_CURRENT_SOURCE_DIR}/../Dirac/Common.h)
+    CUDA_ADD_LIBRARY(radio ${CUDA_SRC_FILES} Radio.h ${CMAKE_CURRENT_SOURCE_DIR}/../Dirac/Dirac_common.h)
 
     SET_TARGET_PROPERTIES(radio PROPERTIES SOVERSION 0.0)
     SET_TARGET_PROPERTIES(radio PROPERTIES CUDA_SEPARABLE_COMPILATION ON)
@@ -82,7 +82,7 @@ if(HAVE_CUDA)
 
 else()
 
-    add_library(radio ${objects} Radio.h ${CMAKE_CURRENT_SOURCE_DIR}/../Dirac/Common.h)
+  add_library(radio ${objects} Radio.h ${CMAKE_CURRENT_SOURCE_DIR}/../Dirac/Dirac_common.h)
     SET_TARGET_PROPERTIES(radio PROPERTIES SOVERSION 0.0)
 
     target_link_libraries(radio

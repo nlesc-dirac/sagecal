@@ -1,4 +1,4 @@
-di 10 aug 2021 13:25:10 CEST
+wo 10 nov 2021  8:52:47 CET
 # SAGECal Installation
 
 ## Cmake Build
@@ -26,6 +26,8 @@ If you get **-lgfortran is not found** error, run the following in the build dir
  ln -s /usr/lib/x86_64-linux-gnu/libgfortran.so.5 libgfortran.so
 ```
 to make a symbolic link to libgfortran.so.5 or whatever version that is installed.
+
+To only build *libdirac* library, use *-DLIB_ONLY=1* option. This library can be used with pkg-config using *lib/pkgconfig/libdirac.pc*.
 
 ### Requirements for older installations
 #### das5

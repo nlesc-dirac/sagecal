@@ -17,8 +17,8 @@
  $Id$
  */
 
-#ifndef Common_H
-#define Common_H
+#ifndef DIRAC_Common_H
+#define DIRAC_Common_H
 #ifdef __cplusplus
         extern "C" {
 #endif
@@ -864,4 +864,4 @@ sync_barrier(th_barrier *barrier);
 #ifdef __cplusplus
      } /* extern "C" */
 #endif
-#endif /* Common_H */
+#endif /* DIRAC_Common_H */

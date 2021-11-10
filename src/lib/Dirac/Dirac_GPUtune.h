@@ -17,8 +17,8 @@
  $Id$
  */
 
-#ifndef GPUTUNE_H
-#define GPUTUNE_H
+#ifndef DIRAC_GPUTUNE_H
+#define DIRAC_GPUTUNE_H
 #ifdef __cplusplus
         extern "C" {
 #endif
@@ -45,4 +45,4 @@
 #ifdef __cplusplus
      } /* extern "C" */
 #endif
-#endif /* GPUTUNE_H */
+#endif /* DIRAC_GPUTUNE_H */
