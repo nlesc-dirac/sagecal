@@ -27,7 +27,7 @@ If you get **-lgfortran is not found** error, run the following in the build dir
 ```
 to make a symbolic link to libgfortran.so.5 or whatever version that is installed.
 
-To only build *libdirac.a* library, use *-DLIB_ONLY=1* option. This library can be used with pkg-config using *lib/pkgconfig/libdirac.pc*.
+To only build *libdirac* library, use *-DLIB_ONLY=1* option. This library can be used with pkg-config using *lib/pkgconfig/libdirac.pc*.
 
 ### Requirements for older installations
 #### das5
