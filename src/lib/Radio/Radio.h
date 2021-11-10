@@ -89,7 +89,7 @@
 #define CLM_INFO_SZ       10
 #define CLM_DBL_MAX       1E12    /* max double value */
 
-#include <Common.h>
+#include <Dirac_common.h>
 
 /****************************** readsky.c ****************************/
 /* read sky/cluster files, 

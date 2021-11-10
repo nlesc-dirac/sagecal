@@ -20,7 +20,7 @@
 
 
 #include "Radio.h"
-#include "GPUtune.h"
+#include "Dirac_GPUtune.h"
 
 //#define CUDA_DEBUG
 static void

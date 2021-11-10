@@ -1,11 +1,11 @@
 cmake_minimum_required(VERSION 3.5.1)
 
 #--------------------------------------- project
-project (SageCal)
+project (SAGECal)
 set(PROJECT_VERSION_MAJOR 0)
 set(PROJECT_VERSION_MINOR 7)
 set(PROJECT_VERSION_PATCH 0)
-set(PROJECT_VERSION_REVISION 1)
+set(PROJECT_VERSION_REVISION 7)
 set(PROJECT_VERSION
   "${PROJECT_VERSION_MAJOR}.${PROJECT_VERSION_MINOR}.${PROJECT_VERSION_PATCH}")
 
@@ -51,6 +51,7 @@ option (HAVE_CUDA "Enable CUDA support" OFF)
 option (CUDA_DEBUG "Enable Debug mode for CUDA" OFF)
 option (NUM_GPU "Number of GPUs" OFF)
 option (USE_MIC "Enable MIC" OFF)
+option (LIB_ONLY "Only build libdirac" OFF)
 
 
 #--------------------------------------- rpath setup for libraries
@@ -80,9 +81,11 @@ if(HAVE_CUDA)
     find_package(NVML REQUIRED)
 endif()
 
+if(NOT LIB_ONLY)
 # casacore
 find_package(CasaCore REQUIRED)
 include_directories(${CASACORE_INCLUDE_DIR})
+endif()
 
 #cfitsio
 find_package(CfitsIO REQUIRED)
@@ -159,8 +162,9 @@ if(HAVE_CUDA)
   endif()
 
   if(NUM_GPU)
+    math(EXPR MAX_GPU "${NUM_GPU} - 1")
     message (STATUS "Setting number of GPUs to ${NUM_GPU}")
-    add_definitions(-DMAX_GPU_ID=${NUM_GPU})
+    add_definitions(-DMAX_GPU_ID=${MAX_GPU})
   endif()
 
 endif()
@@ -235,10 +239,21 @@ message (STATUS "WCSLIB_LIBRARIES .......... = ${WCSLIB_LIBRARIES}")
 #--------------------------------------- include directories
 add_subdirectory(src)
 
+#-------------------------------- Install pkg-config file
+configure_file(${CMAKE_SOURCE_DIR}/src/lib/libdirac.pc.in ${CMAKE_BINARY_DIR}/libdirac.pc @ONLY)
+install(FILES
+  ${CMAKE_BINARY_DIR}/libdirac.pc
+  DESTINATION lib/pkgconfig/)
 #--------------------------------------- install
 
 install(DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/dist/ DESTINATION ${CMAKE_INSTALL_PREFIX})
 
-install(DIRECTORY ${CMAKE_SOURCE_DIR}/src/buildsky/
+if (NOT LIB_ONLY)
+    install(DIRECTORY ${CMAKE_SOURCE_DIR}/src/buildsky/
         DESTINATION bin
         FILES_MATCHING PATTERN "*.py" )
+endif()
+
+install(DIRECTORY ${CMAKE_SOURCE_DIR}/src/lib/Dirac/
+        DESTINATION include
+        FILES_MATCHING PATTERN "*.h" )

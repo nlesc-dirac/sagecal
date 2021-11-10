@@ -229,7 +229,7 @@ cout<<"Master received all "<<totalfiles<<" files"<<endl;
    iodata.freqs=new double[iodata.Nms];
    iodata.freq0=0.0;
    iodata.N=iodata.M=iodata.totalt=0;
-   int Mo=0;
+   [[maybe_unused]] int Mo=0;
 
    /* use iodata to store the results, also check for consistency of results */
    for (int cm=0; cm<nslaves; cm++) {

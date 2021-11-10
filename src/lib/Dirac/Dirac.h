@@ -45,7 +45,7 @@
 #include <cusolverDn.h>
 #include <cuda_runtime_api.h>
 /* GPU specific tunable parameters */
-#include "GPUtune.h"
+#include "Dirac_GPUtune.h"
 #endif /* HAVE_CUDA */
 
 
@@ -84,7 +84,7 @@
 #define CLM_INFO_SZ       10
 #define CLM_DBL_MAX       1E12    /* max double value */
 
-#include "Common.h"
+#include "Dirac_common.h"
 
 /* convert types */
 /* both arrays size nx1
