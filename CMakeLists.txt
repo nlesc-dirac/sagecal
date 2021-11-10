@@ -51,6 +51,7 @@ option (HAVE_CUDA "Enable CUDA support" OFF)
 option (CUDA_DEBUG "Enable Debug mode for CUDA" OFF)
 option (NUM_GPU "Number of GPUs" OFF)
 option (USE_MIC "Enable MIC" OFF)
+option (LIB_ONLY "Only build libdirac" OFF)
 
 
 #--------------------------------------- rpath setup for libraries
@@ -80,9 +81,11 @@ if(HAVE_CUDA)
     find_package(NVML REQUIRED)
 endif()
 
+if(NOT LIB_ONLY)
 # casacore
 find_package(CasaCore REQUIRED)
 include_directories(${CASACORE_INCLUDE_DIR})
+endif()
 
 #cfitsio
 find_package(CfitsIO REQUIRED)
@@ -245,9 +248,11 @@ install(FILES
 
 install(DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/dist/ DESTINATION ${CMAKE_INSTALL_PREFIX})
 
-install(DIRECTORY ${CMAKE_SOURCE_DIR}/src/buildsky/
+if (NOT LIB_ONLY)
+    install(DIRECTORY ${CMAKE_SOURCE_DIR}/src/buildsky/
         DESTINATION bin
         FILES_MATCHING PATTERN "*.py" )
+endif()
 
 install(DIRECTORY ${CMAKE_SOURCE_DIR}/src/lib/Dirac/
         DESTINATION include
