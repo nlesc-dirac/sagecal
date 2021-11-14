@@ -235,6 +235,12 @@ configure_file(${CMAKE_SOURCE_DIR}/src/lib/libdirac.pc.in ${CMAKE_BINARY_DIR}/li
 install(FILES
   ${CMAKE_BINARY_DIR}/libdirac.pc
   DESTINATION lib/pkgconfig/)
+
+configure_file(${CMAKE_SOURCE_DIR}/src/lib/libdirac.cmake.in
+  ${CMAKE_BINARY_DIR}/libdirac.cmake @ONLY)
+install(FILES
+  ${CMAKE_BINARY_DIR}/libdirac.cmake
+  DESTINATION lib/cmake/)
 #--------------------------------------- install
 
 install(DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/dist/ DESTINATION ${CMAKE_INSTALL_PREFIX})
