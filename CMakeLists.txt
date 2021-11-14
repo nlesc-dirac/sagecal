@@ -70,7 +70,6 @@ ENDIF("${isSystemDir}" STREQUAL "-1")
 
 set(THREADS_PREFER_PTHREAD_FLAG ON)
 find_package(Threads REQUIRED)
-find_package(PkgConfig REQUIRED)
 
 message(STATUS "\n############################\n#   Searching Sagecal dependencies\n############################")
 # cuda
@@ -82,43 +81,35 @@ if(HAVE_CUDA)
 endif()
 
 if(NOT LIB_ONLY)
-# casacore
-find_package(CasaCore REQUIRED)
-include_directories(${CASACORE_INCLUDE_DIR})
+ # casacore
+ find_package(CasaCore REQUIRED)
+ include_directories(${CASACORE_INCLUDE_DIR})
 endif()
-
-#cfitsio
-find_package(CfitsIO REQUIRED)
-include_directories(${CFITSIO_INCLUDE})
 
 #lapack
 find_package(LAPACK REQUIRED)
 include_directories(${LAPACK_INCLUDE_DIR})
 
-#wcslib
-find_package(WcsLib REQUIRED)
-include_directories(${WCSLIB_INCLUDE_DIR})
-
 #OpenBlas
 find_package(OpenBLAS REQUIRED)
 include_directories(${OpenBLAS_INCLUDE_DIR})
 
-##blas
-#find_package(BLAS REQUIRED)
-#include_directories(${BLAS_INCLUDE_DIR})
+if(NOT LIB_ONLY)
+ #wcslib
+ find_package(WcsLib REQUIRED)
+ include_directories(${WCSLIB_INCLUDE_DIR})
+ #cfitsio
+ find_package(CfitsIO REQUIRED)
+ include_directories(${CFITSIO_INCLUDE})
+endif()
 
-##gfortran
-#find_package(GFortranLibs REQUIRED)
-# include_directories(${GFORTRAN_INCLUDE_DIR})
-
-##hdf5
-#find_package(HDF5 REQUIRED)
-
-
-#glib
-pkg_check_modules(GLIB_PKG glib-2.0)
-if (GLIB_PKG_FOUND)
+if(NOT LIB_ONLY)
+ #glib
+ find_package(PkgConfig REQUIRED)
+ pkg_check_modules(GLIB_PKG glib-2.0)
+ if (GLIB_PKG_FOUND)
     include_directories(${GLIB_PKG_INCLUDE_DIRS})
+ endif()
 endif()
 
 
@@ -244,6 +235,12 @@ configure_file(${CMAKE_SOURCE_DIR}/src/lib/libdirac.pc.in ${CMAKE_BINARY_DIR}/li
 install(FILES
   ${CMAKE_BINARY_DIR}/libdirac.pc
   DESTINATION lib/pkgconfig/)
+
+configure_file(${CMAKE_SOURCE_DIR}/src/lib/libdirac.cmake.in
+  ${CMAKE_BINARY_DIR}/libdirac.cmake @ONLY)
+install(FILES
+  ${CMAKE_BINARY_DIR}/libdirac.cmake
+  DESTINATION lib/cmake/)
 #--------------------------------------- install
 
 install(DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/dist/ DESTINATION ${CMAKE_INSTALL_PREFIX})

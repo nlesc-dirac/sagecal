@@ -23,9 +23,8 @@
         extern "C" {
 #endif
 
-#include <glib.h>
 #include <stdint.h>
-
+#include <float.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -47,42 +46,6 @@
 /* GPU specific tunable parameters */
 #include "Dirac_GPUtune.h"
 #endif /* HAVE_CUDA */
-
-
-/* speed of light */
-#ifndef CONST_C
-#define CONST_C 299792458.0
-#endif
-
-#ifndef MIN
-#define MIN(x,y) \
-  ((x)<=(y)? (x): (y))
-#endif
-
-#ifndef MAX
-#define MAX(x,y) \
-  ((x)>=(y)? (x): (y))
-#endif
-
-/* soure types */
-#define STYPE_POINT 0
-#define STYPE_GAUSSIAN 1
-#define STYPE_DISK 2
-#define STYPE_RING 3
-#define STYPE_SHAPELET 4
-
-/* max source name length, increase it if names get longer */
-#define MAX_SNAME 2048
-
-/********* constants - from levmar ******************/
-#define CLM_INIT_MU       1E-03
-#define CLM_STOP_THRESH   1E-17
-#define CLM_DIFF_DELTA    1E-06
-#define CLM_EPSILON       1E-12
-#define CLM_ONE_THIRD     0.3333333334 /* 1.0/3.0 */
-#define CLM_OPTS_SZ       5 /* max(4, 5) */
-#define CLM_INFO_SZ       10
-#define CLM_DBL_MAX       1E12    /* max double value */
 
 #include "Dirac_common.h"
 
