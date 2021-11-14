@@ -23,10 +23,30 @@
         extern "C" {
 #endif
 
-/* simulation options */
-#define SIMUL_ONLY 1 /* only predict model */
-#define SIMUL_ADD 2 /* add to input */
-#define SIMUL_SUB 3 /* subtract from input */
+/* speed of light */
+#ifndef CONST_C
+#define CONST_C 299792458.0
+#endif
+
+#ifndef MIN
+#define MIN(x,y) \
+  ((x)<=(y)? (x): (y))
+#endif
+
+#ifndef MAX
+#define MAX(x,y) \
+  ((x)>=(y)? (x): (y))
+#endif
+
+/********* constants - from levmar ******************/
+#define CLM_INIT_MU       1E-03
+#define CLM_STOP_THRESH   1E-17
+#define CLM_DIFF_DELTA    1E-06
+#define CLM_EPSILON       1E-12
+#define CLM_ONE_THIRD     0.3333333334 /* 1.0/3.0 */
+#define CLM_OPTS_SZ       5 /* max(4, 5) */
+#define CLM_INFO_SZ       10
+#define CLM_DBL_MAX       1E12    /* max double value */
 
 /* structures to store extra source info for extended sources */
 typedef struct exinfo_gaussian_ {
@@ -97,17 +117,6 @@ typedef struct elementcoff_ {
 
   double *preamble; /* Nmodesx1 array, to store preamble of mode basis */
 } elementcoeff;
-
-/* struct for a cluster GList item */
-typedef struct clust_t_{
- int id; /* cluster id */
- int nchunk; /* no of chunks the data is divided for solving */
- GList *slist; /* list of sources in this cluster (string)*/
-} clust_t;
-
-typedef struct clust_n_{
- char *name; /* source name (string)*/
-} clust_n;
 
 /* struct to store source info in hash table */
 typedef struct sinfo_t_ {
