@@ -233,7 +233,7 @@ mult_hessian(int m, double *pk, double *gk, double *s, double *y, double *rho, i
  int ci;
  double *alphai;
  int *idx; /* store sorted locations of s, y here */
- double gamma,beta;
+ double beta;
 
  if ((alphai=(double*)calloc((size_t)M,sizeof(double)))==0) {
      fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
@@ -278,9 +278,8 @@ mult_hessian(int m, double *pk, double *gk, double *s, double *y, double *rho, i
  }
  /* r=Hk(0) q : initial hessian */
  /* gamma=s(k-1)^T*y(k-1)/y(k-1)^T*y(k-1)*/
- gamma=1.0;
  if (M>0) {
-  gamma=my_ddot(m,&s[m*idx[M-1]],&y[m*idx[M-1]]);
+  double gamma=my_ddot(m,&s[m*idx[M-1]],&y[m*idx[M-1]]);
   gamma/=my_ddot(m,&y[m*idx[M-1]],&y[m*idx[M-1]]);
   /* Hk(0)=gamma I, so scale q by gamma */
   /* r= Hk(0) q */
@@ -304,7 +303,7 @@ cuda_mult_hessian(int m, double *pk, double *gk, double *s, double *y, double *r
  int ci;
  double *alphai;
  int *idx; /* store sorted locations of s, y here */
- double gamma,beta;
+ double beta;
 
  cudaError_t err;
  cublasStatus_t cbstatus;
@@ -362,8 +361,8 @@ cuda_mult_hessian(int m, double *pk, double *gk, double *s, double *y, double *r
  }
  /* r=Hk(0) q : initial hessian */
  /* gamma=s(k-1)^T*y(k-1)/y(k-1)^T*y(k-1)*/
- gamma=1.0;
  if (M>0) {
+  double gamma;
   ///gamma=my_ddot(m,&s[m*idx[M-1]],&y[m*idx[M-1]]);
   cbstatus=cublasDdot(*cbhandle,m,&s[m*idx[M-1]],1,&y[m*idx[M-1]],1,&gamma);
   checkCublasError(cbstatus,__FILE__,__LINE__);
