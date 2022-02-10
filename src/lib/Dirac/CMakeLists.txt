@@ -97,7 +97,7 @@ else()
     #    SET_TARGET_PROPERTIES(${object} PROPERTIES SOVERSION 0.0)
     #endforeach (object)
 
-    add_library(dirac ${objects} Dirac.h)
+    add_library(dirac STATIC SHARED ${objects} Dirac.h)
     SET_TARGET_PROPERTIES(dirac PROPERTIES SOVERSION 0.0)
 
 endif()
