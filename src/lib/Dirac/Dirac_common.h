@@ -543,7 +543,7 @@ typedef struct pipeline_ {
 #endif
 
 
-/****************************** predict.c ****************************/
+/****************************** baseline_utils.c ****************************/
 /* rearranges coherencies for GPU use later */
 /* barr: 2*Nbase x 1
  * coh: M*Nbase*4 x 1 complex
