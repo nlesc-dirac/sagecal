@@ -12,6 +12,7 @@ set (objects
     rtr_solve_robust_admm
     updatenu
     fista
+    baseline_utils
 )
 
 if(HAVE_CUDA)
