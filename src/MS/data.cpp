@@ -220,14 +220,14 @@ Data::readAuxData(const char *fname, Data::IOData *data, Data::LBeam *binfo) {
     data->Nms=1;
    /* allocate memory */
    try {
-   data->u=new double[data->Nbase*data->tilesz];
-   data->v=new double[data->Nbase*data->tilesz];
-   data->w=new double[data->Nbase*data->tilesz];
-   data->x=new double[8*data->Nbase*data->tilesz];
-   data->xo=new double[8*data->Nbase*data->tilesz*data->Nchan];
-   data->freqs=new double[data->Nchan];
-   data->flag=new double[data->Nbase*data->tilesz];
-   data->NchanMS=new int[data->Nms];
+     data->u=new double[data->Nbase*data->tilesz];
+     data->v=new double[data->Nbase*data->tilesz];
+     data->w=new double[data->Nbase*data->tilesz];
+     data->x=new double[8*data->Nbase*data->tilesz];
+     data->xo=new double[8*data->Nbase*data->tilesz*data->Nchan];
+     data->freqs=new double[data->Nchan];
+     data->flag=new double[data->Nbase*data->tilesz];
+     data->NchanMS=new int[data->Nms];
    } catch (const std::bad_alloc& e) {
      cout<<"Allocating memory for data failed. Quitting."<< e.what() << endl;
      exit(1);
@@ -259,220 +259,173 @@ Data::readAuxData(const char *fname, Data::IOData *data, Data::LBeam *binfo) {
    binfo->zz=new double*[data->N];
 
    Table antfield;
+   bool isDipole=false;
    if(_t.keywordSet().fieldNumber("LOFAR_ANTENNA_FIELD") != -1) {
     antfield = Table(_t.keywordSet().asTable("LOFAR_ANTENNA_FIELD"));
    } else {
     char buff[2048]={0};
     sprintf(buff, "%s/LOFAR_ANTENNA_FIELD", fname);
-    antfield=Table(buff);
-   }
-   ROArrayColumn<double> position(antfield, "POSITION"); 
-   ROArrayColumn<double> offset(antfield, "ELEMENT_OFFSET"); 
-   ROArrayColumn<double> coord(antfield, "COORDINATE_AXES"); 
-   ROArrayColumn<bool> eflag(antfield, "ELEMENT_FLAG");
-   ROArrayColumn<double> tileoffset(antfield, "TILE_ELEMENT_OFFSET");
-   /* check if TILE_ELEMENT_OFFSET has any rows, of no rows present, 
-      we know this is LBA */
-   bool isHBA=tileoffset.hasContent(0);
-
-   /* read positions, also setup memory for element coords */
-   for (int ci=0; ci<data->N; ci++) {
-     Array<double> _pos=position(ci);
-     double *tx=_pos.data();
-     binfo->sz[ci]=tx[2];
-
-     MPosition stnpos(MVPosition(tx[0],tx[1],tx[2]),MPosition::ITRF);
-     Array<double> _radpos=stnpos.getAngle("rad").getValue();
-     tx=_radpos.data();
-
-     binfo->sx[ci]=tx[0];
-     binfo->sy[ci]=tx[1];
-//cout<<"position "<<binfo->sx[ci]<<" "<<binfo->sy[ci]<<" "<<binfo->sz[ci]<<endl;
-     binfo->Nelem[ci]=offset.shape(ci)[1];
-   }
-
-
-   if (isHBA) {
-    double cones[16];
-    for (int ci=0; ci<16; ci++) {
-      cones[ci]=1.0;
+    try {
+     antfield=Table(buff);
+    } catch (std::exception &e) {
+     /* No LOFAR_ANTENNA_FIELD, so could only be a dipole */
+     isDipole=true;
     }
-    double tempT[3*16];
-    /* now read in element offsets, also transform them to local coordinates */
-    for (int ci=0; ci<data->N; ci++) {
-      Array<double> _off=offset(ci);
-      double *off=_off.data();
-      Array<double> _coord=coord(ci);
-      double *coordmat=_coord.data();
-      Array<bool> _eflag=eflag(ci);
-      bool *ef=_eflag.data();
-      Array<double> _toff=tileoffset(ci);
-      double *toff=_toff.data();
+   }
 
-/*
-cout<<"A=["<<endl;
-     for (int cj=0; cj<binfo->Nelem[ci]; cj++) {
-cout<<off[3*cj]<<","<<off[3*cj+1]<<","<<off[3*cj+2]<<endl;
-     }
-cout<<"];"<<endl;
-cout<<"T0=["<<endl;
-     for (int cj=0; cj<16; cj++) {
-cout<<toff[3*cj]<<","<<toff[3*cj+1]<<","<<toff[3*cj+2]<<endl;
-     }
-cout<<"];"<<endl;
-cout<<"BT=["<<endl;
-     for (int cj=0; cj<3; cj++) {
-cout<<coordmat[3*cj]<<","<<coordmat[3*cj+1]<<","<<coordmat[3*cj+2]<<endl;
-     }
-cout<<"];"<<endl;
-*/
+   if (!isDipole) {
+     binfo->isDipole=0;
+     ROArrayColumn<double> position(antfield, "POSITION");
+     ROArrayColumn<double> offset(antfield, "ELEMENT_OFFSET");
+     ROArrayColumn<double> coord(antfield, "COORDINATE_AXES");
+     ROArrayColumn<bool> eflag(antfield, "ELEMENT_FLAG");
+     ROArrayColumn<double> tileoffset(antfield, "TILE_ELEMENT_OFFSET");
+     /* check if TILE_ELEMENT_OFFSET has any rows, of no rows present,
+        we know this is LBA */
+     bool isHBA=tileoffset.hasContent(0);
 
-      double *tempC=new double[3*binfo->Nelem[ci]];
-      my_dgemm('T', 'N', binfo->Nelem[ci], 3, 3, 1.0, off, 3, coordmat, 3, 0.0, tempC, binfo->Nelem[ci]); 
-      my_dgemm('T', 'N', 16, 3, 3, 1.0, toff, 3, coordmat, 3, 0.0, tempT, 16); 
+     /* read positions, also setup memory for element coords */
+     for (int ci=0; ci<data->N; ci++) {
+       Array<double> _pos=position(ci);
+       double *tx=_pos.data();
+       binfo->sz[ci]=tx[2];
+
+       MPosition stnpos(MVPosition(tx[0],tx[1],tx[2]),MPosition::ITRF);
+       Array<double> _radpos=stnpos.getAngle("rad").getValue();
+       tx=_radpos.data();
+
+       binfo->sx[ci]=tx[0];
+       binfo->sy[ci]=tx[1];
+       binfo->Nelem[ci]=offset.shape(ci)[1];
+     }
+
+
+     if (isHBA) {
+      double cones[16];
+      for (int ci=0; ci<16; ci++) {
+        cones[ci]=1.0;
+      }
+      double tempT[3*16];
+      /* now read in element offsets, also transform them to local coordinates */
+      for (int ci=0; ci<data->N; ci++) {
+        Array<double> _off=offset(ci);
+        double *off=_off.data();
+        Array<double> _coord=coord(ci);
+        double *coordmat=_coord.data();
+        Array<bool> _eflag=eflag(ci);
+        bool *ef=_eflag.data();
+        Array<double> _toff=tileoffset(ci);
+        double *toff=_toff.data();
+
+        double *tempC=new double[3*binfo->Nelem[ci]];
+        my_dgemm('T', 'N', binfo->Nelem[ci], 3, 3, 1.0, off, 3, coordmat, 3, 0.0, tempC, binfo->Nelem[ci]);
+        my_dgemm('T', 'N', 16, 3, 3, 1.0, toff, 3, coordmat, 3, 0.0, tempT, 16);
   
-/*
-cout<<"C=["<<endl;
-     for (int cj=0; cj<binfo->Nelem[ci]; cj++) {
-cout<<tempC[cj]<<","<<tempC[cj+binfo->Nelem[ci]]<<","<<tempC[cj+2*binfo->Nelem[ci]]<<endl;
-     }
-cout<<"];"<<endl;
-cout<<"T1=["<<endl;
-     for (int cj=0; cj<16; cj++) {
-cout<<tempT[cj]<<","<<tempT[cj+16]<<","<<tempT[cj+2*16]<<endl;
-     }
-cout<<"];"<<endl;
-*/
+        /* now inspect the element flag table to see if any of the dipoles are flagged */
+        int fcount=0;
+        for (int cj=0; cj<binfo->Nelem[ci]; cj++) {
+         if (ef[2*cj]==1 || ef[2*cj+1]==1) {
+          fcount++;
+         }
+        }
 
-      /* now inspect the element flag table to see if any of the dipoles are flagged */
-      int fcount=0;
-      for (int cj=0; cj<binfo->Nelem[ci]; cj++) {
-       if (ef[2*cj]==1 || ef[2*cj+1]==1) {
-        fcount++;
-       } 
+        binfo->xx[ci]=new double[16*(binfo->Nelem[ci]-fcount)];
+        binfo->yy[ci]=new double[16*(binfo->Nelem[ci]-fcount)];
+        binfo->zz[ci]=new double[16*(binfo->Nelem[ci]-fcount)];
+        /* copy unflagged coords, 16 times for each dipole */
+        fcount=0;
+        for (int cj=0; cj<binfo->Nelem[ci]; cj++) {
+         if (!(ef[2*cj]==1 || ef[2*cj+1]==1)) {
+          my_dcopy(16,&tempT[0],1,&(binfo->xx[ci][fcount]),1);
+          my_daxpy(16,cones,tempC[cj],&(binfo->xx[ci][fcount]));
+          my_dcopy(16,&tempT[16],1,&(binfo->yy[ci][fcount]),1);
+          my_daxpy(16,cones,tempC[cj+binfo->Nelem[ci]],&(binfo->yy[ci][fcount]));
+          my_dcopy(16,&tempT[24],1,&(binfo->zz[ci][fcount]),1);
+          my_daxpy(16,cones,tempC[cj+2*binfo->Nelem[ci]],&(binfo->zz[ci][fcount]));
+          fcount+=16;
+         }
+        }
+        binfo->Nelem[ci]=fcount;
+
+        delete [] tempC;
       }
+     } else { /* LBA */
+      /* now read in element offsets, also transform them to local coordinates */
+      for (int ci=0; ci<data->N; ci++) {
+        Array<double> _off=offset(ci);
+        double *off=_off.data();
+        Array<double> _coord=coord(ci);
+        double *coordmat=_coord.data();
+        Array<bool> _eflag=eflag(ci);
+        bool *ef=_eflag.data();
 
-//cout<<"%%Flagged "<<fcount<<endl;
+        double *tempC=new double[3*binfo->Nelem[ci]];
+        my_dgemm('T', 'N', binfo->Nelem[ci], 3, 3, 1.0, off, 3, coordmat, 3, 0.0, tempC, binfo->Nelem[ci]);
 
-      binfo->xx[ci]=new double[16*(binfo->Nelem[ci]-fcount)];
-      binfo->yy[ci]=new double[16*(binfo->Nelem[ci]-fcount)];
-      binfo->zz[ci]=new double[16*(binfo->Nelem[ci]-fcount)];
-      /* copy unflagged coords, 16 times for each dipole */
-      fcount=0;
-      for (int cj=0; cj<binfo->Nelem[ci]; cj++) {
-       if (!(ef[2*cj]==1 || ef[2*cj+1]==1)) {
-        //binfo->xx[ci][fcount]=tempC[cj];
-        //binfo->yy[ci][fcount]=tempC[cj+binfo->Nelem[ci]];
-        //binfo->zz[ci][fcount]=tempC[cj+2*binfo->Nelem[ci]];
-        my_dcopy(16,&tempT[0],1,&(binfo->xx[ci][fcount]),1);
-        my_daxpy(16,cones,tempC[cj],&(binfo->xx[ci][fcount]));
-        my_dcopy(16,&tempT[16],1,&(binfo->yy[ci][fcount]),1);
-        my_daxpy(16,cones,tempC[cj+binfo->Nelem[ci]],&(binfo->yy[ci][fcount]));
-        my_dcopy(16,&tempT[24],1,&(binfo->zz[ci][fcount]),1);
-        my_daxpy(16,cones,tempC[cj+2*binfo->Nelem[ci]],&(binfo->zz[ci][fcount]));
-        fcount+=16;
-       }
+        /* now inspect the element flag table to see if any of the dipoles are flagged */
+        int fcount=0;
+        for (int cj=0; cj<binfo->Nelem[ci]; cj++) {
+         if (ef[2*cj]==1 || ef[2*cj+1]==1) {
+          fcount++;
+         } 
+        }
+
+        binfo->xx[ci]=new double[(binfo->Nelem[ci]-fcount)];
+        binfo->yy[ci]=new double[(binfo->Nelem[ci]-fcount)];
+        binfo->zz[ci]=new double[(binfo->Nelem[ci]-fcount)];
+        /* copy unflagged coords for each dipole */
+        fcount=0;
+        for (int cj=0; cj<binfo->Nelem[ci]; cj++) {
+         if (!(ef[2*cj]==1 || ef[2*cj+1]==1)) {
+          binfo->xx[ci][fcount]=tempC[cj];
+          binfo->yy[ci][fcount]=tempC[cj+binfo->Nelem[ci]];
+          binfo->zz[ci][fcount]=tempC[cj+2*binfo->Nelem[ci]];
+          fcount++;
+         }
+        }
+        binfo->Nelem[ci]=fcount;
+        delete [] tempC;
       }
-      binfo->Nelem[ci]=fcount;
-/*
-cout<<"%%Copied "<<fcount<<endl;
-cout<<"D=["<<endl;
-     for (int cj=0; cj<binfo->Nelem[ci]; cj++) {
-cout<<binfo->xx[ci][cj]<<","<<binfo->yy[ci][cj]<<","<<binfo->zz[ci][cj]<<endl;
      }
-cout<<"];"<<endl;
-*/
-      delete [] tempC;
-    }
-   } else { /* LBA */
-    /* now read in element offsets, also transform them to local coordinates */
-    for (int ci=0; ci<data->N; ci++) {
-      Array<double> _off=offset(ci);
-      double *off=_off.data();
-      Array<double> _coord=coord(ci);
-      double *coordmat=_coord.data();
-      Array<bool> _eflag=eflag(ci);
-      bool *ef=_eflag.data();
 
-/*
-cout<<"A=["<<endl;
-     for (int cj=0; cj<binfo->Nelem[ci]; cj++) {
-cout<<off[3*cj]<<","<<off[3*cj+1]<<","<<off[3*cj+2]<<endl;
+     /* read beam pointing direction (use Tile beam info: LBA also has it) */
+     ROArrayColumn<double> point_dir(_field, "LOFAR_TILE_BEAM_DIR");
+     Array<double> pdir = point_dir(0);
+     double *pc = pdir.data();
+     binfo->p_ra0=pc[0];
+     binfo->p_dec0=pc[1];
+   } else {
+     cout<<"Warning: Not possible to calculate array beam, only element (dipole) beam."<<endl;
+     binfo->isDipole=1;
+     /* use ANTENNA table to get positions */
+     ROArrayColumn<double> position(_ant, "POSITION");
+
+     /* only a dipole in this MS */
+     binfo->p_ra0=data->ra0;
+     binfo->p_dec0=data->dec0;
+     for (int ci=0; ci<data->N; ci++) {
+       Array<double> _pos=position(ci);
+       double *tx=_pos.data();
+       binfo->sz[ci]=tx[2];
+
+       MPosition stnpos(MVPosition(tx[0],tx[1],tx[2]),MPosition::ITRF);
+       Array<double> _radpos=stnpos.getAngle("rad").getValue();
+       tx=_radpos.data();
+
+       binfo->sx[ci]=tx[0];
+       binfo->sy[ci]=tx[1];
+
+       /* allocate storage for only 1 element */
+       binfo->Nelem[ci]=1;
+       binfo->xx[ci]=new double[binfo->Nelem[ci]];
+       binfo->yy[ci]=new double[binfo->Nelem[ci]];
+       binfo->zz[ci]=new double[binfo->Nelem[ci]];
+       binfo->xx[ci][0]=0.0;
+       binfo->yy[ci][0]=0.0;
+       binfo->zz[ci][0]=0.0;
      }
-cout<<"];"<<endl;
-cout<<"BT=["<<endl;
-     for (int cj=0; cj<3; cj++) {
-cout<<coordmat[3*cj]<<","<<coordmat[3*cj+1]<<","<<coordmat[3*cj+2]<<endl;
-     }
-cout<<"];"<<endl;
-*/
-
-      double *tempC=new double[3*binfo->Nelem[ci]];
-      my_dgemm('T', 'N', binfo->Nelem[ci], 3, 3, 1.0, off, 3, coordmat, 3, 0.0, tempC, binfo->Nelem[ci]); 
-  
-/*
-cout<<"C=["<<endl;
-     for (int cj=0; cj<binfo->Nelem[ci]; cj++) {
-cout<<tempC[cj]<<","<<tempC[cj+binfo->Nelem[ci]]<<","<<tempC[cj+2*binfo->Nelem[ci]]<<endl;
-     }
-cout<<"];"<<endl;
-*/
-
-      /* now inspect the element flag table to see if any of the dipoles are flagged */
-      int fcount=0;
-      for (int cj=0; cj<binfo->Nelem[ci]; cj++) {
-       if (ef[2*cj]==1 || ef[2*cj+1]==1) {
-        fcount++;
-       } 
-      }
-
-//cout<<"%%Flagged "<<fcount<<endl;
-
-      binfo->xx[ci]=new double[(binfo->Nelem[ci]-fcount)];
-      binfo->yy[ci]=new double[(binfo->Nelem[ci]-fcount)];
-      binfo->zz[ci]=new double[(binfo->Nelem[ci]-fcount)];
-      /* copy unflagged coords for each dipole */
-      fcount=0;
-      for (int cj=0; cj<binfo->Nelem[ci]; cj++) {
-       if (!(ef[2*cj]==1 || ef[2*cj+1]==1)) {
-        binfo->xx[ci][fcount]=tempC[cj];
-        binfo->yy[ci][fcount]=tempC[cj+binfo->Nelem[ci]];
-        binfo->zz[ci][fcount]=tempC[cj+2*binfo->Nelem[ci]];
-        fcount++;
-       }
-      }
-      binfo->Nelem[ci]=fcount;
-/*
-cout<<"%%Copied "<<fcount<<endl;
-cout<<"D=["<<endl;
-     for (int cj=0; cj<binfo->Nelem[ci]; cj++) {
-cout<<binfo->xx[ci][cj]<<","<<binfo->yy[ci][cj]<<","<<binfo->zz[ci][cj]<<endl;
-     }
-cout<<"];"<<endl;
-*/
-      delete [] tempC;
-    }
    }
 
-   /* read beam pointing direction (use Tile beam info: LBA also has it) */
-   ROArrayColumn<double> point_dir(_field, "LOFAR_TILE_BEAM_DIR");
-   Array<double> pdir = point_dir(0);
-   double *pc = pdir.data();
-   binfo->p_ra0=pc[0];
-   binfo->p_dec0=pc[1];
-
-   /* convert positions from xyz to longitude,latitude,height */
-/*   double *longitude=new double[data->N];
-   double *latitude=new double[data->N];
-   double *height=new double[data->N];
-   xyz2llh(binfo->sx,binfo->sy,binfo->sz,longitude,latitude,height,data->N);
-   delete [] binfo->sx;
-   delete [] binfo->sy;
-   delete [] binfo->sz;
-   binfo->sx=longitude;
-   binfo->sy=latitude;
-   binfo->sz=height;
-*/
 }
 
 

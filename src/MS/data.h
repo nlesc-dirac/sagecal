@@ -86,6 +86,9 @@ namespace Data
       /* pointing center of beams (only one) (could be different from phase center) */
       double p_ra0;
       double p_dec0;
+
+      /* flag to indicate this beam is only a dipole */
+      int isDipole;
     };
 
 
