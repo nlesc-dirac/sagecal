@@ -16,8 +16,8 @@ target_link_libraries(restore
  ${WCSLIB_LIBRARIES}
  ${GLIB_PKG_LIBRARIES}
  ${LIBGFORTRAN_LIBRARIES}
- -lfftw3_threads
- -lfftw3
+ ${FFTW_DOUBLE_LIB}
+ ${FFTW_DOUBLE_THREADS_LIB}
  -lgfortran
  -lpthread
  -lm

@@ -86,15 +86,15 @@ if(NOT LIB_ONLY)
  include_directories(${CASACORE_INCLUDE_DIR})
 endif()
 
-#lapack
-find_package(LAPACK REQUIRED)
-include_directories(${LAPACK_INCLUDE_DIR})
-
-#OpenBlas
-find_package(OpenBLAS REQUIRED)
-include_directories(${OpenBLAS_INCLUDE_DIR})
-
 if(NOT LIB_ONLY)
+ #lapack
+ find_package(LAPACK REQUIRED)
+ include_directories(${LAPACK_INCLUDE_DIR})
+
+ #OpenBlas
+ find_package(OpenBLAS REQUIRED)
+ include_directories(${OpenBLAS_INCLUDE_DIR})
+
  #wcslib
  find_package(WcsLib REQUIRED)
  include_directories(${WCSLIB_INCLUDE_DIR})
