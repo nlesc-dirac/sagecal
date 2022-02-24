@@ -1,4 +1,4 @@
-do 10 feb 2022 13:18:10 CET
+do 24 feb 2022  1:25:28 CET
 # SAGECal Installation
 
 ## Cmake Build
@@ -10,15 +10,17 @@ do 10 feb 2022 13:18:10 CET
 Run cmake (with GPU support) for example like
 ```
  mkdir build && cd build
- cmake .. -DHAVE_CUDA=ON -DCMAKE_CXX_FLAGS='-DMAX_GPU_ID=0' -DCMAKE_CXX_COMPILER=g++-8  -DCMAKE_C_FLAGS='-DMAX_GPU_ID=0' -DCMAKE_C_COMPILER=gcc-8 -DCUDA_NVCC_FLAGS='-gencode arch=compute_75,code=sm_75'
+ cmake .. -DHAVE_CUDA=ON -DCMAKE_CXX_FLAGS='-DMAX_GPU_ID=0' -DCMAKE_CXX_COMPILER=g++-8  -DCMAKE_C_FLAGS='-DMAX_GPU_ID=0' -DCMAKE_C_COMPILER=gcc-8 -DCUDA_NVCC_FLAGS='-gencode arch=compute_75,code=sm_75' -DBLA_VENDOR=OpenBLAS
 ```
 where *MAX_GPU_ID=0* is when there is only one GPU (ordinal 0). If you have more GPUs, increase this number to 1,2, and so on. This will produce *sagecal_gpu* and *sagecal-mpi_gpu* binary files (after running *make* of course).
 
 CPU only version can be build as
 ```
- cmake .. -DCMAKE_CXX_COMPILER=g++-8 -DCMAKE_C_COMPILER=gcc-8
+ cmake .. -DCMAKE_CXX_COMPILER=g++-8 -DCMAKE_C_COMPILER=gcc-8 -DBLA_VENDOR=OpenBLAS
 ```
 which will produce *sagecal* and *sagecal-mpi*.
+
+The option *-DBLA_VENDOR=OpenBLAS* is to select OpenBLAS explicitly, but other BLAS  flavours can also be given. If not specified, whatever BLAS installed will be used.
 
 If you get **-lgfortran is not found** error, run the following in the build directory
 ```
@@ -27,7 +29,7 @@ If you get **-lgfortran is not found** error, run the following in the build dir
 ```
 to make a symbolic link to libgfortran.so.5 or whatever version that is installed.
 
-To only build *libdirac* library, use *-DLIB_ONLY=1* option (also *-fPIC* compiler flag). This library can be used with pkg-config using *lib/pkgconfig/libdirac.pc*.
+To only build *libdirac* (shared) library, use *-DLIB_ONLY=1* option (also *-DBLA_VENDOR* to select the BLAS flavour). This library can be used with pkg-config using *lib/pkgconfig/libdirac.pc*.
 
 ### Requirements for older installations
 #### das5
