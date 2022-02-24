@@ -191,8 +191,22 @@ my_idamin(int N, double *x, int incx) {
 #ifdef USE_MIC
 __attribute__ ((target(MIC)))
 #endif
+#ifdef HAVE_OPENBLAS
     extern int idamin_(int *N, double *x, int *incx);
     return idamin_(&N,x,&incx);
+#else
+    /* workaround for some BLAS versions where this is missing */
+    /* find min value by hand */
+    double minx=fabs(x[0]); 
+    int idx=0;
+    for (int ci=incx; ci<N; ci+=incx) {
+       if (fabs(x[ci])<minx) {
+         minx=fabs(x[ci]);
+         idx=ci;
+       }
+    }
+    return idx;
+#endif
 }
 
 /* BLAS DGEMM C = alpha*op(A)*op(B)+ beta*C */

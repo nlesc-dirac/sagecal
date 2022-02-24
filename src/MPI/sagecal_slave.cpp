@@ -53,7 +53,9 @@ sagecal_slave(int argc, char **argv) {
       exit(1);
     }
 
+#ifdef HAVE_OPENBLAS
     openblas_set_num_threads(1);//Data::Nt;
+#endif
 
     /* determine my MPI rank */
     int myrank;

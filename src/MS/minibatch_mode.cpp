@@ -113,7 +113,9 @@ run_minibatch_calibration(void) {
       count+=nchan[ii];
     }
 
+#ifdef HAVE_OPENBLAS
     openblas_set_num_threads(1);//Data::Nt;
+#endif
     /**********************************************************/
      int M,Mt,ci,cj,ck;
    /* parameters */
