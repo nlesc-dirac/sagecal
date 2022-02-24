@@ -91,6 +91,15 @@ endif()
 find_package(BLAS REQUIRED)
 include_directories(${BLAS_INCLUDE_DIR})
 
+if ("${BLA_VENDOR}" STREQUAL "OpenBLAS")
+  message(STATUS "Using ${BLA_VENDOR}")
+  # add preprocessor def
+  add_definitions(-DHAVE_OPENBLAS)
+else()
+  message(STATUS "Using generic BLAS")
+endif()
+
+
 # LAPACK (will also find the generic BLAS)
 find_package(LAPACK REQUIRED)
 include_directories(${LAPACK_INCLUDE_DIR})

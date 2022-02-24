@@ -71,7 +71,9 @@ run_fullbatch_calibration(void) {
      set_elementcoeffs((iodata.freq0<100e6?ELEM_LBA:ELEM_HBA), iodata.freq0, &ecoeff);
     }
 
+#ifdef HAVE_OPENBLAS
     openblas_set_num_threads(1);//Data::Nt;
+#endif
     /**********************************************************/
      int M,Mt,ci,cj,ck;
    /* parameters */

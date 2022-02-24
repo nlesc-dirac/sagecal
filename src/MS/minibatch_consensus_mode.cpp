@@ -119,7 +119,9 @@ run_minibatch_consensus_calibration(void) {
       count+=nchan[ii];
     }
 
+#ifdef HAVE_OPENBLAS
     openblas_set_num_threads(1);
+#endif
     /**********************************************************/
      int M,Mt,ci,cj,ck;
    /* parameters */

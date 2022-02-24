@@ -92,13 +92,14 @@ else()
     message (STATUS "lib/Dirac objects --> ${objects}")
 
     include_directories(${CMAKE_CURRENT_SOURCE_DIR})
-    #    foreach (object ${objects})
+    #foreach (object ${objects})
     #    file(GLOB SRC_FILE ${object}.*)
     #    add_library(${object} ${SRC_FILE})
     #    SET_TARGET_PROPERTIES(${object} PROPERTIES SOVERSION 0.0)
     #endforeach (object)
 
-    add_library(dirac STATIC SHARED ${objects} Dirac.h)
+    add_library(dirac SHARED ${objects} Dirac.h)
+    #add_library(dirac-static STATIC ${objects} Dirac.h)
     SET_TARGET_PROPERTIES(dirac PROPERTIES SOVERSION 0.0)
     # for newer cmake
     #target_link_options(dirac PRIVATE ${BLAS_LINKER_FLAGS})

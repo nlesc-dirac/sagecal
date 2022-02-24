@@ -47,7 +47,9 @@ sagecal_master(int argc, char **argv) {
       exit(1);
     }
 
+#ifdef HAVE_OPENBLAS
     openblas_set_num_threads(1);//Always use 1 thread for openblas to avoid conflicts;
+#endif
 
     MPIData iodata;
     MPI_Status status;
