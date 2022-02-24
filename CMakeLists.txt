@@ -1,11 +1,11 @@
-cmake_minimum_required(VERSION 3.5.1)
+cmake_minimum_required(VERSION 3.10)
 
 #--------------------------------------- project
 project (SAGECal)
 set(PROJECT_VERSION_MAJOR 0)
 set(PROJECT_VERSION_MINOR 7)
-set(PROJECT_VERSION_PATCH 0)
-set(PROJECT_VERSION_REVISION 7)
+set(PROJECT_VERSION_PATCH 7)
+set(PROJECT_VERSION_REVISION 0)
 set(PROJECT_VERSION
   "${PROJECT_VERSION_MAJOR}.${PROJECT_VERSION_MINOR}.${PROJECT_VERSION_PATCH}")
 
@@ -86,15 +86,16 @@ if(NOT LIB_ONLY)
  include_directories(${CASACORE_INCLUDE_DIR})
 endif()
 
+
+# BLAS: use -DBLA_VENDOR=OpenBLAS for OpenBLAS
+find_package(BLAS REQUIRED)
+include_directories(${BLAS_INCLUDE_DIR})
+
+# LAPACK (will also find the generic BLAS)
+find_package(LAPACK REQUIRED)
+include_directories(${LAPACK_INCLUDE_DIR})
+
 if(NOT LIB_ONLY)
- #lapack
- find_package(LAPACK REQUIRED)
- include_directories(${LAPACK_INCLUDE_DIR})
-
- #OpenBlas
- find_package(OpenBLAS REQUIRED)
- include_directories(${OpenBLAS_INCLUDE_DIR})
-
  #wcslib
  find_package(WcsLib REQUIRED)
  include_directories(${WCSLIB_INCLUDE_DIR})
@@ -112,6 +113,10 @@ if(NOT LIB_ONLY)
  endif()
 endif()
 
+#if (LIB_ONLY)
+#  string(APPEND CMAKE_SHARED_LINKER_FLAGS " -Wl,--no-undefined")
+#  string(APPEND CMAKE_SHARED_LINKER_FLAGS " -Wl,--as-needed")
+#endif()
 
 #--------------------------------------- check environment variables
 

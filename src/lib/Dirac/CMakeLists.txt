@@ -100,6 +100,12 @@ else()
 
     add_library(dirac STATIC SHARED ${objects} Dirac.h)
     SET_TARGET_PROPERTIES(dirac PROPERTIES SOVERSION 0.0)
+    # for newer cmake
+    #target_link_options(dirac PRIVATE ${BLAS_LINKER_FLAGS})
+    #target_link_options(dirac PRIVATE "LINKER:-as-needed")
+    target_link_libraries(dirac PUBLIC m ${CMAKE_THREAD_LIBS_INIT}
+       ${BLAS_LIBRARIES}
+       ${LAPACK_LIBRARIES})
 
 endif()
 

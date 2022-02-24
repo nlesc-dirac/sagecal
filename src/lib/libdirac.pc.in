@@ -14,4 +14,4 @@ Requires: @pc_req_public@
 Requires.private: @pc_req_private@
 Cflags: -I"${includedir}"
 Libs: -L"${libdir}" -ldirac
-Libs.private: -L"${libdir}" -ldirac
+Libs.private: ${extralib}
