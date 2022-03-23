@@ -47,8 +47,8 @@ jobs:
 
       - run: 
           name: Building CPU libdirac 
-          command: 'mkdir build-cpu &&
-            cd build-cpu &&
+          command: 'mkdir build-cpu-libdirac &&
+            cd build-cpu-libdirac &&
             cmake -DCMAKE_INSTALL_PREFIX=/opt/sagecal -DLIB_ONLY=1 .. &&
             make -j4 &&
             sudo make install'
