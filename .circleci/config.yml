@@ -17,12 +17,8 @@ jobs:
         #  command: 'apt-get update && apt-get install -y sudo && rm -rf /var/lib/apt/lists/*'
       - run: 
           name: Updating
-          command: 'apt-get update && 
-            apt-get install software-properties-common -y && 
-            apt-add-repository multiverse && 
-            apt-add-repository restricted &&
-            apt-get update -y'
-      - run: apt-get install -y \
+          command: 'sudo apt-get update -y' 
+      - run: sudo apt-get install -y \
             git cmake g++ pkg-config \
             libcfitsio-bin libcfitsio-dev \
             liblapack-dev \
