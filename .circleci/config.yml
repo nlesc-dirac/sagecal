@@ -12,7 +12,7 @@ jobs:
       - image: cimg/base:edge
     steps:
       - checkout
-      - run: sudo apt-get update && \
+      - run: apt-get install -y sudo && sudo apt-get update && \
             sudo apt-get install software-properties-common -y && \
             sudo apt-add-repository multiverse && \
             sudo apt-add-repository restricted && \
