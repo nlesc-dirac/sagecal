@@ -1,13 +1,29 @@
-# Use the latest 2.1 version of CircleCI pipeline process engine. See: https://circleci.com/docs/2.0/configuration-reference
 version: 2.1
-# Use a package of configuration called an orb.
-orbs:
-  # Declare a dependency on the welcome-orb
-  welcome: circleci/welcome-orb@0.4.1
-# Orchestrate or schedule a set of jobs
+
 workflows:
-  # Name the workflow "welcome"
-  welcome:
-    # Run the welcome/run job in its own container
+  # test building
+  test-deploy:
     jobs:
-      - welcome/run
+      - build-cpu
+
+jobs:
+  build-cpu:
+    docker:
+      - image: cimg/base:edge
+    steps:
+      - checkout
+      - run: sudo apt-get update && \
+            sudo apt-get install software-properties-common -y && \
+            sudo apt-add-repository multiverse && \
+            sudo apt-add-repository restricted && \
+            sudo apt-get update -y
+      - run: sudo apt-get install -y \
+            git cmake g++ pkg-config \
+            libcfitsio-bin libcfitsio-dev \
+            liblapack-dev \
+            wcslib-dev wcslib-tools \
+            libglib2.0-dev \
+            libcasa-casa4 casacore-dev casacore-data casacore-tools \
+            mpich \
+            fftw3-dev libfftw3-mpi3 libfftw3-bin
+
