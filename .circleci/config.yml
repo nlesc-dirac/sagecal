@@ -11,7 +11,6 @@ jobs:
     docker:
       - image: cimg/base:2022.03
     steps:
-      - checkout
       - run:
           name: Installing SUDO
           command: 'sudo apt-get update -y && sudo apt-get install -y sudo && sudo rm -rf /var/lib/apt/lists/*'
@@ -36,3 +35,13 @@ jobs:
             mpich
             fftw3-dev libfftw3-mpi3 libfftw3-bin'
 
+      - checkout
+
+      - run: 
+          name: Building
+          command: 'cd sagecal &&
+            mkdir build-cpu &&
+            cd build-cpu &&
+            cmake -DCMAKE_INSTALL_PREFIX=/opt/sagecal .. &&
+            make -j4 &&
+            make install'
