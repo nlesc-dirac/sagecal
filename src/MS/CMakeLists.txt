@@ -29,6 +29,7 @@ target_link_libraries(${target} dirac)
 if(HAVE_CUDA)
 
     cuda_add_executable(sagecal_gpu ${SRCFILES})
+    add_dependencies(sagecal_gpu radio dirac)
 
     target_link_libraries(sagecal_gpu
         -lradio
@@ -57,6 +58,7 @@ if(HAVE_CUDA)
 else()
 
     add_executable(sagecal ${SRCFILES})
+    add_dependencies(sagecal radio dirac)
 
     target_link_libraries(sagecal
         -lradio

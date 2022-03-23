@@ -31,6 +31,7 @@ string(STRIP "${SRCFILES}" SRCFILES)
 
 if(HAVE_CUDA)
   cuda_add_executable(sagecal-mpi_gpu ${SRCFILES})
+  add_dependencies(sagecal-mpi_gpu radio dirac)
   target_link_libraries(sagecal-mpi_gpu
     -lradio
     -ldirac
@@ -59,7 +60,7 @@ if(HAVE_CUDA)
 else()
 
     add_executable(sagecal-mpi ${SRCFILES})
-
+    add_dependencies(sagecal-mpi radio dirac)
     target_link_libraries(sagecal-mpi
     -lradio
     -ldirac
