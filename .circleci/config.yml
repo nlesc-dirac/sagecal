@@ -81,7 +81,8 @@ jobs:
             libglib2.0-dev 
             libcasa-casa4 casacore-dev casacore-data casacore-tools
             mpich
-            fftw3-dev libfftw3-mpi3 libfftw3-bin'
+            fftw3-dev libfftw3-mpi3 libfftw3-bin
+            nvidia-cuda-dev nvidia-cuda-toolkit'
 
       - checkout
 
