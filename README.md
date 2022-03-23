@@ -17,7 +17,7 @@
 - Stochastic calibration for handling data at highest resolution (with federated averaging and consensus optimization)
 - Spectral and spatial regularization of calibration solutions
 
-Please read INSTALL.md for installation instructions, but 'cmake' should work in most cases. We give a brief guide to use SAGECal here but there is extensive documentation here.
+Please read INSTALL.md for installation instructions, but 'cmake' should work in most cases. We give a brief guide to use SAGECal here but there is extensive documentation in the links at the end.
 
 ## Contributing
 Read the [contributing guide](https://github.com/nlesc-dirac/sagecal/blob/master/CONTRIBUTING.md)

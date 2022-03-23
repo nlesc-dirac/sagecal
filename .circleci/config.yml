@@ -5,6 +5,7 @@ workflows:
   test-deploy:
     jobs:
       - build-cpu
+      - build-gpu
 
 jobs:
   build-cpu:
@@ -50,5 +51,44 @@ jobs:
           command: 'mkdir build-cpu-libdirac &&
             cd build-cpu-libdirac &&
             cmake -DCMAKE_INSTALL_PREFIX=/opt/sagecal -DLIB_ONLY=1 .. &&
+            make -j4 &&
+            sudo make install'
+
+  build-gpu:
+    machine:
+      resource_class: gpu.nvidia.small
+      image: ubuntu-2004-cuda-11.4:202110-01
+    steps:
+      - run:
+          name: Installing sudo
+          command: 'sudo apt-get update -y && sudo apt-get install -y sudo && sudo rm -rf /var/lib/apt/lists/*'
+
+      - run: 
+          name: Updating
+          command: 'sudo apt-get update -y && 
+            sudo apt-get install software-properties-common -y && 
+            sudo apt-add-repository universe && 
+            sudo apt-add-repository multiverse && 
+            sudo apt-get update -y'
+
+      - run: 
+          name: Installing dependencies
+          command: 'sudo apt-get update -y && sudo apt-get install -y 
+            git cmake g++ pkg-config 
+            libcfitsio-bin libcfitsio-dev 
+            liblapack-dev 
+            wcslib-dev wcslib-tools 
+            libglib2.0-dev 
+            libcasa-casa4 casacore-dev casacore-data casacore-tools
+            mpich
+            fftw3-dev libfftw3-mpi3 libfftw3-bin'
+
+      - checkout
+
+      - run: 
+          name: Building GPU binary
+          command: 'mkdir build-cpu &&
+            cd build-cpu &&
+            cmake -DHAVE_CUDA=ON -DCMAKE_INSTALL_PREFIX=/opt/sagecal -DCUDA_NVCC_FLAGS=''-gencode arch=compute_75,code=sm_75''  .. &&
             make -j4 &&
             sudo make install'
