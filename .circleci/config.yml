@@ -90,6 +90,6 @@ jobs:
           name: Building GPU binary
           command: 'mkdir build-cpu &&
             cd build-cpu &&
-            cmake -DHAVE_CUDA=ON -DCMAKE_INSTALL_PREFIX=/opt/sagecal -DCUDA_NVCC_FLAGS=''-gencode arch=compute_75,code=sm_75''  .. &&
+            cmake -DHAVE_CUDA=ON -DCMAKE_INSTALL_PREFIX=/opt/sagecal -DCUDA_NVCC_FLAGS=''-gencode arch=compute_75,code=sm_75'' -DCMAKE_C_COMPILER=gcc-8 -DCMAKE_CXX_COMPILER=g++-8 .. &&
             make -j4 &&
             sudo make install'
