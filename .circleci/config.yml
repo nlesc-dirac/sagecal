@@ -12,7 +12,7 @@ jobs:
       - image: cimg/base:2022.03
     steps:
       - run:
-          name: Installing SUDO
+          name: Installing sudo
           command: 'sudo apt-get update -y && sudo apt-get install -y sudo && sudo rm -rf /var/lib/apt/lists/*'
 
       - run: 
@@ -24,7 +24,7 @@ jobs:
             sudo apt-get update -y'
 
       - run: 
-          name: Installing
+          name: Installing dependencies
           command: 'sudo apt-get update -y && sudo apt-get install -y 
             git cmake g++ pkg-config 
             libcfitsio-bin libcfitsio-dev 
@@ -38,9 +38,17 @@ jobs:
       - checkout
 
       - run: 
-          name: Building
+          name: Building CPU binary
           command: 'mkdir build-cpu &&
             cd build-cpu &&
             cmake -DCMAKE_INSTALL_PREFIX=/opt/sagecal .. &&
+            make -j4 &&
+            sudo make install'
+
+      - run: 
+          name: Building CPU libdirac 
+          command: 'mkdir build-cpu &&
+            cd build-cpu &&
+            cmake -DCMAKE_INSTALL_PREFIX=/opt/sagecal -DLIB_ONLY=1 .. &&
             make -j4 &&
             sudo make install'

@@ -1,5 +1,7 @@
 # SAGECAL
 
+[![nlesc-dirac](https://circleci.com/gh/nlesc-dirac/sagecal.svg?style=svg)](https://app.circleci.com/pipelines/github/nlesc-dirac/sagecal)
+
 ## Features
 
 - Levenberg-Marquardt, (stochastic) LBFGS, Riemannian Trust Region, Nesterov's accelerated gradient descent algorithms
