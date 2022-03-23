@@ -39,8 +39,7 @@ jobs:
 
       - run: 
           name: Building
-          command: 'cd sagecal &&
-            mkdir build-cpu &&
+          command: 'mkdir build-cpu &&
             cd build-cpu &&
             cmake -DCMAKE_INSTALL_PREFIX=/opt/sagecal .. &&
             make -j4 &&
