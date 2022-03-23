@@ -43,4 +43,4 @@ jobs:
             cd build-cpu &&
             cmake -DCMAKE_INSTALL_PREFIX=/opt/sagecal .. &&
             make -j4 &&
-            make install'
+            sudo make install'
