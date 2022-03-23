@@ -1,14 +1,6 @@
-
-
-| **master**  | **dev** |
-| ------------- | ------------- |
-| [![Build Status](https://travis-ci.org/nlesc-dirac/sagecal.svg?branch=master)](https://travis-ci.org/nlesc-dirac/sagecal)  | [![Build Status](https://travis-ci.org/nlesc-dirac/sagecal.svg?branch=dev)](https://travis-ci.org/nlesc-dirac/sagecal)  |
-
-[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.1289316.svg)](https://doi.org/10.5281/zenodo.1289316)
-[![Documentation](https://codedocs.xyz/nlesc-dirac/sagecal.svg)](https://codedocs.xyz/nlesc-dirac/sagecal/)
-
 # SAGECAL
 
+[![nlesc-dirac](https://circleci.com/gh/nlesc-dirac/sagecal.svg?style=svg)](https://app.circleci.com/pipelines/github/nlesc-dirac/sagecal)
 
 ## Features
 
@@ -23,23 +15,20 @@
 - Adaptive update of ADMM penalty (Barzilai-Borwein a.k.a. Spectral method)
 - Bandpass calibration and unprecedented RFI mitigation with stochastic LBFGS
 - Stochastic calibration for handling data at highest resolution (with federated averaging and consensus optimization)
-
+- Spectral and spatial regularization of calibration solutions
 
 Please read INSTALL.md for installation instructions, but 'cmake' should work in most cases. We give a brief guide to use SAGECal here but there is extensive documentation here.
 
 ## Contributing
 Read the [contributing guide](https://github.com/nlesc-dirac/sagecal/blob/master/CONTRIBUTING.md)
 
-
 ## Code documentation
 Code documentation can be found [here](https://codedocs.xyz/nlesc-dirac/sagecal).
-
 
 ## Step by Step Introduction:
 
 ### 1) Input Data
 Input to sagecal must be in CASA MS format, make sure to create a column in the MS to write output data as well. The data can be in raw or averaged form, also initial calibration using other software can be also applied.
-
 
 ### 2) Sky Model:
 #### 2a) Make an image of your MS (using ExCon/casapy). 
@@ -208,3 +197,7 @@ So for this cluster, there will be more than 1 column in the solution file, the 
 ### Additional Info
 See a [Tutorial](http://sagecal.sourceforge.net/tutorial/html/index.html)
 and the [LOFAR Cookbook Chapter](https://support.astron.nl/LOFARImagingCookbook/sagecal.html).
+
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.1289316.svg)](https://doi.org/10.5281/zenodo.1289316)
+
+[![Documentation](https://codedocs.xyz/nlesc-dirac/sagecal.svg)](https://codedocs.xyz/nlesc-dirac/sagecal/)
