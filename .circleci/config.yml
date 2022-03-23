@@ -9,12 +9,13 @@ workflows:
 jobs:
   build-cpu:
     docker:
-      - image: cimg/base:edge
+      - image: cimg/base:2022.03
     steps:
       - checkout
       - run:
           name: Installing SUDO
-          command: 'apt-get update && apt-get install -y sudo' # && rm -rf /var/lib/apt/lists/*'
+          command: 'sudo apt-get update -y && sudo apt-get install -y sudo && sudo rm -rf /var/lib/apt/lists/*'
+
       - run: 
           name: Updating
           command: 'sudo apt-get update -y && 
