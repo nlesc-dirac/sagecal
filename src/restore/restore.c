@@ -293,7 +293,7 @@ read_fits_file_restore(const char *filename, glist *slist, double bmaj,double bm
        printf("beam= (%lf,%lf,%lf)\n",fits_bmaj,fits_bmin,fits_bpa);
        bmaj=fits_bmaj/360.0*M_PI;
        bmin=fits_bmin/360.0*M_PI;
-       pa=fits_bpa;
+       pa=fits_bpa+0.5*M_PI;
 
        /* also read pixel deltas */
        fits_bmaj=fits_bmin=1.0;
@@ -864,7 +864,7 @@ print_help(void) {
    fprintf(stderr,"-f infile.fits -i lsm.txt\n");
    fprintf(stderr,"-a : add the value, instead of replacing the value at each pixel\n");
    fprintf(stderr,"-s : subtract the value, instead of replacing the value at each pixel\n");
-   fprintf(stderr,"-o : %d: BBS %d: LSM format %d: LSM (3 order spec.idx): default 0\n",FORMAT_BBS,FORMAT_LSM,FORMAT_LSM_SP);
+   fprintf(stderr,"-o : %d: BBS %d: LSM format %d: LSM (3 order spec.idx): default %d\n",FORMAT_BBS,FORMAT_LSM,FORMAT_LSM_SP,FORMAT_LSM_SP);
    fprintf(stderr,"-c : filename: cluster file name\n");
    fprintf(stderr,"-l : filename: solutions file name (new format!)\n");
    fprintf(stderr,"-g : filename: station numbers (0,1,..) whose solutions to ignore\n");
@@ -881,7 +881,7 @@ print_help(void) {
 
 void
 print_copyright(void) {
-  printf("Restore 0.0.10 (C) 2011-2015 Sarod Yatawatta\n");
+  printf("Restore 0.0.11 (C) 2011-2022 Sarod Yatawatta\n");
 }
 
 /* for getopt() */
@@ -898,7 +898,7 @@ int main(int argc, char **argv) {
  double bmaj=0.001; /* psf major axis rad */
  double bmin=0.001; /* psf minor axis rad */
 
- int outformat=0;
+ int outformat=FORMAT_LSM_SP;
  int add_to_pixel=0;
  int subtract_from_pixel=0;
  int beam_given=0;
@@ -999,7 +999,7 @@ int main(int argc, char **argv) {
    case 'o':
      if (optarg) {
        outformat=(int)strtol(optarg,&endptr,base);
-       if (endptr==optarg) outformat=0;
+       if (endptr==optarg) outformat=FORMAT_LSM_SP;
      }
     break;
    break;
