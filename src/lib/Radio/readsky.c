@@ -20,8 +20,16 @@
 
 #include "Radio.h"
 #include <ctype.h>
+#include <glib.h>
 
 //#define DEBUG
+/* struct for a cluster GList item */
+typedef struct clust_t_{
+ int id; /* cluster id */
+ int nchunk; /* no of chunks the data is divided for solving */
+ GList *slist; /* list of sources in this cluster (string)*/
+} clust_t;
+
 
 /* key destroy function */
 static void
