@@ -19,6 +19,16 @@
 
 #ifndef DIRAC_H
 #define DIRAC_H
+
+#ifdef HAVE_CUDA
+#include <cublas_v2.h>
+#include <cusolverDn.h>
+#include <cuda_runtime_api.h>
+/* GPU specific tunable parameters */
+#include "Dirac_GPUtune.h"
+#endif /* HAVE_CUDA */
+
+
 #ifdef __cplusplus
         extern "C" {
 #endif
@@ -38,14 +48,6 @@
 #ifndef complex
 #define complex _Complex
 #endif
-
-#ifdef HAVE_CUDA
-#include <cublas_v2.h>
-#include <cusolverDn.h>
-#include <cuda_runtime_api.h>
-/* GPU specific tunable parameters */
-#include "Dirac_GPUtune.h"
-#endif /* HAVE_CUDA */
 
 #include "Dirac_common.h"
 

@@ -19,11 +19,17 @@
 
 #ifndef RADIO_H
 #define RADIO_H
+
+#ifdef HAVE_CUDA
+#include <cublas_v2.h>
+#include <cusolverDn.h>
+#include <cuda_runtime_api.h>
+#endif /* HAVE_CUDA */
+
 #ifdef __cplusplus
         extern "C" {
 #endif
 
-#include <glib.h>
 #include <stdint.h>
 
 #include <stdio.h>
@@ -40,11 +46,6 @@
 #define complex _Complex
 #endif
  
-#ifdef HAVE_CUDA
-#include <cublas_v2.h>
-#include <cusolverDn.h>
-#include <cuda_runtime_api.h>
-#endif /* HAVE_CUDA */
 
 #ifdef HAVE_CUDA
 #include <Dirac_GPUtune.h>
@@ -69,11 +70,7 @@
 
 /****************************** readsky.c ****************************/
 /* struct for a cluster GList item */
-typedef struct clust_t_{
- int id; /* cluster id */
- int nchunk; /* no of chunks the data is divided for solving */
- GList *slist; /* list of sources in this cluster (string)*/
-} clust_t;
+struct clust_t;
 
 typedef struct clust_n_{
  char *name; /* source name (string)*/

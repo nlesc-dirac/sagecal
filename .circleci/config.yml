@@ -63,6 +63,10 @@ jobs:
           name: Installing sudo
           command: 'sudo apt-get update -y && sudo apt-get install -y sudo && sudo rm -rf /var/lib/apt/lists/*'
 
+      - run:
+          name: Installing GPG keys 
+          command: 'sudo apt-get install curl && curl https://cli-assets.heroku.com/apt/release.key | sudo apt-key add -'
+
       - run: 
           name: Updating
           command: 'sudo apt-get update -y && 
