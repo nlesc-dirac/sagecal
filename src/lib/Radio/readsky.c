@@ -307,6 +307,11 @@ read_sky_cluster(const char *skymodel, const char *clusterfile, clus_source_t **
     } else { /* 3 order spectral idx */
     c=fscanf(cfp,"%s %lf %lf %lf %lf %lf %lf %lf %lf %lf %lf %lf %lf %lf %lf %lf %lf %lf %lf",buff,&rahr,&ramin,&rasec,&decd,&decmin,&decsec,&sI,&sQ,&sU,&sV,&spec_idx,&spec_idx1,&spec_idx2,&dummy_RM,&eX,&eY,&eP, &f0);
     }
+    /* sanity check for reference frequency */
+    if (f0<=0.0) {
+       fprintf(stderr,"%s: %d: reference freq must be positive\n",__FILE__,__LINE__);
+       exit(1);
+    }
 
     /* add this to hash table */
     if (c!=EOF && c>0) {

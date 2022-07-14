@@ -5,7 +5,7 @@ workflows:
   test-deploy:
     jobs:
       - build-cpu
-      - build-gpu
+#      - build-gpu
 
 jobs:
   build-cpu:
