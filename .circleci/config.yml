@@ -5,12 +5,13 @@ workflows:
   test-deploy:
     jobs:
       - build-cpu
-#      - build-gpu
+      - build-gpu
 
 jobs:
   build-cpu:
     docker:
       - image: cimg/base:2022.03
+    parallelism: 2
     steps:
       - run:
           name: Installing sudo
@@ -43,7 +44,7 @@ jobs:
           command: 'mkdir build-cpu &&
             cd build-cpu &&
             cmake -DCMAKE_INSTALL_PREFIX=/opt/sagecal .. &&
-            make -j4 &&
+            make -j2 &&
             sudo make install'
 
       - run: 
@@ -51,13 +52,14 @@ jobs:
           command: 'mkdir build-cpu-libdirac &&
             cd build-cpu-libdirac &&
             cmake -DCMAKE_INSTALL_PREFIX=/opt/sagecal -DLIB_ONLY=1 .. &&
-            make -j4 &&
+            make -j2 &&
             sudo make install'
 
   build-gpu:
     machine:
       resource_class: gpu.nvidia.small
       image: ubuntu-2004-cuda-11.4:202110-01
+    parallelism: 2
     steps:
       - run:
           name: Installing sudo
@@ -95,5 +97,5 @@ jobs:
           command: 'mkdir build-cpu &&
             cd build-cpu &&
             cmake -DHAVE_CUDA=ON -DCMAKE_INSTALL_PREFIX=/opt/sagecal -DCUDA_NVCC_FLAGS=''-gencode arch=compute_75,code=sm_75'' -DCMAKE_C_COMPILER=gcc-8 -DCMAKE_CXX_COMPILER=g++-8 .. &&
-            make -j4 &&
+            make -j2 &&
             sudo make install'
