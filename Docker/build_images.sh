@@ -3,7 +3,7 @@
 version=$(date +"%d%m%Y")
 
 for folder in \
-	ubuntu2004-test
+	ubuntu2004-*
 
 do
     name=${folder%%/}
@@ -12,7 +12,6 @@ do
     echo "Building: "$name
     echo "==========================================="
 
-    #cmd="docker build -t fdiblen/$name:$version -t fdiblen/$name:latest ./$name"
     cmd="docker build -t $name:$version ./$name"
     echo
     echo "Running:"
@@ -31,6 +30,4 @@ do
       exit $?
     fi
 
-    #docker push fdiblen/$name:$version
-    #docker push fdiblen/$name:latest
 done

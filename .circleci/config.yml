@@ -82,7 +82,7 @@ jobs:
           command: 'sudo apt-get update -y && sudo apt-get install -y 
             git cmake g++-8 gcc-8 pkg-config 
             libcfitsio-bin libcfitsio-dev 
-            liblapack-dev libgfortran-8-dev
+            liblapack-dev
             wcslib-dev wcslib-tools 
             libglib2.0-dev 
             libcasa-casa4 casacore-dev casacore-data casacore-tools

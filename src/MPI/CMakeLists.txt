@@ -41,10 +41,8 @@ if(HAVE_CUDA)
     ${LAPACK_LIBRARIES}
     ${WCSLIB_LIBRARIES}
     ${GLIB_PKG_LIBRARIES}
-    ${LIBGFORTRAN_LIBRARIES}
     ${MPI_CXX_LIBRARIES}
     ${MPI_CXX_LINK_FLAGS}
-    -lgfortran
     -lpthread
     -lm
     ${CUDA_CUBLAS_LIBRARIES}
@@ -70,10 +68,8 @@ else()
     ${LAPACK_LIBRARIES}
     ${WCSLIB_LIBRARIES}
     ${GLIB_PKG_LIBRARIES}
-    ${LIBGFORTRAN_LIBRARIES}
     ${MPI_CXX_LIBRARIES}
     ${MPI_CXX_LINK_FLAGS}
-    -lgfortran
     -lpthread
     -lm
     )
