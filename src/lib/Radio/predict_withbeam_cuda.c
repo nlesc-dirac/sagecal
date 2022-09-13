@@ -1353,7 +1353,7 @@ double ph_ra0, double ph_dec0, double ph_freq0, double *longitude, double *latit
      threaddata[nth].M=M;
      threaddata[nth].Nf=Nchan;
      threaddata[nth].freqs=freqs;
-     threaddata[nth].fdelta=fdelta;
+     threaddata[nth].fdelta=fdelta/(double)Nchan;
      threaddata[nth].tdelta=tdelta;
      threaddata[nth].dec0=dec0;
 
@@ -2027,7 +2027,7 @@ double ph_ra0, double ph_dec0, double ph_freq0, double *longitude, double *latit
      threaddata[nth].M=M;
      threaddata[nth].Nf=Nchan;
      threaddata[nth].freqs=freqs;
-     threaddata[nth].fdelta=fdelta;
+     threaddata[nth].fdelta=fdelta/(double)Nchan;
      threaddata[nth].tdelta=tdelta;
      threaddata[nth].dec0=dec0;
 
@@ -2727,7 +2727,7 @@ double ph_ra0, double ph_dec0, double ph_freq0, double *longitude, double *latit
      threaddata[nth].M=M;
      threaddata[nth].Nf=Nchan;
      threaddata[nth].freqs=freqs;
-     threaddata[nth].fdelta=fdelta;
+     threaddata[nth].fdelta=fdelta/(double)Nchan;
      threaddata[nth].tdelta=tdelta;
      threaddata[nth].dec0=dec0;
 
@@ -3417,7 +3417,7 @@ precalculate_coherencies_multifreq_withbeam_gpu(double *u, double *v, double *w,
      threaddata[nth].M=M;
      threaddata[nth].Nf=Nchan;
      threaddata[nth].freqs=freqs; /* > 1 freq */
-     threaddata[nth].fdelta=fdelta;
+     threaddata[nth].fdelta=fdelta/(double)Nchan;
      threaddata[nth].tdelta=tdelta;
      threaddata[nth].dec0=dec0;
 
