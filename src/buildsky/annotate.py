@@ -20,9 +20,23 @@
 import re
 import math
 import optparse
+from casacore.measures import measures
+from casacore.quanta import quantity
+
+# LOFAR core coords
+X0='3826896.235129999928176m'
+Y0='460979.4546659999759868m'
+Z0='5064658.20299999974668m'
 
 
-def annotate_lsm_sky(infilename,clusterfilename,outfilename,clid=None,color='yellow',rname=False):
+def radec_azel(mydm,myra,mydec):
+  mra=quantity(str(myra)+'deg')
+  mdec=quantity(str(mydec)+'deg')
+  mydir=mydm.direction('J2000',mra,mdec)
+  azel=mydm.measure(mydir,'AZEL')
+  return azel['m0']['value'],azel['m1']['value']
+
+def annotate_lsm_sky(infilename,clusterfilename,outfilename,clid=None,color='yellow',rname=False, utc=None):
   # LSM format
   # NAME RA(hours, min, sec) DEC(degrees, min, sec) sI sQ sU sV SI RM eX eY eP f0
   # or 3rd order spectra
@@ -109,6 +123,15 @@ def annotate_lsm_sky(infilename,clusterfilename,outfilename,clid=None,color='yel
   all=infile.readlines()
   infile.close()
 
+  # Az,El calculation
+  if utc:
+      mydm=measures()
+      mypos=mydm.position('ITRF',X0,Y0,Z0)
+      mytime=mydm.epoch('UTC',utc+'s')
+      mydm.doframe(mytime)
+      mydm.doframe(mypos)
+
+
   SR={} # sources
   for eachline in all:
     v=pp1.search(eachline)
@@ -125,7 +148,12 @@ def annotate_lsm_sky(infilename,clusterfilename,outfilename,clid=None,color='yel
          mysign=-1.0
 
       mdec=mysign*(abs(float(v.group('col5')))+float(v.group('col6'))/60.0+float(v.group('col7'))/3600.0)
-      SR[str(v.group('col1'))]=(mra,mdec,float(v.group('col8')))
+
+      if utc:
+         myaz,myel=radec_azel(mydm,mra,mdec)
+         SR[str(v.group('col1'))]=(mra,mdec,float(v.group('col8')),myaz,myel)
+      else:
+         SR[str(v.group('col1'))]=(mra,mdec,float(v.group('col8')))
     else:  
       v=pp.search(eachline)
       if v!= None:
@@ -140,7 +168,13 @@ def annotate_lsm_sky(infilename,clusterfilename,outfilename,clid=None,color='yel
            mysign=-1.0
 
         mdec=mysign*(abs(float(v.group('col5')))+float(v.group('col6'))/60.0+float(v.group('col7'))/3600.0)
-        SR[str(v.group('col1'))]=(mra,mdec,float(v.group('col8')))
+
+        if utc:
+          myaz,myel=radec_azel(mydm,mra,mdec)
+          SR[str(v.group('col1'))]=(mra,mdec,float(v.group('col8')),myaz,myel)
+        else:
+          SR[str(v.group('col1'))]=(mra,mdec,float(v.group('col8')))
+
 
   print('Read %d sources'%len(SR))
 
@@ -182,9 +216,15 @@ def annotate_lsm_sky(infilename,clusterfilename,outfilename,clid=None,color='yel
       if slname in SR:
         sinfo=SR[slname]
         if rname:
-          sline='fk5;point('+str(sinfo[0])+','+str(sinfo[1])+') # point=x color='+color+' text={'+slname+'}\n'
+          if utc:
+              sline='fk5;point('+str(sinfo[0])+','+str(sinfo[1])+') # point=x color='+color+' text={'+slname+' '+'{:1.2f}'.format(sinfo[3])+' '+'{:1.2f}'.format(sinfo[4])+'}\n'
+          else:
+             sline='fk5;point('+str(sinfo[0])+','+str(sinfo[1])+') # point=x color='+color+' text={'+slname+'}\n'
         else: 
-          sline='fk5;point('+str(sinfo[0])+','+str(sinfo[1])+') # point=x color='+color+' text={'+clname+'}\n'
+          if utc:
+              sline='fk5;point('+str(sinfo[0])+','+str(sinfo[1])+') # point=x color='+color+' text={'+clname+' '+'{1:2f}'.format(sinfo[3])+' '+'{:1.2f}'.format(sinfo[4])+'}\n'
+          else:
+             sline='fk5;point('+str(sinfo[0])+','+str(sinfo[1])+') # point=x color='+color+' text={'+clname+'}\n'
         outfile.write(sline)
   outfile.close()
 
@@ -198,10 +238,11 @@ if __name__ == '__main__':
   parser.add_option('-n', '--names', help='Output source names (default is cluster id)', dest='rname', action='store_true')
   parser.add_option('-i', '--id', type='int', dest='num', help='Cluster id to annotate (default all clusters)')
   parser.add_option('-C', '--color', help='Colour white|black|red|green|blue|cyan|magenta|yellow', default='yellow')
+  parser.add_option('-t', '--time', help='Time in UTC (s) for az/el', dest='utc', default=None)
   (opts,args)=parser.parse_args()
 
   if opts.skymodel and opts.clusters and opts.outfile:
-    annotate_lsm_sky(opts.skymodel,opts.clusters,opts.outfile,opts.num,opts.color,opts.rname)
+    annotate_lsm_sky(opts.skymodel,opts.clusters,opts.outfile,opts.num,opts.color,opts.rname,utc=opts.utc)
   else:
    parser.print_help()
   exit()

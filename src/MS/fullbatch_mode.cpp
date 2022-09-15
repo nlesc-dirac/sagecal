@@ -322,7 +322,7 @@ run_fullbatch_calibration(void) {
     /* precess source locations (also beam pointing) from J2000 to JAPP if we do any beam predictions,
       using first time slot as epoch */
     if (doBeam && !sources_precessed) {
-      precess_source_locations(beam.time_utc[iodata.tilesz/2],carr,M,&beam.p_ra0,&beam.p_dec0,Data::Nt);
+      Data::precess_source_locations(beam.time_utc[iodata.tilesz/2],carr,M,&beam.p_ra0,&beam.p_dec0,Data::Nt);
       sources_precessed=1;
     }
 

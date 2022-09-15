@@ -186,7 +186,7 @@ kernel_array_beam(int N, int T, int K, int F,
    theta0=M_PI_2-el0;
    phi0=-az0; /* */
 /*********************************************************************/
-   if (el>0.0f) {
+   if (el>=0.0f) {
    /* 2*PI/C */
    const float tpc=2.0f*M_PI/CONST_C;
    float sint,cost,sinph,cosph,sint0,cost0,sinph0,cosph0;
@@ -287,16 +287,16 @@ kernel_element_beam(int N, int T, int K, int F,
    r=M_PI_2-el;
    theta=az-M_PI_4; 
 /*********************************************************************/
-   if (el>0.0f) {
+   if (el>=0.0f) {
       #if (ARRAY_USE_SHMEM == 1)
       float4 evalX=eval_elementcoeff(r, theta, M, beta, sh_theta,
                 sh_phi, sh_preamble);
-      float4 evalY=eval_elementcoeff(r, theta-M_PI_2, M, beta, sh_theta,
+      float4 evalY=eval_elementcoeff(r, theta+M_PI_2, M, beta, sh_theta,
                 sh_phi, sh_preamble);
       #else
       float4 evalX=eval_elementcoeff(r, theta, M, beta, (float2*)pattern_theta,
                 (float2*)pattern_phi, pattern_preamble);
-      float4 evalY=eval_elementcoeff(r, theta-M_PI_2, M, beta, (float2*)pattern_theta,
+      float4 evalY=eval_elementcoeff(r, theta+M_PI_2, M, beta, (float2*)pattern_theta,
                 (float2*)pattern_phi, pattern_preamble);
       #endif
 

@@ -284,6 +284,5 @@ precession(double ra0, double dec0, double Tr[9], double *ra, double *dec) {
   *ra=atan2(pos2[1],pos2[0]);
   *dec=atan(sqrt(pos2[0]*pos2[0]+pos2[1]*pos2[1])/pos2[2]);
 
-
    return 0;
 }

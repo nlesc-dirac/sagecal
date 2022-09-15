@@ -36,6 +36,9 @@
 #include <math.h>
 #include <complex>
 
+#include "Radio.h"
+#include <casacore/measures/Measures/Precession.h>
+
 
 using namespace casacore;
 
@@ -112,6 +115,8 @@ namespace Data
     void writeDataList(vector<MSIter*> msitr, IOData iodata);
     void freeData(IOData data);
     void freeData(IOData data, LBeam binfo);
+
+    int precess_source_locations(double jd_tdb, clus_source_t *carr, int M, double *ra_beam, double *dec_beam, int Nt);
 
     extern int numChannels; 
     extern unsigned long int numRows;

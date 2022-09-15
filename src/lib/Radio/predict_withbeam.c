@@ -2142,7 +2142,7 @@ precess_threadfn(void *data) {
 }
 
 int
-precess_source_locations(double jd_tdb, clus_source_t *carr, int M, double *ra_beam, double *dec_beam, int Nt) {
+precess_source_locations_deprecated(double jd_tdb, clus_source_t *carr, int M, double *ra_beam, double *dec_beam, int Nt) {
 
   int nth,ci;
 
