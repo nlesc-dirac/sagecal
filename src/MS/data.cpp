@@ -1467,3 +1467,27 @@ void Data::freeData(Data::IOData data, Data::LBeam binfo)
    delete [] binfo.yy;
    delete [] binfo.zz;
 }
+
+
+int
+Data::precess_source_locations(double jd_tdb, clus_source_t *carr, int M, double *ra_beam, double *dec_beam, int Nt) {
+
+  Precession prec(Precession::IAU2000);  // define precession type
+  RotMatrix rotat(prec(jd_tdb-2400000.5));        // JD to MJD
+  rotat.transpose();
+
+  for (int cl=0; cl<M; cl++) {
+    for (int ci=0; ci<carr[cl].N; ci++) {
+      MVDirection pos(Quantity(carr[cl].ra[ci],"rad"),Quantity(carr[cl].dec[ci],"rad"));
+      MVDirection newdir = rotat*pos;       // apply precession
+      carr[cl].ra[ci]=newdir.get()[0];
+      carr[cl].dec[ci]=newdir.get()[1];
+    }
+  }
+
+  MVDirection pos(Quantity(*ra_beam,"rad"),Quantity(*dec_beam,"rad"));
+  MVDirection newdir = rotat*pos;       // apply precession
+  *ra_beam=newdir.get()[0];
+  *dec_beam=newdir.get()[1];
+  return 0;
+}
