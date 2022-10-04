@@ -215,7 +215,7 @@ gaussian_contrib(void*dd, double u, double v, double w) {
   /* Fourier TF is normalized with integrated flux,
     so to get the peak value right, scale the flux */
   //return 0.5*exp(-(ut*ut+vt*vt))/sqrt(2.0*a*b);
-  return M_PI_2*exp(-(ut*ut+vt*vt));
+  return exp(-(ut*ut+vt*vt));
 }
 
 complex double
