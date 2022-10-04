@@ -347,7 +347,7 @@ gaussian_contrib__(int *dd, float u, float v, float w) {
   ut=a*(cosph*up-sinph*vp);
   vt=b*(sinph*up+cosph*vp);
 
-  return make_cuDoubleComplex((double)(0.5f*M_PI*expf(-(ut*ut+vt*vt))),0.0);
+  return make_cuDoubleComplex((double)(expf(-2.0*M_PI*M_PI*(ut*ut+vt*vt))),0.0);
 }
 
 
