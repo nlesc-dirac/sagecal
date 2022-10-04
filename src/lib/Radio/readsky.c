@@ -409,8 +409,8 @@ read_sky_cluster(const char *skymodel, const char *clusterfile, clus_source_t **
          fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
          exit(1);
        } 
-       exg->eX=2.0*eX; /* scale by 2 */
-       exg->eY=2.0*eY;
+       exg->eX=eX / (2.0*(sqrt(2.0*log(2.0)))); /* convert fwhm to sigma */
+       exg->eY=eY / (2.0*(sqrt(2.0*log(2.0))));
        exg->eP=eP;
        /* negate angles */
        exg->cxi=cos(xi);
