@@ -69,7 +69,8 @@ P1C1 0 12 42.996 85 43 21.514 0.030498 0 0 0 -5.713060 0 0 0 0 115039062.0
 P5C1 1 18 5.864 85 58 39.755 0.041839 0 0 0 -6.672879 0 0 0 0 115039062.0
 #A Gaussian mjor,minor 0.1375,0.0917 deg diameter -> radius(rad), PA 43.4772 deg (-> rad)
 #Position Angle: "West from North (counter-clockwise)" (0 deg = North, 90 deg = West). 
-#Note: PyBDSM and BBS use "North from East (counter-clockwise)" (0 deg = East, 90 deg = North). 
+#Note: PyBDSF/BBS/DP3 use "North from East (counter-clockwise)" (0 deg = East, 90 deg = North).
+#Flux scaling is same for both
 G0  5 34 31.75 22 00 52.86 100 0 0 0 0.00 0 0.0012  0.0008 -2.329615801 130.0e6
 #A Disk radius=0.041 deg
 D01 23 23 25.67 58 48 58 80 0 0 0 0 0 0.000715 0.000715 0 130e6

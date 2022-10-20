@@ -47,10 +47,8 @@ if(HAVE_CUDA)
     -lm
     ${CUDA_CUBLAS_LIBRARIES}
     ${CUDA_CUFFT_LIBRARIES}
-    -lcudart
-    -lcublas
-    -lcusolver
-    -lcudadevrt
+    ${CUDA_cusolver_LIBRARY}
+    ${CUDA_cudadevrt_LIBRARY}
     ${NVML_LIB_PATH}
   )
 
