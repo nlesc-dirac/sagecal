@@ -126,10 +126,10 @@ array_element_beam(double ra, double dec, double ra0, double dec0, double f, dou
   double *px,*py,*pz;
   double r1,r2,r3;
   double sint,cost,sint0,cost0,sinph,cosph,sinph0,cosph0;
-  double csum,ssum,tmpc,tmps;
+  double csum,ssum,*tmpc=0,*tmps=0;
   /* 2*PI/C */
   const double tpc=2.0*M_PI/CONST_C;
-
+  double *tmpprod=0;
   /* iterate over stations */
   for (ci=0; ci<N; ci++) {
    /* find az,el for both source direction and beam center */
@@ -166,11 +166,38 @@ array_element_beam(double ra, double dec, double ra0, double dec0, double f, dou
    
    csum=0.0;
    ssum=0.0;
-   for (cj=0; cj<K; cj++) {
-     sincos(-tpc*(r1*px[cj]+r2*py[cj]+r3*pz[cj]),&tmps,&tmpc);
-     ssum+=tmps;
-     csum+=tmpc;
+   if (posix_memalign((void*)&tmps,sizeof(double),((size_t)K*sizeof(double)))!=0) {
+      fprintf(stderr,"%s: %d: No free memory\n",__FILE__,__LINE__);
+      exit(1);
    }
+   if (posix_memalign((void*)&tmpc,sizeof(double),((size_t)K*sizeof(double)))!=0) {
+      fprintf(stderr,"%s: %d: No free memory\n",__FILE__,__LINE__);
+      exit(1);
+   }
+   if (posix_memalign((void*)&tmpprod,sizeof(double),((size_t)K*sizeof(double)))!=0) {
+      fprintf(stderr,"%s: %d: No free memory\n",__FILE__,__LINE__);
+      exit(1);
+   }
+//#pragma GCC ivdep
+#pragma omp simd
+   for (cj=0; cj<K; cj++) {
+     tmpprod[cj]=-tpc*(r1*px[cj]+r2*py[cj]+r3*pz[cj]);
+   }
+//#pragma GCC ivdep
+#pragma omp simd
+   for (cj=0; cj<K; cj++) {
+     sincos(tmpprod[cj],&tmps[cj],&tmpc[cj]);
+   }
+//#pragma GCC ivdep
+#pragma omp simd
+   for (cj=0; cj<K; cj++) {
+     ssum+=tmps[cj];
+     csum+=tmpc[cj];
+   }
+   free(tmpprod);
+   free(tmps);
+   free(tmpc);
+
    double invK=1.0/(double)K;
    csum*=invK;
    ssum*=invK;
