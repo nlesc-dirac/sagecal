@@ -178,17 +178,18 @@ array_element_beam(double ra, double dec, double ra0, double dec0, double f, dou
       fprintf(stderr,"%s: %d: No free memory\n",__FILE__,__LINE__);
       exit(1);
    }
-//#pragma GCC ivdep
 #pragma omp simd
    for (cj=0; cj<K; cj++) {
      tmpprod[cj]=-tpc*(r1*px[cj]+r2*py[cj]+r3*pz[cj]);
    }
-//#pragma GCC ivdep
 #pragma omp simd
    for (cj=0; cj<K; cj++) {
-     sincos(tmpprod[cj],&tmps[cj],&tmpc[cj]);
+     tmps[cj]=sin(tmpprod[cj]);
    }
-//#pragma GCC ivdep
+#pragma omp simd
+   for (cj=0; cj<K; cj++) {
+     tmpc[cj]=cos(tmpprod[cj]);
+   }
 #pragma omp simd
    for (cj=0; cj<K; cj++) {
      ssum+=tmps[cj];
