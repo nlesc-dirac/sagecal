@@ -245,18 +245,23 @@ Data::readAuxData(const char *fname, Data::IOData *data, Data::LBeam *binfo) {
    ROArrayColumn<double> chan_width(_freq, "CHAN_WIDTH"); 
    data->deltaf=(double)data->Nchan*(chan_width(0).data()[0]);
 
-   /* UTC time */
-   binfo->time_utc=new double[data->tilesz]; 
-   /* no of elements in each station */
-   binfo->Nelem=new int[data->N];
-   /* positions of stations */
-   binfo->sx=new double[data->N];
-   binfo->sy=new double[data->N];
-   binfo->sz=new double[data->N];
-   /* coordinates of elements */
-   binfo->xx=new double*[data->N];
-   binfo->yy=new double*[data->N];
-   binfo->zz=new double*[data->N];
+   try {
+     /* UTC time */
+     binfo->time_utc=new double[data->tilesz]; 
+     /* no of elements in each station */
+     binfo->Nelem=new int[data->N];
+     /* positions of stations */
+     binfo->sx=new double[data->N];
+     binfo->sy=new double[data->N];
+     binfo->sz=new double[data->N];
+     /* coordinates of elements */
+     binfo->xx=new double*[data->N];
+     binfo->yy=new double*[data->N];
+     binfo->zz=new double*[data->N];
+   } catch (const std::bad_alloc& e) {
+     cout<<"Allocating memory for data failed. Quitting."<< e.what() << endl;
+     exit(1);
+   }
 
    Table antfield;
    bool isDipole=false;
@@ -706,10 +711,13 @@ Data::loadData(Table ti, Data::IOData iodata, LBeam binfo, double *fratio) {
     }
     /* counters for finding flagged data ratio */
     int countgood=0; int countbad=0;
+    /* get antenna pair of first row for recording time */
+    uInt ant_i=a1(0);
+    uInt ant_j=a2(0);
     for(int row = 0; row < nrow && row0<iodata.tilesz*iodata.Nbase; row++) {
         uInt i = a1(row); //antenna1 
         uInt j = a2(row); //antenna2
-        if (!i && !j) {/* use baseline 0-0 to extract time */
+        if (i==ant_i && j==ant_j) {/* baseline ant_i-ant_j to extract time */
          double tt=tut(row);
          /* convert MJD (s) to JD (days) */
          binfo.time_utc[rowt++]=(tt/86400.0+2400000.5); /* no +0.5 added */
@@ -1159,10 +1167,14 @@ Data::loadDataMinibatch(Table ti, Data::IOData iodata, LBeam binfo, int minibatc
     int nrow=t.nrow();
     int row0=rowoffset;
     int rowt=rowtoffset;
+
+    /* get antenna pair of first row for recording time */
+    uInt ant_i=a1(0);
+    uInt ant_j=a2(0);
     for(int row = 0; row < nrow && row0<iodata.tilesz*iodata.Nbase; row++) {
         uInt i = a1(row); //antenna1 
         uInt j = a2(row); //antenna2
-        if (!i && !j) {/* use baseline 0-0 to extract time */
+        if (i==ant_i && j==ant_j) {/* use baseline ant_i-ant_j to extract time */
          double tt=tut(row);
          /* convert MJD (s) to JD (days) */
          binfo.time_utc[rowt++]=(tt/86400.0+2400000.5); /* no +0.5 added */
