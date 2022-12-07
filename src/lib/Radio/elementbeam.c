@@ -195,7 +195,7 @@ L_g1(int p, int q, double x) {
 
 
 elementval
-eval_elementcoeffs0(double r, double theta, elementcoeff *ecoeff) {
+eval_elementcoeffs(double r, double theta, elementcoeff *ecoeff) {
   /* evaluate r^2/beta^2 */
   double rb=pow(r/ecoeff->beta,2);
   /* evaluate e^(-r^2/2beta^2) */
@@ -235,7 +235,7 @@ eval_elementcoeffs0(double r, double theta, elementcoeff *ecoeff) {
 
 
 elementval
-eval_elementcoeffs(double r, double theta, elementcoeff *ecoeff) {
+eval_elementcoeffs0(double r, double theta, elementcoeff *ecoeff) {
   /* evaluate r^2/beta^2 */
   double rb=pow(r/ecoeff->beta,2);
   /* evaluate e^(-r^2/2beta^2) */
