@@ -195,7 +195,7 @@ L_g1(int p, int q, double x) {
 
 
 elementval
-eval_elementcoeffs(double r, double theta, elementcoeff *ecoeff) {
+eval_elementcoeffs0(double r, double theta, elementcoeff *ecoeff) {
   /* evaluate r^2/beta^2 */
   double rb=pow(r/ecoeff->beta,2);
   /* evaluate e^(-r^2/2beta^2) */
@@ -234,6 +234,89 @@ eval_elementcoeffs(double r, double theta, elementcoeff *ecoeff) {
 }
 
 
+elementval
+eval_elementcoeffs(double r, double theta, elementcoeff *ecoeff) {
+  /* evaluate r^2/beta^2 */
+  double rb=pow(r/ecoeff->beta,2);
+  /* evaluate e^(-r^2/2beta^2) */
+  double ex=exp(-0.5*rb);
+
+  elementval eval;
+  eval.phi=0.0+_Complex_I*0.0;
+  eval.theta=0.0+_Complex_I*0.0;
+
+  /* storage for temp data */
+  int N=ecoeff->M*(ecoeff->M+1)/2;
+  double *Lg=0;
+  if (posix_memalign((void*)&Lg,sizeof(double),((size_t)N*sizeof(double)))!=0) {
+      fprintf(stderr,"%s: %d: No free memory\n",__FILE__,__LINE__);
+      exit(1);
+  }
+
+  int idx=0;
+  for (int n=0; n<ecoeff->M; n++) {
+#pragma omp simd
+    for (int m=-n; m<=n; m+=2) {
+     int absm=m>=0?m:-m; /* |m| */
+     Lg[idx]=L_g1((n-absm)/2,absm,rb)*pow(M_PI_4+r,(double)absm);
+
+     idx++;
+    }
+  }
+  idx=0;
+  for (int n=0; n<ecoeff->M; n++) {
+    double *inm=0,*ins=0,*inc=0;
+    if (posix_memalign((void*)&inm,sizeof(double),((size_t)(n+1)*sizeof(double)))!=0) {
+      fprintf(stderr,"%s: %d: No free memory\n",__FILE__,__LINE__);
+      exit(1);
+    }
+    if (posix_memalign((void*)&ins,sizeof(double),((size_t)(n+1)*sizeof(double)))!=0) {
+      fprintf(stderr,"%s: %d: No free memory\n",__FILE__,__LINE__);
+      exit(1);
+    }
+    if (posix_memalign((void*)&inc,sizeof(double),((size_t)(n+1)*sizeof(double)))!=0) {
+      fprintf(stderr,"%s: %d: No free memory\n",__FILE__,__LINE__);
+      exit(1);
+    }
+    int m=-n;
+#pragma omp simd
+    for (int ci=0; ci<n+1; ci++) {
+            inm[ci]=-(double)m*theta;
+            m+=2;
+    }
+     /* evaluate exp(-j*m*theta) */
+#pragma omp simd
+    for (int ci=0; ci<n+1; ci++) {
+            ins[ci]=sin(inm[ci]);
+    }
+#pragma omp simd
+    for (int ci=0; ci<n+1; ci++) {
+            inc[ci]=cos(inm[ci]);
+    }
+
+#pragma omp simd
+    for (int ci=0; ci<n+1; ci++) {
+     /* find product of real terms (including the preamble) */
+     double pr=Lg[idx]*ex*ecoeff->preamble[idx];
+     double re,im;
+     /* basis function re+j*im */
+     re=pr*inc[ci];
+     im=pr*ins[ci];
+
+     eval.phi+=ecoeff->pattern_phi[idx]*(re+_Complex_I*im);
+     eval.theta+=ecoeff->pattern_theta[idx]*(re+_Complex_I*im);
+     idx++;
+    }
+
+    free(inm);
+    free(ins);
+    free(inc);
+  }
+
+  free(Lg);
+
+ return eval;
+}
 
 /* Legendre function P(l,m,x) */
 static double
