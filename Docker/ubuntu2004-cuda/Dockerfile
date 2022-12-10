@@ -33,7 +33,8 @@ RUN git clone --depth 1 --branch master \
      -DHAVE_CUDA=ON -DCUDA_NVCC_FLAGS="-gencode arch=compute_75,code=sm_75 -O3" \
      -DNUM_GPU=2 -DBLA_VENDOR=OpenBLAS \
      -DCMAKE_CXX_COMPILER=g++-8 -DCMAKE_C_COMPILER=gcc-8 \
-     -DCMAKE_CXX_FLAGS="-O3" -DCMAKE_C_FLAGS="-O3" .. && \
+     -DCMAKE_CXX_FLAGS="-O3 -fopenmp -ffast-math -lmvec -lm" \
+     -DCMAKE_C_FLAGS="-O3 -fopenmp -ffast-math -lmvec -lm" .. && \
      make -j4 && \
      make install
 RUN ls -alsrt /opt/sagecal && \
