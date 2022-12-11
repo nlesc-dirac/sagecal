@@ -546,7 +546,9 @@ calculate_mode_vectors_bi(double *x, double *y, int N,  double beta, int n0, dou
 			 }
 		 } else {
 /* parallelize for loop use -fopenmp */
+#ifdef _OPENMP
 #pragma omp parallel for
+#endif /* _OPENMP */
 	     for (xci=0; xci<(n0); xci++) {
 				/*take into account the scaling
 				*/
@@ -575,12 +577,16 @@ calculate_mode_vectors_bi(double *x, double *y, int N,  double beta, int n0, dou
 	  fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
 	  exit(1);
 	}
+#ifdef _OPENMP
 #pragma omp parallel for
+#endif /* _OPENMP */
 	for (n2=0; n2<(n0); n2++) {
 	 for (n1=0; n1<(n0); n1++) {
     /* fill in N*(zci) to N*(zci+1)-1 */
 		start=N*(n2*(n0)+n1);
+#ifdef _OPENMP
 #pragma omp parallel for
+#endif /* _OPENMP */
 	  for (xci=0; xci<N; xci++) {
       (*Av)[start+xci]=shpvl[xindex[xci]][n1]*shpvl[yindex[xci]][n2];
 		}

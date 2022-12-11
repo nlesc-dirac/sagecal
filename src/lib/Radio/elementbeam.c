@@ -175,6 +175,7 @@ free_elementcoeffs(elementcoeff ecoeff) {
 
 /* generalized Laguerre polynomial L_p^q(x) */
 /* for calculating L_{n-|m|/2}^|m| (x) */
+#ifndef _OPENMP
 static double
 L_g1(int p, int q, double x) {
   /* max p: (n-|m|)/2 = n/2 */
@@ -192,7 +193,9 @@ L_g1(int p, int q, double x) {
   }
   return L_p;
 }
+#endif /* !_OPENMP */
 
+#ifdef _OPENMP
 static double
 L_g2(int p, double q, double x) {
   /* max p: (n-|m|)/2 = n/2 */
@@ -210,12 +213,12 @@ L_g2(int p, double q, double x) {
   }
   return L_p;
 }
+#endif /* _OPENMP */
 
 
-
-
+#ifndef _OPENMP
 elementval
-eval_elementcoeffs0(double r, double theta, elementcoeff *ecoeff) {
+eval_elementcoeffs(double r, double theta, elementcoeff *ecoeff) {
   /* evaluate r^2/beta^2 */
   double rb=pow(r/ecoeff->beta,2);
   /* evaluate e^(-r^2/2beta^2) */
@@ -252,8 +255,10 @@ eval_elementcoeffs0(double r, double theta, elementcoeff *ecoeff) {
 
  return eval;
 }
+#endif /* !_OPENMP */
 
 
+#ifdef _OPENMP
 elementval
 eval_elementcoeffs(double r, double theta, elementcoeff *ecoeff) {
   /* evaluate r^2/beta^2 */
@@ -348,6 +353,7 @@ eval_elementcoeffs(double r, double theta, elementcoeff *ecoeff) {
 
  return eval;
 }
+#endif /* _OPENMP */
 
 /* Legendre function P(l,m,x) */
 static double

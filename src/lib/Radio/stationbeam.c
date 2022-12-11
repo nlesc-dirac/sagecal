@@ -178,19 +178,28 @@ array_element_beam(double ra, double dec, double ra0, double dec0, double f, dou
       fprintf(stderr,"%s: %d: No free memory\n",__FILE__,__LINE__);
       exit(1);
    }
+
+#ifdef _OPENMP
 #pragma omp simd
+#endif /* _OPENMP */
    for (cj=0; cj<K; cj++) {
      tmpprod[cj]=-tpc*(r1*px[cj]+r2*py[cj]+r3*pz[cj]);
    }
+#ifdef _OPENMP
 #pragma omp simd
+#endif /* _OPENMP */
    for (cj=0; cj<K; cj++) {
      tmps[cj]=sin(tmpprod[cj]);
    }
+#ifdef _OPENMP
 #pragma omp simd
+#endif /* _OPENMP */
    for (cj=0; cj<K; cj++) {
      tmpc[cj]=cos(tmpprod[cj]);
    }
+#ifdef _OPENMP
 #pragma omp simd
+#endif /* _OPENMP */
    for (cj=0; cj<K; cj++) {
      ssum+=tmps[cj];
      csum+=tmpc[cj];
