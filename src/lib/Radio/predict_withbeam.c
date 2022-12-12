@@ -1033,7 +1033,10 @@ visibilities_threadfn_multifreq(void *data) {
       fprintf(stderr,"%s: %d: No free memory\n",__FILE__,__LINE__);
       exit(1);
       }
+      /* add up terms together with Ejones multiplication */
+#ifdef _OPENMP
       #pragma omp simd
+#endif
       for (cn=0; cn<t->carr[cm].N; cn++) {
        complex double Ph,IIl,QQl,UUl,VVl;
        Ph=(PHr[cn]+_Complex_I*PHi[cn]);
@@ -1046,43 +1049,25 @@ visibilities_threadfn_multifreq(void *data) {
        CO[2+4*cn]=UUl-_Complex_I*VVl;
        CO[3+4*cn]=IIl-QQl;
       }
+#ifdef _OPENMP
       #pragma omp simd
+#endif
       for (cn=0; cn<t->carr[cm].N; cn++) {
        complex double *E1=(complex double*)&t->elementbeam[cn*(t->N*8*t->tilesz*t->Nchan)+cf*(t->N*8*t->tilesz)+tslot*t->N*8+sta1*8]; /* 8 values */
        complex double *E2=(complex double*)&t->elementbeam[cn*(t->N*8*t->tilesz*t->Nchan)+cf*(t->N*8*t->tilesz)+tslot*t->N*8+sta2*8]; /* 8 values */
        amb(E1,&CO[4*cn],T1);
        ambt(T1,E2,&CO[4*cn]);
       }
+#ifdef _OPENMP
       #pragma omp simd
+#endif
       for (cn=0; cn<t->carr[cm].N; cn++) {
        C[0]+=CO[0+4*cn];
        C[1]+=CO[1+4*cn];
        C[2]+=CO[2+4*cn];
        C[3]+=CO[3+4*cn];
       }
-      /* add up terms together with Ejones multiplication */
-     // for (cn=0; cn<t->carr[cm].N; cn++) {
-     //  complex double *E1=(complex double*)&t->elementbeam[cn*(t->N*8*t->tilesz*t->Nchan)+cf*(t->N*8*t->tilesz)+tslot*t->N*8+sta1*8]; /* 8 values */
-     //  complex double *E2=(complex double*)&t->elementbeam[cn*(t->N*8*t->tilesz*t->Nchan)+cf*(t->N*8*t->tilesz)+tslot*t->N*8+sta2*8]; /* 8 values */
-     //  complex double Ph,IIl,QQl,UUl,VVl;
-     //  Ph=(PHr[cn]+_Complex_I*PHi[cn]);
-     //  IIl=Ph*II[cn];
-     //  QQl=Ph*QQ[cn];
-     //  UUl=Ph*UU[cn];
-     //  VVl=Ph*VV[cn];
-     //  complex double C0[4];
-     //  C0[0]=IIl+QQl;
-     //  C0[1]=UUl+_Complex_I*VVl;
-     //  C0[2]=UUl-_Complex_I*VVl;
-     //  C0[3]=IIl-QQl;
-     //  amb(E1,C0,T1);
-     //  ambt(T1,E2,C0);
-     //  C[0]+=C0[0];
-     //  C[1]+=C0[1];
-     //  C[2]+=C0[2];
-     //  C[3]+=C0[3];
-     // }
-     free(CO);
+      free(CO);
      } else {
       /* add up terms together */
       for (cn=0; cn<t->carr[cm].N; cn++) {
