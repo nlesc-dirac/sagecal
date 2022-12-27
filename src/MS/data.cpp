@@ -814,6 +814,12 @@ Data::loadData(Table ti, Data::IOData iodata, LBeam binfo, double *fratio) {
         iodata.flag[row]=1;
 
       }
+      /* also set time to last valid one */
+      if (rowt>0 && rowt<iodata.tilesz) {
+       for(int rowtt=rowt; rowtt<iodata.tilesz; rowtt++) {
+         binfo.time_utc[rowtt]=binfo.time_utc[rowt-1];
+       }
+      }
       /* set uvw and data to 0 to eliminate any funny business */
       memset(&iodata.u[row0],0,sizeof(double)*(size_t)(iodata.tilesz*iodata.Nbase-row0));
       memset(&iodata.v[row0],0,sizeof(double)*(size_t)(iodata.tilesz*iodata.Nbase-row0));
