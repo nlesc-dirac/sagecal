@@ -307,20 +307,26 @@ convolve_with_psf(double *x, int Nx, double *y, int Ny,
     sc=1.0/(double)(Nx*Ny);
     /* for the mode vectors */   
     for (kk=0; kk<n0*n0; kk++) {
+#ifdef _OPENMP
 #pragma omp parallel for
+#endif /* _OPENMP */
      for (yci=0; yci<Nx*Ny; yci++) {
        in[yci]=Av[Nx*Ny*kk+yci]+_Complex_I*0.0;
      }
      fftw_execute(p);
      /* multiply with the psf */
+#ifdef _OPENMP
 #pragma omp parallel for
+#endif /* _OPENMP */
      for (yci=0; yci<Nx*Ny; yci++) {
        out[yci]*=(psfout[yci]);
      }
      /* take ifft */
      fftw_execute(q);
      /* copy back the result, do proper scale */
+#ifdef _OPENMP
 #pragma omp parallel for
+#endif /* _OPENMP */
      for (yci=0; yci<Nx*Ny; yci++) {
        Av[Nx*Ny*kk+yci]=creal(in[yci])*sc;
      }

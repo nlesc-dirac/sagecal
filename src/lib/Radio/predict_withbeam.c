@@ -990,36 +990,11 @@ visibilities_threadfn_multifreq(void *data) {
      }
 
 
-     /* flux of each source, at each freq */
+#ifdef _OPENMP
+#pragma omp simd
+#endif
      for (cn=0; cn<t->carr[cm].N; cn++) {
-       /* coherencies are NOT scaled by 1/2, with spectral index */
-       if (t->carr[cm].spec_idx[cn]!=0.0) {
-         double fratio=log(freq0/t->carr[cm].f0[cn]);
-         double fratio1=fratio*fratio;
-         double fratio2=fratio1*fratio;
-         double tempfr=t->carr[cm].spec_idx[cn]*fratio+t->carr[cm].spec_idx1[cn]*fratio1+t->carr[cm].spec_idx2[cn]*fratio2;
-         /* catch -ve and 0 sI */
-         if (t->carr[cm].sI0[cn]>0.0) {
-          II[cn]=exp(log(t->carr[cm].sI0[cn])+tempfr);
-         } else {
-          II[cn]=(t->carr[cm].sI0[cn]==0.0?0.0:-exp(log(-t->carr[cm].sI0[cn])+tempfr));
-         }
-         if (t->carr[cm].sQ0[cn]>0.0) {
-          QQ[cn]=exp(log(t->carr[cm].sQ0[cn])+tempfr);
-         } else {
-          QQ[cn]=(t->carr[cm].sQ0[cn]==0.0?0.0:-exp(log(-t->carr[cm].sQ0[cn])+tempfr));
-         }
-         if (t->carr[cm].sU0[cn]>0.0) {
-          UU[cn]=exp(log(t->carr[cm].sU0[cn])+tempfr);
-         } else {
-          UU[cn]=(t->carr[cm].sU0[cn]==0.0?0.0:-exp(log(-t->carr[cm].sU0[cn])+tempfr));
-         }
-         if (t->carr[cm].sV0[cn]>0.0) {
-          VV[cn]=exp(log(t->carr[cm].sV0[cn])+tempfr);
-         } else {
-          VV[cn]=(t->carr[cm].sV0[cn]==0.0?0.0:-exp(log(-t->carr[cm].sV0[cn])+tempfr));
-         }
-       } else {
+       if (t->carr[cm].spec_idx[cn]==0.0) {
          II[cn]=t->carr[cm].sI[cn];
          QQ[cn]=t->carr[cm].sQ[cn];
          UU[cn]=t->carr[cm].sU[cn];
@@ -1027,29 +1002,81 @@ visibilities_threadfn_multifreq(void *data) {
        }
      }
 
+     /* flux of each source, at each freq */
+     /* coherencies are NOT scaled by 1/2, with spectral index */
+     double *tempfr=0;
+     if (posix_memalign((void*)&tempfr,sizeof(double),((size_t)t->carr[cm].N*sizeof(double)))!=0) {
+      fprintf(stderr,"%s: %d: No free memory\n",__FILE__,__LINE__);
+      exit(1);
+     }
+#ifdef _OPENMP
+#pragma omp simd
+#endif
+     for (cn=0; cn<t->carr[cm].N; cn++) {
+       if (t->carr[cm].spec_idx[cn]!=0.0) {
+         double fratio=log(freq0/t->carr[cm].f0[cn]);
+         tempfr[cn]=(t->carr[cm].spec_idx[cn]+(t->carr[cm].spec_idx1[cn]+t->carr[cm].spec_idx2[cn]*fratio)*fratio)*fratio;
+       }
+     }
+#ifdef _OPENMP
+#pragma omp simd
+#endif
+     for (cn=0; cn<t->carr[cm].N; cn++) {
+       if (t->carr[cm].spec_idx[cn]!=0.0) {
+         /* catch -ve and 0 sI */
+         II[cn]=t->carr[cm].sI0[cn]>0.0?exp(log(t->carr[cm].sI0[cn])+tempfr[cn])
+		 :(t->carr[cm].sI0[cn]==0.0?0.0:-exp(log(-t->carr[cm].sI0[cn])+tempfr[cn]));
+         QQ[cn]=t->carr[cm].sQ0[cn]>0.0?exp(log(t->carr[cm].sQ0[cn])+tempfr[cn])
+                 :(t->carr[cm].sQ0[cn]==0.0?0.0:-exp(log(-t->carr[cm].sQ0[cn])+tempfr[cn]));
+         UU[cn]=t->carr[cm].sU0[cn]>0.0?exp(log(t->carr[cm].sU0[cn])+tempfr[cn])
+                 :(t->carr[cm].sU0[cn]==0.0?0.0:-exp(log(-t->carr[cm].sU0[cn])+tempfr[cn]));
+         VV[cn]=t->carr[cm].sV0[cn]>0.0?exp(log(t->carr[cm].sV0[cn])+tempfr[cn])
+                 :(t->carr[cm].sV0[cn]==0.0?0.0:-exp(log(-t->carr[cm].sV0[cn])+tempfr[cn]));
+       }
+     }
+     free(tempfr);
+
      if (t->dobeam==DOBEAM_ELEMENT || t->dobeam==DOBEAM_FULL) {
+      complex double *CO=0;
+      if (posix_memalign((void*)&CO,sizeof(complex double),((size_t)t->carr[cm].N*4*sizeof(complex double)))!=0) {
+      fprintf(stderr,"%s: %d: No free memory\n",__FILE__,__LINE__);
+      exit(1);
+      }
       /* add up terms together with Ejones multiplication */
+#ifdef _OPENMP
+      #pragma omp simd
+#endif
       for (cn=0; cn<t->carr[cm].N; cn++) {
-       complex double *E1=(complex double*)&t->elementbeam[cn*(t->N*8*t->tilesz*t->Nchan)+cf*(t->N*8*t->tilesz)+tslot*t->N*8+sta1*8]; /* 8 values */
-       complex double *E2=(complex double*)&t->elementbeam[cn*(t->N*8*t->tilesz*t->Nchan)+cf*(t->N*8*t->tilesz)+tslot*t->N*8+sta2*8]; /* 8 values */
        complex double Ph,IIl,QQl,UUl,VVl;
        Ph=(PHr[cn]+_Complex_I*PHi[cn]);
        IIl=Ph*II[cn];
        QQl=Ph*QQ[cn];
        UUl=Ph*UU[cn];
        VVl=Ph*VV[cn];
-       complex double C0[4];
-       C0[0]=IIl+QQl;
-       C0[1]=UUl+_Complex_I*VVl;
-       C0[2]=UUl-_Complex_I*VVl;
-       C0[3]=IIl-QQl;
-       amb(E1,C0,T1);
-       ambt(T1,E2,C0);
-       C[0]+=C0[0];
-       C[1]+=C0[1];
-       C[2]+=C0[2];
-       C[3]+=C0[3];
+       CO[0+4*cn]=IIl+QQl;
+       CO[1+4*cn]=UUl+_Complex_I*VVl;
+       CO[2+4*cn]=UUl-_Complex_I*VVl;
+       CO[3+4*cn]=IIl-QQl;
       }
+#ifdef _OPENMP
+      #pragma omp simd
+#endif
+      for (cn=0; cn<t->carr[cm].N; cn++) {
+       complex double *E1=(complex double*)&t->elementbeam[cn*(t->N*8*t->tilesz*t->Nchan)+cf*(t->N*8*t->tilesz)+tslot*t->N*8+sta1*8]; /* 8 values */
+       complex double *E2=(complex double*)&t->elementbeam[cn*(t->N*8*t->tilesz*t->Nchan)+cf*(t->N*8*t->tilesz)+tslot*t->N*8+sta2*8]; /* 8 values */
+       amb(E1,&CO[4*cn],T1);
+       ambt(T1,E2,&CO[4*cn]);
+      }
+#ifdef _OPENMP
+      #pragma omp simd
+#endif
+      for (cn=0; cn<t->carr[cm].N; cn++) {
+       C[0]+=CO[0+4*cn];
+       C[1]+=CO[1+4*cn];
+       C[2]+=CO[2+4*cn];
+       C[3]+=CO[3+4*cn];
+      }
+      free(CO);
      } else {
       /* add up terms together */
       for (cn=0; cn<t->carr[cm].N; cn++) {

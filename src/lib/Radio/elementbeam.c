@@ -175,6 +175,7 @@ free_elementcoeffs(elementcoeff ecoeff) {
 
 /* generalized Laguerre polynomial L_p^q(x) */
 /* for calculating L_{n-|m|/2}^|m| (x) */
+#ifndef _OPENMP
 static double
 L_g1(int p, int q, double x) {
   /* max p: (n-|m|)/2 = n/2 */
@@ -192,8 +193,30 @@ L_g1(int p, int q, double x) {
   }
   return L_p;
 }
+#endif /* !_OPENMP */
+
+#ifdef _OPENMP
+static double
+L_g2(int p, double q, double x) {
+  /* max p: (n-|m|)/2 = n/2 */
+  if(p==0) return 1.0;
+  if(p==1) return 1.0-x+q;
+  /* else, use two variables to store past values */
+  double L_p=0.0,L_p_1,L_p_2;
+  L_p_2=1.0;
+  L_p_1=1.0-x+q;
+  for (int i=2; i<=p; i++) {
+   double p_1=1.0/(double)i;
+   L_p=(2.0+p_1*(q-1.0-x))*L_p_1-(1.0+p_1*(q-1))*L_p_2;
+   L_p_2=L_p_1;
+   L_p_1=L_p;
+  }
+  return L_p;
+}
+#endif /* _OPENMP */
 
 
+#ifndef _OPENMP
 elementval
 eval_elementcoeffs(double r, double theta, elementcoeff *ecoeff) {
   /* evaluate r^2/beta^2 */
@@ -232,8 +255,105 @@ eval_elementcoeffs(double r, double theta, elementcoeff *ecoeff) {
 
  return eval;
 }
+#endif /* !_OPENMP */
 
 
+#ifdef _OPENMP
+elementval
+eval_elementcoeffs(double r, double theta, elementcoeff *ecoeff) {
+  /* evaluate r^2/beta^2 */
+  double rb=pow(r/ecoeff->beta,2);
+  /* evaluate e^(-r^2/2beta^2) */
+  double ex=exp(-0.5*rb);
+
+  elementval eval;
+  eval.phi=0.0+_Complex_I*0.0;
+  eval.theta=0.0+_Complex_I*0.0;
+
+  /* storage for temp data */
+  int N=ecoeff->M*(ecoeff->M+1)/2;
+  double *Lg=0;
+  if (posix_memalign((void*)&Lg,sizeof(double),((size_t)N*sizeof(double)))!=0) {
+      fprintf(stderr,"%s: %d: No free memory\n",__FILE__,__LINE__);
+      exit(1);
+  }
+
+  int idx=0;
+  for (int n=0; n<ecoeff->M; n++) {
+#pragma omp simd
+    for (int m=-n; m<=n; m+=2) {
+     int absm=m>=0?m:-m; /* |m| */
+     double dabsm=(double)absm;
+     Lg[idx]=ex*L_g2((n-absm)/2,dabsm,rb)*pow(M_PI_4+r,dabsm);
+
+     idx++;
+    }
+  }
+  int *inm=0;
+  double *inmp=0,*ins=0,*inc=0;
+  /* Note: we allocate for the largest possible, n=M-1, size n+1=M */
+  if ((inm=(int*)malloc((size_t)(ecoeff->M)*sizeof(int)))==0) {
+      fprintf(stderr,"%s: %d: No free memory\n",__FILE__,__LINE__);
+      exit(1);
+  }
+  if (posix_memalign((void*)&inmp,sizeof(double),((size_t)(ecoeff->M)*sizeof(double)))!=0) {
+      fprintf(stderr,"%s: %d: No free memory\n",__FILE__,__LINE__);
+      exit(1);
+  }
+  if (posix_memalign((void*)&ins,sizeof(double),((size_t)(ecoeff->M)*sizeof(double)))!=0) {
+      fprintf(stderr,"%s: %d: No free memory\n",__FILE__,__LINE__);
+      exit(1);
+  }
+  if (posix_memalign((void*)&inc,sizeof(double),((size_t)(ecoeff->M)*sizeof(double)))!=0) {
+      fprintf(stderr,"%s: %d: No free memory\n",__FILE__,__LINE__);
+      exit(1);
+  }
+  idx=0;
+  for (int n=0; n<ecoeff->M; n++) {
+    int m=-n;
+#pragma omp simd
+    for (int ci=0; ci<n+1; ci++) {
+            inm[ci]=-m;
+            m+=2;
+    }
+#pragma omp simd
+    for (int ci=0; ci<n+1; ci++) {
+            inmp[ci]=(double)inm[ci]*theta;
+    }
+    /* evaluate exp(-j*m*theta) */
+#pragma omp simd
+    for (int ci=0; ci<n+1; ci++) {
+            ins[ci]=sin(inmp[ci]);
+    }
+#pragma omp simd
+    for (int ci=0; ci<n+1; ci++) {
+            inc[ci]=cos(inmp[ci]);
+    }
+
+#pragma omp simd
+    for (int ci=0; ci<n+1; ci++) {
+     /* find product of real terms (including the preamble) */
+     double pr=Lg[idx]*ecoeff->preamble[idx];
+     double re,im;
+     /* basis function re+j*im */
+     re=pr*inc[ci];
+     im=pr*ins[ci];
+
+     eval.phi+=ecoeff->pattern_phi[idx]*(re+_Complex_I*im);
+     eval.theta+=ecoeff->pattern_theta[idx]*(re+_Complex_I*im);
+     idx++;
+    }
+
+  }
+  free(inm);
+  free(inmp);
+  free(ins);
+  free(inc);
+  free(Lg);
+
+ return eval;
+}
+#endif /* _OPENMP */
 
 /* Legendre function P(l,m,x) */
 static double
