@@ -326,13 +326,15 @@ read_sky_cluster(const char *skymodel, const char *clusterfile, clus_source_t **
       }      
       /* calculate l,m */
       /* Rad=(hr+min/60+sec/60*60)*pi/12 */
-      if (rahr<0.0) {
+      /* catch case when rahr=-0 as well */
+      if (rahr<0.0 || (rahr==0.0 && signbit(rahr))) {
         myra=-(-rahr+ramin/60.0+rasec/3600.0)*M_PI/12.0;
       } else {
         myra=(rahr+ramin/60.0+rasec/3600.0)*M_PI/12.0;
       }
       /* Rad=(hr+min/60+sec/60*60)*pi/180 */
-      if (decd<0.0) {
+      /* catch case when decd=-0 as well */
+      if (decd<0.0 || (decd==0.0 && signbit(decd))) {
         mydec=-(-decd+decmin/60.0+decsec/3600.0)*M_PI/180.0;
       } else {
         mydec=(decd+decmin/60.0+decsec/3600.0)*M_PI/180.0;
