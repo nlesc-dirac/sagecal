@@ -23,7 +23,7 @@
 #include <stdlib.h>
 #include <math.h>
 
-#include "Radio.h"
+#include "Dirac_radio.h"
 /* 
  convert xyz ITRF 2000 coords (m) to
  long,lat, (rad) height (m)

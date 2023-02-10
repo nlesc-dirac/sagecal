@@ -25,7 +25,7 @@
 #include <pthread.h>
 #include <casacore/casa/Quanta/Quantum.h>
 
-#include "Radio.h"
+#include "Dirac_radio.h"
 #include "Dirac.h"
 #include "sagecalmain.h"
 

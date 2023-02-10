@@ -23,16 +23,16 @@ link_directories(${CMAKE_CURRENT_SOURCE_DIR}/../lib/Radio)
 FILE(GLOB SRCFILES *.cpp)
 
 # add build dependencies
-target_link_libraries(${target} radio)
+target_link_libraries(${target} dirac-radio)
 target_link_libraries(${target} dirac)
 
 if(HAVE_CUDA)
 
     cuda_add_executable(sagecal_gpu ${SRCFILES})
-    add_dependencies(sagecal_gpu radio dirac)
+    add_dependencies(sagecal_gpu dirac-radio dirac)
 
     target_link_libraries(sagecal_gpu
-        -lradio
+        -ldirac-radio
         -ldirac
         ${CASACORE_LIBRARIES}
         ${CFITSIO_LIB}
@@ -54,10 +54,10 @@ if(HAVE_CUDA)
 else()
 
     add_executable(sagecal ${SRCFILES})
-    add_dependencies(sagecal radio dirac)
+    add_dependencies(sagecal dirac-radio dirac)
 
     target_link_libraries(sagecal
-        -lradio
+        -ldirac-radio
         -ldirac
         ${CASACORE_LIBRARIES}
         ${CFITSIO_LIB}

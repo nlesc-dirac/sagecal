@@ -21,7 +21,7 @@
 #include <cuComplex.h>
 #include <stdio.h>
 #include <cublas_v2.h>
-#include "Radio.h"
+#include "Dirac_radio.h"
 
 /* enable this for checking for kernel failure */
 //#define CUDA_DBG

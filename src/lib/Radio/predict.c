@@ -23,7 +23,7 @@
 #include <unistd.h>
 #include <stdlib.h>
 #include <pthread.h>
-#include "Radio.h"
+#include "Dirac_radio.h"
 
 /******************** shapalet stuff **********************/
 /* evaluate Hermite polynomial value using recursion

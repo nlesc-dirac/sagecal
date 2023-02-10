@@ -27,7 +27,7 @@
 #include <unistd.h>
 #include <string.h>
 
-#include "Radio.h"
+#include "Dirac_radio.h"
 #include "elementcoeff.h"
 
 /* get beam type LBA/HBA and frequency

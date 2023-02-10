@@ -18,7 +18,7 @@
  */
 
 #include "data.h"
-#include "Radio.h"
+#include "Dirac_radio.h"
 #include "Dirac.h"
 #include <casacore/measures/Measures/MDirection.h>
 #include <casacore/measures/Measures/UVWMachine.h>

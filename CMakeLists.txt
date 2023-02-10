@@ -116,13 +116,11 @@ if(NOT LIB_ONLY)
  include_directories(${CFITSIO_INCLUDE})
 endif()
 
-if(NOT LIB_ONLY)
- #glib
- find_package(PkgConfig REQUIRED)
- pkg_check_modules(GLIB_PKG glib-2.0)
- if (GLIB_PKG_FOUND)
+#glib
+find_package(PkgConfig REQUIRED)
+pkg_check_modules(GLIB_PKG glib-2.0)
+if (GLIB_PKG_FOUND)
     include_directories(${GLIB_PKG_INCLUDE_DIRS})
- endif()
 endif()
 
 #if (LIB_ONLY)
@@ -270,4 +268,7 @@ endif()
 
 install(DIRECTORY ${CMAKE_SOURCE_DIR}/src/lib/Dirac/
         DESTINATION include
-        FILES_MATCHING PATTERN "*.h" )
+        FILES_MATCHING PATTERN "Dirac*.h" )
+install(DIRECTORY ${CMAKE_SOURCE_DIR}/src/lib/Radio/
+        DESTINATION include
+        FILES_MATCHING PATTERN "Dirac*.h" )

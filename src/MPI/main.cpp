@@ -26,7 +26,7 @@
 #include <pthread.h>
 
 #include <Dirac.h>
-#include <Radio.h>
+#include <Dirac_radio.h>
 #include <mpi.h>
 
 using namespace std;
