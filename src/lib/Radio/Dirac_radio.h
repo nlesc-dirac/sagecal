@@ -17,8 +17,8 @@
  $Id$
  */
 
-#ifndef RADIO_H
-#define RADIO_H
+#ifndef DIRAC_RADIO_H
+#define DIRAC_RADIO_H
 
 #ifdef HAVE_CUDA
 #include <cublas_v2.h>
@@ -581,4 +581,4 @@ predict_visibilities_multifreq_withsol(double *u,double *v,double *w,double *p,d
 #ifdef __cplusplus
      } /* extern "C" */
 #endif
-#endif /* RADIO_H */
+#endif /* DIRAC_RADIO_H */
