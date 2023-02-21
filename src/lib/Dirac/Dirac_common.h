@@ -571,6 +571,26 @@ __attribute__ ((target(MIC)))
 extern void
 setweights(int N, double *b, double a, int Nt);
 
+/* update baseline flags, also make data zero if flagged
+  this is needed for solving (calculate error) ignore flagged data */
+/* Nbase: total actual data points = Nbasextilesz
+   flag: flag array Nbasex1
+   barr: baseline array Nbasex1
+   x: data Nbase*8 x 1 ( 8 value per baseline )
+   Nt: no of threads
+*/
+extern int
+preset_flags_and_data(int Nbase, double *flag, baseline_t *barr, double *x, int Nt);
+
+/* generte baselines -> sta1,sta2 pairs for later use */
+/* barr: Nbasextilesz
+   N : stations
+   Nt : threads
+*/
+extern int
+generate_baselines(int Nbase, int tilesz, int N, baseline_t *barr,int Nt);
+
+
 /****************************** myblas.c ****************************/
 /* BLAS wrappers */
 /* machine precision */
