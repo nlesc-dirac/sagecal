@@ -24,6 +24,8 @@
 #include <casacore/measures/Measures/UVWMachine.h>
 #include <casacore/casa/Quanta.h>
 #include <casacore/casa/Quanta/Quantum.h>
+#include <casacore/measures/Measures/Precession.h>
+#include <casacore/measures/Measures/Nutation.h>
 
 /* speed of light */
 #ifndef CONST_C
@@ -1489,9 +1491,12 @@ void Data::freeData(Data::IOData data, Data::LBeam binfo)
 
 int
 Data::precess_source_locations(double jd_tdb, clus_source_t *carr, int M, double *ra_beam, double *dec_beam, int Nt) {
-
   Precession prec(Precession::IAU2000);  // define precession type
-  RotMatrix rotat(prec(jd_tdb-2400000.5));        // JD to MJD
+  RotMatrix rotat_prec(prec(jd_tdb-2400000.5));        // JD to MJD
+  Nutation nut(Nutation::IAU2000);
+  RotMatrix rotat_nut(nut(jd_tdb - 2400000.5));
+  RotMatrix rotat = rotat_prec * rotat_nut;
+
   rotat.transpose();
 
   for (int cl=0; cl<M; cl++) {
