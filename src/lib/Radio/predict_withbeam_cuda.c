@@ -19,7 +19,7 @@
 
 
 
-#include "Radio.h"
+#include "Dirac_radio.h"
 #include "Dirac_GPUtune.h"
 
 //#define CUDA_DEBUG

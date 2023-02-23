@@ -36,7 +36,7 @@
 #include <math.h>
 #include <complex>
 
-#include "Radio.h"
+#include "Dirac_radio.h"
 #include <casacore/measures/Measures/Precession.h>
 
 

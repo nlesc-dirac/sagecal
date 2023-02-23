@@ -6,4 +6,4 @@
 # Compute paths
 get_filename_component(DIRAC_CMAKE_DIR "${CMAKE_CURRENT_LIST_FILE}" PATH)
 set(DIRAC_INCLUDE_DIRS -I@CMAKE_INSTALL_PREFIX@/include)
-set(DIRAC_LIBRARIES -L@CMAKE_INSTALL_PREFIX@/lib -ldirac)
+set(DIRAC_LIBRARIES -L@CMAKE_INSTALL_PREFIX@/lib -ldirac -ldirac-radio)

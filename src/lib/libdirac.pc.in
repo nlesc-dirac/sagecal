@@ -13,5 +13,5 @@ Version: @PROJECT_VERSION@
 Requires: @pc_req_public@
 Requires.private: @pc_req_private@
 Cflags: -I"${includedir}"
-Libs: -L"${libdir}" -ldirac
+Libs: -L"${libdir}" -ldirac -ldirac-radio
 #Libs.private: ${extralib}

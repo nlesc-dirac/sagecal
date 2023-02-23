@@ -24,7 +24,7 @@
 #include <unistd.h>
 #include <stdlib.h>
 #include <pthread.h>
-#include "Radio.h"
+#include "Dirac_radio.h"
 
 /* Jones matrix multiplication 
    C=A*B
@@ -401,9 +401,14 @@ residual_threadfn_onefreq(void *data) {
      for (cn=0; cn<t->carr[cm].N; cn++) {
        G[cn]=2.0*M_PI*(t->u[ci]*t->carr[cm].ll[cn]+t->v[ci]*t->carr[cm].mm[cn]+t->w[ci]*t->carr[cm].nn[cn]);
      }
+     /* replacing sincos() with sin() and cos() to enable vectorization */
      for (cn=0; cn<t->carr[cm].N; cn++) {
-       sincos(G[cn]*freq0,&PHi[cn],&PHr[cn]);
+       PHi[cn]=sin(G[cn]*freq0);
      }
+     for (cn=0; cn<t->carr[cm].N; cn++) {
+       PHr[cn]=cos(G[cn]*freq0);
+     }
+
 
      /* term due to shape of source, also multiplied by freq/time smearing */
      for (cn=0; cn<t->carr[cm].N; cn++) {
@@ -765,9 +770,14 @@ residual_threadfn_multifreq(void *data) {
      for (cn=0; cn<t->carr[cm].N; cn++) {
        G[cn]=2.0*M_PI*(t->u[ci]*t->carr[cm].ll[cn]+t->v[ci]*t->carr[cm].mm[cn]+t->w[ci]*t->carr[cm].nn[cn]);
      }
+     /* replacing sincos() with sin() and cos() to enable vectorization */
      for (cn=0; cn<t->carr[cm].N; cn++) {
-       sincos(G[cn]*freq0,&PHi[cn],&PHr[cn]);
+       PHi[cn]=sin(G[cn]*freq0);
      }
+     for (cn=0; cn<t->carr[cm].N; cn++) {
+       PHr[cn]=cos(G[cn]*freq0);
+     }
+
 
      /* term due to shape of source, also multiplied by freq/time smearing */
      for (cn=0; cn<t->carr[cm].N; cn++) {
@@ -1114,9 +1124,14 @@ visibilities_threadfn_multifreq(void *data) {
      for (cn=0; cn<t->carr[cm].N; cn++) {
        G[cn]=2.0*M_PI*(t->u[ci]*t->carr[cm].ll[cn]+t->v[ci]*t->carr[cm].mm[cn]+t->w[ci]*t->carr[cm].nn[cn]);
      }
+     /* replacing sincos() with sin() and cos() to enable vectorization */
      for (cn=0; cn<t->carr[cm].N; cn++) {
-       sincos(G[cn]*freq0,&PHi[cn],&PHr[cn]);
+       PHi[cn]=sin(G[cn]*freq0);
      }
+     for (cn=0; cn<t->carr[cm].N; cn++) {
+       PHr[cn]=cos(G[cn]*freq0);
+     }
+
 
      /* term due to shape of source, also multiplied by freq/time smearing */
      for (cn=0; cn<t->carr[cm].N; cn++) {
@@ -1423,9 +1438,14 @@ predictwithgain_threadfn_multifreq(void *data) {
      for (cn=0; cn<t->carr[cm].N; cn++) {
        G[cn]=2.0*M_PI*(t->u[ci]*t->carr[cm].ll[cn]+t->v[ci]*t->carr[cm].mm[cn]+t->w[ci]*t->carr[cm].nn[cn]);
      }
+     /* replacing sincos() with sin() and cos() to enable vectorization */
      for (cn=0; cn<t->carr[cm].N; cn++) {
-       sincos(G[cn]*freq0,&PHi[cn],&PHr[cn]);
+       PHi[cn]=sin(G[cn]*freq0);
      }
+     for (cn=0; cn<t->carr[cm].N; cn++) {
+       PHr[cn]=cos(G[cn]*freq0);
+     }
+
 
      /* term due to shape of source, also multiplied by freq/time smearing */
      for (cn=0; cn<t->carr[cm].N; cn++) {

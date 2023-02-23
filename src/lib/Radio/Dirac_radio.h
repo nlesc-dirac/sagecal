@@ -17,8 +17,8 @@
  $Id$
  */
 
-#ifndef RADIO_H
-#define RADIO_H
+#ifndef DIRAC_RADIO_H
+#define DIRAC_RADIO_H
 
 #ifdef HAVE_CUDA
 #include <cublas_v2.h>
@@ -197,26 +197,6 @@ extern int
 precalculate_coherencies_multifreq(double *u, double *v, double *w, complex double *x, int N,
    int Nbase, baseline_t *barr,  clus_source_t *carr, int M, double *freqs, int Nchan, double fdelta, double tdelta, double dec0, double uvmin, double uvmax, int Nt);
 
-
-
-/* update baseline flags, also make data zero if flagged
-  this is needed for solving (calculate error) ignore flagged data */
-/* Nbase: total actual data points = Nbasextilesz
-   flag: flag array Nbasex1
-   barr: baseline array Nbasex1
-   x: data Nbase*8 x 1 ( 8 value per baseline ) 
-   Nt: no of threads 
-*/
-extern int
-preset_flags_and_data(int Nbase, double *flag, baseline_t *barr, double *x, int Nt);
-
-/* generte baselines -> sta1,sta2 pairs for later use */
-/* barr: Nbasextilesz
-   N : stations
-   Nt : threads 
-*/
-extern int
-generate_baselines(int Nbase, int tilesz, int N, baseline_t *barr,int Nt);
 
 /****************************** transforms.c ****************************/
 #ifndef ASEC2RAD
@@ -581,4 +561,4 @@ predict_visibilities_multifreq_withsol(double *u,double *v,double *w,double *p,d
 #ifdef __cplusplus
      } /* extern "C" */
 #endif
-#endif /* RADIO_H */
+#endif /* DIRAC_RADIO_H */

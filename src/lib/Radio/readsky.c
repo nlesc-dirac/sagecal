@@ -18,7 +18,7 @@
  */
 
 
-#include "Radio.h"
+#include "Dirac_radio.h"
 #include <ctype.h>
 #include <glib.h>
 
