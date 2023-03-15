@@ -431,24 +431,6 @@ precalculate_coherencies_multifreq_withbeam_gpu(double *u, double *v, double *w,
 /****************************** predict_model.cu ****************************/
 #ifdef HAVE_CUDA
 
-#ifndef ARRAY_USE_SHMEM /* use shared memory for calculation station beam */
-#define ARRAY_USE_SHMEM 1
-#endif
-#ifndef ARRAY_MAX_ELEM /* if using shared memory, max possible elements for a station */
-#define ARRAY_MAX_ELEM 512
-#endif
-/* default GPU heap size (in MB) needed to calculate some shapelet models,
-    if model has n0>20 or so, try increasing this and recompiling
-   the default GPU values is ~ 8MB */
-#ifndef GPU_HEAP_SIZE
-#define GPU_HEAP_SIZE 32 
-#endif
-/* shared memory size for element beam coefficients */
-#ifndef ELEMENT_MAX_SIZE
-#define ELEMENT_MAX_SIZE 64 // should be > (BEAM_ELEM_MODES*(BEAM_ELEM_MODES+1)/2)
-#endif
-
-
 extern void
 cudakernel_array_beam(int N, int T, int K, int F, double *freqs, float *longitude, float *latitude,
  double *time_utc, int *Nelem, float **xx, float **yy, float **zz, float *ra, float *dec, float ph_ra0, float  ph_dec0, float ph_freq0, float *beam);

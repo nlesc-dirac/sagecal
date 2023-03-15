@@ -39,6 +39,24 @@
 #define DEFAULT_TH_PER_BK_2 32
 #endif
 
+#ifndef ARRAY_USE_SHMEM /* use shared memory for calculation station beam */
+#define ARRAY_USE_SHMEM 1
+#endif
+#ifndef ARRAY_MAX_ELEM /* if using shared memory, max possible elements for a station */
+/* this is increased from 512 (=16x32) to 16x96 */
+#define ARRAY_MAX_ELEM 1536
+#endif
+/* default GPU heap size (in MB) needed to calculate some shapelet models,
+    if model has n0>20 or so, try increasing this and recompiling
+   the default GPU values is ~ 8MB */
+#ifndef GPU_HEAP_SIZE
+#define GPU_HEAP_SIZE 32
+#endif
+/* shared memory size for element beam coefficients */
+#ifndef ELEMENT_MAX_SIZE
+#define ELEMENT_MAX_SIZE 64 // should be > (BEAM_ELEM_MODES*(BEAM_ELEM_MODES+1)/2)
+#endif
+
 #endif
 /********************************************/
 
