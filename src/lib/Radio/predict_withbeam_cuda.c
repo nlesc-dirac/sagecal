@@ -134,11 +134,15 @@ typedef struct thread_data_corr_t_ {
    first allocate device memory */
 static void
 dtofcopy(int N, float **x_d, double *x) {
-  float *xhost;
+  float *xhost=0;
   cudaError_t err;
   /* first alloc pinned temp buffer */
   err=cudaMallocHost((void**)&xhost,sizeof(float)*N);
   checkCudaError(err,__FILE__,__LINE__);
+  if (!xhost) {
+      fprintf(stderr,"%s: %d: cudaMallocHost error\n",__FILE__,__LINE__);
+      exit(1);
+  }
   /* double to float */
   int ci;
   for (ci=0; ci<N; ci++) {
