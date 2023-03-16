@@ -63,7 +63,7 @@ print_help(void) {
    cout << "-n no of worker threads : default "<<Data::Nt << endl;
    cout << "-t tile size : default " <<Data::TileSize<< endl;
    cout << "-a 0,1,2,3 : if "<<SIMUL_ONLY<<", only simulate, if "<<SIMUL_ADD<<", simulate and add to input, if "<<SIMUL_SUB<<", simulate and subtract from input (For a>0, multiplied by solutions if solutions file is also given): default " <<Data::DoSim<< endl;
-   cout << "-z ignore_clusters: if only doing a simulation, ignore the cluster ids listed in this file" << endl;
+   cout << "-z ignore_clusters: if only doing a simulation (with an input solution file using -p option), ignore the cluster ids listed in this file" << endl;
    cout << "-b 0,1 : if 1, solve for each channel: default " <<Data::doChan<< endl;
    cout << "-B 0,1,2,3 : predict "<<DOBEAM_ARRAY<<": array beam, "<<DOBEAM_FULL<<": array+element beam, "<<DOBEAM_ELEMENT<<": element beam: default " <<Data::doBeam<< endl;
 #ifdef HAVE_CUDA
