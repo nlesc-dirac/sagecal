@@ -152,7 +152,7 @@ Data::readAuxData(const char *fname, Data::IOData *data) {
     cout<<"Integration Time: "<<data->deltat<<" s,"<<" Total timeslots: "<<data->totalt<<endl;
 
     Table _field = Table(_t.keywordSet().asTable("FIELD"));
-    ROArrayColumn<double> ref_dir(_field, "REFERENCE_DIR");
+    ROArrayColumn<double> ref_dir(_field, "PHASE_DIR");
     Array<double> dir = ref_dir(0);
     double *c = dir.data();
     data->ra0=c[0];
@@ -458,7 +458,7 @@ Data::readAuxDataList(vector<string> msnames, Data::IOData *data) {
     //sprintf(buff, "%s/FIELD", fname);
     //Table _field = Table(buff);
     Table _field = Table(_t.keywordSet().asTable("FIELD"));
-    ROArrayColumn<double> ref_dir(_field, "REFERENCE_DIR");
+    ROArrayColumn<double> ref_dir(_field, "PHASE_DIR");
     Array<double> dir = ref_dir(0);
     double *c = dir.data();
     data->ra0=c[0];
