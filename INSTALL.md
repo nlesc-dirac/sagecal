@@ -1,4 +1,4 @@
-vr  9 dec 2022  1:23:12 CET
+ma 27 mrt 2023 10:16:16 CEST
 # SAGECal Installation
 
 ## Cmake Build
@@ -29,7 +29,7 @@ If you get **-lgfortran is not found** error, run the following in the build dir
 ```
 to make a symbolic link to libgfortran.so.5 or whatever version that is installed.
 
-To only build *libdirac* (shared) library, use *-DLIB_ONLY=1* option (also *-DBLA_VENDOR* to select the BLAS flavour). This library can be used with pkg-config using *lib/pkgconfig/libdirac.pc*.
+To only build *libdirac* (shared) library, use *-DLIB_ONLY=1* option (also *-DBLA_VENDOR* to select the BLAS flavour). This library can be used with pkg-config using *lib/pkgconfig/libdirac.pc*. To build *libdirac* with GPU support, use *-DHAVE_CUDA=ON* with *-DLIB_ONLY=1* and give *-fPIC* compiler flag (for both *-DCMAKE_CXX_FLAGS* and *-DCMAKE_C_FLAGS*). With GPU support, only a static library is built.
 
 ### Vectorized math operations (New)
 SAGECal can use ***libmvec*** vectorized math operations, both in GPU and CPU versions. In order to enable this, use compiler options *-fopenmp -ffast-math -lmvec -lm* for both gcc and g++. Also *-mavx*, *-mavx2* etc. can be added. Here is an example for CPU version
@@ -104,4 +104,3 @@ $INSTALL_PATH is where you want to install SageCal.
 MPI support is automatically detected, otherwise, it can be forced with:
 ```
 cmake -DENABLE_MPI=ON
-```
