@@ -41,6 +41,7 @@ set_elementcoeffs(int element_type,  double frequency, elementcoeff *ecoeff) {
   ecoeff->M=BEAM_ELEM_MODES; /* model order 1,2.. */
   ecoeff->Nmodes=ecoeff->M*(ecoeff->M+1)/2;
   ecoeff->beta=BEAM_ELEM_BETA;
+  ecoeff->Nf=1;
 
   if ((ecoeff->pattern_phi=(complex double*)calloc((size_t)ecoeff->Nmodes,sizeof(complex double)))==0) {
     fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
@@ -127,6 +128,141 @@ set_elementcoeffs(int element_type,  double frequency, elementcoeff *ecoeff) {
   }
 #ifdef DEBUG
   for (int i=0; i<ecoeff->Nmodes; i++) {
+   printf("%d %lf %lf %lf %lf\n",i,creal(ecoeff->pattern_phi[i]),cimag(ecoeff->pattern_phi[i]),creal(ecoeff->pattern_theta[i]),cimag(ecoeff->pattern_theta[i]));
+  }
+#endif
+ 
+  /* factorial array */
+  int *factorial;
+  if ((factorial=(int*)calloc((size_t)ecoeff->Nmodes,sizeof(int)))==0) {
+    fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
+    exit(1);
+  }
+  factorial[0]=1; /* 0! */
+  for (int i=1; i<ecoeff->Nmodes; i++) {
+    factorial[i]=factorial[i-1]*i;
+  }
+
+  /* calculate preamble for basis calculation */
+  int idx=0;
+  for (int n=0; n<ecoeff->M; n++) {
+    for (int m=-n; m<=n; m+=2) {
+      int absm=m>=0?m:-m; /* |m| */
+      /* sqrt { ((n-|m|)/2)! / pi ((n+|m|)/2)! } */
+      ecoeff->preamble[idx]=sqrt(M_1_PI*(double)factorial[(n-absm)/2]/(double)factorial[(n+absm)/2]);
+      /* (-1)^(n-|m|)/2 */
+      if (((n-absm)/2)%2) {ecoeff->preamble[idx]=-ecoeff->preamble[idx];}
+      /* 1/beta^{1+|m|} */
+      ecoeff->preamble[idx] *=pow(ecoeff->beta,-1.0-absm);
+      //printf("n=%d m=%d |m|=%d %d %lf\n",n,m,absm,idx,ecoeff->preamble[idx]);
+      idx++;
+    }
+  }
+
+  free(factorial);
+  return 0;
+}
+
+/* get beam type LBA/HBA and for each frequency in frequencies array
+   return beam pattern coeff vectors for theta/phi patterns
+   element_type: ELEM_LBA or ELEM_HBA
+   frequencies: in Hz, Nf x 1 array
+*/
+int
+set_elementcoeffs_wb(int element_type,  double *frequencies, int Nf,  elementcoeff *ecoeff) {
+  /* common to all beam types */
+  ecoeff->M=BEAM_ELEM_MODES; /* model order 1,2.. */
+  ecoeff->Nmodes=ecoeff->M*(ecoeff->M+1)/2;
+  ecoeff->beta=BEAM_ELEM_BETA;
+  ecoeff->Nf=Nf;
+
+  if ((ecoeff->pattern_phi=(complex double*)calloc((size_t)ecoeff->Nmodes*ecoeff->Nf,sizeof(complex double)))==0) {
+    fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
+    exit(1);
+  }
+  if ((ecoeff->pattern_theta=(complex double*)calloc((size_t)ecoeff->Nmodes*ecoeff->Nf,sizeof(complex double)))==0) {
+    fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
+    exit(1);
+  }
+  if ((ecoeff->preamble=(double*)calloc((size_t)ecoeff->Nmodes,sizeof(double)))==0) {
+    fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
+    exit(1);
+  }
+
+  /* pointers to freq and pattern arrays */
+  int Nfreq=0;
+  double *freqs;
+  complex double *phi, *theta;
+  switch(element_type) {
+     case ELEM_LBA:
+       Nfreq=LBA_FREQS;
+       phi=(complex double *)&lba_beam_elem_phi[0][0];
+       theta=(complex double *)&lba_beam_elem_theta[0][0];
+       freqs=(double *)lba_beam_elem_freqs;
+       //printf("ELEM LBA\n");
+       break;
+     case ELEM_HBA:
+       Nfreq=HBA_FREQS;
+       phi=(complex double *)&hba_beam_elem_phi[0][0];
+       theta=(complex double *)&hba_beam_elem_theta[0][0];
+       freqs=(double *)hba_beam_elem_freqs;
+       //printf("ELEM HBA\n");
+       break;
+
+     default:
+      fprintf(stderr,"%s: %d: undefined element beam type\n",__FILE__,__LINE__);
+      exit(1);
+  }
+
+  for (int cf=0; cf<ecoeff->Nf; cf++) {
+  /* convert frequency to GHz */
+  double myfreq=frequencies[cf]/1e9;
+
+  //printf("myfreq=%lf\n",myfreq);
+  //printf("%lf %lf\n",creal(lba_beam_elem_phi[0][0]),cimag(lba_beam_elem_phi[0][0]));
+  //printf("%lf %lf\n",creal(phi[0]),cimag(phi[0]));
+  /* find correct freq interval */
+  int idl,idh=0;
+  while(idh<Nfreq && myfreq>freqs[idh]) { idh++; }
+  if (idh==Nfreq) { /* higher edge */
+    idl=idh=Nfreq-1;
+  } else if (idh==0) { /* lower edge */
+    idl=idh;
+  } else {
+    idl=idh-1;
+  }
+  /* now freqs[idl]<myfreq<=freqs[idh] */
+  //printf("%d %lf < %lf <= %d %lf\n",idl,freqs[idl],myfreq,idh,freqs[idh]);
+  if (idh==idl) { /* edge case, just copy this value */
+    my_ccopy(ecoeff->Nmodes, &phi[idl*ecoeff->Nmodes], 1, &ecoeff->pattern_phi[cf*ecoeff->Nmodes], 1);
+    my_ccopy(ecoeff->Nmodes, &theta[idl*ecoeff->Nmodes], 1, &ecoeff->pattern_theta[cf*ecoeff->Nmodes], 1);
+  } else {
+    /* interpolate */
+    /* find interpolation weights */
+    double wl=myfreq-freqs[idl];
+    double wh=freqs[idh]-myfreq;
+    double w1=wl/(wl+wh);
+ 
+    /* first copy to temp buffers */
+    complex double *xh;
+    if ((xh=(complex double*)calloc((size_t)ecoeff->Nmodes,sizeof(complex double)))==0) {
+    fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
+    exit(1);
+    }
+    my_ccopy(ecoeff->Nmodes, &phi[idh*ecoeff->Nmodes], 1, xh, 1);
+    my_ccopy(ecoeff->Nmodes, &phi[idl*ecoeff->Nmodes], 1, &ecoeff->pattern_phi[cf*ecoeff->Nmodes], 1);
+    my_cscal(ecoeff->Nmodes,1.0-w1+_Complex_I*0.0,&ecoeff->pattern_phi[cf*ecoeff->Nmodes]);
+    my_caxpy(ecoeff->Nmodes,xh,w1+_Complex_I*0.0,&ecoeff->pattern_phi[cf*ecoeff->Nmodes]);
+
+    my_ccopy(ecoeff->Nmodes, &theta[idh*ecoeff->Nmodes], 1, xh, 1);
+    my_ccopy(ecoeff->Nmodes, &theta[idl*ecoeff->Nmodes], 1, &ecoeff->pattern_theta[cf*ecoeff->Nmodes], 1);
+    my_cscal(ecoeff->Nmodes,1.0-w1+_Complex_I*0.0,&ecoeff->pattern_theta[cf*ecoeff->Nmodes]);
+    my_caxpy(ecoeff->Nmodes,xh,w1+_Complex_I*0.0,&ecoeff->pattern_theta[cf*ecoeff->Nmodes]);
+    free(xh);
+  }
+  }
+#ifdef DEBUG
+  for (int i=0; i<ecoeff->Nmodes*ecoeff->Nf; i++) {
    printf("%d %lf %lf %lf %lf\n",i,creal(ecoeff->pattern_phi[i]),cimag(ecoeff->pattern_phi[i]),creal(ecoeff->pattern_theta[i]),cimag(ecoeff->pattern_theta[i]));
   }
 #endif
@@ -256,6 +392,45 @@ eval_elementcoeffs(double r, double theta, elementcoeff *ecoeff) {
  return eval;
 }
 #endif /* !_OPENMP */
+
+elementval
+eval_elementcoeffs_wb(double r, double theta, elementcoeff *ecoeff, int findex) {
+  /* evaluate r^2/beta^2 */
+  double rb=pow(r/ecoeff->beta,2);
+  /* evaluate e^(-r^2/2beta^2) */
+  double ex=exp(-0.5*rb);
+ 
+  elementval eval;
+  eval.phi=0.0+_Complex_I*0.0;
+  eval.theta=0.0+_Complex_I*0.0;
+  int idx=0;
+  for (int n=0; n<ecoeff->M; n++) {
+    for (int m=-n; m<=n; m+=2) {
+     int absm=m>=0?m:-m; /* |m| */
+     /* evaluate L_((n-|m|)/2)^|m| ( . ) */
+     double Lg=L_g1((n-absm)/2,absm,rb);
+     /* evaluate r^|m| (with pi/4 offset) */
+     double rm=pow(M_PI_4+r,(double)absm);
+     /* evaluate exp(-j*m*theta) */
+     double s,c;
+     sincos(-(double)m*theta,&s,&c);
+
+     /* find product of real terms (including the preamble) */
+     double pr=rm*Lg*ex*ecoeff->preamble[idx];
+     double re,im;
+     /* basis function re+j*im */
+     re=pr*c;
+     im=pr*s; 
+
+     eval.phi+=ecoeff->pattern_phi[findex*ecoeff->Nmodes+idx]*(re+_Complex_I*im);
+     eval.theta+=ecoeff->pattern_theta[findex*ecoeff->Nmodes+idx]*(re+_Complex_I*im);
+     idx++;
+    }
+  }
+  
+
+ return eval;
+}
 
 
 #ifdef _OPENMP

@@ -57,6 +57,12 @@
 #define ELEMENT_MAX_SIZE 64 // should be > (BEAM_ELEM_MODES*(BEAM_ELEM_MODES+1)/2)
 #endif
 
+//Max no. of frequencies for a single kernel to work (predict_model.cu) on
+//Make this large ~64 for handling data with many channels
+#ifndef MODEL_MAX_F
+#define MODEL_MAX_F 16
+#endif
+
 #endif
 /********************************************/
 

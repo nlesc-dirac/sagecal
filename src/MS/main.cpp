@@ -35,7 +35,7 @@ using namespace Data;
 
 void
 print_copyright(void) {
-  cout<<"SAGECal 0.7.9 (C) 2011-2023 Sarod Yatawatta"<<endl;
+  cout<<"SAGECal 0.8.0 (C) 2011-2023 Sarod Yatawatta"<<endl;
 }
 
 
@@ -63,9 +63,9 @@ print_help(void) {
    cout << "-n no of worker threads : default "<<Data::Nt << endl;
    cout << "-t tile size : default " <<Data::TileSize<< endl;
    cout << "-a 0,1,2,3 : if "<<SIMUL_ONLY<<", only simulate, if "<<SIMUL_ADD<<", simulate and add to input, if "<<SIMUL_SUB<<", simulate and subtract from input (For a>0, multiplied by solutions if solutions file is also given): default " <<Data::DoSim<< endl;
-   cout << "-z ignore_clusters: if only doing a simulation, ignore the cluster ids listed in this file" << endl;
+   cout << "-z ignore_clusters: if only doing a simulation (with an input solution file using -p option), ignore the cluster ids listed in this file" << endl;
    cout << "-b 0,1 : if 1, solve for each channel: default " <<Data::doChan<< endl;
-   cout << "-B 0,1,2,3 : predict "<<DOBEAM_ARRAY<<": array beam, "<<DOBEAM_FULL<<": array+element beam, "<<DOBEAM_ELEMENT<<": element beam: default " <<Data::doBeam<< endl;
+   cout << "-B 0,1,2,3,4,5,6 : predict "<<DOBEAM_ARRAY<<": array beam, "<<DOBEAM_FULL<<": array+element beam, "<<DOBEAM_ELEMENT<<": element beam, "<<DOBEAM_ARRAY_WB<<": array beam (per channel), "<<DOBEAM_FULL_WB<<": array+element (per channel) "<<DOBEAM_ELEMENT_WB<<": element beam (per channel) : default " <<Data::doBeam<< endl;
 #ifdef HAVE_CUDA
    cout << "-E 0,1 : if 1, use GPU for model computing: default " <<Data::GPUpredict<< endl;
 #endif
@@ -147,7 +147,7 @@ ParseCmdLine(int ac, char **av) {
                 break;
             case 'B':
                 doBeam= atoi(optarg);
-                if (doBeam>3) { doBeam=DOBEAM_ARRAY; }
+                if (doBeam>6) { doBeam=DOBEAM_ARRAY; }
                 break;
             case 'E':
                 GPUpredict=atoi(optarg);

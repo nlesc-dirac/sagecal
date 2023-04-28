@@ -96,26 +96,39 @@ typedef struct exinfo_shapelet_ {
 
 /* beam prediction flags */
 #ifndef DOBEAM_NONE
-#define DOBEAM_NONE 0
+#define DOBEAM_NONE 0 /* no beam */
 #endif
 #ifndef DOBEAM_ARRAY
-#define DOBEAM_ARRAY 1
+#define DOBEAM_ARRAY 1 /* only the array factor */
 #endif
 #ifndef DOBEAM_FULL
-#define DOBEAM_FULL 2
+#define DOBEAM_FULL 2 /* array factor and element */
 #endif
 #ifndef DOBEAM_ELEMENT
-#define DOBEAM_ELEMENT 3
+#define DOBEAM_ELEMENT 3 /* only the element */
+#endif
+/* following are for wideband data, where beamformer is
+ * applied to each channel, not to the full subband (MS) */
+/* for element beam, the coefficients are per-channel, not per-subband */
+#ifndef DOBEAM_ARRAY_WB
+#define DOBEAM_ARRAY_WB 4
+#endif
+#ifndef DOBEAM_FULL_WB
+#define DOBEAM_FULL_WB 5
+#endif
+#ifndef DOBEAM_ELEMENT_WB
+#define DOBEAM_ELEMENT_WB 6
 #endif
 
 typedef struct elementcoff_ {
   int M; /* model order 1,2,3.. */
   int Nmodes; /* total modes = (M)(M+1)/2 */
+  int Nf; /* number of frequencies (for wideband beam, otherwise =1) */
   double beta; /* scale factor */
-  complex double *pattern_phi; /* Nmodes x 1 array */
-  complex double *pattern_theta; /* Nmodes x 1 array */
+  complex double *pattern_phi; /* Nmodes*Nf x 1 array */
+  complex double *pattern_theta; /* Nmodes*Nf x 1 array */
 
-  double *preamble; /* Nmodesx1 array, to store preamble of mode basis */
+  double *preamble; /* Nmodes x1 array, to store preamble of mode basis */
 } elementcoeff;
 
 /* struct to store source info in hash table */

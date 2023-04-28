@@ -63,7 +63,7 @@ int Data::whiten=0;
 int Data::DoSim=0;
 int Data::DoDiag=0;
 int Data::doChan=0; /* if 1, solve for each channel in multi channel data */
-int Data::doBeam=DOBEAM_NONE; /* if >0, enable LOFAR beam model, DOBEAM_ARRAY: array, DOBEAM_FULL: array+element, DOBEAM_ELEMENT: element */
+int Data::doBeam=DOBEAM_NONE; /* if >0, enable LOFAR beam model, DOBEAM_ARRAY: array, DOBEAM_FULL: array+element, DOBEAM_ELEMENT: element, DOBEAM_ARRAY_WB: array beam per channel, DOBEAM_FULL_WB: full beam per channel, DOBEAM_ELEMENT_WB: element beam per channel */
 int Data::phaseOnly=0; /* if >0, enable phase only correction */
 int Data::solver_mode=SM_RTR_OSRLM_RLBFGS; /* use RTR+LBFGS by default */
 int Data::ccid=-99999;
@@ -152,7 +152,7 @@ Data::readAuxData(const char *fname, Data::IOData *data) {
     cout<<"Integration Time: "<<data->deltat<<" s,"<<" Total timeslots: "<<data->totalt<<endl;
 
     Table _field = Table(_t.keywordSet().asTable("FIELD"));
-    ROArrayColumn<double> ref_dir(_field, "REFERENCE_DIR");
+    ROArrayColumn<double> ref_dir(_field, "PHASE_DIR");
     Array<double> dir = ref_dir(0);
     double *c = dir.data();
     data->ra0=c[0];
@@ -458,7 +458,7 @@ Data::readAuxDataList(vector<string> msnames, Data::IOData *data) {
     //sprintf(buff, "%s/FIELD", fname);
     //Table _field = Table(buff);
     Table _field = Table(_t.keywordSet().asTable("FIELD"));
-    ROArrayColumn<double> ref_dir(_field, "REFERENCE_DIR");
+    ROArrayColumn<double> ref_dir(_field, "PHASE_DIR");
     Array<double> dir = ref_dir(0);
     double *c = dir.data();
     data->ra0=c[0];

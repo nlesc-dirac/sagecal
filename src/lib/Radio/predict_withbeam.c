@@ -142,7 +142,8 @@ precal_threadfn(void *data) {
          G[cn]=1.0;
        }
      }
-     if (t->dobeam==DOBEAM_ARRAY || t->dobeam==DOBEAM_FULL) {
+     if (t->dobeam==DOBEAM_ARRAY || t->dobeam==DOBEAM_FULL
+         ||t->dobeam==DOBEAM_ARRAY_WB ||t->dobeam==DOBEAM_FULL_WB) {
       for (cn=0; cn<t->carr[cm].N; cn++) {
        /* get array factor for these 2 stations, at given time */
        double af1=t->arrayfactor[tslot*(t->N*t->carr[cm].N)+cn*t->N+sta1];
@@ -188,7 +189,8 @@ precal_threadfn(void *data) {
        VV[cn]=t->carr[cm].sV[cn];
      }
 
-     if (t->dobeam==DOBEAM_ELEMENT || t->dobeam==DOBEAM_FULL) {
+     if (t->dobeam==DOBEAM_ELEMENT || t->dobeam==DOBEAM_FULL
+         ||t->dobeam==DOBEAM_ELEMENT_WB ||t->dobeam==DOBEAM_FULL_WB) {
        /* add up terms together with Ejones multiplication */
        for (cn=0; cn<t->carr[cm].N; cn++) {
          complex double *E1=(complex double*)&t->elementbeam[tslot*(t->N*8*t->carr[cm].N)+cn*t->N*8+sta1*8]; /* 8 values */
@@ -360,7 +362,8 @@ precal_threadfn_multifreq(void *data) {
          G[cn]=1.0;
        }
      }
-     if (t->dobeam==DOBEAM_ARRAY || t->dobeam==DOBEAM_FULL) {
+     if (t->dobeam==DOBEAM_ARRAY || t->dobeam==DOBEAM_FULL
+         ||t->dobeam==DOBEAM_ARRAY_WB ||t->dobeam==DOBEAM_FULL_WB) {
       for (cn=0; cn<t->carr[cm].N; cn++) {
        /* get array factor for these 2 stations, at given time */
        double af1=t->arrayfactor[tslot*(t->N*t->carr[cm].N)+cn*t->N+sta1];
@@ -406,7 +409,8 @@ precal_threadfn_multifreq(void *data) {
        VV[cn]=t->carr[cm].sV[cn];
      }
 
-     if (t->dobeam==DOBEAM_ELEMENT || t->dobeam==DOBEAM_FULL) {
+     if (t->dobeam==DOBEAM_ELEMENT || t->dobeam==DOBEAM_FULL
+         ||t->dobeam==DOBEAM_ELEMENT_WB ||t->dobeam==DOBEAM_FULL_WB) {
        /* add up terms together with Ejones multiplication */
        for (cn=0; cn<t->carr[cm].N; cn++) {
          complex double *E1=(complex double*)&t->elementbeam[tslot*(t->N*8*t->carr[cm].N)+cn*t->N*8+sta1*8]; /* 8 values */
@@ -489,36 +493,36 @@ precalbeam_threadfn(void *data) {
     beamgain==NULL && elementgain!=NULL : only element beam
     beamgain!=NULL && elementgain!=NULL : full array+element beam */
  cm=t->cid;  /* predict for only this cluster */
- if (t->dobeam==DOBEAM_ARRAY) {
+ if (t->dobeam==DOBEAM_ARRAY || t->dobeam==DOBEAM_ARRAY_WB) {
     /* iterate over all timeslots */
     for (ct=0;ct<t->Ntime;ct++) {
    /* iterate over frequencies */
    for (cf=0; cf<t->Nf; cf++) {
    /* iterate over sources */
   for (cn=t->soff; cn<t->soff+t->Ns; cn++) {
-     arraybeam(t->carr[cm].ra[cn], t->carr[cm].dec[cn], t->ra0, t->dec0, t->freqs[cf], t->freq0, t->N, t->longitude, t->latitude, t->time_utc[ct], t->Nelem, t->xx, t->yy, t->zz, &(t->beamgain[ct*(t->N*t->carr[cm].N*t->Nf)+cf*(t->N*t->carr[cm].N)+cn*t->N]));
+     arraybeam(t->carr[cm].ra[cn], t->carr[cm].dec[cn], t->ra0, t->dec0, t->freqs[cf], t->freq0, t->N, t->longitude, t->latitude, t->time_utc[ct], t->Nelem, t->xx, t->yy, t->zz, &(t->beamgain[ct*(t->N*t->carr[cm].N*t->Nf)+cf*(t->N*t->carr[cm].N)+cn*t->N]),(t->dobeam==DOBEAM_ARRAY?0:1));
     }
    }
   }
- } else if (t->dobeam==DOBEAM_ELEMENT) {
+ } else if (t->dobeam==DOBEAM_ELEMENT || t->dobeam==DOBEAM_ELEMENT_WB) {
     /* iterate over all timeslots */
     for (ct=0;ct<t->Ntime;ct++) {
    /* iterate over frequencies */
    for (cf=0; cf<t->Nf; cf++) {
    /* iterate over sources */
   for (cn=t->soff; cn<t->soff+t->Ns; cn++) {
-     element_beam(t->carr[cm].ra[cn], t->carr[cm].dec[cn], t->freqs[cf], t->freq0, t->N, t->longitude, t->latitude, t->time_utc[ct], t->ecoeff, &(t->elementgain[ct*(8*t->N*t->carr[cm].N*t->Nf)+cf*(8*t->N*t->carr[cm].N)+cn*8*t->N]));
+     element_beam(t->carr[cm].ra[cn], t->carr[cm].dec[cn], t->freqs[cf], t->freq0, t->N, t->longitude, t->latitude, t->time_utc[ct], t->ecoeff, &(t->elementgain[ct*(8*t->N*t->carr[cm].N*t->Nf)+cf*(8*t->N*t->carr[cm].N)+cn*8*t->N]),(t->dobeam==DOBEAM_ELEMENT?0:1),cf);
     }
    }
   }
- } else if (t->dobeam==DOBEAM_FULL) {
+ } else if (t->dobeam==DOBEAM_FULL || t->dobeam==DOBEAM_FULL_WB) {
     /* iterate over all timeslots */
     for (ct=0;ct<t->Ntime;ct++) {
    /* iterate over frequencies */
    for (cf=0; cf<t->Nf; cf++) {
    /* iterate over sources */
   for (cn=t->soff; cn<t->soff+t->Ns; cn++) {
-     array_element_beam(t->carr[cm].ra[cn], t->carr[cm].dec[cn], t->ra0, t->dec0, t->freqs[cf], t->freq0, t->N, t->longitude, t->latitude, t->time_utc[ct], t->Nelem, t->xx, t->yy, t->zz, t->ecoeff, &(t->beamgain[ct*(t->N*t->carr[cm].N*t->Nf)+cf*(t->N*t->carr[cm].N)+cn*t->N]),&(t->elementgain[cn*(t->N*8*t->Ntime*t->Nf)+cf*(t->N*8*t->Ntime)+ct*t->N*8]));
+     array_element_beam(t->carr[cm].ra[cn], t->carr[cm].dec[cn], t->ra0, t->dec0, t->freqs[cf], t->freq0, t->N, t->longitude, t->latitude, t->time_utc[ct], t->Nelem, t->xx, t->yy, t->zz, t->ecoeff, &(t->beamgain[ct*(t->N*t->carr[cm].N*t->Nf)+cf*(t->N*t->carr[cm].N)+cn*t->N]),&(t->elementgain[cn*(t->N*8*t->Ntime*t->Nf)+cf*(t->N*8*t->Ntime)+ct*t->N*8]),(t->dobeam==DOBEAM_FULL?0:1),cf);
     }
    }
   }
@@ -603,13 +607,15 @@ precalculate_coherencies_withbeam(double *u, double *v, double *w, complex doubl
    /* first precalculate arrayfactor for all sources in this cluster */
    /* for each source : N*tilesz beams, so for a cluster with M: M*N*tilesz */
    beamgain=elementgain=NULL;
-   if (doBeam==DOBEAM_ARRAY || doBeam==DOBEAM_FULL) {
+   if (doBeam==DOBEAM_ARRAY || doBeam==DOBEAM_FULL
+       ||doBeam==DOBEAM_ARRAY_WB ||doBeam==DOBEAM_FULL_WB) {
      if (posix_memalign((void*)&beamgain,sizeof(double),((size_t)N*tilesz*carr[ncl].N*sizeof(double)))!=0) {
       fprintf(stderr,"%s: %d: No free memory\n",__FILE__,__LINE__);
       exit(1);
      }
    } 
-   if (doBeam==DOBEAM_ELEMENT || doBeam==DOBEAM_FULL) {
+   if (doBeam==DOBEAM_ELEMENT || doBeam==DOBEAM_FULL
+       ||doBeam==DOBEAM_ELEMENT_WB || doBeam==DOBEAM_FULL_WB) {
     /* element beam is common to all stations,
        but az,el might be different, so
        per direction 8 values (2x2 complex): 8N*tilesz, for a cluster with M sources
@@ -772,13 +778,15 @@ precalculate_coherencies_multifreq_withbeam(double *u, double *v, double *w, com
    /* first precalculate arrayfactor for all sources in this cluster */
    /* for each source : N*tilesz*Nchan beams, so for a cluster with M: M*N*Nchan*tilesz */
    beamgain=elementgain=NULL;
-   if (doBeam==DOBEAM_ARRAY || doBeam==DOBEAM_FULL) {
+   if (doBeam==DOBEAM_ARRAY || doBeam==DOBEAM_FULL
+       ||doBeam==DOBEAM_ARRAY_WB || doBeam==DOBEAM_FULL_WB) {
      if (posix_memalign((void*)&beamgain,sizeof(double),((size_t)N*tilesz*carr[ncl].N*Nchan*sizeof(double)))!=0) {
       fprintf(stderr,"%s: %d: No free memory\n",__FILE__,__LINE__);
       exit(1);
      }
    }
-   if (doBeam==DOBEAM_ELEMENT || doBeam==DOBEAM_FULL) {
+   if (doBeam==DOBEAM_ELEMENT || doBeam==DOBEAM_FULL
+       ||doBeam==DOBEAM_ELEMENT_WB || doBeam==DOBEAM_FULL_WB) {
     /* element beam is common to all stations,
        but az,el might be different, so
        per direction 8 values (2x2 complex): 8N*tilesz*Nchan, for a cluster with M sources
@@ -968,7 +976,8 @@ visibilities_threadfn_multifreq(void *data) {
          G[cn]=1.0;
        }
      }
-     if (t->dobeam==DOBEAM_ARRAY || t->dobeam==DOBEAM_FULL) {
+     if (t->dobeam==DOBEAM_ARRAY || t->dobeam==DOBEAM_FULL
+         ||t->dobeam==DOBEAM_ARRAY_WB || t->dobeam==DOBEAM_FULL_WB) {
       for (cn=0; cn<t->carr[cm].N; cn++) {
        /* get array factor for these 2 stations, at given time */
        double af1=t->arrayfactor[tslot*(t->N*t->carr[cm].N*t->Nchan)+cf*(t->N*t->carr[cm].N)+cn*t->N+sta1];
@@ -1045,7 +1054,8 @@ visibilities_threadfn_multifreq(void *data) {
      }
      free(tempfr);
 
-     if (t->dobeam==DOBEAM_ELEMENT || t->dobeam==DOBEAM_FULL) {
+     if (t->dobeam==DOBEAM_ELEMENT || t->dobeam==DOBEAM_FULL
+         ||t->dobeam==DOBEAM_ELEMENT_WB || t->dobeam==DOBEAM_FULL_WB) {
       complex double *CO=0;
       if (posix_memalign((void*)&CO,sizeof(complex double),((size_t)t->carr[cm].N*4*sizeof(complex double)))!=0) {
       fprintf(stderr,"%s: %d: No free memory\n",__FILE__,__LINE__);
@@ -1264,13 +1274,15 @@ double ph_ra0, double ph_dec0, double ph_freq0, double *longitude, double *latit
    /* first precalculate arrayfactor for all sources in this cluster */
    /* for each source : N*tilesz*Nchan beams, so for a cluster with M: M*N*Nchan*tilesz */
    beamgain=elementgain=NULL;
-   if (doBeam==DOBEAM_ARRAY || doBeam==DOBEAM_FULL) {
+   if (doBeam==DOBEAM_ARRAY || doBeam==DOBEAM_FULL
+       ||doBeam==DOBEAM_ARRAY_WB || doBeam==DOBEAM_FULL_WB) {
      if (posix_memalign((void*)&beamgain,sizeof(double),((size_t)N*tilesz*carr[ncl].N*Nchan*sizeof(double)))!=0) {
       fprintf(stderr,"%s: %d: No free memory\n",__FILE__,__LINE__);
       exit(1);
      }
    }
-   if (doBeam==DOBEAM_ELEMENT || doBeam==DOBEAM_FULL) {
+   if (doBeam==DOBEAM_ELEMENT || doBeam==DOBEAM_FULL
+       ||doBeam==DOBEAM_ELEMENT_WB || doBeam==DOBEAM_FULL_WB) {
     /* element beam is common to all stations,
        but az,el might be different, so
        per direction 8 values (2x2 complex): 8N*tilesz*Nchan, for a cluster with M sources
@@ -1530,13 +1542,15 @@ double ph_ra0, double ph_dec0, double ph_freq0, double *longitude, double *latit
     beamgain=elementgain=NULL;
    /* first precalculate arrayfactor for all sources in this cluster */
    /* for each source : N*tilesz*Nchan beams, so for a cluster with M: M*N*Nchan*tilesz */
-   if (doBeam==DOBEAM_ARRAY || doBeam==DOBEAM_FULL) {
+   if (doBeam==DOBEAM_ARRAY || doBeam==DOBEAM_FULL
+       ||doBeam==DOBEAM_ARRAY_WB || doBeam==DOBEAM_FULL_WB) {
      if (posix_memalign((void*)&beamgain,sizeof(double),((size_t)N*tilesz*carr[ncl].N*Nchan*sizeof(double)))!=0) {
       fprintf(stderr,"%s: %d: No free memory\n",__FILE__,__LINE__);
       exit(1);
      }
    }
-   if (doBeam==DOBEAM_ELEMENT || doBeam==DOBEAM_FULL) {
+   if (doBeam==DOBEAM_ELEMENT || doBeam==DOBEAM_FULL
+       ||doBeam==DOBEAM_ELEMENT_WB || doBeam==DOBEAM_FULL_WB) {
     /* element beam is common to all stations,
        but az,el might be different, so
        per direction 8 values (2x2 complex): 8N*tilesz*Nchan, for a cluster with M sources
@@ -1744,7 +1758,8 @@ residual_threadfn_multifreq(void *data) {
        }
      }
 
-     if (t->dobeam==DOBEAM_ARRAY || t->dobeam==DOBEAM_FULL) {
+     if (t->dobeam==DOBEAM_ARRAY || t->dobeam==DOBEAM_FULL
+         ||t->dobeam==DOBEAM_ARRAY_WB || t->dobeam==DOBEAM_FULL_WB) {
       for (cn=0; cn<t->carr[cm].N; cn++) {
        /* get array factor for these 2 stations, at given time */
        double af1=t->arrayfactor[tslot*(t->N*t->carr[cm].N*t->Nchan)+cf*(t->N*t->carr[cm].N)+cn*t->N+sta1];
@@ -1818,7 +1833,8 @@ residual_threadfn_multifreq(void *data) {
        }
      }
 
-    if (t->dobeam==DOBEAM_ELEMENT || t->dobeam==DOBEAM_FULL) {
+    if (t->dobeam==DOBEAM_ELEMENT || t->dobeam==DOBEAM_FULL
+        ||t->dobeam==DOBEAM_ELEMENT_WB ||t->dobeam==DOBEAM_FULL_WB) {
      /* add up terms together with Ejones multiplication */
      for (cn=0; cn<t->carr[cm].N; cn++) {
        complex double *E1=(complex double*)&t->elementbeam[tslot*(t->N*8*t->carr[cm].N*t->Nchan)+cf*(t->N*8*t->carr[cm].N)+cn*t->N*8+sta1*8]; /* 8 values */
@@ -2047,13 +2063,15 @@ double ph_ra0, double ph_dec0, double ph_freq0, double *longitude, double *latit
    /* first precalculate arrayfactor for all sources in this cluster */
    /* for each source : N*tilesz*Nchan beams, so for a cluster with M: M*N*Nchan*tilesz */
    beamgain=elementgain=NULL;
-   if (doBeam==DOBEAM_ARRAY || doBeam==DOBEAM_FULL) {
+   if (doBeam==DOBEAM_ARRAY || doBeam==DOBEAM_FULL
+       ||doBeam==DOBEAM_ARRAY_WB || doBeam==DOBEAM_FULL_WB) {
      if (posix_memalign((void*)&beamgain,sizeof(double),((size_t)N*tilesz*carr[ncl].N*Nchan*sizeof(double)))!=0) {
       fprintf(stderr,"%s: %d: No free memory\n",__FILE__,__LINE__);
       exit(1);
      }
    }
-   if (doBeam==DOBEAM_ELEMENT || doBeam==DOBEAM_FULL) {
+   if (doBeam==DOBEAM_ELEMENT || doBeam==DOBEAM_FULL
+       ||doBeam==DOBEAM_ELEMENT_WB || doBeam==DOBEAM_FULL_WB) {
     /* element beam is common to all stations,
        but az,el might be different, so
        per direction 8 values (2x2 complex): 8N*tilesz*Nchan, for a cluster with M sources
