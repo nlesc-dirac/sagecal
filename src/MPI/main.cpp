@@ -34,7 +34,7 @@ using namespace Data;
 
 void
 print_copyright(void) {
-  cout<<"SAGECal-MPI 0.7.9 (C) 2011-2023 Sarod Yatawatta"<<endl;
+  cout<<"SAGECal-MPI 0.8.0 (C) 2011-2023 Sarod Yatawatta"<<endl;
 }
 
 
@@ -59,7 +59,7 @@ print_help(void) {
    cout << "-m LBFGS memory size : default " <<Data::lbfgs_m<< endl;
    cout << "-n no of worker threads : default "<<Data::Nt << endl;
    cout << "-t tile size : default " <<Data::TileSize<< endl;
-   cout << "-B 0,1,2,3 : predict "<<DOBEAM_ARRAY<<": array beam, "<<DOBEAM_FULL<<": array+element beam, "<<DOBEAM_ELEMENT<<": element beam: default " <<Data::doBeam<< endl;
+   cout << "-B 0,1,2,3,4,5,6 : predict "<<DOBEAM_ARRAY<<": array beam, "<<DOBEAM_FULL<<": array+element beam, "<<DOBEAM_ELEMENT<<": element beam, "<<DOBEAM_ARRAY_WB<<": array beam (per channel), "<<DOBEAM_FULL_WB<<": array+element (per channel) "<<DOBEAM_ELEMENT_WB<<": element beam (per channel) : default " <<Data::doBeam<< endl;
 #ifdef HAVE_CUDA
    cout << "-E 0,1 : if >0, use GPU for model computing: default " <<Data::GPUpredict<< endl;
 #endif

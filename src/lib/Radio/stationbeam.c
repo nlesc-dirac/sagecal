@@ -39,9 +39,12 @@
   x,y,z: Nx1 pointer arrays to station positions, each station has Nelem[]x1 arrays
 
   beamgain: Nx1 array of station beam gain along the source direction
+
+  wideband: if 0, use f0 as beamformer freq, elese, use f as beamformer freq (for wideband data), also the element coeffients are calculated for each f, not only for f0
+
 */ 
 int
-arraybeam(double ra, double dec, double ra0, double dec0, double f, double f0, int N, double *longitude, double *latitude, double time_jd, int *Nelem, double **x, double **y, double **z, double *beamgain) {
+arraybeam(double ra, double dec, double ra0, double dec0, double f, double f0, int N, double *longitude, double *latitude, double time_jd, int *Nelem, double **x, double **y, double **z, double *beamgain, int wideband) {
 
   double gmst;
   jd2gmst(time_jd,&gmst); /* JD (day) to GMST (deg) */
@@ -55,6 +58,7 @@ arraybeam(double ra, double dec, double ra0, double dec0, double f, double f0, i
   /* 2*PI/C */
   const double tpc=2.0*M_PI/CONST_C;
 
+  double beam_f=(!wideband?f0:f);
   /* iterate over stations */
   for (ci=0; ci<N; ci++) {
    /* find az,el for both source direction and beam center */
@@ -83,11 +87,11 @@ arraybeam(double ra, double dec, double ra0, double dec0, double f, double f0, i
    */
 
    /* try to improve computations */
-   double rat1=f0*sint0;
+   double rat1=beam_f*sint0;
    double rat2=f*sint;
    r1=(rat1*cosph0-rat2*cosph);
    r2=(rat1*sinph0-rat2*sinph);
-   r3=(f0*cost0-f*cost);
+   r3=(beam_f*cost0-f*cost);
    
    csum=0.0;
    ssum=0.0;
@@ -114,9 +118,11 @@ arraybeam(double ra, double dec, double ra0, double dec0, double f, double f0, i
 /*
   ecoeff: elementcoeff struct of element beam coefficients
   elementgain: 8Nx1 array of element beam EJones along the source direction
+  findex: in wideband mode, the index of f needed to calculate the offset of element co
+efficients
   */
 int
-array_element_beam(double ra, double dec, double ra0, double dec0, double f, double f0, int N, double *longitude, double *latitude, double time_jd, int *Nelem, double **x, double **y, double **z, elementcoeff *ecoeff, double *beamgain, double *elementgain) {
+array_element_beam(double ra, double dec, double ra0, double dec0, double f, double f0, int N, double *longitude, double *latitude, double time_jd, int *Nelem, double **x, double **y, double **z, elementcoeff *ecoeff, double *beamgain, double *elementgain, int wideband, int findex) {
 
   double gmst;
   jd2gmst(time_jd,&gmst); /* JD (day) to GMST (deg) */
@@ -129,6 +135,8 @@ array_element_beam(double ra, double dec, double ra0, double dec0, double f, dou
   double csum,ssum,*tmpc=0,*tmps=0;
   /* 2*PI/C */
   const double tpc=2.0*M_PI/CONST_C;
+
+  double beam_f=(!wideband?f0:f);
   double *tmpprod=0;
   /* iterate over stations */
   for (ci=0; ci<N; ci++) {
@@ -158,11 +166,11 @@ array_element_beam(double ra, double dec, double ra0, double dec0, double f, dou
    */
 
    /* try to improve computations */
-   double rat1=f0*sint0;
+   double rat1=beam_f*sint0;
    double rat2=f*sint;
    r1=(rat1*cosph0-rat2*cosph);
    r2=(rat1*sinph0-rat2*sinph);
-   r3=(f0*cost0-f*cost);
+   r3=(beam_f*cost0-f*cost);
    
    csum=0.0;
    ssum=0.0;
@@ -212,16 +220,29 @@ array_element_beam(double ra, double dec, double ra0, double dec0, double f, dou
     * theta <- beta=azimuth-pi/4  for XX, -pi/2 for YY
       E = [ Etheta(gamma,beta) Ephi(gamma,beta);
             Etheta(gamma,beta+pi/2) Ehpi(gamma,beta+pi/2) ]; */
-   elementval evalX=eval_elementcoeffs(theta,az-M_PI_4,ecoeff);
-   elementval evalY=eval_elementcoeffs(theta,az-M_PI_4+M_PI_2,ecoeff);
-   elementgain[8*ci]=creal(evalX.theta);
-   elementgain[8*ci+1]=cimag(evalX.theta);
-   elementgain[8*ci+2]=creal(evalX.phi);
-   elementgain[8*ci+3]=cimag(evalX.phi);
-   elementgain[8*ci+4]=creal(evalY.theta);
-   elementgain[8*ci+5]=cimag(evalY.theta);
-   elementgain[8*ci+6]=creal(evalY.phi);
-   elementgain[8*ci+7]=cimag(evalY.phi);
+   if (!wideband) {
+     elementval evalX=eval_elementcoeffs(theta,az-M_PI_4,ecoeff);
+     elementval evalY=eval_elementcoeffs(theta,az-M_PI_4+M_PI_2,ecoeff);
+     elementgain[8*ci]=creal(evalX.theta);
+     elementgain[8*ci+1]=cimag(evalX.theta);
+     elementgain[8*ci+2]=creal(evalX.phi);
+     elementgain[8*ci+3]=cimag(evalX.phi);
+     elementgain[8*ci+4]=creal(evalY.theta);
+     elementgain[8*ci+5]=cimag(evalY.theta);
+     elementgain[8*ci+6]=creal(evalY.phi);
+     elementgain[8*ci+7]=cimag(evalY.phi);
+   } else {
+     elementval evalX=eval_elementcoeffs_wb(theta,az-M_PI_4,ecoeff,findex);
+     elementval evalY=eval_elementcoeffs_wb(theta,az-M_PI_4+M_PI_2,ecoeff,findex);
+     elementgain[8*ci]=creal(evalX.theta);
+     elementgain[8*ci+1]=cimag(evalX.theta);
+     elementgain[8*ci+2]=creal(evalX.phi);
+     elementgain[8*ci+3]=cimag(evalX.phi);
+     elementgain[8*ci+4]=creal(evalY.theta);
+     elementgain[8*ci+5]=cimag(evalY.theta);
+     elementgain[8*ci+6]=creal(evalY.phi);
+     elementgain[8*ci+7]=cimag(evalY.phi);
+   }
    } else {
     beamgain[ci]=0.0;
     elementgain[8*ci]=0.0;
@@ -241,7 +262,7 @@ array_element_beam(double ra, double dec, double ra0, double dec0, double f, dou
 
 
 int
-element_beam(double ra, double dec, double f, double f0, int N, double *longitude, double *latitude, double time_jd, elementcoeff *ecoeff, double *elementgain) {
+element_beam(double ra, double dec, double f, double f0, int N, double *longitude, double *latitude, double time_jd, elementcoeff *ecoeff, double *elementgain, int wideband, int findex) {
 
   double gmst;
   jd2gmst(time_jd,&gmst); /* JD (day) to GMST (deg) */
@@ -262,16 +283,29 @@ element_beam(double ra, double dec, double f, double f0, int N, double *longitud
     * theta <- beta=azimuth-pi/4  for XX, -pi/2 for YY
       E = [ Etheta(gamma,beta) Ephi(gamma,beta);
             Etheta(gamma,beta+pi/2) Ehpi(gamma,beta+pi/2) ]; */
-   elementval evalX=eval_elementcoeffs(theta,az-M_PI_4,ecoeff);
-   elementval evalY=eval_elementcoeffs(theta,az-M_PI_4+M_PI_2,ecoeff);
-   elementgain[8*ci]=creal(evalX.theta);
-   elementgain[8*ci+1]=cimag(evalX.theta);
-   elementgain[8*ci+2]=creal(evalX.phi);
-   elementgain[8*ci+3]=cimag(evalX.phi);
-   elementgain[8*ci+4]=creal(evalY.theta);
-   elementgain[8*ci+5]=cimag(evalY.theta);
-   elementgain[8*ci+6]=creal(evalY.phi);
-   elementgain[8*ci+7]=cimag(evalY.phi);
+   if (!wideband) {
+     elementval evalX=eval_elementcoeffs(theta,az-M_PI_4,ecoeff);
+     elementval evalY=eval_elementcoeffs(theta,az-M_PI_4+M_PI_2,ecoeff);
+     elementgain[8*ci]=creal(evalX.theta);
+     elementgain[8*ci+1]=cimag(evalX.theta);
+     elementgain[8*ci+2]=creal(evalX.phi);
+     elementgain[8*ci+3]=cimag(evalX.phi);
+     elementgain[8*ci+4]=creal(evalY.theta);
+     elementgain[8*ci+5]=cimag(evalY.theta);
+     elementgain[8*ci+6]=creal(evalY.phi);
+     elementgain[8*ci+7]=cimag(evalY.phi);
+   } else {
+     elementval evalX=eval_elementcoeffs_wb(theta,az-M_PI_4,ecoeff,findex);
+     elementval evalY=eval_elementcoeffs_wb(theta,az-M_PI_4+M_PI_2,ecoeff,findex);
+     elementgain[8*ci]=creal(evalX.theta);
+     elementgain[8*ci+1]=cimag(evalX.theta);
+     elementgain[8*ci+2]=creal(evalX.phi);
+     elementgain[8*ci+3]=cimag(evalX.phi);
+     elementgain[8*ci+4]=creal(evalY.theta);
+     elementgain[8*ci+5]=cimag(evalY.theta);
+     elementgain[8*ci+6]=creal(evalY.phi);
+     elementgain[8*ci+7]=cimag(evalY.phi);
+   }
    } else {
     elementgain[8*ci]=0.0;
     elementgain[8*ci+1]=0.0;

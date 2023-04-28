@@ -26,12 +26,6 @@
 /* enable this for checking for kernel failure */
 //#define CUDA_DBG
 
-//Max no. of frequencies for a single kernel to work on
-//Make this large ~64 for handling data with many channels
-#ifndef MODEL_MAX_F
-#define MODEL_MAX_F 16
-#endif
-
 /* matrix multiplications */
 /* C=A*B */
 __device__ void
@@ -138,7 +132,7 @@ kernel_array_beam(int N, int T, int K, int F,
  const double *__restrict__ time_utc, const int *__restrict__ Nelem, 
  const float * const *__restrict__ xx, const float * const *__restrict__ yy, const float * const *__restrict__ zz, 
  const float *__restrict__ ra, const float *__restrict__ dec, 
- float ph_ra0, float ph_dec0, float ph_freq0, float *beam) {
+ float ph_ra0, float ph_dec0, float ph_freq0, float *beam, const int wideband) {
 
     /* global thread index, x-dimension (data) */
     int x=threadIdx.x+blockDim.x*blockIdx.x;
@@ -200,11 +194,13 @@ kernel_array_beam(int N, int T, int K, int F,
    r3=(float)-tpc*(ph_freq0*cost0-freqs[ifrq]*cost);
    */
    float f=(float)__ldg(&freqs[ifrq]);
-   float rat1=ph_freq0*sint0;
+   // use channel freq for per-channel beamformer (wideband data)
+   float beam_freq=(!wideband?ph_freq0:f);
+   float rat1=beam_freq*sint0;
    float rat2=f*sint;
    r1=-tpc*(rat1*cosph0-rat2*cosph);
    r2=-tpc*(rat1*sinph0-rat2*sinph);
-   r3=-tpc*(ph_freq0*cost0-f*cost);
+   r3=-tpc*(beam_freq*cost0-f*cost);
    
 
         float ssum = 0.0f;
@@ -244,7 +240,7 @@ kernel_element_beam(int N, int T, int K, int F,
  const float *__restrict__ ra, const float *__restrict__ dec, 
  int Nmodes, int M, float beta, const float *__restrict__ pattern_phi,
  const float *__restrict__ pattern_theta,const float *__restrict__ pattern_preamble,
- float *beam) {
+ float *beam, const int wideband) {
 
     /* global thread index, x-dimension (data) */
     int x=threadIdx.x+blockDim.x*blockIdx.x;
@@ -264,12 +260,23 @@ kernel_element_beam(int N, int T, int K, int F,
       __shared__ cuFloatComplex sh_phi[ELEMENT_MAX_SIZE];
       __shared__ cuFloatComplex sh_theta[ELEMENT_MAX_SIZE];
       __shared__ float sh_preamble[ELEMENT_MAX_SIZE];
-      for (int i=threadIdx.x; i<Nmodes; i+=blockDim.x) {
+      if (!wideband) {
+       for (int i=threadIdx.x; i<Nmodes; i+=blockDim.x) {
         sh_phi[i].x = __ldg(&pattern_phi[2*i]);
         sh_phi[i].y =__ldg(&pattern_phi[2*i+1]);
         sh_theta[i].x = __ldg(&pattern_theta[2*i]);
         sh_theta[i].y = __ldg(&pattern_theta[2*i+1]);
         sh_preamble[i] = __ldg(&pattern_preamble[i]);
+       }
+      } else {
+       // in wideband mode, offset by 2*Nmodes*ifrq
+       for (int i=threadIdx.x; i<Nmodes; i+=blockDim.x) {
+        sh_phi[i].x = __ldg(&pattern_phi[2*i+2*Nmodes*ifrq]);
+        sh_phi[i].y =__ldg(&pattern_phi[2*i+2*Nmodes*ifrq+1]);
+        sh_theta[i].x = __ldg(&pattern_theta[2*i+2*Nmodes*ifrq]);
+        sh_theta[i].y = __ldg(&pattern_theta[2*i+2*Nmodes*ifrq+1]);
+        sh_preamble[i] = __ldg(&pattern_preamble[i]);
+       }
       }
       __syncthreads();
     #endif
@@ -294,10 +301,19 @@ kernel_element_beam(int N, int T, int K, int F,
       float4 evalY=eval_elementcoeff(r, theta+M_PI_2, M, beta, sh_theta,
                 sh_phi, sh_preamble);
       #else
+      if (!wideband) {
       float4 evalX=eval_elementcoeff(r, theta, M, beta, (float2*)pattern_theta,
                 (float2*)pattern_phi, pattern_preamble);
       float4 evalY=eval_elementcoeff(r, theta+M_PI_2, M, beta, (float2*)pattern_theta,
                 (float2*)pattern_phi, pattern_preamble);
+      } else {
+       // in wideband mode, offset by 2*Nmodes*ifrq
+      float4 evalX=eval_elementcoeff(r, theta, M, beta, (float2*)&pattern_theta[2*Nmodes*ifrq],
+                (float2*)&pattern_phi[2*Nmodes*ifrq], pattern_preamble);
+      float4 evalY=eval_elementcoeff(r, theta+M_PI_2, M, beta, (float2*)&pattern_theta[2*Nmodes*ifrq],
+                (float2*)&pattern_phi[2*Nmodes*ifrq], pattern_preamble);
+
+      }
       #endif
 
    /* store output EJones 8 values */ 
@@ -642,7 +658,8 @@ double phterm0, double sI0f, double sQ0f, double sU0f, double sV0f, double spec_
       scalef *=fabs(sinph); /* catch -ve values due to rounding off */
      }
 
-     if (dobeam==DOBEAM_ARRAY || dobeam==DOBEAM_FULL) {
+     if (dobeam==DOBEAM_ARRAY || dobeam==DOBEAM_FULL
+         ||dobeam==DOBEAM_ARRAY_WB || dobeam==DOBEAM_FULL_WB) {
       /* get beam info */
       int boffset1=itm*N*K*F+k*N*F+cf*N+sta1;
       //  printf("itm=%d, k1=%d, sta1=%d, sta2=%d, boffset1=%d, boffset2=%d\n", itm, k1, sta1, sta2, boffset1, boffset2);
@@ -684,7 +701,8 @@ double phterm0, double sI0f, double sQ0f, double sU0f, double sV0f, double spec_
     Vx=Vf*prodterm.x;
     Vy=Vf*prodterm.y;
 
-    if (dobeam==DOBEAM_ELEMENT || dobeam==DOBEAM_FULL) {
+    if (dobeam==DOBEAM_ELEMENT || dobeam==DOBEAM_FULL
+        ||dobeam==DOBEAM_ELEMENT_WB ||dobeam==DOBEAM_FULL_WB) {
      cuDoubleComplex E1[4], E2[4], C[4], T[4];
      C[0].x=Ix+Qx;
      C[0].y=Iy+Qy;
@@ -753,7 +771,8 @@ compute_prodterm(int sta1, int sta2, int N, int K, int T,
       scalef *=fabs(sinph); /* catch -ve values due to rounding off */
      }
 
-     if (dobeam==DOBEAM_ARRAY || dobeam==DOBEAM_FULL) {
+     if (dobeam==DOBEAM_ARRAY || dobeam==DOBEAM_FULL
+         ||dobeam==DOBEAM_ARRAY_WB ||dobeam==DOBEAM_FULL_WB) {
       /* get beam info */
       int boffset1=itm*N*K+k*N+sta1;
       //  printf("itm=%d, k1=%d, sta1=%d, sta2=%d, boffset1=%d, boffset2=%d\n", itm, k1, sta1, sta2, boffset1, boffset2);
@@ -795,7 +814,8 @@ compute_prodterm(int sta1, int sta2, int N, int K, int T,
     Vx=Vf*prodterm.x;
     Vy=Vf*prodterm.y;
 
-    if (dobeam==DOBEAM_ELEMENT || dobeam==DOBEAM_FULL) {
+    if (dobeam==DOBEAM_ELEMENT || dobeam==DOBEAM_FULL
+        ||dobeam==DOBEAM_ELEMENT_WB ||dobeam==DOBEAM_FULL_WB) {
      cuDoubleComplex E1[4], E2[4], C[4], T[4];
      C[0].x=Ix+Qx;
      C[0].y=Iy+Qy;
@@ -1416,11 +1436,12 @@ checkCudaError(cudaError_t err, const char *file, int line)
   beam: output beam values NxTxKxF values
   ph_ra0,ph_dec0: beam pointing direction
   ph_freq0: beam referene freq
+  wideband: 0: use freq0 for beamformer freq, 1: use each freqs[] for beamformer freq
 */
 
 void
 cudakernel_array_beam(int N, int T, int K, int F, double *freqs, float *longitude, float *latitude,
- double *time_utc, int *Nelem, float **xx, float **yy, float **zz, float *ra, float *dec, float ph_ra0, float ph_dec0, float ph_freq0, float *beam) {
+ double *time_utc, int *Nelem, float **xx, float **yy, float **zz, float *ra, float *dec, float ph_ra0, float ph_dec0, float ph_freq0, float *beam, int wideband) {
 #ifdef CUDA_DBG
   cudaError_t error;
   error = cudaGetLastError();
@@ -1438,7 +1459,7 @@ cudakernel_array_beam(int N, int T, int K, int F, double *freqs, float *longitud
   grid.x = (int)ceilf((K*T*F) / (float)ThreadsPerBlock);
   grid.y = N;
 
-  kernel_array_beam<<<grid,ThreadsPerBlock>>>(N,T,K,F,freqs,longitude,latitude,time_utc,Nelem,xx,yy,zz,ra,dec,ph_ra0,ph_dec0,ph_freq0,beam);
+  kernel_array_beam<<<grid,ThreadsPerBlock>>>(N,T,K,F,freqs,longitude,latitude,time_utc,Nelem,xx,yy,zz,ra,dec,ph_ra0,ph_dec0,ph_freq0,beam,wideband);
   cudaDeviceSynchronize();
 
 #ifdef CUDA_DBG
@@ -1466,10 +1487,11 @@ cudakernel_array_beam(int N, int T, int K, int F, double *freqs, float *longitud
  * pattern_phi, pattern_theta: Nmodes x 1 complex, 2Nmodes x 1 float arrays
  * pattern_preamble: Nmodes x 1 float array
   beam: output element beam values 8*NxTxKxF values
+  wideband: 0: use freq0 for beamformer freq, 1: use each freqs[] for beamformer freq
  */
 void
 cudakernel_element_beam(int N, int T, int K, int F, double *freqs, float *longitude, float *latitude,
- double *time_utc, float *ra, float *dec, int Nmodes, int M, float beta, float *pattern_phi, float *pattern_theta, float *pattern_preamble, float *beam) {
+ double *time_utc, float *ra, float *dec, int Nmodes, int M, float beta, float *pattern_phi, float *pattern_theta, float *pattern_preamble, float *beam, int wideband) {
 #ifdef CUDA_DBG
   cudaError_t error;
   error = cudaGetLastError();
@@ -1487,7 +1509,7 @@ cudakernel_element_beam(int N, int T, int K, int F, double *freqs, float *longit
   grid.x = (int)ceilf((K*T*F) / (float)ThreadsPerBlock);
   grid.y = N;
 
-  kernel_element_beam<<<grid,ThreadsPerBlock>>>(N,T,K,F,freqs,longitude,latitude,time_utc,ra,dec,Nmodes,M,beta,pattern_phi,pattern_theta,pattern_preamble,beam);
+  kernel_element_beam<<<grid,ThreadsPerBlock>>>(N,T,K,F,freqs,longitude,latitude,time_utc,ra,dec,Nmodes,M,beta,pattern_phi,pattern_theta,pattern_preamble,beam,wideband);
   cudaDeviceSynchronize();
 
 #ifdef CUDA_DBG

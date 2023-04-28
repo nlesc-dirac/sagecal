@@ -284,20 +284,24 @@ precession(double ra0, double dec0, double Tr[9], double *ra, double *dec);
   x,y,z: Nx1 pointer arrays to station positions, each station has Nelem[]x1 arrays
 
   beamgain: Nx1 array of station beam gain along the source direction
+
+wideband: if 0, use f0 as beamformer freq, elese, use f as beamformer freq (for wideband data), also the element coeffients are calculated for each f, not only for f0
 */ 
 extern int
-arraybeam(double ra, double dec, double ra0, double dec0, double f, double f0, int N, double *longitude, double *latitude, double time_jd, int *Nelem, double **x, double **y, double **z, double *beamgain);
+arraybeam(double ra, double dec, double ra0, double dec0, double f, double f0, int N, double *longitude, double *latitude, double time_jd, int *Nelem, double **x, double **y, double **z, double *beamgain, int wideband);
 
 
 /*
   ecoeff: elementcoeff struct of element beam coefficients
   elementgain: 8Nx1 array of element beam EJones along the source direction
+
+findex: in wideband mode, the index of f needed to calculate the offset of element coefficients
   */
 extern int
-array_element_beam(double ra, double dec, double ra0, double dec0, double f, double f0, int N, double *longitude, double *latitude, double time_jd, int *Nelem, double **x, double **y, double **z, elementcoeff *ecoeff, double *beamgain, double *elementgain);
+array_element_beam(double ra, double dec, double ra0, double dec0, double f, double f0, int N, double *longitude, double *latitude, double time_jd, int *Nelem, double **x, double **y, double **z, elementcoeff *ecoeff, double *beamgain, double *elementgain, int wideband, int findex);
 
 extern int
-element_beam(double ra, double dec, double f, double f0, int N, double *longitude, double *latitude, double time_jd, elementcoeff *ecoeff, double *elementgain);
+element_beam(double ra, double dec, double f, double f0, int N, double *longitude, double *latitude, double time_jd, elementcoeff *ecoeff, double *elementgain, int wideband, int findex);
 /****************************** elementbeam.c ************************************/
 typedef struct elementval_{
   complex double phi, theta; /* tuple for element beam Ejones */
@@ -308,6 +312,13 @@ typedef struct elementval_{
 extern int
 set_elementcoeffs(int element_type,  double frequency, elementcoeff *ecoeff);
 
+/* get beam type LBA/HBA and for each frequency in frequencies array
+   return beam pattern coeff vectors for theta/phi patterns
+   frequencies: in Hz, Nf x 1 array
+*/
+extern int
+set_elementcoeffs_wb(int element_type,  double *frequencies, int Nf,  elementcoeff *ecoeff);
+
 /* free storage */
 extern int
 free_elementcoeffs(elementcoeff ecoeff);
@@ -315,6 +326,10 @@ free_elementcoeffs(elementcoeff ecoeff);
 /* calculate elementbeam values for given r,theta coordinates */
 extern elementval
 eval_elementcoeffs(double r, double theta, elementcoeff *ecoeff);
+
+/* with wideband model, use findex to offset coefficients to match the freq */
+extern elementval
+eval_elementcoeffs_wb(double r, double theta, elementcoeff *ecoeff, int findex);
 
 /* spherical harmonic basis functions
  * n0: max modes, starts from 1,2,...
@@ -433,11 +448,11 @@ precalculate_coherencies_multifreq_withbeam_gpu(double *u, double *v, double *w,
 
 extern void
 cudakernel_array_beam(int N, int T, int K, int F, double *freqs, float *longitude, float *latitude,
- double *time_utc, int *Nelem, float **xx, float **yy, float **zz, float *ra, float *dec, float ph_ra0, float  ph_dec0, float ph_freq0, float *beam);
+ double *time_utc, int *Nelem, float **xx, float **yy, float **zz, float *ra, float *dec, float ph_ra0, float  ph_dec0, float ph_freq0, float *beam, int wideband);
 
 extern void
 cudakernel_element_beam(int N, int T, int K, int F, double *freqs, float *longitude, float *latitude,
- double *time_utc, float *ra, float *dec, int Nmodes, int M, float beta, float *pattern_phi, float *pattern_theta, float *pattern_preamble, float *elementbeam);
+ double *time_utc, float *ra, float *dec, int Nmodes, int M, float beta, float *pattern_phi, float *pattern_theta, float *pattern_preamble, float *elementbeam, int wideband);
 
 extern void
 cudakernel_coherencies(int B, int N, int T, int K, int F, double *u, double *v, double *w,baseline_t *barr, double *freqs, float *beam, float *element, double *ll, double *mm, double *nn, double *sI, double *sQ, double *sU, double *sV,

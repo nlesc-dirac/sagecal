@@ -175,6 +175,10 @@ cerr<<"Error: Worker "<<myrank<<": Recheck your allocation or reduce number of w
       for(int cm=0; cm<mymscount; cm++) {
         set_elementcoeffs((iodata_vec[cm].freq0<100e6?ELEM_LBA:ELEM_HBA), iodata_vec[cm].freq0, &elem_vec[cm]);
       }
+    } else if (doBeam==DOBEAM_FULL_WB||doBeam==DOBEAM_ELEMENT_WB) {
+      for(int cm=0; cm<mymscount; cm++) {
+        set_elementcoeffs_wb((iodata_vec[cm].freq0<100e6?ELEM_LBA:ELEM_HBA), iodata_vec[cm].freqs, iodata_vec[cm].Nchan, &elem_vec[cm]);
+      }
     }
 
     /* cannot run ADMM if we have only one channel, so print error and exit */
@@ -1129,7 +1133,8 @@ beam_vec[cm].p_ra0,beam_vec[cm].p_dec0,iodata_vec[cm].freq0,beam_vec[cm].sx,beam
   free(pm_vec[cm]);
   free(coh_vec[cm]);
   fclose(sfp_vec[cm]);
-  if (doBeam==DOBEAM_FULL||doBeam==DOBEAM_ELEMENT) {
+  if (doBeam==DOBEAM_FULL||doBeam==DOBEAM_ELEMENT
+      ||doBeam==DOBEAM_FULL_WB||doBeam==DOBEAM_ELEMENT_WB) {
    free_elementcoeffs(elem_vec[cm]);
   }
   }
