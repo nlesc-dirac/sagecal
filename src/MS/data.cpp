@@ -395,8 +395,8 @@ Data::readAuxData(const char *fname, Data::IOData *data, Data::LBeam *binfo) {
       }
      }
 
-     /* read beam pointing direction (use Tile beam info: LBA also has it) */
-     ROArrayColumn<double> point_dir(_field, "LOFAR_TILE_BEAM_DIR");
+     /* read beam pointing direction */
+     ROArrayColumn<double> point_dir(_field, "REFERENCE_DIR"); //old LOFAR_TILE_BEAM_DIR
      Array<double> pdir = point_dir(0);
      double *pc = pdir.data();
      binfo->p_ra0=pc[0];
