@@ -522,7 +522,7 @@ precalbeam_threadfn(void *data) {
    for (cf=0; cf<t->Nf; cf++) {
    /* iterate over sources */
   for (cn=t->soff; cn<t->soff+t->Ns; cn++) {
-     array_element_beam(t->carr[cm].ra[cn], t->carr[cm].dec[cn], t->ra0, t->dec0, t->freqs[cf], t->freq0, t->N, t->longitude, t->latitude, t->time_utc[ct], t->Nelem, t->xx, t->yy, t->zz, t->ecoeff, &(t->beamgain[ct*(t->N*t->carr[cm].N*t->Nf)+cf*(t->N*t->carr[cm].N)+cn*t->N]),&(t->elementgain[cn*(t->N*8*t->Ntime*t->Nf)+cf*(t->N*8*t->Ntime)+ct*t->N*8]),(t->dobeam==DOBEAM_FULL?0:1),cf);
+     array_element_beam(t->carr[cm].ra[cn], t->carr[cm].dec[cn], t->ra0, t->dec0, t->freqs[cf], t->freq0, t->N, t->longitude, t->latitude, t->time_utc[ct], t->Nelem, t->xx, t->yy, t->zz, t->ecoeff, &(t->beamgain[ct*(t->N*t->carr[cm].N*t->Nf)+cf*(t->N*t->carr[cm].N)+cn*t->N]),&(t->elementgain[ct*(8*t->N*t->carr[cm].N*t->Nf)+cf*(8*t->N*t->carr[cm].N)+cn*8*t->N]),(t->dobeam==DOBEAM_FULL?0:1),cf);
     }
    }
   }
