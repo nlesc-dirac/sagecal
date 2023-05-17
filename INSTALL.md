@@ -12,7 +12,7 @@ Run cmake (with GPU support) for example like
  mkdir build && cd build
  cmake .. -DHAVE_CUDA=ON -DCMAKE_CXX_FLAGS='-DMAX_GPU_ID=0' -DCMAKE_CXX_COMPILER=g++-8  -DCMAKE_C_FLAGS='-DMAX_GPU_ID=0' -DCMAKE_C_COMPILER=gcc-8 -DCUDA_NVCC_FLAGS='-gencode arch=compute_75,code=sm_75' -DBLA_VENDOR=OpenBLAS
 ```
-where *MAX_GPU_ID=0* is when there is only one GPU (ordinal 0). If you have more GPUs, increase this number to 1,2, and so on. This will produce *sagecal_gpu* and *sagecal-mpi_gpu* binary files (after running *make* of course). You can also use *-DNUM_CPU* to specify the number of GPUs to use, for example *-DNUM_GPU=4*.
+where *MAX_GPU_ID=0* is when there is only one GPU (ordinal 0). If you have more GPUs, increase this number to 1,2, and so on. This will produce *sagecal_gpu* and *sagecal-mpi_gpu* binary files (after running *make* of course). You can also use *-DNUM_GPU* to specify the number of GPUs to use, for example *-DNUM_GPU=4*.
 
 CPU only version can be build as
 ```
