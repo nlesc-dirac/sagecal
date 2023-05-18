@@ -292,7 +292,7 @@ kernel_element_beam(int N, int T, int K, int F,
    radec2azel_gmst__(__ldg(&ra[isrc]),__ldg(&dec[isrc]), __ldg(&longitude[istat]), __ldg(&latitude[istat]), thetaGMST, &az, &el);
    /* transform : r= pi/2-el, phi=az-pi/4 for element beam */
    r=M_PI_2-el;
-   theta=az-M_PI_4+M_PI_2; /* also rotate X->Y */
+   theta=az-M_PI_4;
 /*********************************************************************/
    if (el>=0.0f) {
       #if (ARRAY_USE_SHMEM == 1)

@@ -220,10 +220,9 @@ array_element_beam(double ra, double dec, double ra0, double dec0, double f, dou
     * theta <- beta=azimuth-pi/4  for XX, -pi/2 for YY
       E = [ Etheta(gamma,beta) Ephi(gamma,beta);
             Etheta(gamma,beta+pi/2) Ehpi(gamma,beta+pi/2) ]; */
-   /* note: additional pi/2 to rotate X->Y */
    if (!wideband) {
-     elementval evalX=eval_elementcoeffs(theta,az-M_PI_4+M_PI_2,ecoeff);
-     elementval evalY=eval_elementcoeffs(theta,az-M_PI_4+M_PI_2+M_PI_2,ecoeff);
+     elementval evalX=eval_elementcoeffs(theta,az-M_PI_4,ecoeff);
+     elementval evalY=eval_elementcoeffs(theta,az-M_PI_4+M_PI_2,ecoeff);
      elementgain[8*ci]=creal(evalX.theta);
      elementgain[8*ci+1]=cimag(evalX.theta);
      elementgain[8*ci+2]=creal(evalX.phi);
@@ -233,8 +232,8 @@ array_element_beam(double ra, double dec, double ra0, double dec0, double f, dou
      elementgain[8*ci+6]=creal(evalY.phi);
      elementgain[8*ci+7]=cimag(evalY.phi);
    } else {
-     elementval evalX=eval_elementcoeffs_wb(theta,az-M_PI_4+M_PI_2,ecoeff,findex);
-     elementval evalY=eval_elementcoeffs_wb(theta,az-M_PI_4+M_PI_2+M_PI_2,ecoeff,findex);
+     elementval evalX=eval_elementcoeffs_wb(theta,az-M_PI_4,ecoeff,findex);
+     elementval evalY=eval_elementcoeffs_wb(theta,az-M_PI_4+M_PI_2,ecoeff,findex);
      elementgain[8*ci]=creal(evalX.theta);
      elementgain[8*ci+1]=cimag(evalX.theta);
      elementgain[8*ci+2]=creal(evalX.phi);
@@ -284,10 +283,9 @@ element_beam(double ra, double dec, double f, double f0, int N, double *longitud
     * theta <- beta=azimuth-pi/4  for XX, -pi/2 for YY
       E = [ Etheta(gamma,beta) Ephi(gamma,beta);
             Etheta(gamma,beta+pi/2) Ehpi(gamma,beta+pi/2) ]; */
-   /* note: additional pi/2 to rotate X->Y */
    if (!wideband) {
-     elementval evalX=eval_elementcoeffs(theta,az-M_PI_4+M_PI_2,ecoeff);
-     elementval evalY=eval_elementcoeffs(theta,az-M_PI_4+M_PI_2+M_PI_2,ecoeff);
+     elementval evalX=eval_elementcoeffs(theta,az-M_PI_4,ecoeff);
+     elementval evalY=eval_elementcoeffs(theta,az-M_PI_4+M_PI_2,ecoeff);
      elementgain[8*ci]=creal(evalX.theta);
      elementgain[8*ci+1]=cimag(evalX.theta);
      elementgain[8*ci+2]=creal(evalX.phi);
@@ -297,8 +295,8 @@ element_beam(double ra, double dec, double f, double f0, int N, double *longitud
      elementgain[8*ci+6]=creal(evalY.phi);
      elementgain[8*ci+7]=cimag(evalY.phi);
    } else {
-     elementval evalX=eval_elementcoeffs_wb(theta,az-M_PI_4+M_PI_2,ecoeff,findex);
-     elementval evalY=eval_elementcoeffs_wb(theta,az-M_PI_4+M_PI_2+M_PI_2,ecoeff,findex);
+     elementval evalX=eval_elementcoeffs_wb(theta,az-M_PI_4,ecoeff,findex);
+     elementval evalY=eval_elementcoeffs_wb(theta,az-M_PI_4+M_PI_2,ecoeff,findex);
      elementgain[8*ci]=creal(evalX.theta);
      elementgain[8*ci+1]=cimag(evalX.theta);
      elementgain[8*ci+2]=creal(evalX.phi);
