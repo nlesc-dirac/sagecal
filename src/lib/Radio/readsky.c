@@ -402,7 +402,6 @@ read_sky_cluster(const char *skymodel, const char *clusterfile, clus_source_t **
          |sin(xi)     cos(phi)cos(xi)     -sin(phi)cos(xi)|
          |0           sin(phi)             cos(phi)       |
        */
-       //printf("nn=%lf\n",nn);
        phi=acos(nn);
        xi=atan2(-source->ll,source->mm);
 
