@@ -220,6 +220,12 @@ Data::readAuxData(const char *fname, Data::IOData *data, Data::LBeam *binfo) {
     ROArrayColumn<double> chan_freq(_freq, "CHAN_FREQ"); 
     data->Nchan=chan_freq.shape(0)[0];
     data->Nms=1;
+
+    Table _obs = Table(_t.keywordSet().asTable("OBSERVATION"));
+    ROScalarColumn<String> telescope(_obs, "TELESCOPE_NAME");
+    std::string tel=telescope(0);
+    std::cout<<tel<<std::endl;
+
    /* allocate memory */
    try {
      data->u=new double[data->Nbase*data->tilesz];
@@ -303,6 +309,7 @@ Data::readAuxData(const char *fname, Data::IOData *data, Data::LBeam *binfo) {
 
        binfo->sx[ci]=tx[0];
        binfo->sy[ci]=tx[1];
+       /* following is the number of tiles */
        binfo->Nelem[ci]=offset.shape(ci)[1];
      }
 
@@ -328,14 +335,14 @@ Data::readAuxData(const char *fname, Data::IOData *data, Data::LBeam *binfo) {
         my_dgemm('T', 'N', binfo->Nelem[ci], 3, 3, 1.0, off, 3, coordmat, 3, 0.0, tempC, binfo->Nelem[ci]);
         my_dgemm('T', 'N', 16, 3, 3, 1.0, toff, 3, coordmat, 3, 0.0, tempT, 16);
   
-        /* now inspect the element flag table to see if any of the dipoles are flagged */
+        /* now inspect the element flag table to see if any of the tiles (16 dipoles) are flagged */
         int fcount=0;
         for (int cj=0; cj<binfo->Nelem[ci]; cj++) {
          if (ef[2*cj]==1 || ef[2*cj+1]==1) {
           fcount++;
          }
         }
-
+        std::cout<<"Ant "<<ci<<" flagged tiles="<<fcount<<std::endl;
         binfo->xx[ci]=new double[16*(binfo->Nelem[ci]-fcount)];
         binfo->yy[ci]=new double[16*(binfo->Nelem[ci]-fcount)];
         binfo->zz[ci]=new double[16*(binfo->Nelem[ci]-fcount)];
@@ -352,7 +359,9 @@ Data::readAuxData(const char *fname, Data::IOData *data, Data::LBeam *binfo) {
           fcount+=16;
          }
         }
+        /* following is the number of dipoles (16 x tiles) */
         binfo->Nelem[ci]=fcount;
+        std::cout<<"Ant "<<ci<<" stored="<<fcount<<std::endl;
 
         delete [] tempC;
       }

@@ -86,9 +86,15 @@ namespace Data
       double **xx; /* x coord pointer, size Nx1, each *x: x coord of station, size Nelem[]x1 */
       double **yy; /* y ... */
       double **zz; /* z ... */
-      /* pointing center of beams (only one) (could be different from phase center) */
+      /* pointing center of beams (only one) (could be different from phase center)
+       * keyword used here is REFERENCE_DIR */
       double p_ra0;
       double p_dec0;
+
+      /* LOFAR tile beam direction, could be different than REFERENCE_DIR
+       * keyword used here is LOFAR_TILE_BEAM_DIR */
+      double b_ra0;
+      double b_dec0;
 
       /* flag to indicate this beam is only a dipole */
       int isDipole;

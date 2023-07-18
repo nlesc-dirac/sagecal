@@ -342,6 +342,10 @@ read_sky_cluster(const char *skymodel, const char *clusterfile, clus_source_t **
       /* convert to l,m: NOTE we use -l here */
       source->ll=cos(mydec)*sin(myra-ra0);
       source->mm=sin(mydec)*cos(dec0)-cos(mydec)*sin(dec0)*cos(myra-ra0);
+      /* calculate n to have a sign */
+      source->nn=sin(mydec)*sin(dec0)+cos(mydec)*cos(dec0)*cos(myra-ra0);
+      /* use |n| for projection */
+      nn=fabs(source->nn);
       source->ra=myra;
       source->dec=mydec;
       
@@ -388,8 +392,6 @@ read_sky_cluster(const char *skymodel, const char *clusterfile, clus_source_t **
       source->spec_idx2=spec_idx2;
       
       /* correction for projection, only for extended sources */
-      /* calculate n */
-      nn=sqrt(1.0-source->ll*source->ll-source->mm*source->mm);
        /* calculate projection from [0,0,1] -> [l,m,n] */
        /* the whole story is:
         [0,0,1]->[l,m,n] with
@@ -624,7 +626,7 @@ read_sky_cluster(const char *skymodel, const char *clusterfile, clus_source_t **
      if (source) {
       (*carr)[ci].ll[cj]=source->ll;
       (*carr)[ci].mm[cj]=source->mm;
-      (*carr)[ci].nn[cj]=sqrt(1.0-source->ll*source->ll-source->mm*source->mm)-1.0;
+      (*carr)[ci].nn[cj]=source->nn-1.0;
       (*carr)[ci].sI[cj]=source->sI[0];
       (*carr)[ci].sQ[cj]=source->sI[1];
       (*carr)[ci].sU[cj]=source->sI[2];
