@@ -313,13 +313,17 @@ Data::readAuxData(const char *fname, Data::IOData *data, Data::LBeam *binfo) {
        binfo->Nelem[ci]=offset.shape(ci)[1];
      }
 
-
+     /* since this is a standard for LOFAR */
+     const int dipoles_per_tile=HBA_TILE_SIZE;
      if (isHBA) {
-      double cones[16];
-      for (int ci=0; ci<16; ci++) {
+      /* there are two ways to calculate the beamformer */
+      binfo->bfType=STAT_SINGLE; /* single stage beamformer, tiles expanded to elements */
+      //binfo->bfType=STAT_TILE; /* two stage beamformer, first tile beamformer, then tile centroid beamformer */
+      double cones[dipoles_per_tile];
+      for (int ci=0; ci<dipoles_per_tile; ci++) {
         cones[ci]=1.0;
       }
-      double tempT[3*16];
+      double tempT[3*dipoles_per_tile];
       /* now read in element offsets, also transform them to local coordinates */
       for (int ci=0; ci<data->N; ci++) {
         Array<double> _off=offset(ci);
@@ -332,8 +336,10 @@ Data::readAuxData(const char *fname, Data::IOData *data, Data::LBeam *binfo) {
         double *toff=_toff.data();
 
         double *tempC=new double[3*binfo->Nelem[ci]];
+        /* rotate tile centroids */
         my_dgemm('T', 'N', binfo->Nelem[ci], 3, 3, 1.0, off, 3, coordmat, 3, 0.0, tempC, binfo->Nelem[ci]);
-        my_dgemm('T', 'N', 16, 3, 3, 1.0, toff, 3, coordmat, 3, 0.0, tempT, 16);
+        /* rotate dipole element coords in the tile */
+        my_dgemm('T', 'N', dipoles_per_tile, 3, 3, 1.0, toff, 3, coordmat, 3, 0.0, tempT, dipoles_per_tile);
   
         /* now inspect the element flag table to see if any of the tiles (16 dipoles) are flagged */
         int fcount=0;
@@ -343,29 +349,57 @@ Data::readAuxData(const char *fname, Data::IOData *data, Data::LBeam *binfo) {
          }
         }
         std::cout<<"Ant "<<ci<<" flagged tiles="<<fcount<<std::endl;
-        binfo->xx[ci]=new double[16*(binfo->Nelem[ci]-fcount)];
-        binfo->yy[ci]=new double[16*(binfo->Nelem[ci]-fcount)];
-        binfo->zz[ci]=new double[16*(binfo->Nelem[ci]-fcount)];
-        /* copy unflagged coords, 16 times for each dipole */
-        fcount=0;
-        for (int cj=0; cj<binfo->Nelem[ci]; cj++) {
-         if (!(ef[2*cj]==1 || ef[2*cj+1]==1)) {
-          my_dcopy(16,&tempT[0],1,&(binfo->xx[ci][fcount]),1);
-          my_daxpy(16,cones,tempC[cj],&(binfo->xx[ci][fcount]));
-          my_dcopy(16,&tempT[16],1,&(binfo->yy[ci][fcount]),1);
-          my_daxpy(16,cones,tempC[cj+binfo->Nelem[ci]],&(binfo->yy[ci][fcount]));
-          my_dcopy(16,&tempT[24],1,&(binfo->zz[ci][fcount]),1);
-          my_daxpy(16,cones,tempC[cj+2*binfo->Nelem[ci]],&(binfo->zz[ci][fcount]));
-          fcount+=16;
-         }
+        if (binfo->bfType==STAT_SINGLE) {
+         /* all dipoles are considered individually */
+         binfo->xx[ci]=new double[dipoles_per_tile*(binfo->Nelem[ci]-fcount)];
+         binfo->yy[ci]=new double[dipoles_per_tile*(binfo->Nelem[ci]-fcount)];
+         binfo->zz[ci]=new double[dipoles_per_tile*(binfo->Nelem[ci]-fcount)];
+        } else if (binfo->bfType==STAT_TILE) {
+         /* we only need to store the (rotated) dipoles in a tile, and the (rotated) tile centroid coords */
+         binfo->xx[ci]=new double[dipoles_per_tile+(binfo->Nelem[ci]-fcount)];
+         binfo->yy[ci]=new double[dipoles_per_tile+(binfo->Nelem[ci]-fcount)];
+         binfo->zz[ci]=new double[dipoles_per_tile+(binfo->Nelem[ci]-fcount)];
         }
-        /* following is the number of dipoles (16 x tiles) */
-        binfo->Nelem[ci]=fcount;
+        fcount=0;
+        if (binfo->bfType==STAT_SINGLE) {
+          /* copy unflagged coords, 16 times for each dipole */
+          for (int cj=0; cj<binfo->Nelem[ci]; cj++) {
+           if (!(ef[2*cj]==1 || ef[2*cj+1]==1)) {
+            my_dcopy(dipoles_per_tile,&tempT[0],1,&(binfo->xx[ci][fcount]),1);
+            my_daxpy(dipoles_per_tile,cones,tempC[cj],&(binfo->xx[ci][fcount]));
+            my_dcopy(dipoles_per_tile,&tempT[dipoles_per_tile],1,&(binfo->yy[ci][fcount]),1);
+            my_daxpy(dipoles_per_tile,cones,tempC[cj+binfo->Nelem[ci]],&(binfo->yy[ci][fcount]));
+            my_dcopy(dipoles_per_tile,&tempT[2*dipoles_per_tile],1,&(binfo->zz[ci][fcount]),1);
+            my_daxpy(dipoles_per_tile,cones,tempC[cj+2*binfo->Nelem[ci]],&(binfo->zz[ci][fcount]));
+            fcount+=dipoles_per_tile;
+           }
+          }
+          /* following is the number of dipoles (16 x tiles) */
+          binfo->Nelem[ci]=fcount;
+        } else if (binfo->bfType==STAT_TILE) {
+          /* copy dipole coords, for one tile */
+          my_dcopy(dipoles_per_tile,&tempT[0],1,&(binfo->xx[ci][0]),1);
+          my_dcopy(dipoles_per_tile,&tempT[dipoles_per_tile],1,&(binfo->yy[ci][0]),1);
+          my_dcopy(dipoles_per_tile,&tempT[2*dipoles_per_tile],1,&(binfo->zz[ci][0]),1);
+          /* now copy unflagged tile centroids */
+          fcount=0;
+          for (int cj=0; cj<binfo->Nelem[ci]; cj++) {
+           if (!(ef[2*cj]==1 || ef[2*cj+1]==1)) {
+            binfo->xx[ci][dipoles_per_tile+fcount]=tempC[cj];
+            binfo->yy[ci][dipoles_per_tile+fcount]=tempC[cj+binfo->Nelem[ci]];
+            binfo->zz[ci][dipoles_per_tile+fcount]=tempC[cj+2*binfo->Nelem[ci]];
+            fcount++;
+           }
+          }
+          /* following is the number of tiles, and the actual data has +dipoles_per_tile added */
+          binfo->Nelem[ci]=fcount;
+        }
         std::cout<<"Ant "<<ci<<" stored="<<fcount<<std::endl;
 
         delete [] tempC;
       }
      } else { /* LBA */
+      binfo->bfType=STAT_SINGLE; /* single stage beamformer, tiles expanded to elements */
       /* now read in element offsets, also transform them to local coordinates */
       for (int ci=0; ci<data->N; ci++) {
         Array<double> _off=offset(ci);
@@ -405,14 +439,22 @@ Data::readAuxData(const char *fname, Data::IOData *data, Data::LBeam *binfo) {
      }
 
      /* read beam pointing direction */
-     ROArrayColumn<double> point_dir(_field, "REFERENCE_DIR"); //old LOFAR_TILE_BEAM_DIR
+     ROArrayColumn<double> point_dir(_field, "REFERENCE_DIR"); //could be different from LOFAR_TILE_BEAM_DIR
      Array<double> pdir = point_dir(0);
      double *pc = pdir.data();
      binfo->p_ra0=pc[0];
      binfo->p_dec0=pc[1];
+     /* read tile beam pointing direction */
+     ROArrayColumn<double> tile_dir(_field, "LOFAR_TILE_BEAM_DIR");
+     Array<double> tdir = tile_dir(0);
+     double *tc = tdir.data();
+     binfo->b_ra0=tc[0];
+     binfo->b_dec0=tc[1];
+     std::cout<<"Tile "<<binfo->b_ra0<<","<<binfo->b_dec0<<" Beam "<<binfo->p_ra0<<","<<binfo->p_dec0<<std::endl;
    } else {
      cout<<"Warning: Not possible to calculate array beam, only element (dipole) beam."<<endl;
      binfo->isDipole=1;
+     binfo->bfType=STAT_NONE; /* no beamformer */
      /* use ANTENNA table to get positions */
      ROArrayColumn<double> position(_ant, "POSITION");
 

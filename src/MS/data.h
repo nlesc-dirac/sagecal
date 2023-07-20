@@ -96,8 +96,10 @@ namespace Data
       double b_ra0;
       double b_dec0;
 
-      /* flag to indicate this beam is only a dipole */
+      /* flag to indicate this beam is only a dipole (1 : true, else 0) */
       int isDipole;
+      /* flag to indicate beamformer type: STAT_NONE: no beamformer (only dipole), STAT_SINGLE: single beamformer, STAT_TILE: two stage (tile+final) beamformer */
+      int bfType;
     };
 
 

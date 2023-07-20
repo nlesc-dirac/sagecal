@@ -97,6 +97,21 @@ typedef struct exinfo_shapelet_ {
 #define ELEM_ALO 2 /*  Astrophysical Lunar Observatory (ALO) */
 #endif
 
+/* station beam calculation */
+#ifndef STAT_NONE
+#define STAT_NONE 0 /* no beamformer, only dipole model */
+#endif
+#ifndef STAT_SINGLE
+#define STAT_SINGLE 1 /* single beamformer, all elements are dipoles */
+#endif
+#ifndef STAT_TILE
+#define STAT_TILE 2 /* two stage beamformer, tile beam + full beam */
+#endif
+/* LOFAR dipoles per tile */
+#ifndef HBA_TILE_SIZE
+#define HBA_TILE_SIZE 16
+#endif
+
 /* beam prediction flags */
 #ifndef DOBEAM_NONE
 #define DOBEAM_NONE 0 /* no beam */
