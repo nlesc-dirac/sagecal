@@ -362,9 +362,9 @@ sharmonic_modes(int n0,double *th, double *ph, int Nt, complex double *output);
   uvmax: baseline length higher than this not included in solution
 
   Station beam specific parameters:
-  bf_type: STAT_NONE, STAT_SINGLE, STAT_TILE (type of beamformer)
+  bf_type: STAT_NONE, STAT_SINGLE, or STAT_TILE (type of beamformer)
   b_ra0, b_dec0: (if HBA), tile beam pointing  rad,rad
-  ph_ra0,ph_dec0: beam pointing rad,rad
+  ph_ra0,ph_dec0: full beam pointing rad,rad
   ph_freq0: beam reference freq
   longitude,latitude: Nx1 arrays (rad,rad) station locations
   time_utc: JD (day) : tilesz x 1 
@@ -451,6 +451,10 @@ precalculate_coherencies_multifreq_withbeam_gpu(double *u, double *v, double *w,
 extern void
 cudakernel_array_beam(int N, int T, int K, int F, double *freqs, float *longitude, float *latitude,
  double *time_utc, int *Nelem, float **xx, float **yy, float **zz, float *ra, float *dec, float ph_ra0, float  ph_dec0, float ph_freq0, float *beam, int wideband);
+
+extern void
+cudakernel_tile_array_beam(int N, int T, int K, int F, double *freqs, float *longitude, float *latitude,
+ double *time_utc, int *Nelem, float **xx, float **yy, float **zz, float *ra, float *dec, float b_ra0, float b_dec0, float ph_ra0, float ph_dec0, float ph_freq0, float *beam, int wideband);
 
 extern void
 cudakernel_element_beam(int N, int T, int K, int F, double *freqs, float *longitude, float *latitude,

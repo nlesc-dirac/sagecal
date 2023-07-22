@@ -124,7 +124,7 @@ namespace Data
     void freeData(IOData data);
     void freeData(IOData data, LBeam binfo);
 
-    int precess_source_locations(double jd_tdb, clus_source_t *carr, int M, double *ra_beam, double *dec_beam, int Nt);
+    int precess_source_locations(double jd_tdb, clus_source_t *carr, int M, double *ra_beam, double *dec_beam, double *ra_tile, double *dec_tile, int Nt);
 
     extern int numChannels; 
     extern unsigned long int numRows;

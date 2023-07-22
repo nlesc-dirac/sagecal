@@ -219,11 +219,9 @@ kernel_array_beam(int N, int T, int K, int F,
 
 
    float Nnor=1.0f/(float)Nelems;
-   ssum*=Nnor;
-   csum*=Nnor;
    /* store output (amplitude of beam)*/
    int boffset=itm*N*K*F+isrc*N*F+ifrq*N+istat;
-   beam[boffset]=sqrtf(ssum*ssum+csum*csum);
+   beam[boffset]=sqrtf(ssum*ssum+csum*csum)*Nnor;
    } else {
    int boffset=itm*N*K*F+isrc*N*F+ifrq*N+istat;
    beam[boffset]=0.0f;
@@ -233,6 +231,135 @@ kernel_array_beam(int N, int T, int K, int F,
 
 }
 
+/* similar to kernel_array_beam, except using two stage beamformer,
+   first the tile beamformer, next the full beamformer using tile centroids */
+__global__ void
+kernel_tile_array_beam(int N, int T, int K, int F,
+ const double *__restrict__ freqs, const float *__restrict__ longitude, const float *__restrict__ latitude,
+ const double *__restrict__ time_utc, const int *__restrict__ Nelem,
+ const float * const *__restrict__ xx, const float * const *__restrict__ yy, const float * const *__restrict__ zz,
+ const float *__restrict__ ra, const float *__restrict__ dec,
+ float b_ra0, float b_dec0, float ph_ra0, float ph_dec0, float ph_freq0, float *beam, const int wideband) {
+
+    /* global thread index, x-dimension (data) */
+    int x=threadIdx.x+blockDim.x*blockIdx.x;
+    /* y-dimension is station */
+    int istat=blockIdx.y;
+
+    // find respective source,freq,time for this thread
+    int n1 = x;
+    int isrc=n1/(T*F);
+    n1=n1-isrc*(T*F);
+    int ifrq=n1/(T);
+    n1=n1-ifrq*(T);
+    int itm=n1;
+
+    //number of elements (tiles) for this station
+    //note that the first HBA_TILE_SIZE values are the dipole locations,
+    //and the rest Nelems are tile locations
+    int Nelems = __ldg(&Nelem[istat]);
+
+    //using shared memory
+    #if (ARRAY_USE_SHMEM==1)
+      __shared__ float sh_x[ARRAY_MAX_ELEM];
+      __shared__ float sh_y[ARRAY_MAX_ELEM];
+      __shared__ float sh_z[ARRAY_MAX_ELEM];
+      for (int i=threadIdx.x; i<Nelems+HBA_TILE_SIZE; i+=blockDim.x) {
+        sh_x[i] = __ldg(&xx[istat][i]);
+        sh_y[i] = __ldg(&yy[istat][i]);
+        sh_z[i] = __ldg(&zz[istat][i]);
+      }
+      __syncthreads();
+    #endif
+
+  float r1,r2,r3;
+  //check data limit
+  if (x<(K*T*F)) {
+
+/*********************************************************************/
+   /* time is already converted to thetaGMST */
+   float thetaGMST=(float)__ldg(&time_utc[itm]);
+   /* find az,el */
+   float az,el,az0,el0,az_b,el_b,theta,phi,theta0,phi0,theta_b,phi_b;
+   radec2azel_gmst__(__ldg(&ra[isrc]),__ldg(&dec[isrc]), __ldg(&longitude[istat]), __ldg(&latitude[istat]), thetaGMST, &az, &el);
+   radec2azel_gmst__(ph_ra0,ph_dec0, __ldg(&longitude[istat]), __ldg(&latitude[istat]), thetaGMST, &az0, &el0);
+   radec2azel_gmst__(b_ra0,b_dec0, __ldg(&longitude[istat]), __ldg(&latitude[istat]), thetaGMST, &az_b, &el_b);
+   /* transform : theta = 90-el, phi=-az? 45 only needed for element beam */
+   theta=M_PI_2-el;
+   phi=-az; /* */
+   theta0=M_PI_2-el0;
+   phi0=-az0; /* */
+   theta_b=M_PI_2-el_b;
+   phi_b=-az_b;
+/*********************************************************************/
+   if (el>=0.0f) {
+   /* 2*PI/C */
+   const float tpc=2.0f*M_PI/CONST_C;
+   float sint,cost,sinph,cosph,sint0,cost0,sinph0,cosph0;
+   sincosf(theta,&sint,&cost);
+   sincosf(phi,&sinph,&cosph);
+   sincosf(theta0,&sint0,&cost0);
+   sincosf(phi0,&sinph0,&cosph0);
+
+   /*r1=(float)-tpc*(ph_freq0*sint0*cosph0-freqs[ifrq]*sint*cosph);
+   r2=(float)-tpc*(ph_freq0*sint0*sinph0-freqs[ifrq]*sint*sinph);
+   r3=(float)-tpc*(ph_freq0*cost0-freqs[ifrq]*cost);
+   */
+   float f=(float)__ldg(&freqs[ifrq]);
+   // use channel freq for per-channel beamformer (wideband data)
+   float beam_freq=(!wideband?ph_freq0:f);
+   float rat1=beam_freq*sint0;
+   float rat2=f*sint;
+   r1=-tpc*(rat1*cosph0-rat2*cosph);
+   r2=-tpc*(rat1*sinph0-rat2*sinph);
+   r3=-tpc*(beam_freq*cost0-f*cost);
+
+   /* full beamformer using tile centroids */
+        float ssum = 0.0f;
+        float csum = 0.0f;
+        for (int i=0; i<Nelems; i++) {
+            float ss,cc;
+            #if (ARRAY_USE_SHMEM == 0)
+            sincosf((r1*__ldg(&xx[istat][i+HBA_TILE_SIZE])+r2*__ldg(&yy[istat][i+HBA_TILE_SIZE])+r3*__ldg(&zz[istat][i+HBA_TILE_SIZE])),&ss,&cc);
+            #else
+            sincosf(r1*sh_x[i+HBA_TILE_SIZE]+r2*sh_y[i+HBA_TILE_SIZE]+r3*sh_z[i+HBA_TILE_SIZE],&ss,&cc);
+            #endif
+            ssum += ss;
+            csum += cc;
+        }
+   /* normalization: num tiles x tile size */
+   float Nnor=1.0f/(float)(Nelems*HBA_TILE_SIZE);
+
+   /* tile beamformer using element positions */
+   sincosf(theta_b,&sint0,&cost0);
+   sincosf(phi_b,&sinph0,&cosph0);
+   rat1=beam_freq*sint0;
+   r1=-tpc*(rat1*cosph0-rat2*cosph);
+   r2=-tpc*(rat1*sinph0-rat2*sinph);
+   r3=-tpc*(beam_freq*cost0-f*cost);
+        float ssum_b = 0.0f;
+        float csum_b = 0.0f;
+        for (int i=0; i<HBA_TILE_SIZE; i++) {
+            float ss,cc;
+            #if (ARRAY_USE_SHMEM == 0)
+            sincosf((r1*__ldg(&xx[istat][i])+r2*__ldg(&yy[istat][i])+r3*__ldg(&zz[istat][i])),&ss,&cc);
+            #else
+            sincosf(r1*sh_x[i]+r2*sh_y[i]+r3*sh_z[i],&ss,&cc);
+            #endif
+            ssum_b += ss;
+            csum_b += cc;
+        }
+
+   /* store output (amplitude of beam)*/
+   int boffset=itm*N*K*F+isrc*N*F+ifrq*N+istat;
+   beam[boffset]=sqrtf(ssum*ssum+csum*csum)*sqrtf(ssum_b*ssum_b+csum_b*csum_b)*Nnor;
+   } else {
+   int boffset=itm*N*K*F+isrc*N*F+ifrq*N+istat;
+   beam[boffset]=0.0f;
+   }
+  }
+
+}
 __global__ void 
 kernel_element_beam(int N, int T, int K, int F, 
  const double *__restrict__ freqs, const float *__restrict__ longitude, const float *__restrict__ latitude,
@@ -1431,14 +1558,13 @@ checkCudaError(cudaError_t err, const char *file, int line)
   longitude, latitude: Nx1 station locations
   time_utc: Tx1 time
   Nelem: Nx1 array of no. of elements
-  xx,yy,zz: Nx1 arrays of Nelem[] station locations
+  xx,yy,zz: Nx1 arrays of Nelem[] dipole locations
   ra,dec: Kx1 source positions
   beam: output beam values NxTxKxF values
   ph_ra0,ph_dec0: beam pointing direction
   ph_freq0: beam referene freq
   wideband: 0: use freq0 for beamformer freq, 1: use each freqs[] for beamformer freq
 */
-
 void
 cudakernel_array_beam(int N, int T, int K, int F, double *freqs, float *longitude, float *latitude,
  double *time_utc, int *Nelem, float **xx, float **yy, float **zz, float *ra, float *dec, float ph_ra0, float ph_dec0, float ph_freq0, float *beam, int wideband) {
@@ -1446,10 +1572,6 @@ cudakernel_array_beam(int N, int T, int K, int F, double *freqs, float *longitud
   cudaError_t error;
   error = cudaGetLastError();
 #endif
-  // Set a heap size of 128 megabytes. Note that this must
-  // be done before any kernel is launched. 
-  //cudaDeviceSetLimit(cudaLimitMallocHeapSize, 128*1024*1024);
-  // for an array of max 24*16 x 2  double, the default 8MB is ok
 
   int ThreadsPerBlock=DEFAULT_TH_PER_BK;
   /* note: make sure we do not exceed max no of blocks available, otherwise (too many sources, loop over source id) */
@@ -1471,6 +1593,47 @@ cudakernel_array_beam(int N, int T, int K, int F, double *freqs, float *longitud
   }
 #endif
 }
+
+/*
+  precalculate station beam, same as cudakernel_array_beam,
+  but with a two stage beamformer, first the tile beam is calculated,
+  next the final beam using tile centroids
+  additional paramters:
+  b_ra0,b_dec0: tile beam pointing direction
+
+  xx,yy,zz: Nx1 arrays of HBA_TILE_SIZE+Nelem[]
+  first HBA_TILE_SIZE values are the rotated dipole locations in a tile
+  next Nelem[] values are the rotated tile centroid locations
+ */
+void
+cudakernel_tile_array_beam(int N, int T, int K, int F, double *freqs, float *longitude, float *latitude,
+ double *time_utc, int *Nelem, float **xx, float **yy, float **zz, float *ra, float *dec, float b_ra0, float b_dec0, float ph_ra0, float ph_dec0, float ph_freq0, float *beam, int wideband) {
+#ifdef CUDA_DBG
+  cudaError_t error;
+  error = cudaGetLastError();
+#endif
+
+  int ThreadsPerBlock=DEFAULT_TH_PER_BK;
+  /* note: make sure we do not exceed max no of blocks available, otherwise (too many sources, loop over source id) */
+
+  /* 2D grid of threads: x dim->data, y dim-> stations */
+  dim3 grid(1, 1, 1);
+  grid.x = (int)ceilf((K*T*F) / (float)ThreadsPerBlock);
+  grid.y = N;
+
+  kernel_tile_array_beam<<<grid,ThreadsPerBlock>>>(N,T,K,F,freqs,longitude,latitude,time_utc,Nelem,xx,yy,zz,ra,dec,b_ra0,b_dec0,ph_ra0,ph_dec0,ph_freq0,beam,wideband);
+  cudaDeviceSynchronize();
+
+#ifdef CUDA_DBG
+  error = cudaGetLastError();
+  if(error != cudaSuccess) {
+    // print the CUDA error message and exit
+    fprintf(stderr,"CUDA error: %s :%s: %d\n", cudaGetErrorString(error),__FILE__,__LINE__);
+    exit(-1);
+  }
+#endif
+}
+
 
 /* element beam parameters
   N: no of stations

@@ -224,7 +224,9 @@ Data::readAuxData(const char *fname, Data::IOData *data, Data::LBeam *binfo) {
     Table _obs = Table(_t.keywordSet().asTable("OBSERVATION"));
     ROScalarColumn<String> telescope(_obs, "TELESCOPE_NAME");
     std::string tel=telescope(0);
-    std::cout<<tel<<std::endl;
+    if (tel.compare("LOFAR")) {
+     std::cout<<"Telescope is "<<tel<<std::endl;
+    }
 
    /* allocate memory */
    try {
@@ -317,8 +319,8 @@ Data::readAuxData(const char *fname, Data::IOData *data, Data::LBeam *binfo) {
      const int dipoles_per_tile=HBA_TILE_SIZE;
      if (isHBA) {
       /* there are two ways to calculate the beamformer */
-      binfo->bfType=STAT_SINGLE; /* single stage beamformer, tiles expanded to elements */
-      //binfo->bfType=STAT_TILE; /* two stage beamformer, first tile beamformer, then tile centroid beamformer */
+      //binfo->bfType=STAT_SINGLE; /* single stage beamformer, tiles expanded to elements */
+      binfo->bfType=STAT_TILE; /* two stage beamformer, first tile beamformer, then tile centroid beamformer */
       double cones[dipoles_per_tile];
       for (int ci=0; ci<dipoles_per_tile; ci++) {
         cones[ci]=1.0;
@@ -348,7 +350,6 @@ Data::readAuxData(const char *fname, Data::IOData *data, Data::LBeam *binfo) {
           fcount++;
          }
         }
-        std::cout<<"Ant "<<ci<<" flagged tiles="<<fcount<<std::endl;
         if (binfo->bfType==STAT_SINGLE) {
          /* all dipoles are considered individually */
          binfo->xx[ci]=new double[dipoles_per_tile*(binfo->Nelem[ci]-fcount)];
@@ -394,7 +395,6 @@ Data::readAuxData(const char *fname, Data::IOData *data, Data::LBeam *binfo) {
           /* following is the number of tiles, and the actual data has +dipoles_per_tile added */
           binfo->Nelem[ci]=fcount;
         }
-        std::cout<<"Ant "<<ci<<" stored="<<fcount<<std::endl;
 
         delete [] tempC;
       }
@@ -450,7 +450,6 @@ Data::readAuxData(const char *fname, Data::IOData *data, Data::LBeam *binfo) {
      double *tc = tdir.data();
      binfo->b_ra0=tc[0];
      binfo->b_dec0=tc[1];
-     std::cout<<"Tile "<<binfo->b_ra0<<","<<binfo->b_dec0<<" Beam "<<binfo->p_ra0<<","<<binfo->p_dec0<<std::endl;
    } else {
      cout<<"Warning: Not possible to calculate array beam, only element (dipole) beam."<<endl;
      binfo->isDipole=1;
@@ -461,6 +460,8 @@ Data::readAuxData(const char *fname, Data::IOData *data, Data::LBeam *binfo) {
      /* only a dipole in this MS */
      binfo->p_ra0=data->ra0;
      binfo->p_dec0=data->dec0;
+     binfo->b_ra0=data->ra0;
+     binfo->b_dec0=data->dec0;
      for (int ci=0; ci<data->N; ci++) {
        Array<double> _pos=position(ci);
        double *tx=_pos.data();
@@ -1541,7 +1542,7 @@ void Data::freeData(Data::IOData data, Data::LBeam binfo)
 
 
 int
-Data::precess_source_locations(double jd_tdb, clus_source_t *carr, int M, double *ra_beam, double *dec_beam, int Nt) {
+Data::precess_source_locations(double jd_tdb, clus_source_t *carr, int M, double *ra_beam, double *dec_beam, double *ra_tile, double *dec_tile, int Nt) {
   Precession prec(Precession::IAU2000);  // define precession type
   RotMatrix rotat_prec(prec(jd_tdb-2400000.5));        // JD to MJD
   Nutation nut(Nutation::IAU2000);
@@ -1563,5 +1564,11 @@ Data::precess_source_locations(double jd_tdb, clus_source_t *carr, int M, double
   MVDirection newdir = rotat*pos;       // apply precession
   *ra_beam=newdir.get()[0];
   *dec_beam=newdir.get()[1];
+
+  MVDirection pos_tile(Quantity(*ra_tile,"rad"),Quantity(*dec_tile,"rad"));
+  MVDirection newdir_tile = rotat*pos_tile;       // apply precession
+  *ra_tile=newdir_tile.get()[0];
+  *dec_tile=newdir_tile.get()[1];
+
   return 0;
 }
