@@ -241,6 +241,8 @@ typedef struct thread_data_arrayfac_ {
   int N; /* no. of stations */
   double *longitude, *latitude;
 
+  int bf_type; /* beamformer type STAT_NONE, STAT_SINGLE or STAT_TILE */
+  double b_ra0, b_dec0; /* tile beam pointing */
   double ra0,dec0,freq0; /* reference pointing and freq */
   int Nf; /* no. of frequencies to calculate */
   double *freqs; /* Nfx1 array */

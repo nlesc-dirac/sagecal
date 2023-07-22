@@ -274,6 +274,8 @@ precession(double ra0, double dec0, double Tr[9], double *ra, double *dec);
 /****************************** stationbeam.c ****************************/
 /* 
   ra,dec: source direction (rad)
+  int bf_type:  beamformer type STAT_NONE, STAT_SINGLE or STAT_TILE
+  b_ra0,b_dec0: tile bem center (rad), only used in STAT_TILE mode
   ra0,dec0: beam center (rad)
   f: frequency (Hz)
   f0: beam forming frequency (Hz)
@@ -288,7 +290,7 @@ precession(double ra0, double dec0, double Tr[9], double *ra, double *dec);
 wideband: if 0, use f0 as beamformer freq, elese, use f as beamformer freq (for wideband data), also the element coeffients are calculated for each f, not only for f0
 */ 
 extern int
-arraybeam(double ra, double dec, double ra0, double dec0, double f, double f0, int N, double *longitude, double *latitude, double time_jd, int *Nelem, double **x, double **y, double **z, double *beamgain, int wideband);
+arraybeam(double ra, double dec, int bf_type, double b_ra0, double b_dec0, double ra0, double dec0, double f, double f0, int N, double *longitude, double *latitude, double time_jd, int *Nelem, double **x, double **y, double **z, double *beamgain, int wideband);
 
 
 /*
@@ -298,7 +300,7 @@ arraybeam(double ra, double dec, double ra0, double dec0, double f, double f0, i
 findex: in wideband mode, the index of f needed to calculate the offset of element coefficients
   */
 extern int
-array_element_beam(double ra, double dec, double ra0, double dec0, double f, double f0, int N, double *longitude, double *latitude, double time_jd, int *Nelem, double **x, double **y, double **z, elementcoeff *ecoeff, double *beamgain, double *elementgain, int wideband, int findex);
+array_element_beam(double ra, double dec, int bf_type, double b_ra0, double b_dec0, double ra0, double dec0, double f, double f0, int N, double *longitude, double *latitude, double time_jd, int *Nelem, double **x, double **y, double **z, elementcoeff *ecoeff, double *beamgain, double *elementgain, int wideband, int findex);
 
 extern int
 element_beam(double ra, double dec, double f, double f0, int N, double *longitude, double *latitude, double time_jd, elementcoeff *ecoeff, double *elementgain, int wideband, int findex);

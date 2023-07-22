@@ -500,7 +500,7 @@ precalbeam_threadfn(void *data) {
    for (cf=0; cf<t->Nf; cf++) {
    /* iterate over sources */
   for (cn=t->soff; cn<t->soff+t->Ns; cn++) {
-     arraybeam(t->carr[cm].ra[cn], t->carr[cm].dec[cn], t->ra0, t->dec0, t->freqs[cf], t->freq0, t->N, t->longitude, t->latitude, t->time_utc[ct], t->Nelem, t->xx, t->yy, t->zz, &(t->beamgain[ct*(t->N*t->carr[cm].N*t->Nf)+cf*(t->N*t->carr[cm].N)+cn*t->N]),(t->dobeam==DOBEAM_ARRAY?0:1));
+     arraybeam(t->carr[cm].ra[cn], t->carr[cm].dec[cn], t->bf_type, t->b_ra0, t->b_dec0, t->ra0, t->dec0, t->freqs[cf], t->freq0, t->N, t->longitude, t->latitude, t->time_utc[ct], t->Nelem, t->xx, t->yy, t->zz, &(t->beamgain[ct*(t->N*t->carr[cm].N*t->Nf)+cf*(t->N*t->carr[cm].N)+cn*t->N]),(t->dobeam==DOBEAM_ARRAY?0:1));
     }
    }
   }
@@ -522,7 +522,7 @@ precalbeam_threadfn(void *data) {
    for (cf=0; cf<t->Nf; cf++) {
    /* iterate over sources */
   for (cn=t->soff; cn<t->soff+t->Ns; cn++) {
-     array_element_beam(t->carr[cm].ra[cn], t->carr[cm].dec[cn], t->ra0, t->dec0, t->freqs[cf], t->freq0, t->N, t->longitude, t->latitude, t->time_utc[ct], t->Nelem, t->xx, t->yy, t->zz, t->ecoeff, &(t->beamgain[ct*(t->N*t->carr[cm].N*t->Nf)+cf*(t->N*t->carr[cm].N)+cn*t->N]),&(t->elementgain[ct*(8*t->N*t->carr[cm].N*t->Nf)+cf*(8*t->N*t->carr[cm].N)+cn*8*t->N]),(t->dobeam==DOBEAM_FULL?0:1),cf);
+     array_element_beam(t->carr[cm].ra[cn], t->carr[cm].dec[cn], t->bf_type, t->b_ra0, t->b_dec0, t->ra0, t->dec0, t->freqs[cf], t->freq0, t->N, t->longitude, t->latitude, t->time_utc[ct], t->Nelem, t->xx, t->yy, t->zz, t->ecoeff, &(t->beamgain[ct*(t->N*t->carr[cm].N*t->Nf)+cf*(t->N*t->carr[cm].N)+cn*t->N]),&(t->elementgain[ct*(8*t->N*t->carr[cm].N*t->Nf)+cf*(8*t->N*t->carr[cm].N)+cn*8*t->N]),(t->dobeam==DOBEAM_FULL?0:1),cf);
     }
    }
   }
@@ -643,6 +643,9 @@ precalculate_coherencies_withbeam(double *u, double *v, double *w, complex doubl
      beamdata[nth1].N=N;
      beamdata[nth1].longitude=longitude;
      beamdata[nth1].latitude=latitude;
+     beamdata[nth1].bf_type=bf_type;
+     beamdata[nth1].b_ra0=b_ra0;
+     beamdata[nth1].b_dec0=b_dec0;
      beamdata[nth1].ra0=ph_ra0;
      beamdata[nth1].dec0=ph_dec0;
      beamdata[nth1].freq0=ph_freq0;
@@ -813,6 +816,9 @@ precalculate_coherencies_multifreq_withbeam(double *u, double *v, double *w, com
      beamdata[nth1].N=N;
      beamdata[nth1].longitude=longitude;
      beamdata[nth1].latitude=latitude;
+     beamdata[nth1].bf_type=bf_type;
+     beamdata[nth1].b_ra0=b_ra0;
+     beamdata[nth1].b_dec0=b_dec0;
      beamdata[nth1].ra0=ph_ra0;
      beamdata[nth1].dec0=ph_dec0;
      beamdata[nth1].freq0=ph_freq0;
@@ -1309,6 +1315,9 @@ predict_visibilities_multifreq_withbeam(double *u,double *v,double *w,double *x,
      beamdata[nth1].N=N;
      beamdata[nth1].longitude=longitude;
      beamdata[nth1].latitude=latitude;
+     beamdata[nth1].bf_type=bf_type;
+     beamdata[nth1].b_ra0=b_ra0;
+     beamdata[nth1].b_dec0=b_dec0;
      beamdata[nth1].ra0=ph_ra0;
      beamdata[nth1].dec0=ph_dec0;
      beamdata[nth1].freq0=ph_freq0;
@@ -1578,6 +1587,9 @@ predict_visibilities_multifreq_withsol_withbeam(double *u,double *v,double *w,do
      beamdata[nth1].N=N;
      beamdata[nth1].longitude=longitude;
      beamdata[nth1].latitude=latitude;
+     beamdata[nth1].bf_type=bf_type;
+     beamdata[nth1].b_ra0=b_ra0;
+     beamdata[nth1].b_dec0=b_dec0;
      beamdata[nth1].ra0=ph_ra0;
      beamdata[nth1].dec0=ph_dec0;
      beamdata[nth1].freq0=ph_freq0;
@@ -2100,6 +2112,9 @@ calculate_residuals_multifreq_withbeam(double *u,double *v,double *w,double *p,d
      beamdata[nth1].N=N;
      beamdata[nth1].longitude=longitude;
      beamdata[nth1].latitude=latitude;
+     beamdata[nth1].bf_type=bf_type;
+     beamdata[nth1].b_ra0=b_ra0;
+     beamdata[nth1].b_dec0=b_dec0;
      beamdata[nth1].ra0=ph_ra0;
      beamdata[nth1].dec0=ph_dec0;
      beamdata[nth1].freq0=ph_freq0;
