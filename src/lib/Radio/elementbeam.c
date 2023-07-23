@@ -408,7 +408,7 @@ eval_elementcoeffs_wb(double r, double theta, elementcoeff *ecoeff, int findex) 
     for (int m=-n; m<=n; m+=2) {
      int absm=m>=0?m:-m; /* |m| */
      /* evaluate L_((n-|m|)/2)^|m| ( . ) */
-     double Lg=L_g1((n-absm)/2,absm,rb);
+     double Lg=L_g2((n-absm)/2,absm,rb);
      /* evaluate r^|m| (with pi/4 offset) */
      double rm=pow(M_PI_4+r,(double)absm);
      /* evaluate exp(-j*m*theta) */
