@@ -52,7 +52,7 @@
 #ifndef GPU_HEAP_SIZE
 #define GPU_HEAP_SIZE 32
 #endif
-/* shared memory size for element beam coefficients */
+/* shared memory size for element beam coefficients (for one frequency) */
 #ifndef ELEMENT_MAX_SIZE
 #define ELEMENT_MAX_SIZE 64 // should be > (BEAM_ELEM_MODES*(BEAM_ELEM_MODES+1)/2)
 #endif

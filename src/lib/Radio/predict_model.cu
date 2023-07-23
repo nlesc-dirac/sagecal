@@ -92,8 +92,8 @@ L_g1(int p, int q, float x) {
 
 /* evaluate element value using coefficient arrays */
 __device__ float4
-eval_elementcoeff(float r, float theta, int M, float beta, float2 *pattern_theta,
-     float2 *pattern_phi, float *pattern_preamble) {
+eval_elementcoeff(float r, float theta, int M, float beta, const float2 *pattern_theta,
+     const float2 *pattern_phi, const float *pattern_preamble) {
   float4 eval={0.f,0.f,0.f,0.f};
   float rb=powf(r/beta,2);
   float ex=exp(-0.5f*rb);
@@ -360,6 +360,8 @@ kernel_tile_array_beam(int N, int T, int K, int F,
   }
 
 }
+
+
 __global__ void 
 kernel_element_beam(int N, int T, int K, int F, 
  const double *__restrict__ freqs, const float *__restrict__ longitude, const float *__restrict__ latitude,
@@ -382,7 +384,7 @@ kernel_element_beam(int N, int T, int K, int F,
     n1=n1-ifrq*(T);
     int itm=n1;
 
-     //using shared memory
+     //using shared memory (not for wideband model)
     #if (ARRAY_USE_SHMEM==1)
       __shared__ cuFloatComplex sh_phi[ELEMENT_MAX_SIZE];
       __shared__ cuFloatComplex sh_theta[ELEMENT_MAX_SIZE];
@@ -396,14 +398,7 @@ kernel_element_beam(int N, int T, int K, int F,
         sh_preamble[i] = __ldg(&pattern_preamble[i]);
        }
       } else {
-       // in wideband mode, offset by 2*Nmodes*ifrq
-       for (int i=threadIdx.x; i<Nmodes; i+=blockDim.x) {
-        sh_phi[i].x = __ldg(&pattern_phi[2*i+2*Nmodes*ifrq]);
-        sh_phi[i].y =__ldg(&pattern_phi[2*i+2*Nmodes*ifrq+1]);
-        sh_theta[i].x = __ldg(&pattern_theta[2*i+2*Nmodes*ifrq]);
-        sh_theta[i].y = __ldg(&pattern_theta[2*i+2*Nmodes*ifrq+1]);
-        sh_preamble[i] = __ldg(&pattern_preamble[i]);
-       }
+       // in wideband mode, total is Nmodes*F (which can be too large)
       }
       __syncthreads();
     #endif
@@ -422,26 +417,27 @@ kernel_element_beam(int N, int T, int K, int F,
    theta=az-M_PI_4;
 /*********************************************************************/
    if (el>=0.0f) {
+      float4 evalX,evalY;
+      if (!wideband) {
       #if (ARRAY_USE_SHMEM == 1)
-      float4 evalX=eval_elementcoeff(r, theta, M, beta, sh_theta,
+      evalX=eval_elementcoeff(r, theta, M, beta, sh_theta,
                 sh_phi, sh_preamble);
-      float4 evalY=eval_elementcoeff(r, theta+M_PI_2, M, beta, sh_theta,
+      evalY=eval_elementcoeff(r, theta+M_PI_2, M, beta, sh_theta,
                 sh_phi, sh_preamble);
       #else
-      if (!wideband) {
-      float4 evalX=eval_elementcoeff(r, theta, M, beta, (float2*)pattern_theta,
+      evalX=eval_elementcoeff(r, theta, M, beta, (float2*)pattern_theta,
                 (float2*)pattern_phi, pattern_preamble);
-      float4 evalY=eval_elementcoeff(r, theta+M_PI_2, M, beta, (float2*)pattern_theta,
+      evalY=eval_elementcoeff(r, theta+M_PI_2, M, beta, (float2*)pattern_theta,
                 (float2*)pattern_phi, pattern_preamble);
+      #endif
       } else {
-       // in wideband mode, offset by 2*Nmodes*ifrq
-      float4 evalX=eval_elementcoeff(r, theta, M, beta, (float2*)&pattern_theta[2*Nmodes*ifrq],
+       // in wideband mode, offset by 2*Nmodes*ifrq, not using shared memory
+      evalX=eval_elementcoeff(r, theta, M, beta, (float2*)&pattern_theta[2*Nmodes*ifrq],
                 (float2*)&pattern_phi[2*Nmodes*ifrq], pattern_preamble);
-      float4 evalY=eval_elementcoeff(r, theta+M_PI_2, M, beta, (float2*)&pattern_theta[2*Nmodes*ifrq],
+      evalY=eval_elementcoeff(r, theta+M_PI_2, M, beta, (float2*)&pattern_theta[2*Nmodes*ifrq],
                 (float2*)&pattern_phi[2*Nmodes*ifrq], pattern_preamble);
 
       }
-      #endif
 
    /* store output EJones 8 values */ 
    int boffset=itm*N*K*F+isrc*N*F+ifrq*N+istat;
