@@ -321,10 +321,6 @@ Data::readAuxData(const char *fname, Data::IOData *data, Data::LBeam *binfo) {
       /* there are two ways to calculate the beamformer */
       //binfo->bfType=STAT_SINGLE; /* single stage beamformer, tiles expanded to elements */
       binfo->bfType=STAT_TILE; /* two stage beamformer, first tile beamformer, then tile centroid beamformer */
-      double cones[dipoles_per_tile];
-      for (int ci=0; ci<dipoles_per_tile; ci++) {
-        cones[ci]=1.0;
-      }
       double tempT[3*dipoles_per_tile];
       /* now read in element offsets, also transform them to local coordinates */
       for (int ci=0; ci<data->N; ci++) {
@@ -363,6 +359,10 @@ Data::readAuxData(const char *fname, Data::IOData *data, Data::LBeam *binfo) {
         }
         fcount=0;
         if (binfo->bfType==STAT_SINGLE) {
+          double cones[dipoles_per_tile];
+          for (int cj=0; cj<dipoles_per_tile; cj++) {
+            cones[cj]=1.0;
+          }
           /* copy unflagged coords, 16 times for each dipole */
           for (int cj=0; cj<binfo->Nelem[ci]; cj++) {
            if (!(ef[2*cj]==1 || ef[2*cj+1]==1)) {

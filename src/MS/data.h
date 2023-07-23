@@ -83,7 +83,7 @@ namespace Data
       double *sy; /* y: ... */
       double *sz; /* z: ... */
       /* x,y,z coords of elements, projected, converted to ITRF (m) */
-      double **xx; /* x coord pointer, size Nx1, each *x: x coord of station, size Nelem[]x1 */
+      double **xx; /* x coord pointer, size Nx1, each *x: x coord of station, size Nelem[]x1 or (Nelem[]+HBA_TILE_SIZE)x1 */
       double **yy; /* y ... */
       double **zz; /* z ... */
       /* pointing center of beams (only one) (could be different from phase center)
