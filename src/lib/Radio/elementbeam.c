@@ -333,7 +333,7 @@ L_g1(int p, int q, double x) {
 
 #ifdef _OPENMP
 static double
-L_g2(int p, double q, double x) {
+L_g1(int p, int q, double x) {
   /* max p: (n-|m|)/2 = n/2 */
   if(p==0) return 1.0;
   if(p==1) return 1.0-x+q;
@@ -459,7 +459,7 @@ eval_elementcoeffs(double r, double theta, elementcoeff *ecoeff) {
     for (int m=-n; m<=n; m+=2) {
      int absm=m>=0?m:-m; /* |m| */
      double dabsm=(double)absm;
-     Lg[idx]=ex*L_g2((n-absm)/2,dabsm,rb)*pow(M_PI_4+r,dabsm);
+     Lg[idx]=ex*L_g1((n-absm)/2,dabsm,rb)*pow(M_PI_4+r,dabsm);
 
      idx++;
     }

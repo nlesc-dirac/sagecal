@@ -93,13 +93,16 @@ typedef struct thread_data_pred_t_ {
 
   /* following used in beam prediction */
   int dobeam; /* which part of beam to apply */
-  double ph_ra0,ph_dec0; /* beam pointing */
+  int bf_type; /* station beam type: STAT_NONE, STAT_SINGLE or STAT_TILE */
+  double b_ra0,b_dec0; /* tile beam pointing */
+  double ph_ra0,ph_dec0; /* full beam pointing */
   double ph_freq0; /* beam central freq */
   double *longitude,*latitude; /* Nx1 array of station locations */
   double *time_utc; /* tileszx1 array of time */
   int tilesz;
   int *Nelem; /* Nx1 array of station sizes */
-  double **xx,**yy,**zz; /* Nx1 arrays of station element coords */
+  double **xx,**yy,**zz; /* Nx1 arrays of station element coords,
+   ci-th element will have a pointer to Nelem[ci] values (+HBA_TILE_SIZE depending on bf_type) */
   elementcoeff *ecoeff; /* element beam coefficients */
 
   int Ns; /* total no of sources (clusters) per thread */
@@ -261,18 +264,18 @@ precalcoh_threadfn(void *data) {
       exit(1);
   }
   for (ci=0; ci<t->N; ci++) {
-    err=cudaMalloc((void**)&xx_p[ci], t->Nelem[ci]*sizeof(double));
+    err=cudaMalloc((void**)&xx_p[ci], (t->Nelem[ci]+(t->bf_type==STAT_TILE?HBA_TILE_SIZE:0))*sizeof(double));
     checkCudaError(err,__FILE__,__LINE__);
-    err=cudaMalloc((void**)&yy_p[ci], t->Nelem[ci]*sizeof(double));
+    err=cudaMalloc((void**)&yy_p[ci], (t->Nelem[ci]+(t->bf_type==STAT_TILE?HBA_TILE_SIZE:0))*sizeof(double));
     checkCudaError(err,__FILE__,__LINE__);
-    err=cudaMalloc((void**)&zz_p[ci], t->Nelem[ci]*sizeof(double));
+    err=cudaMalloc((void**)&zz_p[ci], (t->Nelem[ci]+(t->bf_type==STAT_TILE?HBA_TILE_SIZE:0))*sizeof(double));
     checkCudaError(err,__FILE__,__LINE__);
   }
   /* now copy data */
   for (ci=0; ci<t->N; ci++) {
-    dtofcopy(t->Nelem[ci],&xx_p[ci],t->xx[ci]);
-    dtofcopy(t->Nelem[ci],&yy_p[ci],t->yy[ci]);
-    dtofcopy(t->Nelem[ci],&zz_p[ci],t->zz[ci]);
+    dtofcopy(t->Nelem[ci]+(t->bf_type==STAT_TILE?HBA_TILE_SIZE:0),&xx_p[ci],t->xx[ci]);
+    dtofcopy(t->Nelem[ci]+(t->bf_type==STAT_TILE?HBA_TILE_SIZE:0),&yy_p[ci],t->yy[ci]);
+    dtofcopy(t->Nelem[ci]+(t->bf_type==STAT_TILE?HBA_TILE_SIZE:0),&zz_p[ci],t->zz[ci]);
   }
   /* now copy pointer locations to device */
   err=cudaMemcpy(xxd, xx_p, t->N*sizeof(int*), cudaMemcpyHostToDevice);
@@ -470,9 +473,17 @@ precalcoh_threadfn(void *data) {
 
      if (t->dobeam==DOBEAM_ARRAY) {
      /* calculate array beam for all sources in this cluster */
-      cudakernel_array_beam(t->N,t->tilesz,t->carr[ncl].N,t->Nf,freqsd,longd,latd,timed,Nelemd,xxd,yyd,zzd,rad,decd,(float)t->ph_ra0,(float)t->ph_dec0,(float)t->ph_freq0,beamd,0);
+      if (t->bf_type==STAT_TILE) {
+       cudakernel_tile_array_beam(t->N,t->tilesz,t->carr[ncl].N,t->Nf,freqsd,longd,latd,timed,Nelemd,xxd,yyd,zzd,rad,decd,(float)t->b_ra0,(float)t->b_dec0,(float)t->ph_ra0,(float)t->ph_dec0,(float)t->ph_freq0,beamd,0);
+      } else {
+       cudakernel_array_beam(t->N,t->tilesz,t->carr[ncl].N,t->Nf,freqsd,longd,latd,timed,Nelemd,xxd,yyd,zzd,rad,decd,(float)t->ph_ra0,(float)t->ph_dec0,(float)t->ph_freq0,beamd,0);
+      }
      } else if (t->dobeam==DOBEAM_ARRAY_WB) {
-      cudakernel_array_beam(t->N,t->tilesz,t->carr[ncl].N,t->Nf,freqsd,longd,latd,timed,Nelemd,xxd,yyd,zzd,rad,decd,(float)t->ph_ra0,(float)t->ph_dec0,(float)t->ph_freq0,beamd,1);
+      if (t->bf_type==STAT_TILE) {
+       cudakernel_tile_array_beam(t->N,t->tilesz,t->carr[ncl].N,t->Nf,freqsd,longd,latd,timed,Nelemd,xxd,yyd,zzd,rad,decd,(float)t->b_ra0,(float)t->b_dec0,(float)t->ph_ra0,(float)t->ph_dec0,(float)t->ph_freq0,beamd,1);
+      } else {
+       cudakernel_array_beam(t->N,t->tilesz,t->carr[ncl].N,t->Nf,freqsd,longd,latd,timed,Nelemd,xxd,yyd,zzd,rad,decd,(float)t->ph_ra0,(float)t->ph_dec0,(float)t->ph_freq0,beamd,1);
+      }
      } else if (t->dobeam==DOBEAM_ELEMENT) {
       /* calculate element beam for all sources in this cluster */
       cudakernel_element_beam(t->N,t->tilesz,t->carr[ncl].N,t->Nf,freqsd,longd,latd,timed,rad,decd,t->ecoeff->Nmodes,t->ecoeff->M,t->ecoeff->beta,pattern_phid,pattern_thetad,preambled,elementd,0);
@@ -480,10 +491,18 @@ precalcoh_threadfn(void *data) {
       cudakernel_element_beam(t->N,t->tilesz,t->carr[ncl].N,t->Nf,freqsd,longd,latd,timed,rad,decd,t->ecoeff->Nmodes,t->ecoeff->M,t->ecoeff->beta,pattern_phid,pattern_thetad,preambled,elementd,1);
      } else if (t->dobeam==DOBEAM_FULL) {
       /* calculate array+element beam for all sources in this cluster */
-      cudakernel_array_beam(t->N,t->tilesz,t->carr[ncl].N,t->Nf,freqsd,longd,latd,timed,Nelemd,xxd,yyd,zzd,rad,decd,(float)t->ph_ra0,(float)t->ph_dec0,(float)t->ph_freq0,beamd,0);
+      if (t->bf_type==STAT_TILE) {
+       cudakernel_tile_array_beam(t->N,t->tilesz,t->carr[ncl].N,t->Nf,freqsd,longd,latd,timed,Nelemd,xxd,yyd,zzd,rad,decd,(float)t->b_ra0,(float)t->b_dec0,(float)t->ph_ra0,(float)t->ph_dec0,(float)t->ph_freq0,beamd,0);
+      } else {
+       cudakernel_array_beam(t->N,t->tilesz,t->carr[ncl].N,t->Nf,freqsd,longd,latd,timed,Nelemd,xxd,yyd,zzd,rad,decd,(float)t->ph_ra0,(float)t->ph_dec0,(float)t->ph_freq0,beamd,0);
+      }
       cudakernel_element_beam(t->N,t->tilesz,t->carr[ncl].N,t->Nf,freqsd,longd,latd,timed,rad,decd,t->ecoeff->Nmodes,t->ecoeff->M,t->ecoeff->beta,pattern_phid,pattern_thetad,preambled,elementd,0);
      } else if (t->dobeam==DOBEAM_FULL_WB) {
-      cudakernel_array_beam(t->N,t->tilesz,t->carr[ncl].N,t->Nf,freqsd,longd,latd,timed,Nelemd,xxd,yyd,zzd,rad,decd,(float)t->ph_ra0,(float)t->ph_dec0,(float)t->ph_freq0,beamd,1);
+      if (t->bf_type==STAT_TILE) {
+       cudakernel_tile_array_beam(t->N,t->tilesz,t->carr[ncl].N,t->Nf,freqsd,longd,latd,timed,Nelemd,xxd,yyd,zzd,rad,decd,(float)t->b_ra0,(float)t->b_dec0,(float)t->ph_ra0,(float)t->ph_dec0,(float)t->ph_freq0,beamd,1);
+      } else {
+       cudakernel_array_beam(t->N,t->tilesz,t->carr[ncl].N,t->Nf,freqsd,longd,latd,timed,Nelemd,xxd,yyd,zzd,rad,decd,(float)t->ph_ra0,(float)t->ph_dec0,(float)t->ph_freq0,beamd,1);
+      }
       cudakernel_element_beam(t->N,t->tilesz,t->carr[ncl].N,t->Nf,freqsd,longd,latd,timed,rad,decd,t->ecoeff->Nmodes,t->ecoeff->M,t->ecoeff->beta,pattern_phid,pattern_thetad,preambled,elementd,1);
      }
 
@@ -677,7 +696,7 @@ resetflags_threadfn(void *data) {
 int
 precalculate_coherencies_withbeam_gpu(double *u, double *v, double *w, complex double *x, int N,
    int Nbase, baseline_t *barr,  clus_source_t *carr, int M, double freq0, double fdelta, double tdelta, double dec0, double uvmin, double uvmax, 
- double ph_ra0, double ph_dec0, double ph_freq0, double *longitude, double *latitude, double *time_utc, int tilesz, int *Nelem, double **xx, double **yy, double **zz, elementcoeff *ecoeff, int dobeam, int Nt) {
+ int bf_type, double b_ra0, double b_dec0, double ph_ra0, double ph_dec0, double ph_freq0, double *longitude, double *latitude, double *time_utc, int tilesz, int *Nelem, double **xx, double **yy, double **zz, elementcoeff *ecoeff, int dobeam, int Nt) {
 
   int nth,ci;
 
@@ -736,6 +755,9 @@ precalculate_coherencies_withbeam_gpu(double *u, double *v, double *w, complex d
      threaddata[nth].dec0=dec0;
 
      threaddata[nth].dobeam=dobeam; 
+     threaddata[nth].bf_type=bf_type;
+     threaddata[nth].b_ra0=b_ra0;
+     threaddata[nth].b_dec0=b_dec0;
      threaddata[nth].ph_ra0=ph_ra0;
      threaddata[nth].ph_dec0=ph_dec0;
      threaddata[nth].ph_freq0=ph_freq0;
@@ -933,18 +955,18 @@ predictvis_threadfn(void *data) {
       exit(1);
   }
   for (ci=0; ci<t->N; ci++) {
-    err=cudaMalloc((void**)&xx_p[ci], t->Nelem[ci]*sizeof(double));
+    err=cudaMalloc((void**)&xx_p[ci], (t->Nelem[ci]+(t->bf_type==STAT_TILE?HBA_TILE_SIZE:0))*sizeof(double));
     checkCudaError(err,__FILE__,__LINE__);
-    err=cudaMalloc((void**)&yy_p[ci], t->Nelem[ci]*sizeof(double));
+    err=cudaMalloc((void**)&yy_p[ci], (t->Nelem[ci]+(t->bf_type==STAT_TILE?HBA_TILE_SIZE:0))*sizeof(double));
     checkCudaError(err,__FILE__,__LINE__);
-    err=cudaMalloc((void**)&zz_p[ci], t->Nelem[ci]*sizeof(double));
+    err=cudaMalloc((void**)&zz_p[ci], (t->Nelem[ci]+(t->bf_type==STAT_TILE?HBA_TILE_SIZE:0))*sizeof(double));
     checkCudaError(err,__FILE__,__LINE__);
   }
   /* now copy data */
   for (ci=0; ci<t->N; ci++) {
-    dtofcopy(t->Nelem[ci],&xx_p[ci],t->xx[ci]);
-    dtofcopy(t->Nelem[ci],&yy_p[ci],t->yy[ci]);
-    dtofcopy(t->Nelem[ci],&zz_p[ci],t->zz[ci]);
+    dtofcopy(t->Nelem[ci]+(t->bf_type==STAT_TILE?HBA_TILE_SIZE:0),&xx_p[ci],t->xx[ci]);
+    dtofcopy(t->Nelem[ci]+(t->bf_type==STAT_TILE?HBA_TILE_SIZE:0),&yy_p[ci],t->yy[ci]);
+    dtofcopy(t->Nelem[ci]+(t->bf_type==STAT_TILE?HBA_TILE_SIZE:0),&zz_p[ci],t->zz[ci]);
   }
   /* now copy pointer locations to device */
   err=cudaMemcpy(xxd, xx_p, t->N*sizeof(int*), cudaMemcpyHostToDevice);
@@ -1142,9 +1164,17 @@ predictvis_threadfn(void *data) {
 
      if (t->dobeam==DOBEAM_ARRAY) {
       /* calculate array beam for all sources in this cluster */
-      cudakernel_array_beam(t->N,t->tilesz,t->carr[ncl].N,t->Nf,freqsd,longd,latd,timed,Nelemd,xxd,yyd,zzd,rad,decd,(float)t->ph_ra0,(float)t->ph_dec0,(float)t->ph_freq0,beamd,0);
+       if (t->bf_type==STAT_TILE) {
+        cudakernel_tile_array_beam(t->N,t->tilesz,t->carr[ncl].N,t->Nf,freqsd,longd,latd,timed,Nelemd,xxd,yyd,zzd,rad,decd,(float)t->b_ra0,(float)t->b_dec0,(float)t->ph_ra0,(float)t->ph_dec0,(float)t->ph_freq0,beamd,0);
+       } else {
+        cudakernel_array_beam(t->N,t->tilesz,t->carr[ncl].N,t->Nf,freqsd,longd,latd,timed,Nelemd,xxd,yyd,zzd,rad,decd,(float)t->ph_ra0,(float)t->ph_dec0,(float)t->ph_freq0,beamd,0);
+       }
      } else if (t->dobeam==DOBEAM_ARRAY_WB) {
-      cudakernel_array_beam(t->N,t->tilesz,t->carr[ncl].N,t->Nf,freqsd,longd,latd,timed,Nelemd,xxd,yyd,zzd,rad,decd,(float)t->ph_ra0,(float)t->ph_dec0,(float)t->ph_freq0,beamd,1);
+       if (t->bf_type==STAT_TILE) {
+        cudakernel_tile_array_beam(t->N,t->tilesz,t->carr[ncl].N,t->Nf,freqsd,longd,latd,timed,Nelemd,xxd,yyd,zzd,rad,decd,(float)t->b_ra0,(float)t->b_dec0,(float)t->ph_ra0,(float)t->ph_dec0,(float)t->ph_freq0,beamd,1);
+       } else {
+       cudakernel_array_beam(t->N,t->tilesz,t->carr[ncl].N,t->Nf,freqsd,longd,latd,timed,Nelemd,xxd,yyd,zzd,rad,decd,(float)t->ph_ra0,(float)t->ph_dec0,(float)t->ph_freq0,beamd,1);
+       }
      } else if (t->dobeam==DOBEAM_ELEMENT) {
       /* calculate element beam for all sources in this cluster */
       cudakernel_element_beam(t->N,t->tilesz,t->carr[ncl].N,t->Nf,freqsd,longd,latd,timed,rad,decd,t->ecoeff->Nmodes,t->ecoeff->M,t->ecoeff->beta,pattern_phid,pattern_thetad,preambled,elementd,0);
@@ -1152,10 +1182,18 @@ predictvis_threadfn(void *data) {
       cudakernel_element_beam(t->N,t->tilesz,t->carr[ncl].N,t->Nf,freqsd,longd,latd,timed,rad,decd,t->ecoeff->Nmodes,t->ecoeff->M,t->ecoeff->beta,pattern_phid,pattern_thetad,preambled,elementd,1);
      } else if (t->dobeam==DOBEAM_FULL) {
       /* calculate array+element beam for all sources in this cluster */
-      cudakernel_array_beam(t->N,t->tilesz,t->carr[ncl].N,t->Nf,freqsd,longd,latd,timed,Nelemd,xxd,yyd,zzd,rad,decd,(float)t->ph_ra0,(float)t->ph_dec0,(float)t->ph_freq0,beamd,0);
+      if (t->bf_type==STAT_TILE) {
+       cudakernel_tile_array_beam(t->N,t->tilesz,t->carr[ncl].N,t->Nf,freqsd,longd,latd,timed,Nelemd,xxd,yyd,zzd,rad,decd,(float)t->b_ra0,(float)t->b_dec0,(float)t->ph_ra0,(float)t->ph_dec0,(float)t->ph_freq0,beamd,0);
+      } else {
+       cudakernel_array_beam(t->N,t->tilesz,t->carr[ncl].N,t->Nf,freqsd,longd,latd,timed,Nelemd,xxd,yyd,zzd,rad,decd,(float)t->ph_ra0,(float)t->ph_dec0,(float)t->ph_freq0,beamd,0);
+      }
       cudakernel_element_beam(t->N,t->tilesz,t->carr[ncl].N,t->Nf,freqsd,longd,latd,timed,rad,decd,t->ecoeff->Nmodes,t->ecoeff->M,t->ecoeff->beta,pattern_phid,pattern_thetad,preambled,elementd,0);
      } else if (t->dobeam==DOBEAM_FULL_WB) {
-      cudakernel_array_beam(t->N,t->tilesz,t->carr[ncl].N,t->Nf,freqsd,longd,latd,timed,Nelemd,xxd,yyd,zzd,rad,decd,(float)t->ph_ra0,(float)t->ph_dec0,(float)t->ph_freq0,beamd,1);
+      if (t->bf_type==STAT_TILE) {
+       cudakernel_tile_array_beam(t->N,t->tilesz,t->carr[ncl].N,t->Nf,freqsd,longd,latd,timed,Nelemd,xxd,yyd,zzd,rad,decd,(float)t->b_ra0,(float)t->b_dec0,(float)t->ph_ra0,(float)t->ph_dec0,(float)t->ph_freq0,beamd,1);
+      } else {
+       cudakernel_array_beam(t->N,t->tilesz,t->carr[ncl].N,t->Nf,freqsd,longd,latd,timed,Nelemd,xxd,yyd,zzd,rad,decd,(float)t->ph_ra0,(float)t->ph_dec0,(float)t->ph_freq0,beamd,1);
+      }
       cudakernel_element_beam(t->N,t->tilesz,t->carr[ncl].N,t->Nf,freqsd,longd,latd,timed,rad,decd,t->ecoeff->Nmodes,t->ecoeff->M,t->ecoeff->beta,pattern_phid,pattern_thetad,preambled,elementd,1);
      }
 
@@ -1324,7 +1362,7 @@ predictvis_threadfn(void *data) {
 
 int
 predict_visibilities_multifreq_withbeam_gpu(double *u,double *v,double *w,double *x,int N,int Nbase,int tilesz,baseline_t *barr, clus_source_t *carr, int M,double *freqs,int Nchan, double fdelta,double tdelta, double dec0,
-double ph_ra0, double ph_dec0, double ph_freq0, double *longitude, double *latitude, double *time_utc, int *Nelem, double **xx, double **yy, double **zz, elementcoeff *ecoeff, int dobeam, int Nt, int add_to_data) {
+ int bf_type, double b_ra0, double b_dec0, double ph_ra0, double ph_dec0, double ph_freq0, double *longitude, double *latitude, double *time_utc, int *Nelem, double **xx, double **yy, double **zz, elementcoeff *ecoeff, int dobeam, int Nt, int add_to_data) {
 
   int nth,ci;
 
@@ -1398,6 +1436,9 @@ double ph_ra0, double ph_dec0, double ph_freq0, double *longitude, double *latit
      threaddata[nth].dec0=dec0;
 
      threaddata[nth].dobeam=dobeam;
+     threaddata[nth].bf_type=bf_type;
+     threaddata[nth].b_ra0=b_ra0;
+     threaddata[nth].b_dec0=b_dec0;
      threaddata[nth].ph_ra0=ph_ra0;
      threaddata[nth].ph_dec0=ph_dec0;
      threaddata[nth].ph_freq0=ph_freq0;
@@ -1548,18 +1589,18 @@ residual_threadfn(void *data) {
       exit(1);
   }
   for (ci=0; ci<t->N; ci++) {
-    err=cudaMalloc((void**)&xx_p[ci], t->Nelem[ci]*sizeof(double));
+    err=cudaMalloc((void**)&xx_p[ci], (t->Nelem[ci]+(t->bf_type==STAT_TILE?HBA_TILE_SIZE:0))*sizeof(double));
     checkCudaError(err,__FILE__,__LINE__);
-    err=cudaMalloc((void**)&yy_p[ci], t->Nelem[ci]*sizeof(double));
+    err=cudaMalloc((void**)&yy_p[ci], (t->Nelem[ci]+(t->bf_type==STAT_TILE?HBA_TILE_SIZE:0))*sizeof(double));
     checkCudaError(err,__FILE__,__LINE__);
-    err=cudaMalloc((void**)&zz_p[ci], t->Nelem[ci]*sizeof(double));
+    err=cudaMalloc((void**)&zz_p[ci], (t->Nelem[ci]+(t->bf_type==STAT_TILE?HBA_TILE_SIZE:0))*sizeof(double));
     checkCudaError(err,__FILE__,__LINE__);
   }
   /* now copy data */
   for (ci=0; ci<t->N; ci++) {
-    dtofcopy(t->Nelem[ci],&xx_p[ci],t->xx[ci]);
-    dtofcopy(t->Nelem[ci],&yy_p[ci],t->yy[ci]);
-    dtofcopy(t->Nelem[ci],&zz_p[ci],t->zz[ci]);
+    dtofcopy(t->Nelem[ci]+(t->bf_type==STAT_TILE?HBA_TILE_SIZE:0),&xx_p[ci],t->xx[ci]);
+    dtofcopy(t->Nelem[ci]+(t->bf_type==STAT_TILE?HBA_TILE_SIZE:0),&yy_p[ci],t->yy[ci]);
+    dtofcopy(t->Nelem[ci]+(t->bf_type==STAT_TILE?HBA_TILE_SIZE:0),&zz_p[ci],t->zz[ci]);
   }
   /* now copy pointer locations to device */
   err=cudaMemcpy(xxd, xx_p, t->N*sizeof(int*), cudaMemcpyHostToDevice);
@@ -1765,9 +1806,17 @@ residual_threadfn(void *data) {
 
      if (t->dobeam==DOBEAM_ARRAY) {
       /* now calculate array beam for all sources in this cluster */
-      cudakernel_array_beam(t->N,t->tilesz,t->carr[ncl].N,t->Nf,freqsd,longd,latd,timed,Nelemd,xxd,yyd,zzd,rad,decd,(float)t->ph_ra0,(float)t->ph_dec0,(float)t->ph_freq0,beamd,0);
+      if (t->bf_type==STAT_TILE) {
+        cudakernel_tile_array_beam(t->N,t->tilesz,t->carr[ncl].N,t->Nf,freqsd,longd,latd,timed,Nelemd,xxd,yyd,zzd,rad,decd,(float)t->b_ra0,(float)t->b_dec0,(float)t->ph_ra0,(float)t->ph_dec0,(float)t->ph_freq0,beamd,0);
+      } else {
+        cudakernel_array_beam(t->N,t->tilesz,t->carr[ncl].N,t->Nf,freqsd,longd,latd,timed,Nelemd,xxd,yyd,zzd,rad,decd,(float)t->ph_ra0,(float)t->ph_dec0,(float)t->ph_freq0,beamd,0);
+      }
      } else if (t->dobeam==DOBEAM_ARRAY_WB) {
-      cudakernel_array_beam(t->N,t->tilesz,t->carr[ncl].N,t->Nf,freqsd,longd,latd,timed,Nelemd,xxd,yyd,zzd,rad,decd,(float)t->ph_ra0,(float)t->ph_dec0,(float)t->ph_freq0,beamd,1);
+      if (t->bf_type==STAT_TILE) {
+        cudakernel_tile_array_beam(t->N,t->tilesz,t->carr[ncl].N,t->Nf,freqsd,longd,latd,timed,Nelemd,xxd,yyd,zzd,rad,decd,(float)t->b_ra0,(float)t->b_dec0,(float)t->ph_ra0,(float)t->ph_dec0,(float)t->ph_freq0,beamd,1);
+      } else {
+        cudakernel_array_beam(t->N,t->tilesz,t->carr[ncl].N,t->Nf,freqsd,longd,latd,timed,Nelemd,xxd,yyd,zzd,rad,decd,(float)t->ph_ra0,(float)t->ph_dec0,(float)t->ph_freq0,beamd,1);
+      }
      } else if (t->dobeam==DOBEAM_ELEMENT) {
       /* calculate element beam for all sources in this cluster */
       cudakernel_element_beam(t->N,t->tilesz,t->carr[ncl].N,t->Nf,freqsd,longd,latd,timed,rad,decd,t->ecoeff->Nmodes,t->ecoeff->M,t->ecoeff->beta,pattern_phid,pattern_thetad,preambled,elementd,0);
@@ -1775,10 +1824,18 @@ residual_threadfn(void *data) {
       cudakernel_element_beam(t->N,t->tilesz,t->carr[ncl].N,t->Nf,freqsd,longd,latd,timed,rad,decd,t->ecoeff->Nmodes,t->ecoeff->M,t->ecoeff->beta,pattern_phid,pattern_thetad,preambled,elementd,1);
      } else if (t->dobeam==DOBEAM_FULL) {
       /* calculate array+element beam for all sources in this cluster */
-      cudakernel_array_beam(t->N,t->tilesz,t->carr[ncl].N,t->Nf,freqsd,longd,latd,timed,Nelemd,xxd,yyd,zzd,rad,decd,(float)t->ph_ra0,(float)t->ph_dec0,(float)t->ph_freq0,beamd,0);
+      if (t->bf_type==STAT_TILE) {
+        cudakernel_tile_array_beam(t->N,t->tilesz,t->carr[ncl].N,t->Nf,freqsd,longd,latd,timed,Nelemd,xxd,yyd,zzd,rad,decd,(float)t->b_ra0,(float)t->b_dec0,(float)t->ph_ra0,(float)t->ph_dec0,(float)t->ph_freq0,beamd,0);
+      } else {
+        cudakernel_array_beam(t->N,t->tilesz,t->carr[ncl].N,t->Nf,freqsd,longd,latd,timed,Nelemd,xxd,yyd,zzd,rad,decd,(float)t->ph_ra0,(float)t->ph_dec0,(float)t->ph_freq0,beamd,0);
+      }
       cudakernel_element_beam(t->N,t->tilesz,t->carr[ncl].N,t->Nf,freqsd,longd,latd,timed,rad,decd,t->ecoeff->Nmodes,t->ecoeff->M,t->ecoeff->beta,pattern_phid,pattern_thetad,preambled,elementd,0);
      } else if (t->dobeam==DOBEAM_FULL_WB) {
-      cudakernel_array_beam(t->N,t->tilesz,t->carr[ncl].N,t->Nf,freqsd,longd,latd,timed,Nelemd,xxd,yyd,zzd,rad,decd,(float)t->ph_ra0,(float)t->ph_dec0,(float)t->ph_freq0,beamd,1);
+      if (t->bf_type==STAT_TILE) {
+        cudakernel_tile_array_beam(t->N,t->tilesz,t->carr[ncl].N,t->Nf,freqsd,longd,latd,timed,Nelemd,xxd,yyd,zzd,rad,decd,(float)t->b_ra0,(float)t->b_dec0,(float)t->ph_ra0,(float)t->ph_dec0,(float)t->ph_freq0,beamd,1);
+      } else {
+        cudakernel_array_beam(t->N,t->tilesz,t->carr[ncl].N,t->Nf,freqsd,longd,latd,timed,Nelemd,xxd,yyd,zzd,rad,decd,(float)t->ph_ra0,(float)t->ph_dec0,(float)t->ph_freq0,beamd,1);
+      }
       cudakernel_element_beam(t->N,t->tilesz,t->carr[ncl].N,t->Nf,freqsd,longd,latd,timed,rad,decd,t->ecoeff->Nmodes,t->ecoeff->M,t->ecoeff->beta,pattern_phid,pattern_thetad,preambled,elementd,1);
      }
 
@@ -2022,7 +2079,7 @@ correct_threadfn(void *data) {
 */
 int
 calculate_residuals_multifreq_withbeam_gpu(double *u,double *v,double *w,double *p,double *x,int N,int Nbase,int tilesz,baseline_t *barr, clus_source_t *carr, int M,double *freqs,int Nchan, double fdelta,double tdelta, double dec0,
-double ph_ra0, double ph_dec0, double ph_freq0, double *longitude, double *latitude, double *time_utc, int *Nelem, double **xx, double **yy, double **zz, elementcoeff *ecoeff, int dobeam, int Nt, int ccid, double rho, int phase_only) {
+ int bf_type, double b_ra0, double b_dec0, double ph_ra0, double ph_dec0, double ph_freq0, double *longitude, double *latitude, double *time_utc, int *Nelem, double **xx, double **yy, double **zz, elementcoeff *ecoeff, int dobeam, int Nt, int ccid, double rho, int phase_only) {
 
   int nth,ci;
 
@@ -2091,6 +2148,9 @@ double ph_ra0, double ph_dec0, double ph_freq0, double *longitude, double *latit
      threaddata[nth].dec0=dec0;
 
      threaddata[nth].dobeam=dobeam;
+     threaddata[nth].bf_type=bf_type;
+     threaddata[nth].b_ra0=b_ra0;
+     threaddata[nth].b_dec0=b_dec0;
      threaddata[nth].ph_ra0=ph_ra0;
      threaddata[nth].ph_dec0=ph_dec0;
      threaddata[nth].ph_freq0=ph_freq0;
@@ -2331,18 +2391,18 @@ predict_threadfn(void *data) {
       exit(1);
   }
   for (ci=0; ci<t->N; ci++) {
-    err=cudaMalloc((void**)&xx_p[ci], t->Nelem[ci]*sizeof(double));
+    err=cudaMalloc((void**)&xx_p[ci], (t->Nelem[ci]+(t->bf_type==STAT_TILE?HBA_TILE_SIZE:0))*sizeof(double));
     checkCudaError(err,__FILE__,__LINE__);
-    err=cudaMalloc((void**)&yy_p[ci], t->Nelem[ci]*sizeof(double));
+    err=cudaMalloc((void**)&yy_p[ci], (t->Nelem[ci]+(t->bf_type==STAT_TILE?HBA_TILE_SIZE:0))*sizeof(double));
     checkCudaError(err,__FILE__,__LINE__);
-    err=cudaMalloc((void**)&zz_p[ci], t->Nelem[ci]*sizeof(double));
+    err=cudaMalloc((void**)&zz_p[ci], (t->Nelem[ci]+(t->bf_type==STAT_TILE?HBA_TILE_SIZE:0))*sizeof(double));
     checkCudaError(err,__FILE__,__LINE__);
   }
   /* now copy data */
   for (ci=0; ci<t->N; ci++) {
-    dtofcopy(t->Nelem[ci],&xx_p[ci],t->xx[ci]);
-    dtofcopy(t->Nelem[ci],&yy_p[ci],t->yy[ci]);
-    dtofcopy(t->Nelem[ci],&zz_p[ci],t->zz[ci]);
+    dtofcopy(t->Nelem[ci]+(t->bf_type==STAT_TILE?HBA_TILE_SIZE:0),&xx_p[ci],t->xx[ci]);
+    dtofcopy(t->Nelem[ci]+(t->bf_type==STAT_TILE?HBA_TILE_SIZE:0),&yy_p[ci],t->yy[ci]);
+    dtofcopy(t->Nelem[ci]+(t->bf_type==STAT_TILE?HBA_TILE_SIZE:0),&zz_p[ci],t->zz[ci]);
   }
   /* now copy pointer locations to device */
   err=cudaMemcpy(xxd, xx_p, t->N*sizeof(int*), cudaMemcpyHostToDevice);
@@ -2549,9 +2609,17 @@ predict_threadfn(void *data) {
 
      if (t->dobeam==DOBEAM_ARRAY) {
       /* now calculate array beam for all sources in this cluster */
-      cudakernel_array_beam(t->N,t->tilesz,t->carr[ncl].N,t->Nf,freqsd,longd,latd,timed,Nelemd,xxd,yyd,zzd,rad,decd,(float)t->ph_ra0,(float)t->ph_dec0,(float)t->ph_freq0,beamd,0);
+      if (t->bf_type==STAT_TILE) {
+        cudakernel_tile_array_beam(t->N,t->tilesz,t->carr[ncl].N,t->Nf,freqsd,longd,latd,timed,Nelemd,xxd,yyd,zzd,rad,decd,(float)t->b_ra0,(float)t->b_dec0,(float)t->ph_ra0,(float)t->ph_dec0,(float)t->ph_freq0,beamd,0);
+      } else {
+        cudakernel_array_beam(t->N,t->tilesz,t->carr[ncl].N,t->Nf,freqsd,longd,latd,timed,Nelemd,xxd,yyd,zzd,rad,decd,(float)t->ph_ra0,(float)t->ph_dec0,(float)t->ph_freq0,beamd,0);
+      }
      } else if (t->dobeam==DOBEAM_ARRAY_WB) {
-      cudakernel_array_beam(t->N,t->tilesz,t->carr[ncl].N,t->Nf,freqsd,longd,latd,timed,Nelemd,xxd,yyd,zzd,rad,decd,(float)t->ph_ra0,(float)t->ph_dec0,(float)t->ph_freq0,beamd,1);
+      if (t->bf_type==STAT_TILE) {
+        cudakernel_tile_array_beam(t->N,t->tilesz,t->carr[ncl].N,t->Nf,freqsd,longd,latd,timed,Nelemd,xxd,yyd,zzd,rad,decd,(float)t->b_ra0,(float)t->b_dec0,(float)t->ph_ra0,(float)t->ph_dec0,(float)t->ph_freq0,beamd,1);
+      } else {
+        cudakernel_array_beam(t->N,t->tilesz,t->carr[ncl].N,t->Nf,freqsd,longd,latd,timed,Nelemd,xxd,yyd,zzd,rad,decd,(float)t->ph_ra0,(float)t->ph_dec0,(float)t->ph_freq0,beamd,1);
+      }
      } else if (t->dobeam==DOBEAM_ELEMENT) {
       /* calculate element beam for all sources in this cluster */
       cudakernel_element_beam(t->N,t->tilesz,t->carr[ncl].N,t->Nf,freqsd,longd,latd,timed,rad,decd,t->ecoeff->Nmodes,t->ecoeff->M,t->ecoeff->beta,pattern_phid,pattern_thetad,preambled,elementd,0);
@@ -2559,10 +2627,18 @@ predict_threadfn(void *data) {
       cudakernel_element_beam(t->N,t->tilesz,t->carr[ncl].N,t->Nf,freqsd,longd,latd,timed,rad,decd,t->ecoeff->Nmodes,t->ecoeff->M,t->ecoeff->beta,pattern_phid,pattern_thetad,preambled,elementd,1);
      } else if (t->dobeam==DOBEAM_FULL) {
       /* calculate array+element beam for all sources in this cluster */
-      cudakernel_array_beam(t->N,t->tilesz,t->carr[ncl].N,t->Nf,freqsd,longd,latd,timed,Nelemd,xxd,yyd,zzd,rad,decd,(float)t->ph_ra0,(float)t->ph_dec0,(float)t->ph_freq0,beamd,0);
+      if (t->bf_type==STAT_TILE) {
+        cudakernel_tile_array_beam(t->N,t->tilesz,t->carr[ncl].N,t->Nf,freqsd,longd,latd,timed,Nelemd,xxd,yyd,zzd,rad,decd,(float)t->b_ra0,(float)t->b_dec0,(float)t->ph_ra0,(float)t->ph_dec0,(float)t->ph_freq0,beamd,0);
+      } else {
+        cudakernel_array_beam(t->N,t->tilesz,t->carr[ncl].N,t->Nf,freqsd,longd,latd,timed,Nelemd,xxd,yyd,zzd,rad,decd,(float)t->ph_ra0,(float)t->ph_dec0,(float)t->ph_freq0,beamd,0);
+      }
       cudakernel_element_beam(t->N,t->tilesz,t->carr[ncl].N,t->Nf,freqsd,longd,latd,timed,rad,decd,t->ecoeff->Nmodes,t->ecoeff->M,t->ecoeff->beta,pattern_phid,pattern_thetad,preambled,elementd,0);
      } else if (t->dobeam==DOBEAM_FULL_WB) {
-      cudakernel_array_beam(t->N,t->tilesz,t->carr[ncl].N,t->Nf,freqsd,longd,latd,timed,Nelemd,xxd,yyd,zzd,rad,decd,(float)t->ph_ra0,(float)t->ph_dec0,(float)t->ph_freq0,beamd,1);
+      if (t->bf_type==STAT_TILE) {
+        cudakernel_tile_array_beam(t->N,t->tilesz,t->carr[ncl].N,t->Nf,freqsd,longd,latd,timed,Nelemd,xxd,yyd,zzd,rad,decd,(float)t->b_ra0,(float)t->b_dec0,(float)t->ph_ra0,(float)t->ph_dec0,(float)t->ph_freq0,beamd,1);
+      } else {
+        cudakernel_array_beam(t->N,t->tilesz,t->carr[ncl].N,t->Nf,freqsd,longd,latd,timed,Nelemd,xxd,yyd,zzd,rad,decd,(float)t->ph_ra0,(float)t->ph_dec0,(float)t->ph_freq0,beamd,1);
+      }
       cudakernel_element_beam(t->N,t->tilesz,t->carr[ncl].N,t->Nf,freqsd,longd,latd,timed,rad,decd,t->ecoeff->Nmodes,t->ecoeff->M,t->ecoeff->beta,pattern_phid,pattern_thetad,preambled,elementd,1);
      }
 
@@ -2741,7 +2817,7 @@ predict_threadfn(void *data) {
 */
 int
 predict_visibilities_withsol_withbeam_gpu(double *u,double *v,double *w,double *p,double *x, int *ignorelist, int N,int Nbase,int tilesz,baseline_t *barr, clus_source_t *carr, int M,double *freqs,int Nchan, double fdelta,double tdelta, double dec0,
-double ph_ra0, double ph_dec0, double ph_freq0, double *longitude, double *latitude, double *time_utc, int *Nelem, double **xx, double **yy, double **zz, elementcoeff *ecoeff, int dobeam, int Nt, int add_to_data, int ccid, double rho, int phase_only) {
+ int bf_type, double b_ra0, double b_dec0, double ph_ra0, double ph_dec0, double ph_freq0, double *longitude, double *latitude, double *time_utc, int *Nelem, double **xx, double **yy, double **zz, elementcoeff *ecoeff, int dobeam, int Nt, int add_to_data, int ccid, double rho, int phase_only) {
 
   int nth,ci;
 
@@ -2810,6 +2886,9 @@ double ph_ra0, double ph_dec0, double ph_freq0, double *longitude, double *latit
      threaddata[nth].dec0=dec0;
 
      threaddata[nth].dobeam=dobeam;
+     threaddata[nth].bf_type=bf_type;
+     threaddata[nth].b_ra0=b_ra0;
+     threaddata[nth].b_dec0=b_dec0;
      threaddata[nth].ph_ra0=ph_ra0;
      threaddata[nth].ph_dec0=ph_dec0;
      threaddata[nth].ph_freq0=ph_freq0;
@@ -3058,18 +3137,18 @@ precalcoh_multifreq_threadfn(void *data) {
       exit(1);
   }
   for (ci=0; ci<t->N; ci++) {
-    err=cudaMalloc((void**)&xx_p[ci], t->Nelem[ci]*sizeof(double));
+    err=cudaMalloc((void**)&xx_p[ci], (t->Nelem[ci]+(t->bf_type==STAT_TILE?HBA_TILE_SIZE:0))*sizeof(double));
     checkCudaError(err,__FILE__,__LINE__);
-    err=cudaMalloc((void**)&yy_p[ci], t->Nelem[ci]*sizeof(double));
+    err=cudaMalloc((void**)&yy_p[ci], (t->Nelem[ci]+(t->bf_type==STAT_TILE?HBA_TILE_SIZE:0))*sizeof(double));
     checkCudaError(err,__FILE__,__LINE__);
-    err=cudaMalloc((void**)&zz_p[ci], t->Nelem[ci]*sizeof(double));
+    err=cudaMalloc((void**)&zz_p[ci], (t->Nelem[ci]+(t->bf_type==STAT_TILE?HBA_TILE_SIZE:0))*sizeof(double));
     checkCudaError(err,__FILE__,__LINE__);
   }
   /* now copy data */
   for (ci=0; ci<t->N; ci++) {
-    dtofcopy(t->Nelem[ci],&xx_p[ci],t->xx[ci]);
-    dtofcopy(t->Nelem[ci],&yy_p[ci],t->yy[ci]);
-    dtofcopy(t->Nelem[ci],&zz_p[ci],t->zz[ci]);
+    dtofcopy(t->Nelem[ci]+(t->bf_type==STAT_TILE?HBA_TILE_SIZE:0),&xx_p[ci],t->xx[ci]);
+    dtofcopy(t->Nelem[ci]+(t->bf_type==STAT_TILE?HBA_TILE_SIZE:0),&yy_p[ci],t->yy[ci]);
+    dtofcopy(t->Nelem[ci]+(t->bf_type==STAT_TILE?HBA_TILE_SIZE:0),&zz_p[ci],t->zz[ci]);
   }
   /* now copy pointer locations to device */
   err=cudaMemcpy(xxd, xx_p, t->N*sizeof(int*), cudaMemcpyHostToDevice);
@@ -3266,9 +3345,17 @@ precalcoh_multifreq_threadfn(void *data) {
 
      if (t->dobeam==DOBEAM_ARRAY) {
       /* calculate array beam for all sources in this cluster */
-      cudakernel_array_beam(t->N,t->tilesz,t->carr[ncl].N,t->Nf,freqsd,longd,latd,timed,Nelemd,xxd,yyd,zzd,rad,decd,(float)t->ph_ra0,(float)t->ph_dec0,(float)t->ph_freq0,beamd,0);
+      if (t->bf_type==STAT_TILE) {
+        cudakernel_tile_array_beam(t->N,t->tilesz,t->carr[ncl].N,t->Nf,freqsd,longd,latd,timed,Nelemd,xxd,yyd,zzd,rad,decd,(float)t->b_ra0,(float)t->b_dec0,(float)t->ph_ra0,(float)t->ph_dec0,(float)t->ph_freq0,beamd,0);
+      } else {
+        cudakernel_array_beam(t->N,t->tilesz,t->carr[ncl].N,t->Nf,freqsd,longd,latd,timed,Nelemd,xxd,yyd,zzd,rad,decd,(float)t->ph_ra0,(float)t->ph_dec0,(float)t->ph_freq0,beamd,0);
+      }
      } else if (t->dobeam==DOBEAM_ARRAY_WB) {
-      cudakernel_array_beam(t->N,t->tilesz,t->carr[ncl].N,t->Nf,freqsd,longd,latd,timed,Nelemd,xxd,yyd,zzd,rad,decd,(float)t->ph_ra0,(float)t->ph_dec0,(float)t->ph_freq0,beamd,1);
+      if (t->bf_type==STAT_TILE) {
+        cudakernel_tile_array_beam(t->N,t->tilesz,t->carr[ncl].N,t->Nf,freqsd,longd,latd,timed,Nelemd,xxd,yyd,zzd,rad,decd,(float)t->b_ra0,(float)t->b_dec0,(float)t->ph_ra0,(float)t->ph_dec0,(float)t->ph_freq0,beamd,1);
+      } else {
+        cudakernel_array_beam(t->N,t->tilesz,t->carr[ncl].N,t->Nf,freqsd,longd,latd,timed,Nelemd,xxd,yyd,zzd,rad,decd,(float)t->ph_ra0,(float)t->ph_dec0,(float)t->ph_freq0,beamd,1);
+      }
      } else if (t->dobeam==DOBEAM_ELEMENT) {
        /* calculate element beam for all sources in this cluster */
        cudakernel_element_beam(t->N,t->tilesz,t->carr[ncl].N,t->Nf,freqsd,longd,latd,timed,rad,decd,t->ecoeff->Nmodes,t->ecoeff->M,t->ecoeff->beta,pattern_phid,pattern_thetad,preambled,elementd,0);
@@ -3276,11 +3363,19 @@ precalcoh_multifreq_threadfn(void *data) {
        cudakernel_element_beam(t->N,t->tilesz,t->carr[ncl].N,t->Nf,freqsd,longd,latd,timed,rad,decd,t->ecoeff->Nmodes,t->ecoeff->M,t->ecoeff->beta,pattern_phid,pattern_thetad,preambled,elementd,1);
      } else if (t->dobeam==DOBEAM_FULL) {
       /* calculate array+element beam for all sources in this cluster */
-      cudakernel_array_beam(t->N,t->tilesz,t->carr[ncl].N,t->Nf,freqsd,longd,latd,timed,Nelemd,xxd,yyd,zzd,rad,decd,(float)t->ph_ra0,(float)t->ph_dec0,(float)t->ph_freq0,beamd,0);
-       cudakernel_element_beam(t->N,t->tilesz,t->carr[ncl].N,t->Nf,freqsd,longd,latd,timed,rad,decd,t->ecoeff->Nmodes,t->ecoeff->M,t->ecoeff->beta,pattern_phid,pattern_thetad,preambled,elementd,0);
+      if (t->bf_type==STAT_TILE) {
+        cudakernel_tile_array_beam(t->N,t->tilesz,t->carr[ncl].N,t->Nf,freqsd,longd,latd,timed,Nelemd,xxd,yyd,zzd,rad,decd,(float)t->b_ra0,(float)t->b_dec0,(float)t->ph_ra0,(float)t->ph_dec0,(float)t->ph_freq0,beamd,0);
+      } else {
+        cudakernel_array_beam(t->N,t->tilesz,t->carr[ncl].N,t->Nf,freqsd,longd,latd,timed,Nelemd,xxd,yyd,zzd,rad,decd,(float)t->ph_ra0,(float)t->ph_dec0,(float)t->ph_freq0,beamd,0);
+      }
+      cudakernel_element_beam(t->N,t->tilesz,t->carr[ncl].N,t->Nf,freqsd,longd,latd,timed,rad,decd,t->ecoeff->Nmodes,t->ecoeff->M,t->ecoeff->beta,pattern_phid,pattern_thetad,preambled,elementd,0);
      } else if (t->dobeam==DOBEAM_FULL_WB) {
-      cudakernel_array_beam(t->N,t->tilesz,t->carr[ncl].N,t->Nf,freqsd,longd,latd,timed,Nelemd,xxd,yyd,zzd,rad,decd,(float)t->ph_ra0,(float)t->ph_dec0,(float)t->ph_freq0,beamd,1);
-       cudakernel_element_beam(t->N,t->tilesz,t->carr[ncl].N,t->Nf,freqsd,longd,latd,timed,rad,decd,t->ecoeff->Nmodes,t->ecoeff->M,t->ecoeff->beta,pattern_phid,pattern_thetad,preambled,elementd,1);
+      if (t->bf_type==STAT_TILE) {
+        cudakernel_tile_array_beam(t->N,t->tilesz,t->carr[ncl].N,t->Nf,freqsd,longd,latd,timed,Nelemd,xxd,yyd,zzd,rad,decd,(float)t->b_ra0,(float)t->b_dec0,(float)t->ph_ra0,(float)t->ph_dec0,(float)t->ph_freq0,beamd,1);
+      } else {
+        cudakernel_array_beam(t->N,t->tilesz,t->carr[ncl].N,t->Nf,freqsd,longd,latd,timed,Nelemd,xxd,yyd,zzd,rad,decd,(float)t->ph_ra0,(float)t->ph_dec0,(float)t->ph_freq0,beamd,1);
+      }
+      cudakernel_element_beam(t->N,t->tilesz,t->carr[ncl].N,t->Nf,freqsd,longd,latd,timed,rad,decd,t->ecoeff->Nmodes,t->ecoeff->M,t->ecoeff->beta,pattern_phid,pattern_thetad,preambled,elementd,1);
      }
 
 
@@ -3460,7 +3555,7 @@ precalcoh_multifreq_threadfn(void *data) {
 int
 precalculate_coherencies_multifreq_withbeam_gpu(double *u, double *v, double *w, complex double *x, int N,
    int Nbase, baseline_t *barr,  clus_source_t *carr, int M, double *freqs, int Nchan, double fdelta, double tdelta, double dec0, double uvmin, double uvmax, 
- double ph_ra0, double ph_dec0, double ph_freq0, double *longitude, double *latitude, double *time_utc, int tilesz, int *Nelem, double **xx, double **yy, double **zz, elementcoeff *ecoeff, int dobeam, int Nt) {
+ int bf_type, double b_ra0, double b_dec0, double ph_ra0, double ph_dec0, double ph_freq0, double *longitude, double *latitude, double *time_utc, int tilesz, int *Nelem, double **xx, double **yy, double **zz, elementcoeff *ecoeff, int dobeam, int Nt) {
 
   int nth,ci;
 
@@ -3519,6 +3614,9 @@ precalculate_coherencies_multifreq_withbeam_gpu(double *u, double *v, double *w,
      threaddata[nth].dec0=dec0;
 
      threaddata[nth].dobeam=dobeam; 
+     threaddata[nth].bf_type=bf_type;
+     threaddata[nth].b_ra0=b_ra0;
+     threaddata[nth].b_dec0=b_dec0;
      threaddata[nth].ph_ra0=ph_ra0;
      threaddata[nth].ph_dec0=ph_dec0;
      threaddata[nth].ph_freq0=ph_freq0;

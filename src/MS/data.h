@@ -83,15 +83,23 @@ namespace Data
       double *sy; /* y: ... */
       double *sz; /* z: ... */
       /* x,y,z coords of elements, projected, converted to ITRF (m) */
-      double **xx; /* x coord pointer, size Nx1, each *x: x coord of station, size Nelem[]x1 */
+      double **xx; /* x coord pointer, size Nx1, each *x: x coord of station, size Nelem[]x1 or (Nelem[]+HBA_TILE_SIZE)x1 */
       double **yy; /* y ... */
       double **zz; /* z ... */
-      /* pointing center of beams (only one) (could be different from phase center) */
+      /* pointing center of beams (only one) (could be different from phase center)
+       * keyword used here is REFERENCE_DIR */
       double p_ra0;
       double p_dec0;
 
-      /* flag to indicate this beam is only a dipole */
+      /* LOFAR tile beam direction, could be different than REFERENCE_DIR
+       * keyword used here is LOFAR_TILE_BEAM_DIR */
+      double b_ra0;
+      double b_dec0;
+
+      /* flag to indicate this beam is only a dipole (1 : true, else 0) */
       int isDipole;
+      /* flag to indicate beamformer type: STAT_NONE: no beamformer (only dipole), STAT_SINGLE: single beamformer, STAT_TILE: two stage (tile+final) beamformer */
+      int bfType;
     };
 
 
@@ -116,7 +124,7 @@ namespace Data
     void freeData(IOData data);
     void freeData(IOData data, LBeam binfo);
 
-    int precess_source_locations(double jd_tdb, clus_source_t *carr, int M, double *ra_beam, double *dec_beam, int Nt);
+    int precess_source_locations(double jd_tdb, clus_source_t *carr, int M, double *ra_beam, double *dec_beam, double *ra_tile, double *dec_tile, int Nt);
 
     extern int numChannels; 
     extern unsigned long int numRows;

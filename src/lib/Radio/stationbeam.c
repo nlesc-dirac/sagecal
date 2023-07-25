@@ -29,6 +29,8 @@
 
 /* 
   ra,dec: source direction (rad)
+  int bf_type:  beamformer type STAT_NONE, STAT_SINGLE or STAT_TILE
+  b_ra0,b_dec0: tile bem center (rad), only used in STAT_TILE mode
   ra0,dec0: beam center (rad)
   f: frequency (Hz)
   f0: beam forming frequency (Hz)
@@ -44,7 +46,7 @@
 
 */ 
 int
-arraybeam(double ra, double dec, double ra0, double dec0, double f, double f0, int N, double *longitude, double *latitude, double time_jd, int *Nelem, double **x, double **y, double **z, double *beamgain, int wideband) {
+arraybeam(double ra, double dec, int bf_type, double b_ra0, double b_dec0, double ra0, double dec0, double f, double f0, int N, double *longitude, double *latitude, double time_jd, int *Nelem, double **x, double **y, double **z, double *beamgain, int wideband) {
 
   double gmst;
   jd2gmst(time_jd,&gmst); /* JD (day) to GMST (deg) */
@@ -60,6 +62,7 @@ arraybeam(double ra, double dec, double ra0, double dec0, double f, double f0, i
 
   double beam_f=(!wideband?f0:f);
   /* iterate over stations */
+  if (bf_type==STAT_SINGLE) {
   for (ci=0; ci<N; ci++) {
    /* find az,el for both source direction and beam center */
    radec2azel_gmst(ra,dec, longitude[ci], latitude[ci], gmst, &az, &el);
@@ -72,9 +75,9 @@ arraybeam(double ra, double dec, double ra0, double dec0, double f, double f0, i
 
    if (el>=0.0) {
    K=Nelem[ci];
-   px=x[ci]; 
-   py=y[ci]; 
-   pz=z[ci]; 
+   px=x[ci];
+   py=y[ci];
+   pz=z[ci];
 
    sincos(theta,&sint,&cost);
    sincos(phi,&sinph,&cosph);
@@ -92,7 +95,7 @@ arraybeam(double ra, double dec, double ra0, double dec0, double f, double f0, i
    r1=(rat1*cosph0-rat2*cosph);
    r2=(rat1*sinph0-rat2*sinph);
    r3=(beam_f*cost0-f*cost);
-   
+
    csum=0.0;
    ssum=0.0;
    for (cj=0; cj<K; cj++) {
@@ -101,16 +104,79 @@ arraybeam(double ra, double dec, double ra0, double dec0, double f, double f0, i
      csum+=tmpc;
    }
    double invK=1.0/(double)K;
-   csum*=invK;
-   ssum*=invK;
 
    /* beam gain is | |, only for +ve elevation */
-   beamgain[ci]=sqrt(csum*csum+ssum*ssum);
+   beamgain[ci]=sqrt(csum*csum+ssum*ssum)*invK;
    } else {
     beamgain[ci]=0.0;
    }
   }
- 
+  } else if (bf_type==STAT_TILE) {
+   for (ci=0; ci<N; ci++) {
+   /* find az,el for both source direction and beam center, also tile beam */
+   double az_b, el_b, theta_b, phi_b;
+   radec2azel_gmst(ra,dec, longitude[ci], latitude[ci], gmst, &az, &el);
+   radec2azel_gmst(ra0,dec0, longitude[ci], latitude[ci], gmst, &az0, &el0);
+   radec2azel_gmst(b_ra0,b_dec0, longitude[ci], latitude[ci], gmst, &az_b, &el_b);
+   /* transform : theta = 90-el, phi=-az? 45 only needed for element beam */
+   theta=M_PI_2-el;
+   phi=-az; /* */
+   theta0=M_PI_2-el0;
+   phi0=-az0; /* */
+   theta_b=M_PI_2-el_b;
+   phi_b=-az_b; /* */
+
+   if (el>=0.0) {
+   K=Nelem[ci];
+   px=x[ci];
+   py=y[ci];
+   pz=z[ci];
+
+   sincos(theta,&sint,&cost);
+   sincos(phi,&sinph,&cosph);
+   sincos(theta0,&sint0,&cost0);
+   sincos(phi0,&sinph0,&cosph0);
+
+   /* try to improve computations */
+   double rat1=beam_f*sint0;
+   double rat2=f*sint;
+   r1=(rat1*cosph0-rat2*cosph);
+   r2=(rat1*sinph0-rat2*sinph);
+   r3=(beam_f*cost0-f*cost);
+
+   /* full beamformer only using tile centroids */
+   csum=0.0;
+   ssum=0.0;
+   for (cj=0; cj<K; cj++) {
+     sincos(-tpc*(r1*px[cj+HBA_TILE_SIZE]+r2*py[cj+HBA_TILE_SIZE]+r3*pz[cj+HBA_TILE_SIZE]),&tmps,&tmpc);
+     ssum+=tmps;
+     csum+=tmpc;
+   }
+
+   /* tile only beamformer */
+   sincos(theta_b,&sint0,&cost0);
+   sincos(phi_b,&sinph0,&cosph0);
+   rat1=beam_f*sint0;
+   r1=(rat1*cosph0-rat2*cosph);
+   r2=(rat1*sinph0-rat2*sinph);
+   r3=(beam_f*cost0-f*cost);
+   double csum_b=0.0;
+   double ssum_b=0.0;
+   for (cj=0; cj<HBA_TILE_SIZE; cj++) {
+     sincos(-tpc*(r1*px[cj]+r2*py[cj]+r3*pz[cj]),&tmps,&tmpc);
+     ssum_b+=tmps;
+     csum_b+=tmpc;
+   }
+
+   double invK=1.0/(double)(K*HBA_TILE_SIZE);
+   /* beam gain is | |, only for +ve elevation */
+   beamgain[ci]=sqrt(csum*csum+ssum*ssum)*sqrt(csum_b*csum_b+ssum_b*ssum_b)*invK;
+   } else {
+    beamgain[ci]=0.0;
+   }
+  }
+
+  }
 
   return 0;
 }
@@ -122,17 +188,17 @@ arraybeam(double ra, double dec, double ra0, double dec0, double f, double f0, i
 efficients
   */
 int
-array_element_beam(double ra, double dec, double ra0, double dec0, double f, double f0, int N, double *longitude, double *latitude, double time_jd, int *Nelem, double **x, double **y, double **z, elementcoeff *ecoeff, double *beamgain, double *elementgain, int wideband, int findex) {
+array_element_beam(double ra, double dec, int bf_type, double b_ra0, double b_dec0, double ra0, double dec0, double f, double f0, int N, double *longitude, double *latitude, double time_jd, int *Nelem, double **x, double **y, double **z, elementcoeff *ecoeff, double *beamgain, double *elementgain, int wideband, int findex) {
 
   double gmst;
   jd2gmst(time_jd,&gmst); /* JD (day) to GMST (deg) */
   int ci,cj,K;
-  double az,el,az0,el0;
-  double theta,phi,theta0,phi0;
+  double az,el,az0,el0,az_b,el_b;
+  double theta,phi,theta0,phi0,theta_b,phi_b;
   double *px,*py,*pz;
   double r1,r2,r3;
   double sint,cost,sint0,cost0,sinph,cosph,sinph0,cosph0;
-  double csum,ssum,*tmpc=0,*tmps=0;
+  double csum,ssum,csum_b,ssum_b,*tmpc=0,*tmps=0;
   /* 2*PI/C */
   const double tpc=2.0*M_PI/CONST_C;
 
@@ -148,12 +214,17 @@ array_element_beam(double ra, double dec, double ra0, double dec0, double f, dou
    phi=-az; /* */
    theta0=M_PI_2-el0;
    phi0=-az0; /* */
+   if (bf_type==STAT_TILE) {
+    radec2azel_gmst(b_ra0,b_dec0, longitude[ci], latitude[ci], gmst, &az_b, &el_b);
+    theta_b=M_PI_2-el_b;
+    phi_b=-az_b; /* */
+   }
 
    if (el>=0.0) {
    K=Nelem[ci];
-   px=x[ci]; 
-   py=y[ci]; 
-   pz=z[ci]; 
+   px=x[ci];
+   py=y[ci];
+   pz=z[ci];
 
    sincos(theta,&sint,&cost);
    sincos(phi,&sinph,&cosph);
@@ -171,7 +242,7 @@ array_element_beam(double ra, double dec, double ra0, double dec0, double f, dou
    r1=(rat1*cosph0-rat2*cosph);
    r2=(rat1*sinph0-rat2*sinph);
    r3=(beam_f*cost0-f*cost);
-   
+
    csum=0.0;
    ssum=0.0;
    if (posix_memalign((void*)&tmps,sizeof(double),((size_t)K*sizeof(double)))!=0) {
@@ -187,6 +258,7 @@ array_element_beam(double ra, double dec, double ra0, double dec0, double f, dou
       exit(1);
    }
 
+   if (bf_type==STAT_SINGLE) {
 #pragma GCC ivdep
    for (cj=0; cj<K; cj++) {
      tmpprod[cj]=-tpc*(r1*px[cj]+r2*py[cj]+r3*pz[cj]);
@@ -204,16 +276,51 @@ array_element_beam(double ra, double dec, double ra0, double dec0, double f, dou
      ssum+=tmps[cj];
      csum+=tmpc[cj];
    }
+   } else if (bf_type==STAT_TILE) {
+#pragma GCC ivdep
+   for (cj=0; cj<K; cj++) {
+     tmpprod[cj]=-tpc*(r1*px[cj+HBA_TILE_SIZE]+r2*py[cj+HBA_TILE_SIZE]+r3*pz[cj+HBA_TILE_SIZE]);
+   }
+#pragma GCC ivdep
+   for (cj=0; cj<K; cj++) {
+     tmps[cj]=sin(tmpprod[cj]);
+   }
+#pragma GCC ivdep
+   for (cj=0; cj<K; cj++) {
+     tmpc[cj]=cos(tmpprod[cj]);
+   }
+#pragma GCC ivdep
+   for (cj=0; cj<K; cj++) {
+     ssum+=tmps[cj];
+     csum+=tmpc[cj];
+   }
+   sincos(theta_b,&sint0,&cost0);
+   sincos(phi_b,&sinph0,&cosph0);
+   rat1=beam_f*sint0;
+   r1=(rat1*cosph0-rat2*cosph);
+   r2=(rat1*sinph0-rat2*sinph);
+   r3=(beam_f*cost0-f*cost);
+   csum_b=0.0;
+   ssum_b=0.0;
+   for (cj=0; cj<HBA_TILE_SIZE; cj++) {
+     double tmps_b,tmpc_b;
+     sincos(-tpc*(r1*px[cj]+r2*py[cj]+r3*pz[cj]),&tmps_b,&tmpc_b);
+     ssum_b+=tmps_b;
+     csum_b+=tmpc_b;
+   }
+   }
    free(tmpprod);
    free(tmps);
    free(tmpc);
 
-   double invK=1.0/(double)K;
-   csum*=invK;
-   ssum*=invK;
-
    /* array beam gain is | |, only for +ve elevation */
-   beamgain[ci]=sqrt(csum*csum+ssum*ssum);
+   if (bf_type==STAT_SINGLE) {
+    double invK=1.0/(double)K;
+    beamgain[ci]=sqrt(csum*csum+ssum*ssum)*invK;
+   } else if (bf_type==STAT_TILE) {
+    double invK=1.0/(double)(K*HBA_TILE_SIZE);
+    beamgain[ci]=sqrt(csum*csum+ssum*ssum)*sqrt(csum_b*csum_b+ssum_b*ssum_b)*invK;
+   }
    /* element beam EJones */
    /* evaluate on r=(zenith angle) 0..pi/2, theta=azimuth grid 0..2pi */
    /* real data r<- gamma=pi/2-elevation =theta from above code

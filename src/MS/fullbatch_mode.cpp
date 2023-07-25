@@ -324,7 +324,7 @@ run_fullbatch_calibration(void) {
     /* precess source locations (also beam pointing) from J2000 to JAPP if we do any beam predictions,
       using first time slot as epoch */
     if (doBeam && !sources_precessed) {
-      Data::precess_source_locations(beam.time_utc[iodata.tilesz/2],carr,M,&beam.p_ra0,&beam.p_dec0,Data::Nt);
+      Data::precess_source_locations(beam.time_utc[iodata.tilesz/2],carr,M,&beam.p_ra0,&beam.p_dec0,&beam.b_ra0,&beam.b_dec0,Data::Nt);
       sources_precessed=1;
     }
 
@@ -362,19 +362,19 @@ run_fullbatch_calibration(void) {
      precalculate_coherencies(iodata.u,iodata.v,iodata.w,coh,iodata.N,iodata.Nbase*iodata.tilesz,barr,carr,M,iodata.freq0,iodata.deltaf,iodata.deltat,iodata.dec0,Data::min_uvcut,Data::max_uvcut,Data::Nt);
     } else {
      precalculate_coherencies_withbeam(iodata.u,iodata.v,iodata.w,coh,iodata.N,iodata.Nbase*iodata.tilesz,barr,carr,M,iodata.freq0,iodata.deltaf,iodata.deltat,iodata.dec0,Data::min_uvcut,Data::max_uvcut,
-  beam.p_ra0,beam.p_dec0,iodata.freq0,beam.sx,beam.sy,beam.time_utc,iodata.tilesz,beam.Nelem,beam.xx,beam.yy,beam.zz,&ecoeff,doBeam,Data::Nt);
+  beam.bfType,beam.b_ra0,beam.b_dec0,beam.p_ra0,beam.p_dec0,iodata.freq0,beam.sx,beam.sy,beam.time_utc,iodata.tilesz,beam.Nelem,beam.xx,beam.yy,beam.zz,&ecoeff,doBeam,Data::Nt);
     }
 #endif
 #ifdef HAVE_CUDA
    if (GPUpredict) {
      precalculate_coherencies_withbeam_gpu(iodata.u,iodata.v,iodata.w,coh,iodata.N,iodata.Nbase*iodata.tilesz,barr,carr,M,iodata.freq0,iodata.deltaf,iodata.deltat,iodata.dec0,Data::min_uvcut,Data::max_uvcut,
-  beam.p_ra0,beam.p_dec0,iodata.freq0,beam.sx,beam.sy,beam.time_utc,iodata.tilesz,beam.Nelem,beam.xx,beam.yy,beam.zz,&ecoeff,doBeam,Data::Nt);
+  beam.bfType,beam.b_ra0,beam.b_dec0,beam.p_ra0,beam.p_dec0,iodata.freq0,beam.sx,beam.sy,beam.time_utc,iodata.tilesz,beam.Nelem,beam.xx,beam.yy,beam.zz,&ecoeff,doBeam,Data::Nt);
    } else {
     if (!doBeam) {
      precalculate_coherencies(iodata.u,iodata.v,iodata.w,coh,iodata.N,iodata.Nbase*iodata.tilesz,barr,carr,M,iodata.freq0,iodata.deltaf,iodata.deltat,iodata.dec0,Data::min_uvcut,Data::max_uvcut,Data::Nt);
     } else {
      precalculate_coherencies_withbeam(iodata.u,iodata.v,iodata.w,coh,iodata.N,iodata.Nbase*iodata.tilesz,barr,carr,M,iodata.freq0,iodata.deltaf,iodata.deltat,iodata.dec0,Data::min_uvcut,Data::max_uvcut,
-  beam.p_ra0,beam.p_dec0,iodata.freq0,beam.sx,beam.sy,beam.time_utc,iodata.tilesz,beam.Nelem,beam.xx,beam.yy,beam.zz,&ecoeff,doBeam,Data::Nt);
+  beam.bfType,beam.b_ra0,beam.b_dec0,beam.p_ra0,beam.p_dec0,iodata.freq0,beam.sx,beam.sy,beam.time_utc,iodata.tilesz,beam.Nelem,beam.xx,beam.yy,beam.zz,&ecoeff,doBeam,Data::Nt);
     }
    }
 #endif
@@ -496,19 +496,19 @@ run_fullbatch_calibration(void) {
       calculate_residuals_multifreq(iodata.u,iodata.v,iodata.w,p,iodata.xo,iodata.N,iodata.Nbase,iodata.tilesz,barr,carr,M,iodata.freqs,iodata.Nchan,iodata.deltaf,iodata.deltat,iodata.dec0,Data::Nt,Data::ccid,Data::rho,Data::phaseOnly);
      } else {
       calculate_residuals_multifreq_withbeam(iodata.u,iodata.v,iodata.w,p,iodata.xo,iodata.N,iodata.Nbase,iodata.tilesz,barr,carr,M,iodata.freqs,iodata.Nchan,iodata.deltaf,iodata.deltat,iodata.dec0,
-beam.p_ra0,beam.p_dec0,iodata.freq0,beam.sx,beam.sy,beam.time_utc,beam.Nelem,beam.xx,beam.yy,beam.zz,&ecoeff,doBeam,Data::Nt,Data::ccid,Data::rho,Data::phaseOnly);
+       beam.bfType,beam.b_ra0,beam.b_dec0,beam.p_ra0,beam.p_dec0,iodata.freq0,beam.sx,beam.sy,beam.time_utc,beam.Nelem,beam.xx,beam.yy,beam.zz,&ecoeff,doBeam,Data::Nt,Data::ccid,Data::rho,Data::phaseOnly);
      }
 #endif
 #ifdef HAVE_CUDA
     if (GPUpredict) {
       calculate_residuals_multifreq_withbeam_gpu(iodata.u,iodata.v,iodata.w,p,iodata.xo,iodata.N,iodata.Nbase,iodata.tilesz,barr,carr,M,iodata.freqs,iodata.Nchan,iodata.deltaf,iodata.deltat,iodata.dec0,
-beam.p_ra0,beam.p_dec0,iodata.freq0,beam.sx,beam.sy,beam.time_utc,beam.Nelem,beam.xx,beam.yy,beam.zz,&ecoeff,doBeam,Data::Nt,Data::ccid,Data::rho,Data::phaseOnly);
+       beam.bfType,beam.b_ra0,beam.b_dec0,beam.p_ra0,beam.p_dec0,iodata.freq0,beam.sx,beam.sy,beam.time_utc,beam.Nelem,beam.xx,beam.yy,beam.zz,&ecoeff,doBeam,Data::Nt,Data::ccid,Data::rho,Data::phaseOnly);
     } else {
      if (!doBeam) {
       calculate_residuals_multifreq(iodata.u,iodata.v,iodata.w,p,iodata.xo,iodata.N,iodata.Nbase,iodata.tilesz,barr,carr,M,iodata.freqs,iodata.Nchan,iodata.deltaf,iodata.deltat,iodata.dec0,Data::Nt,Data::ccid,Data::rho,Data::phaseOnly);
      } else {
       calculate_residuals_multifreq_withbeam(iodata.u,iodata.v,iodata.w,p,iodata.xo,iodata.N,iodata.Nbase,iodata.tilesz,barr,carr,M,iodata.freqs,iodata.Nchan,iodata.deltaf,iodata.deltat,iodata.dec0,
-beam.p_ra0,beam.p_dec0,iodata.freq0,beam.sx,beam.sy,beam.time_utc,beam.Nelem,beam.xx,beam.yy,beam.zz,&ecoeff,doBeam,Data::Nt,Data::ccid,Data::rho,Data::phaseOnly);
+       beam.bfType,beam.b_ra0,beam.b_dec0,beam.p_ra0,beam.p_dec0,iodata.freq0,beam.sx,beam.sy,beam.time_utc,beam.Nelem,beam.xx,beam.yy,beam.zz,&ecoeff,doBeam,Data::Nt,Data::ccid,Data::rho,Data::phaseOnly);
      }
     }
 #endif
@@ -531,19 +531,19 @@ beam.p_ra0,beam.p_dec0,iodata.freq0,beam.sx,beam.sy,beam.time_utc,beam.Nelem,bea
       predict_visibilities_multifreq(iodata.u,iodata.v,iodata.w,iodata.xo,iodata.N,iodata.Nbase,iodata.tilesz,barr,carr,M,iodata.freqs,iodata.Nchan,iodata.deltaf,iodata.deltat,iodata.dec0,Data::Nt,Data::DoSim);
      } else {
       predict_visibilities_multifreq_withbeam(iodata.u,iodata.v,iodata.w,iodata.xo,iodata.N,iodata.Nbase,iodata.tilesz,barr,carr,M,iodata.freqs,iodata.Nchan,iodata.deltaf,iodata.deltat,iodata.dec0,
-  beam.p_ra0,beam.p_dec0,iodata.freq0,beam.sx,beam.sy,beam.time_utc,beam.Nelem,beam.xx,beam.yy,beam.zz,&ecoeff,doBeam,Data::Nt,Data::DoSim);
+  beam.bfType,beam.b_ra0,beam.b_dec0,beam.p_ra0,beam.p_dec0,iodata.freq0,beam.sx,beam.sy,beam.time_utc,beam.Nelem,beam.xx,beam.yy,beam.zz,&ecoeff,doBeam,Data::Nt,Data::DoSim);
      }
 #endif
 #ifdef HAVE_CUDA
      if (GPUpredict) {
       predict_visibilities_multifreq_withbeam_gpu(iodata.u,iodata.v,iodata.w,iodata.xo,iodata.N,iodata.Nbase,iodata.tilesz,barr,carr,M,iodata.freqs,iodata.Nchan,iodata.deltaf,iodata.deltat,iodata.dec0,
-  beam.p_ra0,beam.p_dec0,iodata.freq0,beam.sx,beam.sy,beam.time_utc,beam.Nelem,beam.xx,beam.yy,beam.zz,&ecoeff,doBeam,Data::Nt,Data::DoSim);
+  beam.bfType,beam.b_ra0,beam.b_dec0,beam.p_ra0,beam.p_dec0,iodata.freq0,beam.sx,beam.sy,beam.time_utc,beam.Nelem,beam.xx,beam.yy,beam.zz,&ecoeff,doBeam,Data::Nt,Data::DoSim);
      } else {
       if (!doBeam) {
        predict_visibilities_multifreq(iodata.u,iodata.v,iodata.w,iodata.xo,iodata.N,iodata.Nbase,iodata.tilesz,barr,carr,M,iodata.freqs,iodata.Nchan,iodata.deltaf,iodata.deltat,iodata.dec0,Data::Nt,Data::DoSim);
       } else {
        predict_visibilities_multifreq_withbeam(iodata.u,iodata.v,iodata.w,iodata.xo,iodata.N,iodata.Nbase,iodata.tilesz,barr,carr,M,iodata.freqs,iodata.Nchan,iodata.deltaf,iodata.deltat,iodata.dec0,
-       beam.p_ra0,beam.p_dec0,iodata.freq0,beam.sx,beam.sy,beam.time_utc,beam.Nelem,beam.xx,beam.yy,beam.zz,&ecoeff,doBeam,Data::Nt,Data::DoSim);
+       beam.bfType,beam.b_ra0,beam.b_dec0,beam.p_ra0,beam.p_dec0,iodata.freq0,beam.sx,beam.sy,beam.time_utc,beam.Nelem,beam.xx,beam.yy,beam.zz,&ecoeff,doBeam,Data::Nt,Data::DoSim);
       }
      }
 #endif
@@ -554,13 +554,13 @@ beam.p_ra0,beam.p_dec0,iodata.freq0,beam.sx,beam.sy,beam.time_utc,beam.Nelem,bea
 #ifdef HAVE_CUDA
      if (GPUpredict) {
       predict_visibilities_withsol_withbeam_gpu(iodata.u,iodata.v,iodata.w,p,iodata.xo,ignorelist,iodata.N,iodata.Nbase,iodata.tilesz,barr,carr,M,iodata.freqs,iodata.Nchan,iodata.deltaf,iodata.deltat,iodata.dec0,
-beam.p_ra0,beam.p_dec0,iodata.freq0,beam.sx,beam.sy,beam.time_utc,beam.Nelem,beam.xx,beam.yy,beam.zz,&ecoeff,doBeam,Data::Nt,Data::DoSim,Data::ccid,Data::rho,Data::phaseOnly);
+       beam.bfType,beam.b_ra0,beam.b_dec0,beam.p_ra0,beam.p_dec0,iodata.freq0,beam.sx,beam.sy,beam.time_utc,beam.Nelem,beam.xx,beam.yy,beam.zz,&ecoeff,doBeam,Data::Nt,Data::DoSim,Data::ccid,Data::rho,Data::phaseOnly);
      } else {
       if (!doBeam) {
        predict_visibilities_multifreq_withsol(iodata.u,iodata.v,iodata.w,p,iodata.xo,ignorelist,iodata.N,iodata.Nbase,iodata.tilesz,barr,carr,M,iodata.freqs,iodata.Nchan,iodata.deltaf,iodata.deltat,iodata.dec0,Data::Nt,Data::DoSim,Data::ccid,Data::rho,Data::phaseOnly);
       } else {
        predict_visibilities_multifreq_withsol_withbeam(iodata.u,iodata.v,iodata.w,p,iodata.xo,ignorelist,iodata.N,iodata.Nbase,iodata.tilesz,barr,carr,M,iodata.freqs,iodata.Nchan,iodata.deltaf,iodata.deltat,iodata.dec0,
-      beam.p_ra0,beam.p_dec0,iodata.freq0,beam.sx,beam.sy,beam.time_utc,beam.Nelem,beam.xx,beam.yy,beam.zz,
+      beam.bfType,beam.b_ra0,beam.b_dec0,beam.p_ra0,beam.p_dec0,iodata.freq0,beam.sx,beam.sy,beam.time_utc,beam.Nelem,beam.xx,beam.yy,beam.zz,
       &ecoeff,doBeam,
       Data::Nt,Data::DoSim,Data::ccid,Data::rho,Data::phaseOnly);
       }
@@ -571,7 +571,7 @@ beam.p_ra0,beam.p_dec0,iodata.freq0,beam.sx,beam.sy,beam.time_utc,beam.Nelem,bea
        predict_visibilities_multifreq_withsol(iodata.u,iodata.v,iodata.w,p,iodata.xo,ignorelist,iodata.N,iodata.Nbase,iodata.tilesz,barr,carr,M,iodata.freqs,iodata.Nchan,iodata.deltaf,iodata.deltat,iodata.dec0,Data::Nt,Data::DoSim,Data::ccid,Data::rho,Data::phaseOnly);
       } else {
        predict_visibilities_multifreq_withsol_withbeam(iodata.u,iodata.v,iodata.w,p,iodata.xo,ignorelist,iodata.N,iodata.Nbase,iodata.tilesz,barr,carr,M,iodata.freqs,iodata.Nchan,iodata.deltaf,iodata.deltat,iodata.dec0,
-      beam.p_ra0,beam.p_dec0,iodata.freq0,beam.sx,beam.sy,beam.time_utc,beam.Nelem,beam.xx,beam.yy,beam.zz,
+      beam.bfType,beam.b_ra0,beam.b_dec0,beam.p_ra0,beam.p_dec0,iodata.freq0,beam.sx,beam.sy,beam.time_utc,beam.Nelem,beam.xx,beam.yy,beam.zz,
       &ecoeff,doBeam,
       Data::Nt,Data::DoSim,Data::ccid,Data::rho,Data::phaseOnly);
       }

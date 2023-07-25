@@ -35,7 +35,7 @@ using namespace Data;
 
 void
 print_copyright(void) {
-  cout<<"SAGECal 0.8.0 (C) 2011-2023 Sarod Yatawatta"<<endl;
+  cout<<"SAGECal 0.8.1 (C) 2011-2023 Sarod Yatawatta"<<endl;
 }
 
 

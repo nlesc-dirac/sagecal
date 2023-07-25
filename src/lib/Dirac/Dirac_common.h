@@ -93,6 +93,24 @@ typedef struct exinfo_shapelet_ {
 #ifndef ELEM_HBA
 #define ELEM_HBA 1 /* LOFAR HBA */
 #endif
+#ifndef ELEM_ALO
+#define ELEM_ALO 2 /*  Astrophysical Lunar Observatory (ALO) */
+#endif
+
+/* station beam calculation */
+#ifndef STAT_NONE
+#define STAT_NONE 0 /* no beamformer, only dipole model */
+#endif
+#ifndef STAT_SINGLE
+#define STAT_SINGLE 1 /* single beamformer, all elements are dipoles */
+#endif
+#ifndef STAT_TILE
+#define STAT_TILE 2 /* two stage beamformer, tile beam + full beam */
+#endif
+/* LOFAR dipoles per tile */
+#ifndef HBA_TILE_SIZE
+#define HBA_TILE_SIZE 16
+#endif
 
 /* beam prediction flags */
 #ifndef DOBEAM_NONE
@@ -133,7 +151,7 @@ typedef struct elementcoff_ {
 
 /* struct to store source info in hash table */
 typedef struct sinfo_t_ {
- double ll,mm,ra,dec,sI[4]; /* sI:4x1 for I,Q,U,V, note sI is updated for central freq (ra,dec) for Az,El */
+ double ll,mm,nn,ra,dec,sI[4]; /* sI:4x1 for I,Q,U,V, note sI is updated for central freq (ra,dec) for Az,El */
  unsigned char stype; /* source type */
  void *exdata; /* pointer to carry additional data, if needed */
  double sI0[4],f0,spec_idx,spec_idx1,spec_idx2; /* for multi channel data, original sI,Q,U,V, f0 and spectral index */
@@ -223,6 +241,8 @@ typedef struct thread_data_arrayfac_ {
   int N; /* no. of stations */
   double *longitude, *latitude;
 
+  int bf_type; /* beamformer type STAT_NONE, STAT_SINGLE or STAT_TILE */
+  double b_ra0, b_dec0; /* tile beam pointing */
   double ra0,dec0,freq0; /* reference pointing and freq */
   int Nf; /* no. of frequencies to calculate */
   double *freqs; /* Nfx1 array */
