@@ -47,14 +47,14 @@ ambt(const cuDoubleComplex *__restrict__ a, const cuDoubleComplex *__restrict__ 
 
 __device__ void
 radec2azel_gmst__(float ra, float dec, float longitude, float latitude, float thetaGMST, float *az, float *el) {
-  float thetaLST=thetaGMST+longitude*180.0f/M_PI;
+  float thetaLST=thetaGMST+longitude*180.0f/M_PIf;
 
-  float LHA=fmodf(thetaLST-ra*180.0f/M_PI,360.0f);
+  float LHA=fmodf(thetaLST-ra*180.0f/M_PIf,360.0f);
 
   float sinlat,coslat,sindec,cosdec,sinLHA,cosLHA;
   sincosf(latitude,&sinlat,&coslat);
   sincosf(dec,&sindec,&cosdec);
-  sincosf(LHA*M_PI/180.0f,&sinLHA,&cosLHA);
+  sincosf(LHA*M_PIf/180.0f,&sinLHA,&cosLHA);
 
   float tmp=sinlat*sindec+coslat*cosdec*cosLHA;
   float eld=asinf(tmp);
@@ -62,9 +62,9 @@ radec2azel_gmst__(float ra, float dec, float longitude, float latitude, float th
   float sinel,cosel;
   sincosf(eld,&sinel,&cosel);
 
-  float azd=fmodf(atan2f(-sinLHA*cosdec/cosel,(sindec-sinel*sinlat)/(cosel*coslat)),2.0f*M_PI);
+  float azd=fmodf(atan2f(-sinLHA*cosdec/cosel,(sindec-sinel*sinlat)/(cosel*coslat)),2.0f*M_PIf);
   if (azd<0.0f) {
-   azd+=2.0f*M_PI;
+   azd+=2.0f*M_PIf;
   }
   *el=eld;
   *az=azd;
@@ -103,7 +103,7 @@ eval_elementcoeff(float r, float theta, int M, float beta, const float2 *pattern
     for (int m=-n; m<=n; m+=2) {
       int absm=m>0?m:-m; /* |m| */
       float Lg=L_g1((n-absm)/2,absm,rb);
-      float rm=powf(M_PI_4+r,(float)absm);
+      float rm=powf(M_PI_4f+r,(float)absm);
       float s,c;
       sincosf(-(float)m*theta,&s,&c);
       float pr=rm*Lg*ex*pattern_preamble[idx];
@@ -175,14 +175,14 @@ kernel_array_beam(int N, int T, int K, int F,
    radec2azel_gmst__(__ldg(&ra[isrc]),__ldg(&dec[isrc]), __ldg(&longitude[istat]), __ldg(&latitude[istat]), thetaGMST, &az, &el);
    radec2azel_gmst__(ph_ra0,ph_dec0, __ldg(&longitude[istat]), __ldg(&latitude[istat]), thetaGMST, &az0, &el0);
    /* transform : theta = 90-el, phi=-az? 45 only needed for element beam */
-   theta=M_PI_2-el;
+   theta=M_PI_2f-el;
    phi=-az; /* */
-   theta0=M_PI_2-el0;
+   theta0=M_PI_2f-el0;
    phi0=-az0; /* */
 /*********************************************************************/
    if (el>=0.0f) {
    /* 2*PI/C */
-   const float tpc=2.0f*M_PI/CONST_C;
+   const float tpc=2.0f*M_PIf/CONST_C;
    float sint,cost,sinph,cosph,sint0,cost0,sinph0,cosph0;
    sincosf(theta,&sint,&cost);
    sincosf(phi,&sinph,&cosph);
@@ -285,16 +285,16 @@ kernel_tile_array_beam(int N, int T, int K, int F,
    radec2azel_gmst__(ph_ra0,ph_dec0, __ldg(&longitude[istat]), __ldg(&latitude[istat]), thetaGMST, &az0, &el0);
    radec2azel_gmst__(b_ra0,b_dec0, __ldg(&longitude[istat]), __ldg(&latitude[istat]), thetaGMST, &az_b, &el_b);
    /* transform : theta = 90-el, phi=-az? 45 only needed for element beam */
-   theta=M_PI_2-el;
+   theta=M_PI_2f-el;
    phi=-az; /* */
-   theta0=M_PI_2-el0;
+   theta0=M_PI_2f-el0;
    phi0=-az0; /* */
-   theta_b=M_PI_2-el_b;
+   theta_b=M_PI_2f-el_b;
    phi_b=-az_b;
 /*********************************************************************/
    if (el>=0.0f) {
    /* 2*PI/C */
-   const float tpc=2.0f*M_PI/CONST_C;
+   const float tpc=2.0f*M_PIf/CONST_C;
    float sint,cost,sinph,cosph,sint0,cost0,sinph0,cosph0;
    sincosf(theta,&sint,&cost);
    sincosf(phi,&sinph,&cosph);
@@ -413,8 +413,8 @@ kernel_element_beam(int N, int T, int K, int F,
    float az,el,r,theta;
    radec2azel_gmst__(__ldg(&ra[isrc]),__ldg(&dec[isrc]), __ldg(&longitude[istat]), __ldg(&latitude[istat]), thetaGMST, &az, &el);
    /* transform : r= pi/2-el, phi=az-pi/4 for element beam */
-   r=M_PI_2-el;
-   theta=az-M_PI_4;
+   r=M_PI_2f-el;
+   theta=az-M_PI_4f;
 /*********************************************************************/
    if (el>=0.0f) {
       float4 evalX,evalY;
@@ -422,19 +422,19 @@ kernel_element_beam(int N, int T, int K, int F,
       #if (ARRAY_USE_SHMEM == 1)
       evalX=eval_elementcoeff(r, theta, M, beta, sh_theta,
                 sh_phi, sh_preamble);
-      evalY=eval_elementcoeff(r, theta+M_PI_2, M, beta, sh_theta,
+      evalY=eval_elementcoeff(r, theta+M_PI_2f, M, beta, sh_theta,
                 sh_phi, sh_preamble);
       #else
       evalX=eval_elementcoeff(r, theta, M, beta, (float2*)pattern_theta,
                 (float2*)pattern_phi, pattern_preamble);
-      evalY=eval_elementcoeff(r, theta+M_PI_2, M, beta, (float2*)pattern_theta,
+      evalY=eval_elementcoeff(r, theta+M_PI_2f, M, beta, (float2*)pattern_theta,
                 (float2*)pattern_phi, pattern_preamble);
       #endif
       } else {
        // in wideband mode, offset by 2*Nmodes*ifrq, not using shared memory
       evalX=eval_elementcoeff(r, theta, M, beta, (float2*)&pattern_theta[2*Nmodes*ifrq],
                 (float2*)&pattern_phi[2*Nmodes*ifrq], pattern_preamble);
-      evalY=eval_elementcoeff(r, theta+M_PI_2, M, beta, (float2*)&pattern_theta[2*Nmodes*ifrq],
+      evalY=eval_elementcoeff(r, theta+M_PI_2f, M, beta, (float2*)&pattern_theta[2*Nmodes*ifrq],
                 (float2*)&pattern_phi[2*Nmodes*ifrq], pattern_preamble);
 
       }
@@ -501,7 +501,7 @@ ring_contrib__(int *dd, float u, float v, float w) {
   vp=u*(dp->sxi)+v*(dp->cphi)*(dp->cxi)-w*(dp->sphi)*(dp->cxi);
 
   a=dp->eX; /* diameter */
-  b=sqrtf(up*up+vp*vp)*a*2.0f*M_PI;
+  b=sqrtf(up*up+vp*vp)*a*2.0f*M_PIf;
 
   return make_cuDoubleComplex((double)j0f(b),0.0);
 }
@@ -516,7 +516,7 @@ disk_contrib__(int *dd, float u, float v, float w) {
   vp=u*(dp->sxi)+v*(dp->cphi)*(dp->cxi)-w*(dp->sphi)*(dp->cxi);
 
   a=dp->eX; /* diameter */
-  b=sqrtf(up*up+vp*vp)*a*2.0f*M_PI;
+  b=sqrtf(up*up+vp*vp)*a*2.0f*M_PIf;
 
   return make_cuDoubleComplex((double)j1f(b),0.0);
 }
@@ -728,8 +728,8 @@ shapelet_contrib__(int *dd, float u, float v, float w) {
 
   free(Av);
   free(cplx);
-  realsum*=2.0f*M_PI*a*b;
-  imagsum*=2.0f*M_PI*a*b;
+  realsum*=2.0f*M_PIf*a*b;
+  imagsum*=2.0f*M_PIf*a*b;
   /* additional safeguards */
   if ( isnan(realsum) ) { realsum=0.0f; }
   if ( isnan(imagsum) ) { imagsum=0.0f; }
