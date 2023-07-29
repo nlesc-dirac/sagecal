@@ -29,6 +29,7 @@
 
 #include "Dirac_radio.h"
 #include "elementcoeff.h"
+#include "elementcoeff_ALO.h"
 
 /* get beam type LBA/HBA and frequency
    return beam pattern coeff vectors for theta/phi patterns 
@@ -38,9 +39,17 @@
 int 
 set_elementcoeffs(int element_type,  double frequency, elementcoeff *ecoeff) {
   /* common to all beam types */
-  ecoeff->M=BEAM_ELEM_MODES; /* model order 1,2.. */
+  if (element_type==ELEM_LBA || element_type==ELEM_HBA) {
+   ecoeff->M=BEAM_ELEM_MODES; /* model order 1,2.. */
+   ecoeff->beta=BEAM_ELEM_BETA;
+  } else if (element_type==ELEM_ALO) {
+   ecoeff->M=ALO_BEAM_ELEM_MODES; /* model order 1,2.. */
+   ecoeff->beta=ALO_BEAM_ELEM_BETA;
+  } else {
+   fprintf(stderr,"%s: %d: undefined element beam type\n",__FILE__,__LINE__);
+   exit(1);
+  }
   ecoeff->Nmodes=ecoeff->M*(ecoeff->M+1)/2;
-  ecoeff->beta=BEAM_ELEM_BETA;
   ecoeff->Nf=1;
 
   if ((ecoeff->pattern_phi=(complex double*)calloc((size_t)ecoeff->Nmodes,sizeof(complex double)))==0) {
@@ -78,7 +87,12 @@ set_elementcoeffs(int element_type,  double frequency, elementcoeff *ecoeff) {
        freqs=(double *)hba_beam_elem_freqs;
        //printf("ELEM HBA\n");
        break;
-
+     case ELEM_ALO:
+       Nfreq=ALO_FREQS;
+       phi=(complex double *)&alo_beam_elem_phi[0][0];
+       theta=(complex double *)&alo_beam_elem_theta[0][0];
+       freqs=(double *)alo_beam_elem_freqs;
+       break;
      default:
       fprintf(stderr,"%s: %d: undefined element beam type\n",__FILE__,__LINE__);
       exit(1);
@@ -171,9 +185,17 @@ set_elementcoeffs(int element_type,  double frequency, elementcoeff *ecoeff) {
 int
 set_elementcoeffs_wb(int element_type,  double *frequencies, int Nf,  elementcoeff *ecoeff) {
   /* common to all beam types */
-  ecoeff->M=BEAM_ELEM_MODES; /* model order 1,2.. */
+  if (element_type==ELEM_LBA || element_type==ELEM_HBA) {
+   ecoeff->M=BEAM_ELEM_MODES; /* model order 1,2.. */
+   ecoeff->beta=BEAM_ELEM_BETA;
+  } else if (element_type==ELEM_ALO) {
+   ecoeff->M=ALO_BEAM_ELEM_MODES; /* model order 1,2.. */
+   ecoeff->beta=ALO_BEAM_ELEM_BETA;
+  } else {
+   fprintf(stderr,"%s: %d: undefined element beam type\n",__FILE__,__LINE__);
+   exit(1);
+  }
   ecoeff->Nmodes=ecoeff->M*(ecoeff->M+1)/2;
-  ecoeff->beta=BEAM_ELEM_BETA;
   ecoeff->Nf=Nf;
 
   if ((ecoeff->pattern_phi=(complex double*)calloc((size_t)ecoeff->Nmodes*ecoeff->Nf,sizeof(complex double)))==0) {
@@ -208,7 +230,12 @@ set_elementcoeffs_wb(int element_type,  double *frequencies, int Nf,  elementcoe
        freqs=(double *)hba_beam_elem_freqs;
        //printf("ELEM HBA\n");
        break;
-
+     case ELEM_ALO:
+       Nfreq=ALO_FREQS;
+       phi=(complex double *)&alo_beam_elem_phi[0][0];
+       theta=(complex double *)&alo_beam_elem_theta[0][0];
+       freqs=(double *)alo_beam_elem_freqs;
+       break;
      default:
       fprintf(stderr,"%s: %d: undefined element beam type\n",__FILE__,__LINE__);
       exit(1);

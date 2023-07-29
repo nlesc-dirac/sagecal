@@ -221,12 +221,6 @@ Data::readAuxData(const char *fname, Data::IOData *data, Data::LBeam *binfo) {
     data->Nchan=chan_freq.shape(0)[0];
     data->Nms=1;
 
-    Table _obs = Table(_t.keywordSet().asTable("OBSERVATION"));
-    ROScalarColumn<String> telescope(_obs, "TELESCOPE_NAME");
-    std::string tel=telescope(0);
-    if (tel.compare("LOFAR")) {
-     std::cout<<"Telescope is "<<tel<<std::endl;
-    }
 
    /* allocate memory */
    try {
@@ -254,6 +248,20 @@ Data::readAuxData(const char *fname, Data::IOData *data, Data::LBeam *binfo) {
    /* need channel widths to calculate bandwidth */
    ROArrayColumn<double> chan_width(_freq, "CHAN_WIDTH"); 
    data->deltaf=(double)data->Nchan*(chan_width(0).data()[0]);
+
+   Table _obs = Table(_t.keywordSet().asTable("OBSERVATION"));
+   ROScalarColumn<String> telescope(_obs, "TELESCOPE_NAME");
+   std::string tel=telescope(0);
+   /* figure out which telescope */
+   if (!tel.compare("LOFAR") || !tel.compare("AARTFAAC")) {
+     /* LOFAR or AARTFAAC */
+     binfo->elType=(data->freq0<100e6?ELEM_LBA:ELEM_HBA);
+   } else if ( !tel.compare("ALO") ) {
+     binfo->elType=ELEM_ALO;
+   } else {
+     std::cout<<"Warning: unknown telecope "<<tel<<", defaulting to LOFAR"<<std::endl;
+     binfo->elType=(data->freq0<100e6?ELEM_LBA:ELEM_HBA);
+   }
 
    try {
      /* UTC time */

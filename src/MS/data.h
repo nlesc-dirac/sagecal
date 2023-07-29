@@ -100,6 +100,9 @@ namespace Data
       int isDipole;
       /* flag to indicate beamformer type: STAT_NONE: no beamformer (only dipole), STAT_SINGLE: single beamformer, STAT_TILE: two stage (tile+final) beamformer */
       int bfType;
+      /* flag for element (dipole) model, ELEM_LBA, ELEM_HBA (LOFAR and AARTFAAC)
+       * ELEM_ALO (ALO) */
+      int elType;
     };
 
 
