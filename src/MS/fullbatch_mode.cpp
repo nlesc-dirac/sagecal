@@ -68,9 +68,9 @@ run_fullbatch_calibration(void) {
      srand(time(0)); /* use different seed */
     }
     if (doBeam==DOBEAM_FULL||doBeam==DOBEAM_ELEMENT) {
-     set_elementcoeffs((iodata.freq0<100e6?ELEM_LBA:ELEM_HBA), iodata.freq0, &ecoeff);
+     set_elementcoeffs(beam.elType, iodata.freq0, &ecoeff);
     } else if (doBeam==DOBEAM_FULL_WB||doBeam==DOBEAM_ELEMENT_WB) {
-     set_elementcoeffs_wb((iodata.freq0<100e6?ELEM_LBA:ELEM_HBA), iodata.freqs, iodata.Nchan, &ecoeff);
+     set_elementcoeffs_wb(beam.elType, iodata.freqs, iodata.Nchan, &ecoeff);
     }
 
 #ifdef HAVE_OPENBLAS

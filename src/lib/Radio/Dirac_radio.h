@@ -310,7 +310,8 @@ typedef struct elementval_{
 } elementval;
 
 /* get beam type LBA/HBA and frequency
-   return beam pattern coeff vectors for theta/phi patterns */
+   return beam pattern coeff vectors for theta/phi patterns
+element_type: ELEM_HBA, ELEM_LBA, ELEM_ALO, ... */
 extern int
 set_elementcoeffs(int element_type,  double frequency, elementcoeff *ecoeff);
 

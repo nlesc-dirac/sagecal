@@ -88,10 +88,10 @@ typedef struct exinfo_shapelet_ {
 
 /* element beam types */
 #ifndef ELEM_LBA
-#define ELEM_LBA 0 /* LOFAR LBA */
+#define ELEM_LBA 0 /* LOFAR LBA, AARTFAAC */
 #endif
 #ifndef ELEM_HBA
-#define ELEM_HBA 1 /* LOFAR HBA */
+#define ELEM_HBA 1 /* LOFAR HBA, AARTFAAC */
 #endif
 #ifndef ELEM_ALO
 #define ELEM_ALO 2 /*  Astrophysical Lunar Observatory (ALO) */
