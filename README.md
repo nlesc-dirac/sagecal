@@ -103,8 +103,10 @@ Optionally: Make sure your machine has (1/2 working NVIDIA GPU cards or Intel Xe
 Recommended usage: (with GPUs)
 
 ```
-sagecal -d my_data.MS -s my_skymodel -c my_clustering -n no.of.threads -t 60 -p my_solutions -e 3 -g 2 -l 10 -m 7 -w 1 -b 1
+sagecal_gpu -d my_data.MS -s my_skymodel -c my_clustering -n no.of.threads -t 60 -p my_solutions -e 3 -g 2 -l 10 -m 7 -w 1 -b 1
 ```
+
+Replace ```sagecal_gpu``` with ```sagecal``` if you have a CPU only build.
 
 Use your solution interval (-t 60) so that its big enough to get a decent solution and not too big to make the parameters vary too much. (about 20 minutes per solution is reasonable).
 
@@ -131,7 +133,7 @@ Use ```-N 1``` combined with options for ```-M```,```-w``` (see also section 4 b
 
 ### 4) Distributed calibration
 
-Use mpirun to run sagecal-mpi, example:
+Use mpirun to run sagecal-mpi, (or ```sagecal-mpi_gpu``` for GPU version) for example:
 ```
  mpirun  -np 11 -hostfile ./machines --map-by node --cpus-per-proc 8 
  --mca yield_when_idle 1 -mca orte_tmpdir_base /scratch/users/sarod 
