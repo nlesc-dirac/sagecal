@@ -780,14 +780,19 @@ update_ignorelist(const char *ignfile, int *ignlist, int M, clus_source_t *carr)
 
 
 int
-read_arho_fromfile(const char *admm_rho_file,int Mt,double *arho, int M, double *arhoslave) {
+read_arho_fromfile(const char *admm_rho_file,int Mt,double *arho, int M, double *arhoslave, int spatialreg, double *alpha) {
 
   FILE *cfp;
   int c,ci,cj,cluster_id,hybrid,hb;
-  double admm_rho;
+  double admm_rho, spatial_alpha;
   if ((cfp=fopen(admm_rho_file,"r"))==0) {
       fprintf(stderr,"%s: %d: no file\n",__FILE__,__LINE__);
       exit(1);
+  }
+
+  // check if we have spatialreg enabled and memory allocated
+  if (spatialreg && (!alpha)) {
+    fprintf(stderr,"%s: %d: Error: spatial regularization is enabled but the memory is not allocated.",__FILE__,__LINE__);
   }
 
   c=skip_lines(cfp);
@@ -795,7 +800,11 @@ read_arho_fromfile(const char *admm_rho_file,int Mt,double *arho, int M, double 
   cj=0;
 //printf("Mt=%d M=%d\n",Mt,M);
   while(c>=0 && cj<M) {
-    c=fscanf(cfp,"%d %d %lf",&cluster_id,&hybrid,&admm_rho);
+    if (spatialreg) {
+     c=fscanf(cfp,"%d %d %lf %lf",&cluster_id,&hybrid,&admm_rho,&spatial_alpha);
+    } else {
+     c=fscanf(cfp,"%d %d %lf",&cluster_id,&hybrid,&admm_rho);
+    }
 //printf("c=%d ci=%d cj=%d\n",c,ci,cj);
     /* add this value to arho array */
     if (c!=EOF && c>0) {
@@ -811,6 +820,10 @@ read_arho_fromfile(const char *admm_rho_file,int Mt,double *arho, int M, double 
         }
         arho[Mt-1-ci]=admm_rho; /* reverse order */
         //printf("clus=%d arr=%d rho=%lf\n",cluster_id,Mt-1-ci,admm_rho);
+        if (spatialreg) {
+          alpha[Mt-1-ci]=spatial_alpha;
+          //printf("clus=%d arr=%d alpha=%lf\n",cluster_id,Mt-1-ci,spatial_alpha);
+        }
         if (ci<Mt-1) {
          ci++;
         } else {
@@ -825,7 +838,7 @@ read_arho_fromfile(const char *admm_rho_file,int Mt,double *arho, int M, double 
 //printf("c=%d ci=%d cj=%d\n",c,ci,cj);
   /* report any errors */
   if (!(c==EOF && ci==Mt-1 && cj==M)) {
-    fprintf(stderr,"%s: %d: Error: cluster numbers in cluster file and regularization file do not match up.\n",__FILE__,__LINE__);
+    fprintf(stderr,"%s: %d: Error: cluster numbers in cluster file and regularization file do not match up.\n Perhaps spatial regularization is (not) enabled and the regularization file is missing their values.",__FILE__,__LINE__);
     exit(1);
   }
   fclose(cfp);

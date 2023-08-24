@@ -527,9 +527,18 @@ sagecal_master(int argc, char **argv) {
      exit(1);
     }
 
-    /* if text file is given, read it and update rho array */
+    double *alphak=0; /* alpha array Mx1, for spatial regularization */
+    if (Data::spatialreg) {
+     if ((alphak=(double*)calloc((size_t)iodata.M,sizeof(double)))==0) {
+      fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
+      exit(1);
+     }
+    }
+
+    /* if text file is given, read it and update rho array 
+     * also if spatialreg is on, text file should have those values */
     if (Data::admm_rho_file) {
-     read_arho_fromfile(Data::admm_rho_file,iodata.M,arho,Mo,arhoslave);
+     read_arho_fromfile(Data::admm_rho_file,iodata.M,arho,Mo,arhoslave,Data::spatialreg,alphak);
     } else {
      /* copy common value */
      /* setup regularization factor array */
@@ -558,7 +567,6 @@ sagecal_master(int argc, char **argv) {
     /* rho for each freq can be different (per each direction),
        so need to store each value, each column is Mx1 rho of one freq */
     double *rhok,*Bii;
-    double *alphak=0; /* alpha array Mx1, for spatial regularization */
     if ((rhok=(double*)calloc((size_t)iodata.Nms*iodata.M,sizeof(double)))==0) {
      fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
      exit(1);
@@ -567,12 +575,9 @@ sagecal_master(int argc, char **argv) {
     for(int cm=0; cm<iodata.Nms; cm++) {
        my_dcopy(iodata.M,arho,1,&rhok[cm*iodata.M],1);
     }
-    if (Data::spatialreg) {
-     if ((alphak=(double*)calloc((size_t)iodata.M,sizeof(double)))==0) {
-      fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
-      exit(1);
-     }
-     /* scale up/down each alpha based on initial rho value,
+    if (Data::spatialreg && (!Data::admm_rho_file)) {
+     /* if spatial regularization is not given in text file,
+      * scale up/down each alpha based on initial rho value,
       * for cluster with max rho, scale is 1 */
      double maxrho=arho[my_idamax(iodata.M,arho,1)-1];
      for (int cm=0; cm<iodata.M; cm++) {
@@ -766,7 +771,6 @@ sagecal_master(int argc, char **argv) {
          /* no need to scale by 1/rho above, because Bii is already divided by 1/rho */
          /* add (alpha Zbar - X) if spatial regularization is enabled */
          if (Data::spatialreg && admm>0) {
-           //my_daxpy(iodata.N*8*Npoly*iodata.M,(double*)Zbar,Data::federated_reg_alpha,z);
            for (int cm=0; cm<iodata.M; cm++) {
              my_daxpy(iodata.N*8*Npoly,(double*)&Zbar[cm*2*Npoly*iodata.N*2],alphak[cm],&z[cm*4*Npoly*iodata.N*2]);
            }
@@ -805,10 +809,9 @@ sagecal_master(int argc, char **argv) {
             memset(X,0,sizeof(double)*(size_t)iodata.N*8*Npoly*iodata.M);
            }
            for (int cm=0; cm<iodata.M; cm++) {
-             //my_daxpy(iodata.N*8*Npoly*iodata.M,Zerr,Data::federated_reg_alpha,X);
              my_daxpy(iodata.N*8*Npoly,&Zerr[cm*iodata.N*8*Npoly],alphak[cm],&X[cm*iodata.N*8*Npoly]);
            }
-           printf("SP: alpha=%lf ||Z-Zbar||=%lf ||Z||=%lf ||X||=%lf\n",Data::federated_reg_alpha,my_dnrm2(iodata.N*8*Npoly*iodata.M,Zerr)/((double)iodata.N*8*Npoly*iodata.M),my_dnrm2(iodata.N*8*Npoly*iodata.M,Z)/((double)iodata.N*8*Npoly*iodata.M),my_dnrm2(iodata.N*8*Npoly*iodata.M,X)/((double)iodata.N*8*Npoly*iodata.M));
+           printf("SP: ||Z-Zbar||=%lf ||Z||=%lf ||X||=%lf\n",my_dnrm2(iodata.N*8*Npoly*iodata.M,Zerr)/((double)iodata.N*8*Npoly*iodata.M),my_dnrm2(iodata.N*8*Npoly*iodata.M,Z)/((double)iodata.N*8*Npoly*iodata.M),my_dnrm2(iodata.N*8*Npoly*iodata.M,X)/((double)iodata.N*8*Npoly*iodata.M));
            /* 5. feed Zbar and X to next update of Z
              already done above*/
          }
@@ -922,7 +925,6 @@ sagecal_master(int argc, char **argv) {
          /* no need to scale by 1/rho here, because Bii is already divided by 1/rho */
          /* add (alpha Zbar - X) if spatial regularization is enabled */
          if (Data::spatialreg) {
-           //my_daxpy(iodata.N*8*Npoly*iodata.M,(double*)Zbar,Data::federated_reg_alpha,z);
            for (int cm=0; cm<iodata.M; cm++) {
              my_daxpy(iodata.N*8*Npoly,(double*)&Zbar[cm*2*Npoly*iodata.N*2],alphak[cm],&z[cm*4*Npoly*iodata.N*2]);
            }

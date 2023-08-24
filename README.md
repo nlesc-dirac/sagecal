@@ -154,12 +154,21 @@ Specific options :
 
 ```-r 5``` : regularization factor is 5.0. See ```-G``` option below for regularization per direction.
 
-```-G textfile```: each cluster can have a different regularization factor, instead of using ```-r``` option when the regularization is the same for all clusters. The text file format is as follows: each row should have the cluter_id, hybrid count (= same as in the cluster file), spectral regularization, and spatial regularization, e.g.,
+```-G textfile```: each cluster can have a different regularization factor, instead of using ```-r``` option (and ```-u``` option) when the regularization is the same for all clusters. The text file format is as follows: each row should have the cluter_id, hybrid count (= same as in the cluster file), spectral regularization, and (optionally) spatial regularization, e.g.,
 
 ```
 # cluster_id hybrid_factor spetral_reg spatial_reg
 -1 1 5.0 3.0
 2 4 1.0 2.0
+...
+```
+
+It is also possible to only use spectral regularization, for example,
+
+```
+# cluster_id hybrid_factor spetral_reg
+-1 1 5.0
+2 4 1.0
 ...
 ```
 

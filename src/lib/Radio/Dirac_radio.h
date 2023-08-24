@@ -102,19 +102,33 @@ read_solutions(FILE *sfp,double *p,clus_source_t *carr,int N,int M);
 extern int
 update_ignorelist(const char *ignfile, int *ignlist, int M, clus_source_t *carr);
 
-/* read ADMM regularization factor per cluster from text file, format:
- cluster_id  hybrid_parameter admm_rho
+/* read ADMM regularization factor per cluster from text file:
+ *
+ *
+ * format without spatial regularization:
+#cluster_id  hybrid_parameter admm_rho
  ...
  ...
  (M values)
+ admm_rho : can be 0 to ignore consensus, just normal calibration
+# end file
+
+ format with spatial regularization:
+#cluster_id  hybrid_parameter admm_rho spatial_alpha
+ ...
+ ...
+ (M values)
+# end file
+
  and store it in array arho : size Mtx1, taking into account the hybrid parameter
  also in array arhoslave : size Mx1, without taking hybrid params into account
 
- admm_rho : can be 0 to ignore consensus, just normal calibration
+ if spatialreg>0, also read spatial regularization factors (read M and store Mt values)
+ alpha: Mtx1 spatial regularization values
 */
 
 extern int
-read_arho_fromfile(const char *admm_rho_file,int Mt,double *arho, int M, double *arhoslave);
+read_arho_fromfile(const char *admm_rho_file,int Mt,double *arho, int M, double *arhoslave, int spatialreg, double *alpha);
 
 /****************************** predict.c ****************************/
 /************* extended source contributions ************/
