@@ -141,6 +141,7 @@ run_fullbatch_calibration(void) {
   }
    /* if simulation mode, solution file is given check if ignore file
       is also given */
+  /* FIXME: ignore list parsing need to be improved, also done before reading the sky model */
   int *ignorelist=0;
   if (Data::DoSim && solfile) {
     if ((ignorelist=(int*)calloc((size_t)M,sizeof(int)))==0) {
