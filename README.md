@@ -103,8 +103,10 @@ Optionally: Make sure your machine has (1/2 working NVIDIA GPU cards or Intel Xe
 Recommended usage: (with GPUs)
 
 ```
-sagecal -d my_data.MS -s my_skymodel -c my_clustering -n no.of.threads -t 60 -p my_solutions -e 3 -g 2 -l 10 -m 7 -w 1 -b 1
+sagecal_gpu -d my_data.MS -s my_skymodel -c my_clustering -n no.of.threads -t 60 -p my_solutions -e 3 -g 2 -l 10 -m 7 -w 1 -b 1
 ```
+
+Replace ```sagecal_gpu``` with ```sagecal``` if you have a CPU only build.
 
 Use your solution interval (-t 60) so that its big enough to get a decent solution and not too big to make the parameters vary too much. (about 20 minutes per solution is reasonable).
 
@@ -131,7 +133,7 @@ Use ```-N 1``` combined with options for ```-M```,```-w``` (see also section 4 b
 
 ### 4) Distributed calibration
 
-Use mpirun to run sagecal-mpi, example:
+Use mpirun to run sagecal-mpi, (or ```sagecal-mpi_gpu``` for GPU version) for example:
 ```
  mpirun  -np 11 -hostfile ./machines --map-by node --cpus-per-proc 8 
  --mca yield_when_idle 1 -mca orte_tmpdir_base /scratch/users/sarod 
@@ -152,9 +154,27 @@ Specific options :
 
 ```-Q``` : can change the type of polynomial used (```-Q 2``` gives Bernstein polynomials).
 
-```-r 5``` : regularization factor is 5.0.
+```-r 5``` : regularization factor is 5.0. See ```-G``` option below for regularization per direction.
 
-```-G textfile```: each cluster can have a different regularization factor, instead of using ```-r``` option when the regularization is the same for all clusters.
+```-G textfile```: each cluster can have a different regularization factor, instead of using ```-r``` option (and ```-u``` option) when the regularization is the same for all clusters. The text file format is as follows: each row should have the cluter_id, hybrid count (= same as in the cluster file), spectral regularization, and (optionally) spatial regularization, e.g.,
+
+```
+# cluster_id hybrid_factor spetral_reg spatial_reg
+-1 1 5.0 3.0
+2 4 1.0 2.0
+...
+```
+
+It is also possible to only use spectral regularization, for example,
+
+```
+# cluster_id hybrid_factor spetral_reg
+-1 1 5.0
+2 4 1.0
+...
+```
+
+Note that lines starting with '#' are comments.
 
 ```-N 1```: enable **stochastic** calibration (minibatches of data), combined with options ```-M```, ```-w``` and ```-u```.
 
@@ -176,7 +196,7 @@ Spatial regularization (with distributed multi-directional calibration) enables 
 
 ```-X L2 penalty,L1 penalty,model order,FISTA iterations,update cadence``` : For example ```-X 0.01,1e-4,3,40,10``` will use 0.01 as the L2 penalty and 1e-4 as the L1 penalty for solving an elastic net regression to build a spatial model. The model will have 3x3=9 spatial basis functions. The elastic net model will be found using 40 FISTA iterations. The spatial model will be updated at every 10 ADMM iterations.
 
-```-u alpha``` : The regularization factor for the spatial constraint while solving the consensus problem. This factor is scaled according to the value of rho given to each cluster (see section 5 above). The cluster with the highest rho value will have the value of alpha given by ```-u```.
+```-u alpha``` : The regularization factor for the spatial constraint while solving the consensus problem. Note that by using the  ```-G``` option, you can define regularization factors for each cluster.
 
 
 ### 6) Solution format

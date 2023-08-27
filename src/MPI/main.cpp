@@ -66,8 +66,8 @@ print_help(void) {
    cout << "-A ADMM iterations: default " <<Data::Nadmm<< endl;
    cout << "-P consensus polynomial terms: default " <<Data::Npoly<< endl;
    cout << "-Q consensus polynomial type (0,1,2,3): default " <<Data::PolyType<< endl;
-   cout << "-r regularization factor: default " <<Data::admm_rho<< endl;
-   cout << "-G regularization factor of each cluster (text file instead of -r, has to match _exactly_ the cluster file's first 2 columns): default : None" << endl;
+   cout << "-r spectral regularization factor, can be overridden by using -G option: default " <<Data::admm_rho<< endl;
+   cout << "-G regularization factors (both spectral and spatial) of each cluster (using text file instead of using -r and -u, has to match _exactly_ the cluster file's first 2 columns): default : None" << endl;
    cout << "-C if >0, adaptive update of regularization factor: default "<<Data::aadmm<< endl;
    cout << "-x exclude baselines length (lambda) lower than this in calibration : default "<<Data::min_uvcut << endl;
    cout << "-y exclude baselines length (lambda) higher than this in calibration : default "<<Data::max_uvcut << endl;
@@ -95,7 +95,7 @@ print_help(void) {
    cout << "-N epochs, if >0, use stochastic calibration: default "<<Data::stochastic_calib_epochs<< endl;
    cout << "-M minibatches, must be >0, split data to this many minibatches: default "<<Data::stochastic_calib_minibatches<< endl;
    cout << "-w mini-bands, must be >0, split channels to this many mini-bands for bandpass calibration: default "<<Data::stochastic_calib_bands<< endl;
-   cout << "-u alpha, must be >0, alpha is the regularization factor used in passing global Z to local value and in spatial regularization: default "<<Data::federated_reg_alpha<< endl;
+   cout << "-u alpha, must be >0, alpha is the regularization factor used in passing global Z to local value and in spatial regularization. Can be overridden by using -G option, default "<<Data::federated_reg_alpha<< endl;
    cout << "-X lambda,mu,n0,fista_maxiter,cadence: if defined, enable spatial regularization: (lambda: L2, mu: L1, n0: model order with n0^2 modes, fista_maxiter: FISTA iterations, cadence: update cadence):  default:"<<Data::spatialreg<<endl;
    cout <<"Report bugs to <sarod@users.sf.net>"<<endl;
 }

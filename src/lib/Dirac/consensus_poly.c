@@ -81,6 +81,11 @@ setup_polynomials(double *B, int Npoly, int Nf, double *freqs, double freq0, int
    /* Bernstein polynomials */
    int idmax=my_idamax(Nf, freqs, 1);
    int idmin=my_idamin(Nf, freqs, 1);
+   /* sanity check */
+   if (idmax<1) idmax=1;
+   if (idmax>Nf) idmax=Nf;
+   if (idmin<1) idmin=1;
+   if (idmin>Nf) idmin=Nf;
    double fmax=freqs[idmax-1];
    double fmin=freqs[idmin-1];
    double *fact; /* factorial array */
