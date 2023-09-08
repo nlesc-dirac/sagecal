@@ -1095,6 +1095,7 @@ sagecal_master(int argc, char **argv) {
        }
        std::string imagename=std::string("J_")+std::to_string(ct)+std::string(".ppm");
        convert_tensor_to_image(pixval, imagename.c_str(), iodata.N, pn_axes_M);
+#ifdef DEBUG1
        FILE *dfp;
        if ((dfp=fopen("debug.m","w+"))==0) {
         fprintf(stderr,"%s: %d: no file\n",__FILE__,__LINE__);
@@ -1112,6 +1113,7 @@ sagecal_master(int argc, char **argv) {
        }
        fprintf(dfp,"];\n");
        fclose(dfp);
+#endif /* DEBUG1 */
        free(pixval);
      }
 
