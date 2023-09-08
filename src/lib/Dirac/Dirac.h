@@ -1520,6 +1520,12 @@ openblas_set_num_threads(int num_threads);
  */
 extern int 
 update_spatialreg_fista(complex double *Z, complex double *Zbar, complex double *Phikk, complex double *Phi, int N, int M, int Npoly, int G, double mu, int maxiter);
+
+
+/****************************** pngoutput.c ****************************/
+extern int
+convert_tensor_to_image(double *W, const char *filename, int N, int M);
+
 /****************************** lmfit.c ****************************/
 /****************************** lmfit_cuda.c ****************************/
 /* minimization (or vector cost) function (multithreaded) */

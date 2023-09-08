@@ -13,6 +13,7 @@ set (objects
     updatenu
     fista
     baseline_utils
+    pngoutput
 )
 
 if(HAVE_CUDA)
