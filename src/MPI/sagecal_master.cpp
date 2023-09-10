@@ -1086,6 +1086,7 @@ sagecal_master(int argc, char **argv) {
         exit(1);
        }
        for (int cm=0; cm<iodata.N; cm++) {
+#pragma GCC ivdep
          for (int ci=0; ci<pn_grid_M; ci++) {
            pixval[ci+cm*pn_grid_M]=pn_J[8*cm+ci*8*iodata.N]*pn_J[8*cm+ci*8*iodata.N]
              +pn_J[8*cm+ci*8*iodata.N+1]*pn_J[8*cm+ci*8*iodata.N+1]
