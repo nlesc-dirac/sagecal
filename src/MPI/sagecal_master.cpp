@@ -424,8 +424,8 @@ sagecal_master(int argc, char **argv) {
       exit(1);
      }
      for (int ci=0; ci<pn_axes_M; ci++) {
-       pn_ll[ci]=(0.5-(-0.5))*(double)ci/(double)(2*pn_axes_M)-0.5;
-       pn_mm[ci]=(0.5-(-0.5))*(double)ci/(double)(2*pn_axes_M)-0.5;
+       pn_ll[ci]=(0.9-(-0.9))*(double)ci/(double)(pn_axes_M)-0.9;
+       pn_mm[ci]=(0.9-(-0.9))*(double)ci/(double)(pn_axes_M)-0.9;
      }
      if ((pn_theta=(double*)calloc((size_t)pn_grid_M,sizeof(double)))==0) {
       fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
