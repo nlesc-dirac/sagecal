@@ -122,12 +122,6 @@ pkg_check_modules(GLIB_PKG glib-2.0)
 if (GLIB_PKG_FOUND)
     include_directories(${GLIB_PKG_INCLUDE_DIRS})
 endif()
-
-#if (LIB_ONLY)
-#  string(APPEND CMAKE_SHARED_LINKER_FLAGS " -Wl,--no-undefined")
-#  string(APPEND CMAKE_SHARED_LINKER_FLAGS " -Wl,--as-needed")
-#endif()
-
 #--------------------------------------- check environment variables
 
 # Check pre-defined environment variables
