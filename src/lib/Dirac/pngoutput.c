@@ -102,6 +102,7 @@ convert_tensor_to_image(double *W, const char *filename, int N, int M) {
  }
 
  /* scale each column of W to fit [0,1] */
+ double W_max_diff=0.0;
  double *W_min,*W_max;
  if((W_min=(double*)calloc((size_t)N,sizeof(double)))==0) {
    fprintf(stderr,"%s: %d: no free memory",__FILE__,__LINE__);
@@ -119,10 +120,20 @@ convert_tensor_to_image(double *W, const char *filename, int N, int M) {
      if (W_min[col]>W[col*patch_size+ci]) { W_min[col]=W[col*patch_size+ci];}
      if (W_max[col]<W[col*patch_size+ci]) { W_max[col]=W[col*patch_size+ci];}
    }
+   if (W_max_diff<(W_max[col]-W_min[col])) {
+     W_max_diff=W_max[col]-W_min[col];
+   }
  }
 
+ /* cut off very small values (prevent plotting noise), say less than 0.1 of the peak column */
+ for (col=0; col<N; col++) {
+   if (W_max_diff*0.1 > (W_max[col]-W_min[col])) {
+     W_max[col]=1.0;
+     W_min[col]=0.0;
+   }
+ }
 
- /* copy W to B, also find min/max values */
+ /* copy W to B, also while scaling values to [0,1] */
  for (col=0; col<N; col++) {
    double scalefactor=1.0/(W_max[col]-W_min[col]);
    /* map each column of MxM values in W to panel (x,y) */
