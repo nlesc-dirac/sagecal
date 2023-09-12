@@ -198,6 +198,7 @@ Spatial regularization (with distributed multi-directional calibration) enables 
 
 ```-u alpha``` : The regularization factor for the spatial constraint while solving the consensus problem. Note that by using the  ```-G``` option, you can define regularization factors for each cluster.
 
+After each solution, images showing the spatial model (amplitude) will be created as ```.PPM``` files.
 
 ### 6) Solution format
 All SAGECal solutions are stored as text files. Lines starting with '#' are comments.
