@@ -127,7 +127,8 @@ convert_tensor_to_image(double *W, const char *filename, int N, int M) {
 
  /* cut off very small values (prevent plotting noise), say less than 0.1 of the peak column */
  for (col=0; col<N; col++) {
-   if (W_max_diff*0.1 > (W_max[col]-W_min[col])) {
+   if ((W_max_diff*0.1 > (W_max[col]-W_min[col]))
+       && (W_max[col]-W_min[col] < 1.0) ) {
      W_max[col]=1.0;
      W_min[col]=0.0;
    }
