@@ -49,7 +49,20 @@
 
 #ifdef HAVE_CUDA
 #include <Dirac_GPUtune.h>
+
+/* define float constants if not defined */
+#ifndef M_PIf
+#define M_PIf (float)M_PI
 #endif
+
+#ifndef M_PI_2f
+#define M_PI_2f (float)M_PI_2
+#endif
+
+#ifndef M_PI_4f
+#define M_PI_4f (float)M_PI_4
+#endif
+#endif /* HAVE_CUDA */
 
 /* max source name length, increase it if names get longer */
 #define MAX_SNAME 2048
