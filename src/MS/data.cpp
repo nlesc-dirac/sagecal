@@ -149,7 +149,8 @@ Data::readAuxData(const char *fname, Data::IOData *data) {
     ROScalarColumn<double> timeCol(_t, "INTERVAL"); 
     data->deltat=timeCol.get(0);
     data->totalt=(timeCol.nrow()+data->Nbase+data->N-1)/(data->Nbase+data->N);
-    cout<<"Integration Time: "<<data->deltat<<" s,"<<" Total timeslots: "<<data->totalt<<endl;
+    int totalt_noauto=(timeCol.nrow()+data->Nbase-1)/(data->Nbase); //if no autocorr present
+    cout<<"Integration Time: "<<data->deltat<<" s,"<<" Total timeslots: "<<data->totalt<<"~"<<totalt_noauto<<endl;
 
     Table _field = Table(_t.keywordSet().asTable("FIELD"));
     ROArrayColumn<double> ref_dir(_field, "PHASE_DIR");
@@ -205,7 +206,8 @@ Data::readAuxData(const char *fname, Data::IOData *data, Data::LBeam *binfo) {
     ROScalarColumn<double> timeCol(_t, "INTERVAL"); 
     data->deltat=timeCol.get(0);
     data->totalt=(timeCol.nrow()+data->Nbase+data->N-1)/(data->Nbase+data->N);
-    cout<<"Integration Time: "<<data->deltat<<" s,"<<" Total timeslots: "<<data->totalt<<endl;
+    int totalt_noauto=(timeCol.nrow()+data->Nbase-1)/(data->Nbase); //if no autocorr present
+    cout<<"Integration Time: "<<data->deltat<<" s,"<<" Total timeslots: "<<data->totalt<<"~"<<totalt_noauto<<endl;
 
     Table _field = Table(_t.keywordSet().asTable("FIELD"));
     ROArrayColumn<double> ref_dir(_field, "PHASE_DIR"); /* old REFERENCE_DIR */
@@ -501,9 +503,6 @@ Data::readAuxDataList(vector<string> msnames, Data::IOData *data) {
     /* read first filename */
     const char *fname=msnames[0].c_str();
     Table _t=Table(fname);
-    //char buff[2048] = {0};
-    //sprintf(buff, "%s/ANTENNA", fname);
-    //Table _ant=Table(buff);
     Table _ant = Table(_t.keywordSet().asTable("ANTENNA"));
     ROScalarColumn<String> a1(_ant, "NAME");
     data->N=a1.nrow();
@@ -513,10 +512,9 @@ Data::readAuxDataList(vector<string> msnames, Data::IOData *data) {
     ROScalarColumn<double> timeCol(_t, "INTERVAL"); 
     data->deltat=timeCol.get(0);
     data->totalt=(timeCol.nrow()+data->Nbase+data->N-1)/(data->Nbase+data->N);
-    cout<<"Integration Time: "<<data->deltat<<" s,"<<" Total timeslots: "<<data->totalt<<endl;
+    int totalt_noauto=(timeCol.nrow()+data->Nbase-1)/(data->Nbase); //if no autocorr present
+    cout<<"Integration Time: "<<data->deltat<<" s,"<<" Total timeslots: "<<data->totalt<<"~"<<totalt_noauto<<endl;
 
-    //sprintf(buff, "%s/FIELD", fname);
-    //Table _field = Table(buff);
     Table _field = Table(_t.keywordSet().asTable("FIELD"));
     ROArrayColumn<double> ref_dir(_field, "PHASE_DIR");
     Array<double> dir = ref_dir(0);
