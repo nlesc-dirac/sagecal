@@ -746,11 +746,16 @@ double phterm0, double sI0f, double sQ0f, double sU0f, double sV0f, double spec_
      cuDoubleComplex prodterm=make_cuDoubleComplex(cosph,sinph);
      double If,Qf,Uf,Vf;
      If=Qf=Uf=Vf=0.0;
-     /* evaluate spectra */
-     double fratio=log(myfreq/myf0);
-     double fratio1=fratio*fratio;
-     double fratio2=fratio1*fratio;
-     double cm=spec_idxf*fratio+spec_idx1f*fratio1+spec_idx2f*fratio2;
+     /* evaluate spectra, only if non-zero spectral indices given */
+     int spectra_valid=(spec_idxf!=0.0 || spec_idx1f!=0.0 || spec_idx2f!=0.0);
+     double cm=0.0;
+     if (spectra_valid) {
+      double fratio=log(myfreq/myf0);
+      double fratio1=fratio*fratio;
+      double fratio2=fratio1*fratio;
+      cm=spec_idxf*fratio+spec_idx1f*fratio1+spec_idx2f*fratio2;
+     }
+     if (spectra_valid) {
      /* catch -ve flux */
      if (sI0f>0.0) {
         If=exp(log(sI0f)+cm);
@@ -771,6 +776,12 @@ double phterm0, double sI0f, double sQ0f, double sU0f, double sV0f, double spec_
         Vf=exp(log(sV0f)+cm);
      } else if (sI0f<0.0) {
         Vf=-exp(log(-sV0f)+cm);
+     }
+     } else {
+       If=sI0f;
+       Qf=sQ0f;
+       Uf=sU0f;
+       Vf=sV0f;
      }
 
      /* smearing, beam */
