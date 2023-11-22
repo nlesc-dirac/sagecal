@@ -234,7 +234,14 @@ run_minibatch_calibration(void) {
   }
 
   /* coherencies: note this is only the size of minibatch x number of channels */
-  if ((coh=(complex double*)calloc((size_t)(M*iodata.Nbase*iodata.tilesz*4*iodata.Nchan),sizeof(complex double)))==0) {
+  size_t coh_size=M*iodata.Nbase*iodata.tilesz*4*iodata.Nchan;
+  if ((coh=(complex double*)calloc((size_t)(coh_size),sizeof(complex double)))==0) {
+     fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
+     exit(1);
+  }
+  /* storage for coherencies for all minibatches */
+  complex double *coh_all;
+  if ((coh_all=(complex double*)calloc((size_t)(coh_size*minibatches),sizeof(complex double)))==0) {
      fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
      exit(1);
   }
@@ -393,6 +400,7 @@ run_minibatch_calibration(void) {
 
     /****************** calibration **************************/
     /* coherency calculation need to be done per channel */
+        if (!nepch) {
 #ifndef HAVE_CUDA
     if (!doBeam) {
      precalculate_coherencies_multifreq(iodata.u,iodata.v,iodata.w,coh,iodata.N,iodata.Nbase*iodata.tilesz,barr,carr,M,iodata.freqs,iodata.Nchan,iodata.deltaf,iodata.deltat,iodata.dec0,Data::min_uvcut,Data::max_uvcut,Data::Nt);
@@ -415,6 +423,10 @@ run_minibatch_calibration(void) {
     }
    }
 #endif
+        } else {
+          /* copy coherencies from backup */
+          memcpy(coh,&coh_all[coh_size*nmb],(size_t)coh_size*sizeof(complex double));
+        }
      
         /* iterate over solutions covering full bandwidth */
         /* updated values for xo, coh, freqs, Nchan, deltaf needed */
@@ -436,6 +448,10 @@ run_minibatch_calibration(void) {
       res_1/=(double)nsolbw;
 
 
+      /* backup coherencies for this minibatch at first epoch */
+      if (!nepch) {
+       memcpy(&coh_all[coh_size*nmb],coh,(size_t)coh_size*sizeof(complex double));
+      }
 /******************************* work on minibatch*****************************/
       }
       }
@@ -652,6 +668,7 @@ run_minibatch_calibration(void) {
   free(pfreq);
   free(resband);
   free(coh);
+  free(coh_all);
   if (solfile) {
     fclose(sfp);
   }
