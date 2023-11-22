@@ -577,6 +577,11 @@ cudakernel_lbfgs_multifreq_r_robust(int Nbase, int tilesz, int Nchan, int M, int
   dim3 threadsPerBlock(16,4);
   dim3 blocksPerGrid((Nbase+threadsPerBlock.x-1)/threadsPerBlock.x,(Nchan+threadsPerBlock.y-1)/threadsPerBlock.y);
 
+  /* check to see the block dimensions exceed 65535 and warn to reduce the minibatch size */
+  if (blocksPerGrid.x>65535 || blocksPerGrid.y>65535) {
+    fprintf(stderr,"Warning: the number of blocks %d x %d are exceeding 65535 limit, try reducing the minibatch size or increasing -M and -w\n",blocksPerGrid.x,blocksPerGrid.y);
+  }
+
 #ifdef CUDA_DBG
   error = cudaGetLastError(); /* reset all previous errors */
 #endif
@@ -635,6 +640,10 @@ cudakernel_lbfgs_multifreq_cost_robust(int Nbase, int Nchan, int M, int Ns, int 
   if((error=cudaMalloc((void**)&ed, sizeof(double)*blocksPerGridXY))!=cudaSuccess) {
      fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
      exit(1);
+  }
+  /* check to see the block dimensions exceed 65535 and warn to reduce the minibatch size */
+  if (blocksPerGrid.x>65535 || blocksPerGrid.y>65535) {
+    fprintf(stderr,"Warning: the number of blocks %d x %d are exceeding 65535 limit, try reducing the minibatch size or increasing -M and -w\n",blocksPerGrid.x,blocksPerGrid.y);
   }
 
   cudaMemset(ed, 0, sizeof(double)*blocksPerGridXY);
