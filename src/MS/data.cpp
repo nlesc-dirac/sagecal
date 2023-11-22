@@ -136,36 +136,56 @@ Data::readMSlist(char *fname, vector<string> *msnames) {
      }
 }
 
-void 
-Data::readAuxData(const char *fname, Data::IOData *data) {
+static void
+getBaselineCounts(MeasurementSet& ms, int& n_cross_baselines, int& n_auto_correlations) {
+  ScalarColumn<double> time_col(ms, MeasurementSet::columnName(MSMainEnums::TIME));
+  ScalarColumn<int> antenna1_col(ms, MeasurementSet::columnName(MSMainEnums::ANTENNA1));
+  ScalarColumn<int> antenna2_col(ms, MeasurementSet::columnName(MSMainEnums::ANTENNA2));
+  const double first_timestep = time_col(0);
+  n_auto_correlations = antenna1_col(0) == antenna2_col(0) ? 1 : 0;
+  n_cross_baselines = 1 - n_auto_correlations;
+  size_t row = 1;
+  while(row < ms.nrow() && first_timestep == time_col(row)) {
+    if(antenna1_col(row) == antenna2_col(row))
+      ++n_auto_correlations;
+    else
+      ++n_cross_baselines;
+    ++row;
+  }
+}
 
-    Table _t=Table(fname);
-    Table _ant = Table(_t.keywordSet().asTable("ANTENNA"));
-    ROScalarColumn<String> a1(_ant, "NAME");
-    data->N=a1.nrow();
-    data->Nbase=data->N*(data->N-1)/2;
+static void
+readAuxDataFirstPart(MeasurementSet& ms, Data::IOData *data) {
+    data->N = ms.antenna().nrow();
+
+    int n_auto_correlations;
+    getBaselineCounts(ms, data->Nbase, n_auto_correlations);
     cout <<"Stations: "<<data->N<<" Baselines: "<<data->Nbase<<endl;
+    if (data->Nbase != data->N*(data->N-1)/2) {
+      cout<<"Warning: expected "<<data->N*(data->N-1)/2<< " baselines but got "<<data->Nbase<<endl;
+    }
 
-    ROScalarColumn<double> timeCol(_t, "INTERVAL"); 
-    data->deltat=timeCol.get(0);
-    data->totalt=(timeCol.nrow()+data->Nbase+data->N-1)/(data->Nbase+data->N);
+    ScalarColumn<double> interval_col(ms, MeasurementSet::columnName(MSMainEnums::INTERVAL));
+    data->deltat=interval_col.get(0);
+    data->totalt=(ms.nrow()+data->Nbase+n_auto_correlations-1)/(data->Nbase+n_auto_correlations);
     cout<<"Integration Time: "<<data->deltat<<" s,"<<" Total timeslots: "<<data->totalt<<endl;
 
-    Table _field = Table(_t.keywordSet().asTable("FIELD"));
-    ROArrayColumn<double> ref_dir(_field, "PHASE_DIR");
+    MSField _field = Table(ms.field());
+    ArrayColumn<double> ref_dir(_field, MSField::columnName(MSFieldEnums::PHASE_DIR));
     Array<double> dir = ref_dir(0);
     double *c = dir.data();
     data->ra0=c[0];
     data->dec0=c[1];
     cout<<"Phase center ("<< c[0] << ", " << c[1] <<")"<<endl;
 
-    //obtain the chanel freq information
-    Table _freq = Table(_t.keywordSet().asTable("SPECTRAL_WINDOW"));
-    ROArrayColumn<double> chan_freq(_freq, "CHAN_FREQ"); 
+    //obtain the channel freq information
+    MSSpectralWindow _freq = ms.spectralWindow();
+    ArrayColumn<double> chan_freq(_freq, MSSpectralWindow::columnName(MSSpectralWindowEnums::CHAN_FREQ));
     data->Nchan=chan_freq.shape(0)[0];
     data->Nms=1;
+
    /* allocate memory */
-   try { 
+   try {
    data->u=new double[data->Nbase*data->tilesz];
    data->v=new double[data->Nbase*data->tilesz];
    data->w=new double[data->Nbase*data->tilesz];
@@ -188,69 +208,25 @@ Data::readAuxData(const char *fname, Data::IOData *data) {
    }
    data->freq0/=(double)data->Nchan;
    /* need channel widths to calculate bandwidth */
-   ROArrayColumn<double> chan_width(_freq, "CHAN_WIDTH"); 
+   ArrayColumn<double> chan_width(_freq, MSSpectralWindow::columnName(MSSpectralWindowEnums::CHAN_WIDTH));
    data->deltaf=(double)data->Nchan*(chan_width(0).data()[0]);
 }
 
-void 
+void
+Data::readAuxData(const char *fname, Data::IOData *data) {
+
+    MeasurementSet ms(fname);
+    readAuxDataFirstPart(ms, data);
+}
+
+void
 Data::readAuxData(const char *fname, Data::IOData *data, Data::LBeam *binfo) {
 
-    Table _t=Table(fname);
-    Table _ant = Table(_t.keywordSet().asTable("ANTENNA"));
-    ROScalarColumn<String> a1(_ant, "NAME");
-    data->N=a1.nrow();
-    data->Nbase=data->N*(data->N-1)/2;
-    cout <<"Stations: "<<data->N<<" Baselines: "<<data->Nbase<<endl;
+   MeasurementSet ms(fname);
+   readAuxDataFirstPart(ms, data);
 
-    ROScalarColumn<double> timeCol(_t, "INTERVAL"); 
-    data->deltat=timeCol.get(0);
-    data->totalt=(timeCol.nrow()+data->Nbase+data->N-1)/(data->Nbase+data->N);
-    cout<<"Integration Time: "<<data->deltat<<" s,"<<" Total timeslots: "<<data->totalt<<endl;
-
-    Table _field = Table(_t.keywordSet().asTable("FIELD"));
-    ROArrayColumn<double> ref_dir(_field, "PHASE_DIR"); /* old REFERENCE_DIR */
-    Array<double> dir = ref_dir(0);
-    double *c = dir.data();
-    data->ra0=c[0];
-    data->dec0=c[1];
-    cout<<"Phase center ("<< c[0] << ", " << c[1] <<")"<<endl;
-
-    //obtain the chanel freq information
-    Table _freq = Table(_t.keywordSet().asTable("SPECTRAL_WINDOW"));
-    ROArrayColumn<double> chan_freq(_freq, "CHAN_FREQ"); 
-    data->Nchan=chan_freq.shape(0)[0];
-    data->Nms=1;
-
-
-   /* allocate memory */
-   try {
-     data->u=new double[data->Nbase*data->tilesz];
-     data->v=new double[data->Nbase*data->tilesz];
-     data->w=new double[data->Nbase*data->tilesz];
-     data->x=new double[8*data->Nbase*data->tilesz];
-     data->xo=new double[8*data->Nbase*data->tilesz*data->Nchan];
-     data->freqs=new double[data->Nchan];
-     data->flag=new double[data->Nbase*data->tilesz];
-     data->NchanMS=new int[data->Nms];
-   } catch (const std::bad_alloc& e) {
-     cout<<"Allocating memory for data failed. Quitting."<< e.what() << endl;
-     exit(1);
-   }
-   data->NchanMS[0]=data->Nchan;
-
-   /* copy freq */
-   data->freq0=0.0;
-   for (int ci=0; ci<data->Nchan; ci++) {
-     data->freqs[ci]=chan_freq(0).data()[ci];
-     data->freq0+=data->freqs[ci];
-   }
-   data->freq0/=(double)data->Nchan;
-   /* need channel widths to calculate bandwidth */
-   ROArrayColumn<double> chan_width(_freq, "CHAN_WIDTH"); 
-   data->deltaf=(double)data->Nchan*(chan_width(0).data()[0]);
-
-   Table _obs = Table(_t.keywordSet().asTable("OBSERVATION"));
-   ROScalarColumn<String> telescope(_obs, "TELESCOPE_NAME");
+   MSObservation _obs = ms.observation();
+   ScalarColumn<String> telescope(_obs, MSObservation::columnName(MSObservationEnums::TELESCOPE_NAME));
    std::string tel=telescope(0);
    /* figure out which telescope */
    if (!tel.compare("LOFAR") || !tel.compare("AARTFAAC")) {
@@ -265,7 +241,7 @@ Data::readAuxData(const char *fname, Data::IOData *data, Data::LBeam *binfo) {
 
    try {
      /* UTC time */
-     binfo->time_utc=new double[data->tilesz]; 
+     binfo->time_utc=new double[data->tilesz];
      /* no of elements in each station */
      binfo->Nelem=new int[data->N];
      /* positions of stations */
@@ -283,8 +259,8 @@ Data::readAuxData(const char *fname, Data::IOData *data, Data::LBeam *binfo) {
 
    Table antfield;
    bool isDipole=false;
-   if(_t.keywordSet().fieldNumber("LOFAR_ANTENNA_FIELD") != -1) {
-    antfield = Table(_t.keywordSet().asTable("LOFAR_ANTENNA_FIELD"));
+   if(ms.keywordSet().fieldNumber("LOFAR_ANTENNA_FIELD") != -1) {
+    antfield = Table(ms.keywordSet().asTable("LOFAR_ANTENNA_FIELD"));
    } else {
     char buff[2048]={0};
     sprintf(buff, "%s/LOFAR_ANTENNA_FIELD", fname);
@@ -298,11 +274,11 @@ Data::readAuxData(const char *fname, Data::IOData *data, Data::LBeam *binfo) {
 
    if (!isDipole) {
      binfo->isDipole=0;
-     ROArrayColumn<double> position(antfield, "POSITION");
-     ROArrayColumn<double> offset(antfield, "ELEMENT_OFFSET");
-     ROArrayColumn<double> coord(antfield, "COORDINATE_AXES");
-     ROArrayColumn<bool> eflag(antfield, "ELEMENT_FLAG");
-     ROArrayColumn<double> tileoffset(antfield, "TILE_ELEMENT_OFFSET");
+     ArrayColumn<double> position(antfield, "POSITION");
+     ArrayColumn<double> offset(antfield, "ELEMENT_OFFSET");
+     ArrayColumn<double> coord(antfield, "COORDINATE_AXES");
+     ArrayColumn<bool> eflag(antfield, "ELEMENT_FLAG");
+     ArrayColumn<double> tileoffset(antfield, "TILE_ELEMENT_OFFSET");
      /* check if TILE_ELEMENT_OFFSET has any rows, of no rows present,
         we know this is LBA */
      bool isHBA=tileoffset.hasContent(0);
@@ -346,7 +322,7 @@ Data::readAuxData(const char *fname, Data::IOData *data, Data::LBeam *binfo) {
         my_dgemm('T', 'N', binfo->Nelem[ci], 3, 3, 1.0, off, 3, coordmat, 3, 0.0, tempC, binfo->Nelem[ci]);
         /* rotate dipole element coords in the tile */
         my_dgemm('T', 'N', dipoles_per_tile, 3, 3, 1.0, toff, 3, coordmat, 3, 0.0, tempT, dipoles_per_tile);
-  
+
         /* now inspect the element flag table to see if any of the tiles (16 dipoles) are flagged */
         int fcount=0;
         for (int cj=0; cj<binfo->Nelem[ci]; cj++) {
@@ -425,7 +401,7 @@ Data::readAuxData(const char *fname, Data::IOData *data, Data::LBeam *binfo) {
         for (int cj=0; cj<binfo->Nelem[ci]; cj++) {
          if (ef[2*cj]==1 || ef[2*cj+1]==1) {
           fcount++;
-         } 
+         }
         }
 
         binfo->xx[ci]=new double[(binfo->Nelem[ci]-fcount)];
@@ -447,13 +423,14 @@ Data::readAuxData(const char *fname, Data::IOData *data, Data::LBeam *binfo) {
      }
 
      /* read beam pointing direction */
-     ROArrayColumn<double> point_dir(_field, "REFERENCE_DIR"); //could be different from LOFAR_TILE_BEAM_DIR
+     MSField _field = Table(ms.field());
+     ArrayColumn<double> point_dir(_field, MSField::columnName(MSFieldEnums::REFERENCE_DIR)); //could be different from LOFAR_TILE_BEAM_DIR
      Array<double> pdir = point_dir(0);
      double *pc = pdir.data();
      binfo->p_ra0=pc[0];
      binfo->p_dec0=pc[1];
      /* read tile beam pointing direction */
-     ROArrayColumn<double> tile_dir(_field, "LOFAR_TILE_BEAM_DIR");
+     ArrayColumn<double> tile_dir(_field, "LOFAR_TILE_BEAM_DIR");
      Array<double> tdir = tile_dir(0);
      double *tc = tdir.data();
      binfo->b_ra0=tc[0];
@@ -463,7 +440,8 @@ Data::readAuxData(const char *fname, Data::IOData *data, Data::LBeam *binfo) {
      binfo->isDipole=1;
      binfo->bfType=STAT_NONE; /* no beamformer */
      /* use ANTENNA table to get positions */
-     ROArrayColumn<double> position(_ant, "POSITION");
+     MSAntenna _ant = ms.antenna();
+     ArrayColumn<double> position(_ant, MSAntenna::columnName(MSAntennaEnums::POSITION));
 
      /* only a dipole in this MS */
      binfo->p_ra0=data->ra0;
@@ -475,7 +453,7 @@ Data::readAuxData(const char *fname, Data::IOData *data, Data::LBeam *binfo) {
        double *tx=_pos.data();
        binfo->sz[ci]=tx[2];
 
-       MPosition stnpos(MVPosition(tx[0],tx[1],tx[2]),MPosition::ITRF);
+       MPosition stnpos(MVPosition(tx[0],tx[1],tx[2]), MPosition::ITRF);
        Array<double> _radpos=stnpos.getAngle("rad").getValue();
        tx=_radpos.data();
 
@@ -495,15 +473,12 @@ Data::readAuxData(const char *fname, Data::IOData *data, Data::LBeam *binfo) {
 
 }
 
-
 void 
 Data::readAuxDataList(vector<string> msnames, Data::IOData *data) {
+    cout<<"Warning: this method is deprecated, use at your own risk"<<endl;
     /* read first filename */
     const char *fname=msnames[0].c_str();
     Table _t=Table(fname);
-    //char buff[2048] = {0};
-    //sprintf(buff, "%s/ANTENNA", fname);
-    //Table _ant=Table(buff);
     Table _ant = Table(_t.keywordSet().asTable("ANTENNA"));
     ROScalarColumn<String> a1(_ant, "NAME");
     data->N=a1.nrow();
@@ -513,10 +488,9 @@ Data::readAuxDataList(vector<string> msnames, Data::IOData *data) {
     ROScalarColumn<double> timeCol(_t, "INTERVAL"); 
     data->deltat=timeCol.get(0);
     data->totalt=(timeCol.nrow()+data->Nbase+data->N-1)/(data->Nbase+data->N);
-    cout<<"Integration Time: "<<data->deltat<<" s,"<<" Total timeslots: "<<data->totalt<<endl;
+    int totalt_noauto=(timeCol.nrow()+data->Nbase-1)/(data->Nbase); //if no autocorr present
+    cout<<"Integration Time: "<<data->deltat<<" s,"<<" Total timeslots: "<<data->totalt<<"~"<<totalt_noauto<<endl;
 
-    //sprintf(buff, "%s/FIELD", fname);
-    //Table _field = Table(buff);
     Table _field = Table(_t.keywordSet().asTable("FIELD"));
     ROArrayColumn<double> ref_dir(_field, "PHASE_DIR");
     Array<double> dir = ref_dir(0);
