@@ -511,6 +511,8 @@ run_minibatch_consensus_calibration(void) {
     }
    }
 #endif
+      /* backup coherencies for this minibatch at first epoch */
+      memcpy(&coh_all[coh_size*nmb],coh,(size_t)coh_size*sizeof(complex double));
     } else {
       /* copy coherencies from backup */
       memcpy(coh,&coh_all[coh_size*nmb],(size_t)coh_size*sizeof(complex double));
@@ -598,10 +600,6 @@ run_minibatch_consensus_calibration(void) {
       }
       }
 
-      /* backup coherencies for this minibatch at first epoch */
-      if (!nepch && !nadmm) {
-       memcpy(&coh_all[coh_size*nmb],coh,(size_t)coh_size*sizeof(complex double));
-      }
 /******************************* work on minibatch*****************************/
       } /* minibatch */
       } /* epoch */
