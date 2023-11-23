@@ -423,6 +423,8 @@ run_minibatch_calibration(void) {
     }
    }
 #endif
+          /* backup coherencies for this minibatch at first epoch */
+          memcpy(&coh_all[coh_size*nmb],coh,(size_t)coh_size*sizeof(complex double));
         } else {
           /* copy coherencies from backup */
           memcpy(coh,&coh_all[coh_size*nmb],(size_t)coh_size*sizeof(complex double));
@@ -448,10 +450,6 @@ run_minibatch_calibration(void) {
       res_1/=(double)nsolbw;
 
 
-      /* backup coherencies for this minibatch at first epoch */
-      if (!nepch) {
-       memcpy(&coh_all[coh_size*nmb],coh,(size_t)coh_size*sizeof(complex double));
-      }
 /******************************* work on minibatch*****************************/
       }
       }
