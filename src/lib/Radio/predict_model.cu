@@ -96,7 +96,7 @@ eval_elementcoeff(float r, float theta, int M, float beta, const float2 *pattern
      const float2 *pattern_phi, const float *pattern_preamble) {
   float4 eval={0.f,0.f,0.f,0.f};
   float rb=powf(r/beta,2);
-  float ex=exp(-0.5f*rb);
+  float ex=expf(-0.5f*rb);
 
   int idx=0;
   for (int n=0; n<M; n++) {
@@ -576,7 +576,7 @@ calculate_uv_mode_vectors_scalar00(float u, float v, float beta, int n0, float *
   }
   zci=1;
   xval=v*beta;
-  expval=exp(-0.5f*xval*xval);
+  expval=__expf(-0.5f*(float)xval*xval);
   for (xci=0; xci<n0; xci++) {
     shpvl[zci][xci]=H_e(xval,xci)*expval/__fsqrt_rn((float)(2<<xci)*fact[xci]);
   }
