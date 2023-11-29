@@ -371,7 +371,7 @@ sagecal_master(int argc, char **argv) {
       exit(1);
      }
      if (spatialreg_basis==0) {
-      sh_beta=2.0*sqrt(l_max*l_max/(double)iodata.M); /* scale ~ sqrt(range(l)*delta(l)) or m */
+      sh_beta=4.0*sqrt(l_max*l_max/(double)iodata.M); /* scale ~ 2 x sqrt(range(l)*delta(l)) or m */
       printf("shaplet scale %lf\n",sh_beta);
       /* shapelet basis: real, so copy to complex part */
       shapelet_modes(sh_n0,sh_beta,ll,mm,iodata.M,phivec);
