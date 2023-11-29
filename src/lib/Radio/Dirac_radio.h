@@ -366,13 +366,23 @@ eval_elementcoeffs_wb(double r, double theta, elementcoeff *ecoeff, int findex);
  l=0,1,2,....,n0-1 : total n0
  m=(0),(-1,0,1),(-2,-1,0,1,2),....(-l,-l+1,...,l-1,l) : total 2*l+1
  total no of modes=(n0)^2
- * th,ph: array of theta,phi values, both of size Nt (not a grid)
+ * th,ph: array of theta,phi values, both of size Nt (not a uniform grid)
  * range th: 0..pi/2, ph: 0..2*pi
  * output: n0^2 (per each mode) x Nt vector
  */
 extern int
 sharmonic_modes(int n0,double *th, double *ph, int Nt, complex double *output);
 
+
+/****************************** shapelet.c ****************************/
+/* shapelet basis (rectangular, real valued),
+ * n0: total modes=n0^2
+ * beta: scale factor
+ * x,y : grid points, total N
+ * output: n0^2 (per mode) x N, real/imag same value
+ */
+extern int
+shapelet_modes(int n0,double beta, double *x, double *y, int N, complex double *output);
 /****************************** predict_withbeam.c ****************************/
 /* precalculate cluster coherencies
   u,v,w: u,v,w coordinates (wavelengths) size Nbase*tilesz x 1 

@@ -293,9 +293,11 @@ sagecal_master(int argc, char **argv) {
 #endif
    clus_source_t *carr;
    double *ll=0,*mm=0; /* Mx1 centroid coords (polar) */
-   /* input parameter int sh_n0 spherical harmonic model order */
-   /* elastic net regularization parameters sh_lambda (L2), sh_mu (L1) */
+   int spatialreg_basis=0; /* 0: shapelet (l,m) basis, 1: spherical harmonic (phi,theta) basis */
+   /* input parameter int sh_n0 shapelet or spherical harmonic model order */
    int G=sh_n0*sh_n0; /* total modes */
+   double sh_beta=1.0; /* scale factor for shapelet basis */
+   /* elastic net regularization parameters sh_lambda (L2), sh_mu (L1) */
    complex double *phivec=0; /* vector to store spherical harmonic modes n0^2 per each  polar coordinate */
    complex double *Phi=0; /* basis matrices 2Gx2, M times */
    complex double *Phikk=0; /* sum of Phi_k x Phi_k^H : 2Gx2G */
@@ -321,6 +323,7 @@ sagecal_master(int argc, char **argv) {
      }
      double *P;
      double lmean,mmean;
+     double l_max=0; /* max +ve or -ve value, to determine scale factor for shapelet basis */
      /* find centroid of each cluster, weighted by P=|sI|+|sQ|+|sU|+|sV|
       * for example, llmean=dot(P,ll)/N, N: sources */
      int idx=0;
@@ -344,9 +347,18 @@ sagecal_master(int argc, char **argv) {
         lmean=carr[ci].ll[0];
         mmean=carr[ci].mm[0];
        }
-       /* transform l,m in [-1,1] to r in [0,pi/2],theta [0,2*pi] */
-       double rr=sqrt(lmean*lmean+mmean*mmean)*M_PI_2;
-       double tt=atan2(mmean,lmean);
+       if (l_max<MAX(fabs(lmean),fabs(mmean))) {
+         l_max=MAX(fabs(lmean),fabs(mmean));
+       }
+       double rr,tt;
+       if (spatialreg_basis==0) {
+         rr=lmean;
+         tt=mmean;
+       } else {
+         /* transform l,m in [-1,1] to r in [0,pi/2],theta [0,2*pi] */
+         rr=sqrt(lmean*lmean+mmean*mmean)*M_PI_2;
+         tt=atan2(mmean,lmean);
+       }
        /* copy coordinates to array, considering hybrid clustering */
        for (int cj=0; cj<carr[ci].nchunk; cj++) {
          ll[idx]=rr;
@@ -358,7 +370,14 @@ sagecal_master(int argc, char **argv) {
       fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
       exit(1);
      }
-     sharmonic_modes(sh_n0,ll,mm,iodata.M,phivec);
+     if (spatialreg_basis==0) {
+      sh_beta=2.0*sqrt(l_max*l_max/(double)iodata.M); /* scale ~ sqrt(range(l)*delta(l)) or m */
+      printf("shaplet scale %lf\n",sh_beta);
+      /* shapelet basis: real, so copy to complex part */
+      shapelet_modes(sh_n0,sh_beta,ll,mm,iodata.M,phivec);
+     } else {
+      sharmonic_modes(sh_n0,ll,mm,iodata.M,phivec);
+     }
 #ifdef DEBUG1
      fprintf(dfp,"phi=[\n");
      for (int ci=0; ci<iodata.M*G; ci++) {
@@ -424,8 +443,8 @@ sagecal_master(int argc, char **argv) {
       exit(1);
      }
      for (int ci=0; ci<pn_axes_M; ci++) {
-       pn_ll[ci]=(0.9-(-0.9))*(double)ci/(double)(pn_axes_M)-0.9;
-       pn_mm[ci]=(0.9-(-0.9))*(double)ci/(double)(pn_axes_M)-0.9;
+       pn_ll[ci]=(0.9-(-0.9))*((double)ci+0.5)/(double)(pn_axes_M)-0.9;
+       pn_mm[ci]=(0.9-(-0.9))*((double)ci+0.5)/(double)(pn_axes_M)-0.9;
      }
      if ((pn_theta=(double*)calloc((size_t)pn_grid_M,sizeof(double)))==0) {
       fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
@@ -437,14 +456,24 @@ sagecal_master(int argc, char **argv) {
      }
      for (int ci=0; ci<pn_axes_M; ci++) {
        for (int cj=0; cj<pn_axes_M; cj++) {
-          /* map (l,m) to r [0,pi/2] and theta[0,2*pi] */
-          double rr=sqrt(pn_ll[ci]*pn_ll[ci]+pn_mm[cj]*pn_mm[cj])*M_PI_2;
-          double tt=atan2(pn_mm[cj],pn_ll[ci]);
-          pn_theta[ci*pn_axes_M+cj]=rr;
-          pn_phi[ci*pn_axes_M+cj]=tt;
+          if (spatialreg_basis==0) {
+           pn_theta[ci*pn_axes_M+cj]=pn_ll[ci];
+           pn_phi[ci*pn_axes_M+cj]=pn_mm[cj];
+          } else {
+           /* map (l,m) to r [0,pi/2] and theta[0,2*pi] */
+           double rr=sqrt(pn_ll[ci]*pn_ll[ci]+pn_mm[cj]*pn_mm[cj])*M_PI_2;
+           double tt=atan2(pn_mm[cj],pn_ll[ci]);
+           pn_theta[ci*pn_axes_M+cj]=rr;
+           pn_phi[ci*pn_axes_M+cj]=tt;
+          }
        }
      }
-     sharmonic_modes(sh_n0,pn_theta,pn_phi,pn_grid_M,pn_phivec);
+
+     if (spatialreg_basis==0) {
+       shapelet_modes(sh_n0,sh_beta,pn_theta,pn_phi,pn_grid_M,pn_phivec);
+     } else {
+       sharmonic_modes(sh_n0,pn_theta,pn_phi,pn_grid_M,pn_phivec);
+     }
      /* Phi = I \kron phi_vec */
      if ((pn_Phi=(complex double*)calloc((size_t)pn_grid_M*2*G*2,sizeof(complex double)))==0) {
       fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
@@ -1103,6 +1132,9 @@ sagecal_master(int argc, char **argv) {
         exit(1);
        }
        fprintf(dfp,"N=%d;\nM=%d;\n",iodata.N,pn_axes_M);
+       fprintf(dfp,"%% each station will have M*M*5 values, offset 8*N\n");
+       fprintf(dfp,"%% for example J1_11=Jvec(1:4*N:end); J1_11=reshape(J1_11,M,M);\n");
+       fprintf(dfp,"%% and J2_11=Jvec(1*4+1:4*N:end);\n");
        fprintf(dfp,"Jvec=[\n");
        for (int ci=0; ci<pn_grid_M*4*iodata.N; ci++) {
          fprintf(dfp,"%lf+j*(%lf)\n",pn_J[2*ci],pn_J[2*ci+1]);
