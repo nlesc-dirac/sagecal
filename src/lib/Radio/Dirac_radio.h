@@ -67,7 +67,7 @@
 /* max source name length, increase it if names get longer */
 #define MAX_SNAME 2048
 
-/* soure types */
+/* source types */
 #define STYPE_POINT 0
 #define STYPE_GAUSSIAN 1
 #define STYPE_DISK 2
@@ -78,6 +78,10 @@
 #define SIMUL_ONLY 1 /* only predict model */
 #define SIMUL_ADD 2 /* add to input */
 #define SIMUL_SUB 3 /* subtract from input */
+
+/* basis functions for spatial regularization */
+#define SP_SHAPELET 0 /* rectangular shapelet basis */
+#define SP_SHARMONIC 1 /* spherical harmonic basis */
 
 #include <Dirac_common.h>
 
@@ -383,6 +387,15 @@ sharmonic_modes(int n0,double *th, double *ph, int Nt, complex double *output);
  */
 extern int
 shapelet_modes(int n0,double beta, double *x, double *y, int N, complex double *output);
+
+
+extern int
+shapelet_product_tensor(int L, int M, int N, double alpha, double beta, double gamma,
+    double *B);
+
+extern int
+shapelet_product(int L, int M, int N, double alpha, double beta, double gamma,
+    double *h, double *f, double *g, double *C);
 /****************************** predict_withbeam.c ****************************/
 /* precalculate cluster coherencies
   u,v,w: u,v,w coordinates (wavelengths) size Nbase*tilesz x 1 

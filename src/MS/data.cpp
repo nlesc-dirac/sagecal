@@ -67,6 +67,7 @@ int Data::doBeam=DOBEAM_NONE; /* if >0, enable LOFAR beam model, DOBEAM_ARRAY: a
 int Data::phaseOnly=0; /* if >0, enable phase only correction */
 int Data::solver_mode=SM_RTR_OSRLM_RLBFGS; /* use RTR+LBFGS by default */
 int Data::ccid=-99999;
+int Data::ddid=-99999;
 double Data::rho=1e-9;
 char *Data::solfile=NULL;
 char *Data::initsolfile=NULL;

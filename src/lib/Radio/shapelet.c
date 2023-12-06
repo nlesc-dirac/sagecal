@@ -287,7 +287,7 @@ shapelet_modes(int n0,double beta, double *x, double *y, int N, complex double *
 	 for (n1=0; n1<(n0); n1++) {
       // per each point: nmodes values, idx: iterate over model for given point
       double prod=shpvl[xindex[xci]][n1]*shpvl[yindex[xci]][n2];
-      output[n0*n0*xci+n2*n0+n1]=prod+_Complex_I*prod;
+      output[n0*n0*xci+n2*n0+n1]=prod+_Complex_I*0.0;//real-valued basis;
 		}
 	 }
 	}
@@ -315,5 +315,312 @@ shapelet_modes(int n0,double beta, double *x, double *y, int N, complex double *
 	 free(shpvl[xci]);
 	}
 	free(shpvl);
+  return 0;
+}
+
+
+/* calculate recurrance relation
+ * equations
+% if l+m+n odd, = H(l,m,n)= 0
+% H(0,0,0)=1, circular symmetry
+% H(l+1,m,n) = 2 l (a^2-1) H(l-1,m,n) + 2m a b H(l,m-1,n) + 2n a c H(l,m,n-1)
+% H(l,m+1,n) = 2 m (b^2-1) H(l,m-1,n) + 2n b c H(l,m,n-1) + 2l b a H(l-1,m,n)
+% H(l,m,n+1) = 2 n (c^2-1) H(l,m,n-1) + 2l c a H(l-1,m,n) + 2m c b H(l,m-1,n)
+l: 0..L-1, m: 0..M-1, n: 0..N-1
+
+L: LxMxN storage
+*/
+static int
+L_mat(int L, int M, int N, double a, double b, double c, double *H) {
+
+  int *flag;
+  /* Note: initially all flags are set to invalid: or to zero */
+  if ((flag=(int*)calloc((size_t)(L*M*N),sizeof(int)))==0) {
+	  fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
+	  exit(1);
+	}
+  /* as the tensor is updated, corresponding flags are also set to valid */
+  for (int l=0; l<L; l++) {
+    for (int m=0; m<M; m++) {
+      for (int n=0; n<N; n++) {
+        /* H(0,0,0)=1 */
+        if (!l && !m && !n) {
+          H[l*M*N+m*N+n]=1.0;
+          flag[l*M*N+m*N+n]=1;
+        }
+        /* l+m+n odd, H(l,m,n)= 0 */
+        if ((l+m+n)%2 !=0) {
+          H[l*M*N+m*N+n]=0.0;
+          flag[l*M*N+m*N+n]=1;
+        }
+
+        if ((n+1<=N-1) && ((l+m+n+1)%2 ==0)) {
+          /* valid lhs l,m,n+1 */
+          /* H(l,m,n+1) = 2 n (c^2-1) H(l,m,n-1) + 2l c a H(l-1,m,n) + 2m c b H(l,m-1,n)
+           * find valid rhs */
+          double rhs=0.0;
+          if ((n-1>=0) && flag[l*M*N+m*N+n-1]) {
+            rhs += ((double)2*n)*(c*c-1.0)*H[l*M*N+m*N+n-1];
+          }
+          if ((l-1>=0) && flag[(l-1)*M*N+m*N+n]) {
+            rhs += ((double)2*l)*(c*a)*H[(l-1)*M*N+m*N+n];
+          }
+          if ((m-1>=0) && flag[l*M*N+(m-1)*N+n]) {
+            rhs += ((double)2*m)*(c*b)*H[l*M*N+(m-1)*N+n];
+          }
+          if (rhs!=0.0) {
+            H[l*M*N+m*N+n+1]=rhs;
+            flag[l*M*N+m*N+n+1]=1;
+          }
+        }
+
+        if ((m+1<=M-1) && ((l+m+1+n)%2 ==0)) {
+          /* valid lhs l,m+1,n */
+          /* H(l,m+1,n) = 2 m (b^2-1) H(l,m-1,n) + 2n b c H(l,m,n-1) + 2l b a H(l-1,m,n)
+           * find valid rhs */
+          double rhs=0.0;
+          if ((m-1>=0) && flag[l*M*N+(m-1)*N+n]) {
+            rhs += ((double)2*m)*(b*b-1.0)*H[l*M*N+(m-1)*N+n];
+          }
+          if ((n-1>=0) && flag[l*M*N+m*N+n-1]) {
+            rhs += ((double)2*n)*(b*c)*H[l*M*N+m*N+n-1];
+          }
+          if ((l-1>=0) && flag[(l-1)*M*N+m*N+n]) {
+            rhs += ((double)2*l)*(b*a)*H[(l-1)*M*N+m*N+n];
+          }
+          if (rhs!=0.0) {
+            H[l*M*N+(m+1)*N+n]=rhs;
+            flag[l*M*N+(m+1)*N+n]=1;
+          }
+        }
+
+        if ((l+1<=L-1) && ((l+1+m+n)%2 ==0)) {
+          /* valid lhs l+1,m,n */
+          /* H(l+1,m,n) = 2 l (a^2-1) H(l-1,m,n) + 2m a b H(l,m-1,n) + 2n a c H(l,m,n-1)
+           * find valid rhs */
+          double rhs=0.0;
+          if ((l-1>=0) && flag[(l-1)*M*N+m*N+n]) {
+            rhs += ((double)2*l)*(a*a-1.0)*H[(l-1)*M*N+m*N+n];
+          }
+          if ((m-1>=0) && flag[l*M*N+(m-1)*N+n]) {
+            rhs += ((double)2*m)*(a*b)*H[l*M*N+(m-1)*N+n];
+          }
+          if ((n-1>=0) && flag[l*M*N+m*N+n-1]) {
+            rhs += ((double)2*n)*(a*c)*H[l*M*N+m*N+n-1];
+          }
+          if (rhs!=0.0) {
+            H[(l+1)*M*N+m*N+n]=rhs;
+            flag[(l+1)*M*N+m*N+n]=1;
+          }
+        }
+
+      }
+    }
+  }
+
+  free(flag);
+
+  return 0;
+}
+
+
+/* pre-calculate tensor B used in shapelet multiplication (1D)
+ * h = f x g
+ * where f, g, and h are given as (real space) 1D shapelet decompositions
+ * h: L modes, alpha scale
+ * f: M modes, beta scale
+ * g: N modes, gamma scale
+ * output :
+ * B: LxMxN tensor C(l,m,n) : out
+ * The same B can be used in 2D decompositions by using the (kronecker) product
+ */
+int
+shapelet_product_tensor(int L, int M, int N, double alpha, double beta, double gamma,
+    double *B) {
+
+  double *H;
+  if ((H=(double*)calloc((size_t)(L*M*N),sizeof(double)))==0) {
+	  fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
+	  exit(1);
+	}
+
+  double nu=1.0/sqrt(1.0/(alpha*alpha)+1.0/(beta*beta)+1.0/(gamma*gamma));
+  L_mat(L, M, N, sqrt(2.0)*nu/alpha, sqrt(2.0)*nu/beta, sqrt(2.0)*nu/gamma, H);
+
+  /* setup factorial array : max value of L,M or N*/
+  double *fact;
+  int n0=MAX(L,MAX(M,N));
+  if ((fact=(double*)calloc((size_t)(n0),sizeof(double)))==0) {
+	  fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
+	  exit(1);
+	}
+  fact[0]=1.0;
+	for (int ci=1; ci<(n0); ci++) {
+		fact[ci]=(ci)*fact[ci-1];
+	}
+
+  /* B_lmn(a,b,c) = nu/sqrt(-2^{l+m+n} sqrt(pi) l! m! n! a b c) L_lmn(sqrt(2)nu/a, sqrt(2)nu/b, sqrt(2)nu/c)
+  */
+  for (int l=0; l<L; l++) {
+    for (int m=0; m<M; m++) {
+      for (int n=0; n<N; n++) {
+        /* only even l+m+n are non zero, so -2^{l+m+n}=2^{l+m+n} */
+        if ((l+m+n)%2 ==0) {
+         /* note that we use column major order in B, row m and col n = m+nM, NOT mN+n */
+         B[l*M*N+m+n*M]=nu/sqrt((double)(1<<(l+m+n))*sqrt(M_PI)* fact[l]*fact[m]*fact[n]*alpha*beta*gamma) * H[l*M*N+m*N+n];
+        } else {
+         B[l*M*N+m+n*M]=0.0;
+        }
+      }
+    }
+  }
+
+  free(H);
+  free(fact);
+
+  return 0;
+}
+
+
+/* find C=kron(A,B)
+ * A: MxN input
+ * B: MxN input
+ * Note: A and B can be the same
+ * C: M^2 x N^2 output
+ * All matrices in column major order, (row i, col j) = i + j*M
+ */
+static int
+kronecker_prod(int M, int N, double *A, double *B, double *C) {
+  /* storage for a_ij B */
+  double *aB;
+  if ((aB=(double*)calloc((size_t)(M*N),sizeof(double)))==0) {
+    fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
+    exit(1);
+  }
+  printf("A=\n");
+  for (int i=0; i<M; i++) {
+    for (int j=0; j<N; j++) {
+      printf("%lf ",A[i+j*M]);
+    }
+    printf("\n");
+  }
+  printf("B=\n");
+  for (int i=0; i<M; i++) {
+    for (int j=0; j<N; j++) {
+      printf("%lf ",B[i+j*M]);
+    }
+    printf("\n");
+  }
+
+
+  for (int i=0; i<M; i++) {
+    for (int j=0; j<N; j++) {
+      /* find a_ij B */
+      my_dcopy(M*N,B,1,aB,1);
+      my_dscal(M*N,A[i+j*M],aB);
+
+      /* starting location of C to copy a_ij B */
+      /* i rows of M blocks = iM, j columns of N blocks, each of size M^2 = jN*M^2 */
+      int st=i*M+j*N*(M*M);
+      /* start copying N columns of a_ij B to C */
+      for (int col=0; col<N; col++) {
+        my_dcopy(M,&aB[col*M],1,&C[st+col*M*M],1);
+      }
+    }
+  }
+
+  printf("C=\n");
+  for (int i=0; i<M*M; i++) {
+    for (int j=0; j<N*N; j++) {
+      printf("%lf ",C[i+j*M*M]);
+    }
+    printf("\n");
+  }
+  free(aB);
+  return 0;
+}
+
+/* find in terms of shapelet decompositions (2D)
+ * h = f x g
+ * where f, g, and h are given as (real space) shapelet decompositions
+ * h: L^2 modes, alpha scale
+ * f: M^2 modes, beta scale
+ * g: N^2 modes, gamma scale
+ * input : f, g
+ * output : h
+ * h: LxL modes : out
+ * f: MxM modes : in 
+ * g: NxN modes : in
+ * C: LxMxN tensor C(l,m,n) : in (pre-calculated)
+ */
+int
+shapelet_product(int L, int M, int N, double alpha, double beta, double gamma,
+    double *h, double *f, double *g, double *C) {
+
+  for (int m=0; m<M*M; m++) {
+    printf("f %d %lf\n",m,f[m]);
+  }
+  for (int n=0; n<N*N; n++) {
+    printf("g %d %lf\n",n,g[n]);
+  }
+  for (int l=0; l<L; l++) {
+    printf("%d =\n",l);
+    for (int m=0; m<M; m++) {
+      for (int n=0; n<N; n++) {
+         /* column major order */
+         printf("%lf ",C[l*M*N+m+n*M]);
+      }
+      printf("\n");
+    }
+  }
+
+  /* find f x g^T : M^2 x N^2 matrix, stored as M^2*N^2 vector */
+  double *fg;
+  if ((fg=(double*)calloc((size_t)(M*M*N*N),sizeof(double)))==0) {
+    fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
+    exit(1);
+  }
+  for (int ci=0; ci<N*N; ci++) {
+    my_dcopy(M*M,f,1,&fg[ci*M*M],1);
+    my_dscal(M*M,g[ci],&fg[ci*M*M]);
+  }
+
+  printf("fg=\n");
+  for (int ci=0; ci<M*M; ci++) {
+    for (int cj=0; cj<N*N; cj++) {
+      printf("%lf ",fg[ci+cj*M*M]);
+    }
+    printf("\n");
+  }
+
+  /* storage to find kronecker product */
+  double *Cl;
+  if ((Cl=(double*)calloc((size_t)(M*M*N*N),sizeof(double)))==0) {
+    fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
+    exit(1);
+  }
+  for (int l1=0; l1<L; l1++) {
+    double *Cl1=&C[l1*M*N]; //C[l1,:,:] MxN matrix
+    for (int l2=0; l2<L; l2++) {
+      double *Cl2=&C[l2*M*N]; //C[l2,:,:] MxN matrix
+      /* find kronecker product Cl=kron(Cl2,Cl1) */
+      kronecker_prod(M,N,Cl2,Cl1,Cl);
+      /* Hadamard prod Cl . fg and sum */
+      double sum=0.0;
+#pragma GCC ivdep
+      for (int ci=0; ci<M*M*N*N; ci++) {
+        sum+=Cl[ci]*fg[ci];
+      }
+      printf("h(%d,%d) %lf\n",l1,l2,sum);
+      h[l1+l2*L]=sum;
+    }
+  }
+
+  for (int l=0; l<L*L; l++) {
+    printf("h %d %lf\n",l,h[l]);
+  }
+
+  free(fg);
+  free(Cl);
   return 0;
 }

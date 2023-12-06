@@ -160,6 +160,7 @@ namespace Data
     extern int linsolv;
     extern int solver_mode;
     extern int ccid;
+    extern int ddid; /* diffuse sky model cluster id */
     extern double rho;
     extern char *solfile;
     extern char *initsolfile;
