@@ -301,6 +301,7 @@ sagecal_master(int argc, char **argv) {
    complex double *phivec=0; /* vector to store spherical harmonic modes n0^2 per each  polar coordinate */
    complex double *Phi=0; /* basis matrices 2Gx2, M times */
    complex double *Phikk=0; /* sum of Phi_k x Phi_k^H : 2Gx2G */
+   int sp_diffuse_id=-1; /* if -D 'id' gives a matching cluster id, set this to matching ordinal number in 0,1,... */
    if (Data::spatialreg) {
 #ifdef DEBUG1
     if ((dfp=fopen("debug.m","w+"))==0) {
@@ -329,6 +330,11 @@ sagecal_master(int argc, char **argv) {
      int idx=0;
      /* Note: cluster odering is in reverse */
      for (int ci=0; ci<M1; ci++) {
+       /* check if a cluster id exists matching Data::ddid */
+       if (carr[ci].id==Data::ddid) {
+         sp_diffuse_id=ci;
+         printf("Cluster id %d (ordinal %d) is being used as foreground (diffuse) model\n",Data::ddid,sp_diffuse_id);
+       }
        if (carr[ci].N>1) {
         if ((P=(double*)calloc((size_t)carr[ci].N,sizeof(double)))==0) {
          fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
@@ -452,79 +458,10 @@ sagecal_master(int argc, char **argv) {
    }
 #endif
 
-   double *pn_ll=0,*pn_mm=0;
-   double *pn_phi=0,*pn_theta=0;
+   /**************** for plotting of spatial model *****************/
    int pn_axes_M=30; /* l,m axis size M */
-   int pn_grid_M=pn_axes_M*pn_axes_M;
-   complex double *pn_phivec=0; /* basis vector */
-   complex double *pn_Phi=0; /* basis matrix */
-   complex double *pn_Zbar=0; /* constraint for each pixel, 2*Npoly*N x 2 x pn_grid_M */
-   double *pn_J=0; /* storage for B_f Z, for selected freq, all pixels, (complex) 2Nx2xpn_grid_M */
-   if (Data::spatialreg) { 
-     /* plotting : initialize */
-     if ((pn_ll=(double*)calloc((size_t)pn_axes_M,sizeof(double)))==0) {
-      fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
-      exit(1);
-     }
-     if ((pn_mm=(double*)calloc((size_t)pn_axes_M,sizeof(double)))==0) {
-      fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
-      exit(1);
-     }
-     if ((pn_phivec=(complex double*)calloc((size_t)pn_grid_M*G,sizeof(complex double)))==0) {
-      fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
-      exit(1);
-     }
-     for (int ci=0; ci<pn_axes_M; ci++) {
-       pn_ll[ci]=(0.9-(-0.9))*((double)ci+0.5)/(double)(pn_axes_M)-0.9;
-       pn_mm[ci]=(0.9-(-0.9))*((double)ci+0.5)/(double)(pn_axes_M)-0.9;
-     }
-     if ((pn_theta=(double*)calloc((size_t)pn_grid_M,sizeof(double)))==0) {
-      fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
-      exit(1);
-     }
-     if ((pn_phi=(double*)calloc((size_t)pn_grid_M,sizeof(double)))==0) {
-      fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
-      exit(1);
-     }
-     for (int ci=0; ci<pn_axes_M; ci++) {
-       for (int cj=0; cj<pn_axes_M; cj++) {
-          if (spatialreg_basis==SP_SHAPELET) {
-           pn_theta[ci*pn_axes_M+cj]=pn_ll[ci];
-           pn_phi[ci*pn_axes_M+cj]=pn_mm[cj];
-          } else {
-           /* map (l,m) to r [0,pi/2] and theta[0,2*pi] */
-           double rr=sqrt(pn_ll[ci]*pn_ll[ci]+pn_mm[cj]*pn_mm[cj])*M_PI_2;
-           double tt=atan2(pn_mm[cj],pn_ll[ci]);
-           pn_theta[ci*pn_axes_M+cj]=rr;
-           pn_phi[ci*pn_axes_M+cj]=tt;
-          }
-       }
-     }
-
-     if (spatialreg_basis==SP_SHAPELET) {
-       shapelet_modes(sh_n0,sh_beta,pn_theta,pn_phi,pn_grid_M,pn_phivec);
-     } else {
-       sharmonic_modes(sh_n0,pn_theta,pn_phi,pn_grid_M,pn_phivec);
-     }
-     /* Phi = I \kron phi_vec */
-     if ((pn_Phi=(complex double*)calloc((size_t)pn_grid_M*2*G*2,sizeof(complex double)))==0) {
-      fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
-      exit(1);
-     }
-     for (int ci=0; ci<pn_grid_M; ci++) {
-       memcpy(&pn_Phi[ci*2*G*2],&pn_phivec[ci*G],G*sizeof(complex double));
-       memcpy(&pn_Phi[ci*2*G*2+3*G],&pn_phivec[ci*G],G*sizeof(complex double));
-     }
-
-     if ((pn_Zbar=(complex double*)calloc((size_t)iodata.N*4*Npoly*pn_grid_M,sizeof(complex double)))==0) {
-       fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
-       exit(1);
-     }
-     if ((pn_J=(double*)calloc((size_t)iodata.N*8*pn_grid_M,sizeof(double)))==0) {
-       fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
-       exit(1);
-     }
-   }
+   int pn_nfreq=0; /* freq to plot */
+   /**************** end plotting of spatial model *****************/
 
     /* ADMM memory : allocated together for all MS */
     double *Z,*Y,*z;
@@ -728,6 +665,15 @@ sagecal_master(int argc, char **argv) {
     /* each Npoly blocks is bases evaluated at one freq, catch if Npoly=1 */
     setup_polynomials(B, Npoly, iodata.Nms, iodata.freqs, iodata.freq0,(Npoly==1?1:PolyType));
 
+    if (Data::spatialreg && sp_diffuse_id>=0) {
+       /* before admm iteration, send all necessary aux info */
+       for (int cm=0; cm<nslaves; cm++) {
+         MPI_Send(&G, 1, MPI_INT, cm+1,TAG_SPATIAL, MPI_COMM_WORLD);
+         MPI_Send(&iodata.Nms, 1, MPI_INT, cm+1,TAG_SPATIAL, MPI_COMM_WORLD);
+         MPI_Send(B, Npoly*iodata.Nms, MPI_DOUBLE, cm+1,TAG_SPATIAL, MPI_COMM_WORLD);
+       }
+    }
+
 
     /* determine how many iterations are needed */
     int Ntime=(iodata.totalt+iodata.tilesz-1)/iodata.tilesz;
@@ -777,6 +723,8 @@ sagecal_master(int argc, char **argv) {
        my_dcopy(iodata.M,arho,1,&rhok[cm*iodata.M],1);
        my_dscal(iodata.M,fratio[cm],&rhok[cm*iodata.M]);
       }
+
+
 
       /* Note(x): sum rho*B(:,i)*B(:,i)^T and its inverse changes with iteration, because rho might be updated */
       /* find sum fratio[i] * B(:,i)B(:,i)^T, and its pseudoinverse */
@@ -914,7 +862,7 @@ sagecal_master(int argc, char **argv) {
           cout<<"Timeslot:"<<ct<<" ADMM:"<<admm<<endl;
          }
 
-         if (Data::spatialreg && !(admm%admm_cadence)) {
+         if (Data::spatialreg && !(admm%Data::admm_cadence)) {
            /*SP: spatial update */
            /* 1. update Zbar  from global sol Z (copy) */
            memcpy(Zbar,Z,iodata.N*8*Npoly*iodata.M*sizeof(double));
@@ -1014,6 +962,16 @@ sagecal_master(int argc, char **argv) {
            Scurrent[cm]=(Sbegin[cm]+Scurrent[cm]>=Send[cm]?0:Scurrent[cm]+1);
           }
         }
+
+        /* spatial regularization with a valid diffuse model: send each worker updated spatial model for its next MS */
+        if (Data::spatialreg && sp_diffuse_id>=0 && !(admm%Data::admm_cadence)) {
+          cout<<"Master: send spatial model to workers size "<< iodata.N*8*Npoly*G<< endl;
+          for (int cm=0; cm<nslaves; cm++) {
+             MPI_Send(Zspat, iodata.N*8*Npoly*G, MPI_DOUBLE, cm+1,TAG_SPATIAL, MPI_COMM_WORLD);
+          }
+        }
+
+
       }
       
       if (Data::use_global_solution) {
@@ -1128,58 +1086,9 @@ sagecal_master(int argc, char **argv) {
 
      if (Data::spatialreg) { 
        /* plotting : create plot */
-       /* Z_k = Z Phi_k */
-       for(int cm=0; cm<pn_grid_M; cm++) {
-         my_zgemm('N','N',2*Npoly*iodata.N,2,2*G,1.0,Zspat,2*Npoly*iodata.N,&pn_Phi[cm*2*G*2],2*G,0.0,&pn_Zbar[cm*2*Npoly*iodata.N*2],2*Npoly*iodata.N);
-       }
-       /* evaluate B_f Z_k, k all pixels */
-       int nfreq=0; /* selected freq */
-       for (int p=0; p<pn_grid_M; p++) {
-         memset(&pn_J[8*iodata.N*p],0,sizeof(double)*(size_t)iodata.N*8);
-         for (int ci=0; ci<Npoly; ci++) {
-           my_daxpy(8*iodata.N, (double*)&pn_Zbar[p*4*iodata.N*Npoly+ci*4*iodata.N], B[nfreq*Npoly+ci], &pn_J[8*iodata.N*p]);
-         }
-       }
-       /* re-arrange pixel values into pn_grid_M blocks, N times for stations */
-       double *pixval=0;
-       if ((pixval=(double*)calloc((size_t)pn_grid_M*iodata.N,sizeof(double)))==0) {
-        fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
-        exit(1);
-       }
-       for (int cm=0; cm<iodata.N; cm++) {
-#pragma GCC ivdep
-         for (int ci=0; ci<pn_grid_M; ci++) {
-           pixval[ci+cm*pn_grid_M]=pn_J[8*cm+ci*8*iodata.N]*pn_J[8*cm+ci*8*iodata.N]
-             +pn_J[8*cm+ci*8*iodata.N+1]*pn_J[8*cm+ci*8*iodata.N+1]
-             +pn_J[8*cm+ci*8*iodata.N+6]*pn_J[8*cm+ci*8*iodata.N+6]
-             +pn_J[8*cm+ci*8*iodata.N+7]*pn_J[8*cm+ci*8*iodata.N+7];
-         }
-       }
        std::string imagename=std::string("J_")+std::to_string(ct)+std::string(".ppm");
-       convert_tensor_to_image(pixval, imagename.c_str(), iodata.N, pn_axes_M);
-#ifdef DEBUG1
-       FILE *dfp;
-       if ((dfp=fopen("debug.m","w+"))==0) {
-        fprintf(stderr,"%s: %d: no file\n",__FILE__,__LINE__);
-        exit(1);
-       }
-       fprintf(dfp,"N=%d;\nM=%d;\n",iodata.N,pn_axes_M);
-       fprintf(dfp,"%% each station will have M*M*5 values, offset 8*N\n");
-       fprintf(dfp,"%% for example J1_11=Jvec(1:4*N:end); J1_11=reshape(J1_11,M,M);\n");
-       fprintf(dfp,"%% and J2_11=Jvec(1*4+1:4*N:end);\n");
-       fprintf(dfp,"Jvec=[\n");
-       for (int ci=0; ci<pn_grid_M*4*iodata.N; ci++) {
-         fprintf(dfp,"%lf+j*(%lf)\n",pn_J[2*ci],pn_J[2*ci+1]);
-       }
-       fprintf(dfp,"];\n");
-       fprintf(dfp,"Pix=[\n");
-       for (int ci=0; ci<pn_grid_M*iodata.N; ci++) {
-         fprintf(dfp,"%lf\n",pixval[ci]);
-       }
-       fprintf(dfp,"];\n");
-       fclose(dfp);
-#endif /* DEBUG1 */
-       free(pixval);
+       /* this is slow, because the basis vectors need to be re-calculated, but this keeps the code cleaner */
+       plot_spatial_model(Zspat,B,Npoly,iodata.N,sh_n0,iodata.Nms,pn_axes_M,pn_nfreq,0,spatialreg_basis,sh_beta,imagename.c_str());
      }
 
     } /* time */
@@ -1195,18 +1104,6 @@ sagecal_master(int argc, char **argv) {
       if (Data::spatialreg) {
         fclose(sp_sfp);
       }
-    }
-
-    if (Data::spatialreg) { 
-       /* plotting : free resources */
-       free(pn_ll);
-       free(pn_mm);
-       free(pn_theta);
-       free(pn_phi);
-       free(pn_phivec);
-       free(pn_Phi);
-       free(pn_Zbar);
-       free(pn_J);
     }
 
 #ifdef DEBUG

@@ -48,6 +48,10 @@
 #define CLM_INFO_SZ       10
 #define CLM_DBL_MAX       1E12    /* max double value */
 
+/* basis functions for spatial regularization */
+#define SP_SHAPELET 0 /* rectangular shapelet basis */
+#define SP_SHARMONIC 1 /* spherical harmonic basis */
+
 /* structures to store extra source info for extended sources */
 typedef struct exinfo_gaussian_ {
   double eX,eY,eP; /* major,minor,PA */

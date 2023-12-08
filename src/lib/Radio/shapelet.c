@@ -23,6 +23,7 @@
 #include <string.h>
 #include <math.h>
 
+#include "Dirac.h"
 #include "Dirac_radio.h"
 
 /* evaluate Hermite polynomial value using recursion
@@ -623,4 +624,178 @@ shapelet_product(int L, int M, int N, double alpha, double beta, double gamma,
   free(fg);
   free(Cl);
   return 0;
+}
+
+
+
+/* 
+ * Zspat: spatial model N*4*Npoly*G 
+ * B: consensus polynomials Npoly*Nfreq
+ * Npoly: consensus poly (in freq) terms
+ * N: stations
+ * n0: spatial terms (G = n0 x n0)
+ * axes_M: image size axes_M x axes_M
+ * freq: which freq to plot ? 0...Nfreq-1
+ * plot_type: what to plot, 0: ||J||^2, ....
+ * basis: spatial basis type: SP_SHAPELET, SP_SHARMONIC
+ * beta: for shapelet basis, scale factor
+ * filename: output filename
+ *
+ */
+int
+plot_spatial_model(complex double *Zspat, double *B, int Npoly, int N, int n0, int Nfreq, int axes_M, int freq, int plot_type, int spatialreg_basis, double beta, const char *filename) {
+
+   int G=n0*n0;
+   double *pn_ll=0,*pn_mm=0;
+   double *pn_phi=0,*pn_theta=0;
+   int pn_grid_M=axes_M*axes_M;
+   complex double *pn_phivec=0; /* basis vector */
+   complex double *pn_Phi=0; /* basis matrix */
+   complex double *pn_Zbar=0; /* constraint for each pixel, 2*Npoly*N x 2 x pn_grid_M */
+   double *pn_J=0; /* storage for B_f Z, for selected freq, all pixels, (complex) 2Nx2xpn_grid_M */
+
+
+   /* plotting : initialize */
+   if ((pn_ll=(double*)calloc((size_t)axes_M,sizeof(double)))==0) {
+      fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
+      exit(1);
+   }
+   if ((pn_mm=(double*)calloc((size_t)axes_M,sizeof(double)))==0) {
+      fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
+      exit(1);
+   }
+   if ((pn_phivec=(complex double*)calloc((size_t)pn_grid_M*G,sizeof(complex double)))==0) {
+      fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
+      exit(1);
+   }
+   for (int ci=0; ci<axes_M; ci++) {
+       pn_ll[ci]=(0.9-(-0.9))*((double)ci+0.5)/(double)(axes_M)-0.9;
+       pn_mm[ci]=(0.9-(-0.9))*((double)ci+0.5)/(double)(axes_M)-0.9;
+   }
+   if ((pn_theta=(double*)calloc((size_t)pn_grid_M,sizeof(double)))==0) {
+      fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
+      exit(1);
+   }
+   if ((pn_phi=(double*)calloc((size_t)pn_grid_M,sizeof(double)))==0) {
+      fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
+      exit(1);
+   }
+
+   for (int ci=0; ci<axes_M; ci++) {
+       for (int cj=0; cj<axes_M; cj++) {
+          if (spatialreg_basis==SP_SHAPELET) {
+           pn_theta[ci*axes_M+cj]=pn_ll[ci];
+           pn_phi[ci*axes_M+cj]=pn_mm[cj];
+          } else {
+           /* map (l,m) to r [0,pi/2] and theta[0,2*pi] */
+           double rr=sqrt(pn_ll[ci]*pn_ll[ci]+pn_mm[cj]*pn_mm[cj])*M_PI_2;
+           double tt=atan2(pn_mm[cj],pn_ll[ci]);
+           pn_theta[ci*axes_M+cj]=rr;
+           pn_phi[ci*axes_M+cj]=tt;
+          }
+       }
+   }
+
+   if (spatialreg_basis==SP_SHAPELET) {
+       shapelet_modes(n0,beta,pn_theta,pn_phi,pn_grid_M,pn_phivec);
+   } else {
+       sharmonic_modes(n0,pn_theta,pn_phi,pn_grid_M,pn_phivec);
+   }
+   /* Phi = I \kron phi_vec */
+   if ((pn_Phi=(complex double*)calloc((size_t)pn_grid_M*2*G*2,sizeof(complex double)))==0) {
+      fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
+      exit(1);
+   }
+   for (int ci=0; ci<pn_grid_M; ci++) {
+       memcpy(&pn_Phi[ci*2*G*2],&pn_phivec[ci*G],G*sizeof(complex double));
+       memcpy(&pn_Phi[ci*2*G*2+3*G],&pn_phivec[ci*G],G*sizeof(complex double));
+   }
+
+   if ((pn_Zbar=(complex double*)calloc((size_t)N*4*Npoly*pn_grid_M,sizeof(complex double)))==0) {
+       fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
+       exit(1);
+   }
+   if ((pn_J=(double*)calloc((size_t)N*8*pn_grid_M,sizeof(double)))==0) {
+       fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
+       exit(1);
+   }
+
+
+   /* Z_k = Z Phi_k */
+   for(int cm=0; cm<pn_grid_M; cm++) {
+     my_zgemm('N','N',2*Npoly*N,2,2*G,1.0,Zspat,2*Npoly*N,&pn_Phi[cm*2*G*2],2*G,0.0,&pn_Zbar[cm*2*Npoly*N*2],2*Npoly*N);
+   }
+
+   /* evaluate B_f Z_k, k all pixels */
+   for (int p=0; p<pn_grid_M; p++) {
+     memset(&pn_J[8*N*p],0,sizeof(double)*(size_t)N*8);
+     for (int ci=0; ci<Npoly; ci++) {
+       my_daxpy(8*N, (double*)&pn_Zbar[p*4*N*Npoly+ci*4*N], B[freq*Npoly+ci], &pn_J[8*N*p]);
+     }
+   }
+
+   /* re-arrange pixel values into pn_grid_M blocks, N times for stations */
+   double *pixval=0;
+   if ((pixval=(double*)calloc((size_t)pn_grid_M*N,sizeof(double)))==0) {
+        fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
+        exit(1);
+   }
+   for (int cm=0; cm<N; cm++) {
+     if (plot_type==0) { /* ||J||^2 */
+#pragma GCC ivdep
+         for (int ci=0; ci<pn_grid_M; ci++) {
+           pixval[ci+cm*pn_grid_M]=pn_J[8*cm+ci*8*N]*pn_J[8*cm+ci*8*N]
+             +pn_J[8*cm+ci*8*N+1]*pn_J[8*cm+ci*8*N+1]
+             +pn_J[8*cm+ci*8*N+6]*pn_J[8*cm+ci*8*N+6]
+             +pn_J[8*cm+ci*8*N+7]*pn_J[8*cm+ci*8*N+7];
+         }
+     } else if (plot_type==1) { /* angle(J11) */
+#pragma GCC ivdep
+         for (int ci=0; ci<pn_grid_M; ci++) {
+           pixval[ci+cm*pn_grid_M]=atan2(pn_J[8*cm+ci*8*N+1],pn_J[8*cm+ci*8*N]);
+         }
+     } else if (plot_type==2) { /* angle(J22) */
+#pragma GCC ivdep
+         for (int ci=0; ci<pn_grid_M; ci++) {
+           pixval[ci+cm*pn_grid_M]=atan2(pn_J[8*cm+ci*8*N+7],pn_J[8*cm+ci*8*N+6]);
+         }
+     }
+   }
+   convert_tensor_to_image(pixval, filename, N, axes_M);
+
+//#define DEBUG
+#ifdef DEBUG
+       FILE *dfp;
+       if ((dfp=fopen("debug.m","w+"))==0) {
+        fprintf(stderr,"%s: %d: no file\n",__FILE__,__LINE__);
+        exit(1);
+       }
+       fprintf(dfp,"N=%d;\nM=%d;\n",N,axes_M);
+       fprintf(dfp,"%% each station will have M*M*5 values, offset 8*N\n");
+       fprintf(dfp,"%% for example J1_11=Jvec(1:4*N:end); J1_11=reshape(J1_11,M,M);\n");
+       fprintf(dfp,"%% and J2_11=Jvec(1*4+1:4*N:end);\n");
+       fprintf(dfp,"Jvec=[\n");
+       for (int ci=0; ci<pn_grid_M*4*N; ci++) {
+         fprintf(dfp,"%lf+j*(%lf)\n",pn_J[2*ci],pn_J[2*ci+1]);
+       }
+       fprintf(dfp,"];\n");
+       fprintf(dfp,"Pix=[\n");
+       for (int ci=0; ci<pn_grid_M*N; ci++) {
+         fprintf(dfp,"%lf\n",pixval[ci]);
+       }
+       fprintf(dfp,"];\n");
+       fclose(dfp);
+#endif /* DEBUG */
+
+   free(pixval);
+   free(pn_ll);
+   free(pn_mm);
+   free(pn_theta);
+   free(pn_phi);
+   free(pn_phivec);
+   free(pn_Phi);
+   free(pn_Zbar);
+   free(pn_J);
+
+   return 0;
 }

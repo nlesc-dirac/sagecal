@@ -79,10 +79,6 @@
 #define SIMUL_ADD 2 /* add to input */
 #define SIMUL_SUB 3 /* subtract from input */
 
-/* basis functions for spatial regularization */
-#define SP_SHAPELET 0 /* rectangular shapelet basis */
-#define SP_SHARMONIC 1 /* spherical harmonic basis */
-
 #include <Dirac_common.h>
 
 /****************************** readsky.c ****************************/
@@ -388,7 +384,6 @@ sharmonic_modes(int n0,double *th, double *ph, int Nt, complex double *output);
 extern int
 shapelet_modes(int n0,double beta, double *x, double *y, int N, complex double *output);
 
-
 extern int
 shapelet_product_tensor(int L, int M, int N, double alpha, double beta, double gamma,
     double *B);
@@ -396,6 +391,9 @@ shapelet_product_tensor(int L, int M, int N, double alpha, double beta, double g
 extern int
 shapelet_product(int L, int M, int N, double alpha, double beta, double gamma,
     double *h, double *f, double *g, double *C);
+
+extern int
+plot_spatial_model(complex double *Zspat, double *B, int Npoly, int N, int G, int Nfreq, int axes_M, int freq, int plot_type, int basis, double beta, const char *filename);
 /****************************** predict_withbeam.c ****************************/
 /* precalculate cluster coherencies
   u,v,w: u,v,w coordinates (wavelengths) size Nbase*tilesz x 1 
