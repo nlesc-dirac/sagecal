@@ -81,9 +81,10 @@ write_ppm_image(const char* filename, int width, int height, float *buffer) {
 
 
 /* W : tensor each plane (MxM),  N planes
-   write as N squares of size  MxM onto an image (PPM file) */
+   write as N squares of size  MxM onto an image (PPM file) 
+   normalize: if 1, scale each panel to fit to colour range, else if 0, normalize the full panel to have max of 1 */
 int
-convert_tensor_to_image(double *W, const char *filename, int N, int M) {
+convert_tensor_to_image(double *W, const char *filename, int N, int M, int normalize) {
 
  /* determine size of float buffer needed for image */
  int panel_m=(int)ceil(sqrt((double)N));
@@ -101,7 +102,7 @@ convert_tensor_to_image(double *W, const char *filename, int N, int M) {
    exit(1);
  }
 
- /* scale each column of W to fit [0,1] */
+ /* if normalize==1, scale each column of W to fit [0,1] */
  double W_max_diff=0.0;
  double *W_min,*W_max;
  if((W_min=(double*)calloc((size_t)N,sizeof(double)))==0) {
@@ -136,7 +137,7 @@ convert_tensor_to_image(double *W, const char *filename, int N, int M) {
 
  /* copy W to B, also while scaling values to [0,1] */
  for (col=0; col<N; col++) {
-   double scalefactor=1.0/(W_max[col]-W_min[col]);
+   double scalefactor=(normalize?1.0/(W_max[col]-W_min[col]):1.0/W_max_diff);
    /* map each column of MxM values in W to panel (x,y) */
    int x=col%P; // in 0...panel_m-1
    int y=col/P; // in 0...panel_n-1

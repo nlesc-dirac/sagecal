@@ -629,7 +629,7 @@ shapelet_product(int L, int M, int N, double alpha, double beta, double gamma,
 
 
 /* 
- * Zspat: spatial model N*4*Npoly*G 
+ * Zspat: spatial model 4*N*Npoly*G
  * B: consensus polynomials Npoly*Nfreq
  * Npoly: consensus poly (in freq) terms
  * N: stations
@@ -701,7 +701,7 @@ plot_spatial_model(complex double *Zspat, double *B, int Npoly, int N, int n0, i
    } else {
        sharmonic_modes(n0,pn_theta,pn_phi,pn_grid_M,pn_phivec);
    }
-   /* Phi = I \kron phi_vec */
+   /* Phi = I \kron phi_vec : (2Gx2) x pixels */
    if ((pn_Phi=(complex double*)calloc((size_t)pn_grid_M*2*G*2,sizeof(complex double)))==0) {
       fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
       exit(1);
@@ -721,12 +721,12 @@ plot_spatial_model(complex double *Zspat, double *B, int Npoly, int N, int n0, i
    }
 
 
-   /* Z_k = Z Phi_k */
+   /* Z_k = Z Phi_k : (2*2*N x Npoly) x pixels, same row ordering as Z */
    for(int cm=0; cm<pn_grid_M; cm++) {
      my_zgemm('N','N',2*Npoly*N,2,2*G,1.0,Zspat,2*Npoly*N,&pn_Phi[cm*2*G*2],2*G,0.0,&pn_Zbar[cm*2*Npoly*N*2],2*Npoly*N);
    }
 
-   /* evaluate B_f Z_k, k all pixels */
+   /* evaluate B_f Z_k, k all pixels : (2Nx2) x pixels */
    for (int p=0; p<pn_grid_M; p++) {
      memset(&pn_J[8*N*p],0,sizeof(double)*(size_t)N*8);
      for (int ci=0; ci<Npoly; ci++) {
@@ -744,10 +744,14 @@ plot_spatial_model(complex double *Zspat, double *B, int Npoly, int N, int n0, i
      if (plot_type==0) { /* ||J||^2 */
 #pragma GCC ivdep
          for (int ci=0; ci<pn_grid_M; ci++) {
-           pixval[ci+cm*pn_grid_M]=pn_J[8*cm+ci*8*N]*pn_J[8*cm+ci*8*N]
-             +pn_J[8*cm+ci*8*N+1]*pn_J[8*cm+ci*8*N+1]
-             +pn_J[8*cm+ci*8*N+6]*pn_J[8*cm+ci*8*N+6]
-             +pn_J[8*cm+ci*8*N+7]*pn_J[8*cm+ci*8*N+7];
+           pixval[ci+cm*pn_grid_M]=pn_J[8*cm+ci*8*N]*pn_J[8*cm+ci*8*N] // real J11
+             +pn_J[8*cm+ci*8*N+1]*pn_J[8*cm+ci*8*N+1] // imag J11
+             +pn_J[8*cm+ci*8*N+2]*pn_J[8*cm+ci*8*N+2] // real J21
+             +pn_J[8*cm+ci*8*N+3]*pn_J[8*cm+ci*8*N+3] // imag J21
+             +pn_J[8*cm+ci*8*N+4]*pn_J[8*cm+ci*8*N+4] // real J12
+             +pn_J[8*cm+ci*8*N+5]*pn_J[8*cm+ci*8*N+5] // imag J12
+             +pn_J[8*cm+ci*8*N+6]*pn_J[8*cm+ci*8*N+6] // real J22
+             +pn_J[8*cm+ci*8*N+7]*pn_J[8*cm+ci*8*N+7]; // imag J22
          }
      } else if (plot_type==1) { /* angle(J11) */
 #pragma GCC ivdep
@@ -761,7 +765,7 @@ plot_spatial_model(complex double *Zspat, double *B, int Npoly, int N, int n0, i
          }
      }
    }
-   convert_tensor_to_image(pixval, filename, N, axes_M);
+   convert_tensor_to_image(pixval, filename, N, axes_M, 1); // last argument ==1 : normalize
 
 //#define DEBUG
 #ifdef DEBUG

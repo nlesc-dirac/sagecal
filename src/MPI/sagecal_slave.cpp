@@ -393,8 +393,9 @@ cerr<<"Error: Worker "<<myrank<<": Recheck your allocation or reduce number of w
     /* Spatial regularization, used if diffuse sky model is enabled */
     int G;
     int Nms;
-    complex double *Zspat=0; /* 2 Npoly N x 2 G */
+    complex double *Zspat=0; /* storage for spatial model, 2 Npoly N x 2 G */
     double *B=0; /* polynomials in frequency Npoly x Nms */
+    complex double *Zb=0; /* storage for BxZspat, 2 N x 2 G, ordered as 2*2*G x N */
   /**********************************************************/
 
     /* BB */
@@ -508,6 +509,10 @@ cerr<<"Error: Worker "<<myrank<<": Recheck your allocation or reduce number of w
 
          /* do all allocations here */
          if ((Zspat=(complex double*)calloc((size_t)iodata_vec[0].N*4*Npoly*G,sizeof(complex double)))==0) {
+          fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
+          exit(1);
+         }
+         if ((Zb=(complex double*)calloc((size_t)iodata_vec[0].N*4*G,sizeof(complex double)))==0) {
           fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
           exit(1);
          }
@@ -841,9 +846,16 @@ cout<<myrank<<" : "<<cm<<": downweight ratio ("<<iodata_vec[cm].fratio<<") based
         /* find product B x Zspat for a selected frequency */
         /* Zspat: 2N Npoly x 2G, each column (2N Npoly) reduce it to 2N by multiply and sum of Npoly values of B */
         /* B x Zspat : 2N x 2G, order it into 2*2*G x N columns (stations separate) */
-
-  for(int cm=0; cm<mymscount; cm++) {
-  }
+        for(int cm=0; cm<mymscount; cm++) {
+          int ifreq=myids[cm];
+          for (int col=0; col<2*G; col++) {
+            /* work with col of 2N rows */
+            memset(&Zb[col*2*iodata_vec[0].N],0,sizeof(complex double)*(size_t)2*iodata_vec[0].N);
+            for (int np=0; np<Npoly; np++) {
+               my_daxpy(4*iodata_vec[0].N, (double*)&Zspat[col*2*iodata_vec[0].N*Npoly+np*2*iodata_vec[0].N], B[ifreq*Npoly+np], (double*)&Zb[col*2*iodata_vec[0].N]);
+            }
+          }
+        }
       }
       
       /* primal residual : per one real parameter */ 
@@ -1084,6 +1096,7 @@ cout<<myrank<<" : "<<cm<<": downweight ratio ("<<iodata_vec[cm].fratio<<") based
   }
   if (Data::spatialreg && sp_diffuse_id>=0) {
       free(Zspat);
+      free(Zb);
       free(B);
   }
   /**********************************************************/

@@ -460,7 +460,7 @@ sagecal_master(int argc, char **argv) {
 
    /**************** for plotting of spatial model *****************/
    int pn_axes_M=30; /* l,m axis size M */
-   int pn_nfreq=0; /* freq to plot */
+   int pn_nfreq=0;//iodata.Nms-1; /* freq to plot */
    /**************** end plotting of spatial model *****************/
 
     /* ADMM memory : allocated together for all MS */
@@ -502,7 +502,7 @@ sagecal_master(int argc, char **argv) {
     }
     
 
-    complex double *Zbar=0; /* constraint for each direction, 2*Npoly*N x 2 x M */
+    complex double *Zbar=0; /* constraint for each direction, 2Nx2 x Npoly x M */
     complex double *Zspat=0; /* spatial constraint matrix, 2*Npoly*N x 2G */
     double *X=0; /* Lagrange multiplier for spatial reg Z=Zbar, 2*2*Npoly*N x 2 x M (double) */
     /*SP: spatial update */
@@ -865,15 +865,18 @@ sagecal_master(int argc, char **argv) {
          if (Data::spatialreg && !(admm%Data::admm_cadence)) {
            /*SP: spatial update */
            /* 1. update Zbar  from global sol Z (copy) */
+           /* Note the row ordering is same as in Z, 2*2*N x Npoly (for each M) */
            memcpy(Zbar,Z,iodata.N*8*Npoly*iodata.M*sizeof(double));
            /* 2. update Zspat taking proximal step (FISTA) */
            update_spatialreg_fista(Zspat,Zbar,Phikk,Phi,iodata.N,iodata.M,Npoly,G,sh_mu, fista_maxiter);
            /* 3. update Zbar from Zspat, Z_k = Z Phi_k */
+           /* Note the row ordering is 2*2*N x Npoly x M */
            for (int cm=0; cm<iodata.M; cm++) {
              my_zgemm('N','N',2*Npoly*iodata.N,2,2*G,1.0,Zspat,2*Npoly*iodata.N,&Phi[cm*2*G*2],2*G,0.0,&Zbar[cm*2*Npoly*iodata.N*2],2*Npoly*iodata.N);
            }
            /* 4. update X comparing Zbar, Z */
            /* Zerr=Z-Zbar */
+           /* Note the row ordering 2N*2 x Npoly (for each M) */
            my_dcopy(iodata.N*8*Npoly*iodata.M,Z,1,Zerr,1);
            my_daxpy(iodata.N*8*Npoly*iodata.M,(double*)Zbar,-1.0,Zerr);
            /* X = X + alpha (Z - Zbar) */

@@ -1524,7 +1524,7 @@ update_spatialreg_fista(complex double *Z, complex double *Zbar, complex double 
 
 /****************************** pngoutput.c ****************************/
 extern int
-convert_tensor_to_image(double *W, const char *filename, int N, int M);
+convert_tensor_to_image(double *W, const char *filename, int N, int M, int normalize);
 
 /****************************** lmfit.c ****************************/
 /****************************** lmfit_cuda.c ****************************/
