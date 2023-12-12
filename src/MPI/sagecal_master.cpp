@@ -438,7 +438,7 @@ sagecal_master(int argc, char **argv) {
      /* find product Phik*Phik^H (2Gx2G) and add up */
      for (int ci=0; ci<iodata.M; ci++) {
        /* C= alpha * op(A)*op(B)+beta * C */
-       my_zgemm('N','C',2*G,2*G,2,1.0,&Phi[ci*2*G*2],2*G,&Phi[ci*2*G*2],2*G,1.0,Phikk,2*G);
+       my_zgemm('N','C',2*G,2*G,2,1.0+_Complex_I*0.0,&Phi[ci*2*G*2],2*G,&Phi[ci*2*G*2],2*G,1.0+_Complex_I*0.0,Phikk,2*G);
      }
      /* add \lambda I to Phikk */
      for (int ci=0; ci<2*G; ci++) {
@@ -842,9 +842,14 @@ sagecal_master(int argc, char **argv) {
          }
          /* no need to scale by 1/rho above, because Bii is already divided by 1/rho */
          /* add (alpha Zbar - X) if spatial regularization is enabled */
+         /* FIXME Zbar-2col, X,z-1col */
          if (Data::spatialreg && admm>0) {
            for (int cm=0; cm<iodata.M; cm++) {
-             my_daxpy(iodata.N*8*Npoly,(double*)&Zbar[cm*2*Npoly*iodata.N*2],alphak[cm],&z[cm*4*Npoly*iodata.N*2]);
+             //my_daxpy(iodata.N*8*Npoly,(double*)&Zbar[cm*2*Npoly*iodata.N*2],alphak[cm],&z[cm*4*Npoly*iodata.N*2]);
+             for (int np=0; np<Npoly; np++) {
+              my_daxpy(iodata.N*4,(double*)&Zbar[cm*iodata.N*4*Npoly+np*iodata.N*2],alphak[cm],&z[cm*iodata.N*8*Npoly]);
+              my_daxpy(iodata.N*4,(double*)&Zbar[cm*iodata.N*4*Npoly+Npoly*iodata.N*2+np*iodata.N*2],alphak[cm],&z[cm*iodata.N*8*Npoly+iodata.N*4]);
+             }
            }
            my_daxpy(iodata.N*8*Npoly*iodata.M,X,-1.0,z);
          }
@@ -865,26 +870,48 @@ sagecal_master(int argc, char **argv) {
          if (Data::spatialreg && !(admm%Data::admm_cadence)) {
            /*SP: spatial update */
            /* 1. update Zbar  from global sol Z (copy) */
-           /* Note the row ordering is same as in Z, 2*2*N x Npoly (for each M) */
-           memcpy(Zbar,Z,iodata.N*8*Npoly*iodata.M*sizeof(double));
+           /* Note the row ordering Z: 2*2*N x Npoly (for each M)
+            * Zbar: 2*N*Npoly x 2 ( note 2 columns ) for each M */
+           /* FIXME Z-1col Zbar-2col */
+           //memcpy(Zbar,Z,iodata.N*8*Npoly*iodata.M*sizeof(double));
+           /* Split each 4N of Z into two 2N values, copy to first half and second half of Zbar */
+           for (int cm=0; cm<iodata.M; cm++) {
+            for (int np=0; np<Npoly; np++) {
+             my_dcopy(iodata.N*4,&Z[cm*iodata.N*8*Npoly+np*iodata.N*8],1,(double*)&Zbar[cm*iodata.N*4*Npoly+np*iodata.N*2],1);
+             my_dcopy(iodata.N*4,&Z[cm*iodata.N*8*Npoly+np*iodata.N*8+iodata.N*4],1,(double*)&Zbar[cm*iodata.N*4*Npoly+Npoly*iodata.N*2+np*iodata.N*2],1);
+            }
+           }
            /* 2. update Zspat taking proximal step (FISTA) */
            update_spatialreg_fista(Zspat,Zbar,Phikk,Phi,iodata.N,iodata.M,Npoly,G,sh_mu, fista_maxiter);
            /* 3. update Zbar from Zspat, Z_k = Z Phi_k */
-           /* Note the row ordering is 2*2*N x Npoly x M */
+           /* Note the row ordering is 2*N*Npoly x 2 x M (each M has 2 cols) */
            for (int cm=0; cm<iodata.M; cm++) {
-             my_zgemm('N','N',2*Npoly*iodata.N,2,2*G,1.0,Zspat,2*Npoly*iodata.N,&Phi[cm*2*G*2],2*G,0.0,&Zbar[cm*2*Npoly*iodata.N*2],2*Npoly*iodata.N);
+             my_zgemm('N','N',2*Npoly*iodata.N,2,2*G,1.0+_Complex_I*0.0,Zspat,2*Npoly*iodata.N,&Phi[cm*2*G*2],2*G,0.0+_Complex_I*0.0,&Zbar[cm*2*Npoly*iodata.N*2],2*Npoly*iodata.N);
            }
            /* 4. update X comparing Zbar, Z */
            /* Zerr=Z-Zbar */
-           /* Note the row ordering 2N*2 x Npoly (for each M) */
-           my_dcopy(iodata.N*8*Npoly*iodata.M,Z,1,Zerr,1);
+           /* Note the row ordering Z: 2N*2 x Npoly (for each M) and
+            * Zbar: 2*N*Npoly x 2 (for each M) */
+           /* FIXME Z-1col Zerr-2col */
+           //my_dcopy(iodata.N*8*Npoly*iodata.M,Z,1,Zerr,1);
+           for (int cm=0; cm<iodata.M; cm++) {
+            for (int np=0; np<Npoly; np++) {
+             my_dcopy(iodata.N*4,&Z[cm*iodata.N*8*Npoly+np*iodata.N*8],1,&Zerr[cm*iodata.N*8*Npoly+np*iodata.N*4],1);
+             my_dcopy(iodata.N*4,&Z[cm*iodata.N*8*Npoly+np*iodata.N*8+iodata.N*4],1,&Zerr[cm*iodata.N*8*Npoly+Npoly*iodata.N*4+np*iodata.N*4],1);
+            }
+           }
            my_daxpy(iodata.N*8*Npoly*iodata.M,(double*)Zbar,-1.0,Zerr);
            /* X = X + alpha (Z - Zbar) */
            if (!admm) {
             memset(X,0,sizeof(double)*(size_t)iodata.N*8*Npoly*iodata.M);
            }
+           /* FIXME Zerr-2col X-1col */
            for (int cm=0; cm<iodata.M; cm++) {
-             my_daxpy(iodata.N*8*Npoly,&Zerr[cm*iodata.N*8*Npoly],alphak[cm],&X[cm*iodata.N*8*Npoly]);
+             //my_daxpy(iodata.N*8*Npoly,&Zerr[cm*iodata.N*8*Npoly],alphak[cm],&X[cm*iodata.N*8*Npoly]);
+             for (int np=0; np<Npoly; np++) {
+              my_daxpy(iodata.N*4,&Zerr[cm*iodata.N*8*Npoly+np*iodata.N*4],alphak[cm],&X[cm*iodata.N*8*Npoly]);
+              my_daxpy(iodata.N*4,&Zerr[cm*iodata.N*8*Npoly+Npoly*iodata.N*4+np*iodata.N*4],alphak[cm],&X[cm*iodata.N*8*Npoly+iodata.N*4]);
+             }
            }
            printf("SP: ||Z-Zbar||=%lf ||Z||=%lf ||X||=%lf\n",my_dnrm2(iodata.N*8*Npoly*iodata.M,Zerr)/((double)iodata.N*8*Npoly*iodata.M),my_dnrm2(iodata.N*8*Npoly*iodata.M,Z)/((double)iodata.N*8*Npoly*iodata.M),my_dnrm2(iodata.N*8*Npoly*iodata.M,X)/((double)iodata.N*8*Npoly*iodata.M));
            /* 5. feed Zbar and X to next update of Z
@@ -1009,9 +1036,14 @@ sagecal_master(int argc, char **argv) {
          }
          /* no need to scale by 1/rho here, because Bii is already divided by 1/rho */
          /* add (alpha Zbar - X) if spatial regularization is enabled */
+         /* FIXME Zbar-2col, X,z-1col */
          if (Data::spatialreg) {
            for (int cm=0; cm<iodata.M; cm++) {
-             my_daxpy(iodata.N*8*Npoly,(double*)&Zbar[cm*2*Npoly*iodata.N*2],alphak[cm],&z[cm*4*Npoly*iodata.N*2]);
+             //my_daxpy(iodata.N*8*Npoly,(double*)&Zbar[cm*2*Npoly*iodata.N*2],alphak[cm],&z[cm*4*Npoly*iodata.N*2]);
+             for (int np=0; np<Npoly; np++) {
+              my_daxpy(iodata.N*4,(double*)&Zbar[cm*iodata.N*4*Npoly+np*iodata.N*2],alphak[cm],&z[cm*iodata.N*8*Npoly]);
+              my_daxpy(iodata.N*4,(double*)&Zbar[cm*iodata.N*4*Npoly+Npoly*iodata.N*2+np*iodata.N*2],alphak[cm],&z[cm*iodata.N*8*Npoly+iodata.N*4]);
+             }
            }
            my_daxpy(iodata.N*8*Npoly*iodata.M,X,-1.0,z);
          }

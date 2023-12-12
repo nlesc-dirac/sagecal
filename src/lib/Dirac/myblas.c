@@ -210,6 +210,7 @@ __attribute__ ((target(MIC)))
 }
 
 /* BLAS DGEMM C = alpha*op(A)*op(B)+ beta*C */
+/* op(A) : M x K, op(B) : K x N, C: MxN */
 void
 my_dgemm(char transa, char transb, int M, int N, int K, double alpha, double *A, int lda, double *B, int ldb, double beta, double *C, int ldc) {
 #ifdef USE_MIC
@@ -419,6 +420,7 @@ __attribute__ ((target(MIC)))
 
 
 /* BLAS ZGEMM C = alpha*op(A)*op(B)+ beta*C */
+/* op(A) : M x K, op(B) : K x N, C: MxN */
 void
 my_zgemm(char transa, char transb, int M, int N, int K, complex double alpha, complex double *A, int lda, complex double *B, int ldb, complex double beta, complex double *C, int ldc) {
 #ifdef USE_MIC

@@ -629,7 +629,7 @@ shapelet_product(int L, int M, int N, double alpha, double beta, double gamma,
 
 
 /* 
- * Zspat: spatial model 4*N*Npoly*G
+ * Zspat: spatial model storage 4*N*Npoly*G, shape 2*N*Npoly x 2 : Note 2 cols!
  * B: consensus polynomials Npoly*Nfreq
  * Npoly: consensus poly (in freq) terms
  * N: stations
@@ -652,7 +652,7 @@ plot_spatial_model(complex double *Zspat, double *B, int Npoly, int N, int n0, i
    complex double *pn_phivec=0; /* basis vector */
    complex double *pn_Phi=0; /* basis matrix */
    complex double *pn_Zbar=0; /* constraint for each pixel, 2*Npoly*N x 2 x pn_grid_M */
-   double *pn_J=0; /* storage for B_f Z, for selected freq, all pixels, (complex) 2Nx2xpn_grid_M */
+   double *J=0; /* storage for B_f Z, for selected freq, all pixels, (complex) 2Nx2xpn_grid_M */
 
 
    /* plotting : initialize */
@@ -715,22 +715,25 @@ plot_spatial_model(complex double *Zspat, double *B, int Npoly, int N, int n0, i
        fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
        exit(1);
    }
-   if ((pn_J=(double*)calloc((size_t)N*8*pn_grid_M,sizeof(double)))==0) {
+   if ((J=(double*)calloc((size_t)N*8*pn_grid_M,sizeof(double)))==0) {
        fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
        exit(1);
    }
 
 
-   /* Z_k = Z Phi_k : (2*2*N x Npoly) x pixels, same row ordering as Z */
+   /* Z_k = Zspat Phi_k : (2*2*N x Npoly) x pixels, same row ordering as Z */
+   /* Z_k : 2*Npoly*N x 2 */
    for(int cm=0; cm<pn_grid_M; cm++) {
-     my_zgemm('N','N',2*Npoly*N,2,2*G,1.0,Zspat,2*Npoly*N,&pn_Phi[cm*2*G*2],2*G,0.0,&pn_Zbar[cm*2*Npoly*N*2],2*Npoly*N);
+     my_zgemm('N','N',2*Npoly*N,2,2*G,1.0+_Complex_I*0.0,Zspat,2*Npoly*N,&pn_Phi[cm*2*G*2],2*G,0.0+_Complex_I*0.0,&pn_Zbar[cm*2*Npoly*N*2],2*Npoly*N);
    }
 
    /* evaluate B_f Z_k, k all pixels : (2Nx2) x pixels */
    for (int p=0; p<pn_grid_M; p++) {
-     memset(&pn_J[8*N*p],0,sizeof(double)*(size_t)N*8);
+     memset(&J[8*N*p],0,sizeof(double)*(size_t)N*8);
      for (int ci=0; ci<Npoly; ci++) {
-       my_daxpy(8*N, (double*)&pn_Zbar[p*4*N*Npoly+ci*4*N], B[freq*Npoly+ci], &pn_J[8*N*p]);
+       /* 2 columns separately */
+       my_daxpy(4*N, (double*)&pn_Zbar[p*4*N*Npoly+ci*2*N], B[freq*Npoly+ci], &J[8*N*p]);
+       my_daxpy(4*N, (double*)&pn_Zbar[p*4*N*Npoly+ci*2*N+2*N*Npoly], B[freq*Npoly+ci], &J[8*N*p+4*N]);
      }
    }
 
@@ -740,6 +743,65 @@ plot_spatial_model(complex double *Zspat, double *B, int Npoly, int N, int n0, i
         fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
         exit(1);
    }
+
+//#define DEBUG
+#ifdef DEBUG
+       FILE *dfp;
+       if ((dfp=fopen("debug.m","w+"))==0) {
+        fprintf(stderr,"%s: %d: no file\n",__FILE__,__LINE__);
+        exit(1);
+       }
+       fprintf(dfp,"N=%d;\nM=%d;\n",N,axes_M);
+       fprintf(dfp,"%% each station will have M*M*5 values, offset 8*N\n");
+       fprintf(dfp,"%% for example J1_11=Jvec(1:4*N:end); J1_11=reshape(J1_11,M,M);\n");
+       fprintf(dfp,"%% and J2_11=Jvec(1*4+1:4*N:end);\n");
+       fprintf(dfp,"Jvec=[\n");
+       for (int ci=0; ci<pn_grid_M*4*N; ci++) {
+         fprintf(dfp,"%lf+j*(%lf)\n",J[2*ci],J[2*ci+1]);
+       }
+       fprintf(dfp,"];\n");
+       //fprintf(dfp,"Pix=[\n");
+       //for (int ci=0; ci<pn_grid_M*N; ci++) {
+       //  fprintf(dfp,"%lf\n",pixval[ci]);
+       //}
+       //fprintf(dfp,"];\n");
+
+       /* Jvec above is calculated as 1) Z_k = Z Phi_k and 2) J = B_f Z_k 
+        * this can also be calculated as 1) Z_f = B_f Z and 2) J = Z_f Phi_k
+        * do the second form and compare 
+        */
+       complex double *Z_f=0; /* 2N x 2G */
+       double *J_f=0; /* 2N x 2 x pixels */
+       if ((Z_f=(complex double*)calloc((size_t)N*4*G,sizeof(complex double)))==0) {
+         fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
+         exit(1);
+       }
+       if ((J_f=(double*)calloc((size_t)N*8*pn_grid_M,sizeof(double)))==0) {
+         fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
+         exit(1);
+       }
+       /* Z_f = B_f Z : 2N x 2G */
+       for (int col=0; col<2*G; col++) {
+         for (int np=0; np<Npoly; np++) {
+           my_daxpy(4*N, (double*)&Zspat[col*2*N*Npoly+np*2*N], B[freq*Npoly+np], (double*)&Z_f[col*2*N]);
+         }
+       }
+
+       /* J = Z_f Phi_k for all pixels */
+       for(int cm=0; cm<pn_grid_M; cm++) {
+         my_zgemm('N','N',2*N,2,2*G,1.0+_Complex_I*0.0,Z_f,2*N,&pn_Phi[cm*2*G*2],2*G,0.0+_Complex_I*0.0,(complex double *)&J_f[cm*2*N*2*2],2*N);
+       }
+
+       fprintf(dfp,"Jvec1=[\n");
+       for (int ci=0; ci<pn_grid_M*4*N; ci++) {
+         fprintf(dfp,"%lf+j*(%lf)\n",J_f[2*ci],J_f[2*ci+1]);
+       }
+       fprintf(dfp,"];\n");
+
+       fclose(dfp);
+#endif /* DEBUG */
+
+   double *pn_J=J; // or J_f
    for (int cm=0; cm<N; cm++) {
      if (plot_type==0) { /* ||J||^2 */
 #pragma GCC ivdep
@@ -767,30 +829,6 @@ plot_spatial_model(complex double *Zspat, double *B, int Npoly, int N, int n0, i
    }
    convert_tensor_to_image(pixval, filename, N, axes_M, 1); // last argument ==1 : normalize
 
-//#define DEBUG
-#ifdef DEBUG
-       FILE *dfp;
-       if ((dfp=fopen("debug.m","w+"))==0) {
-        fprintf(stderr,"%s: %d: no file\n",__FILE__,__LINE__);
-        exit(1);
-       }
-       fprintf(dfp,"N=%d;\nM=%d;\n",N,axes_M);
-       fprintf(dfp,"%% each station will have M*M*5 values, offset 8*N\n");
-       fprintf(dfp,"%% for example J1_11=Jvec(1:4*N:end); J1_11=reshape(J1_11,M,M);\n");
-       fprintf(dfp,"%% and J2_11=Jvec(1*4+1:4*N:end);\n");
-       fprintf(dfp,"Jvec=[\n");
-       for (int ci=0; ci<pn_grid_M*4*N; ci++) {
-         fprintf(dfp,"%lf+j*(%lf)\n",pn_J[2*ci],pn_J[2*ci+1]);
-       }
-       fprintf(dfp,"];\n");
-       fprintf(dfp,"Pix=[\n");
-       for (int ci=0; ci<pn_grid_M*N; ci++) {
-         fprintf(dfp,"%lf\n",pixval[ci]);
-       }
-       fprintf(dfp,"];\n");
-       fclose(dfp);
-#endif /* DEBUG */
-
    free(pixval);
    free(pn_ll);
    free(pn_mm);
@@ -799,7 +837,12 @@ plot_spatial_model(complex double *Zspat, double *B, int Npoly, int N, int n0, i
    free(pn_phivec);
    free(pn_Phi);
    free(pn_Zbar);
-   free(pn_J);
+   free(J);
+#ifdef DEBUG
+    free(Z_f);
+    free(J_f);
+#endif
+
 
    return 0;
 }
