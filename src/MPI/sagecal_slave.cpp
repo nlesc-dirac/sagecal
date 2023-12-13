@@ -391,11 +391,14 @@ cerr<<"Error: Worker "<<myrank<<": Recheck your allocation or reduce number of w
 
   /**********************************************************/
     /* Spatial regularization, used if diffuse sky model is enabled */
-    int G;
+    int G=0,sh_n0=0;
     int Nms;
+    double sh_beta; /* shapelet basis spatial scale */
     complex double *Zspat=0; /* storage for spatial model, 2 Npoly N x 2 G */
     double *B=0; /* polynomials in frequency Npoly x Nms */
-    complex double *Zb=0; /* storage for BxZspat, 2 N x 2 G, ordered as 2*2*G x N */
+    complex double *Zb=0; /* storage for B_fxZspat, 2 N x 2 G x Freq, 2Nx2G blocks per freq */
+    /* each 2N x 2G : [2Nx2] [2Nx2] ... G times, : Z_1, Z_2, ... Z_G
+     * Similar to 2-col format of J, each 2x2 sub-block per station */
   /**********************************************************/
 
     /* BB */
@@ -504,15 +507,17 @@ cerr<<"Error: Worker "<<myrank<<": Recheck your allocation or reduce number of w
 
 
     if (Data::spatialreg && sp_diffuse_id>=0) {
-         MPI_Recv(&G, 1, MPI_INT, 0,TAG_SPATIAL, MPI_COMM_WORLD, &status);
+         MPI_Recv(&sh_n0, 1, MPI_INT, 0,TAG_SPATIAL, MPI_COMM_WORLD, &status);
          MPI_Recv(&Nms, 1, MPI_INT, 0,TAG_SPATIAL, MPI_COMM_WORLD, &status);
+         MPI_Recv(&sh_beta, 1, MPI_DOUBLE, 0,TAG_SPATIAL, MPI_COMM_WORLD, &status);
+         G=sh_n0*sh_n0;
 
          /* do all allocations here */
          if ((Zspat=(complex double*)calloc((size_t)iodata_vec[0].N*4*Npoly*G,sizeof(complex double)))==0) {
           fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
           exit(1);
          }
-         if ((Zb=(complex double*)calloc((size_t)iodata_vec[0].N*4*G,sizeof(complex double)))==0) {
+         if ((Zb=(complex double*)calloc((size_t)iodata_vec[0].N*4*G*mymscount,sizeof(complex double)))==0) {
           fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
           exit(1);
          }
@@ -527,6 +532,7 @@ cerr<<"Error: Worker "<<myrank<<": Recheck your allocation or reduce number of w
            cout<<myids[cm]<<" ";
          }
          cout<<endl;
+         cout<<"Shapelet "<<sh_n0<<" beta="<<sh_beta<<endl;
     }
 
     while(1) {
@@ -845,16 +851,21 @@ cout<<myrank<<" : "<<cm<<": downweight ratio ("<<iodata_vec[cm].fratio<<") based
         MPI_Recv(Zspat, iodata_vec[0].N*8*Npoly*G, MPI_DOUBLE, 0,TAG_SPATIAL, MPI_COMM_WORLD, &status);
         /* find product B x Zspat for a selected frequency */
         /* Zspat: 2N Npoly x 2G, each column (2N Npoly) reduce it to 2N by multiply and sum of Npoly values of B */
-        /* B x Zspat : 2N x 2G, order it into 2*2*G x N columns (stations separate) */
+        /* B x Zspat : 2N x 2G per each freq */
         for(int cm=0; cm<mymscount; cm++) {
           int ifreq=myids[cm];
+          memset(&Zb[cm*4*iodata_vec[0].N*G],0,sizeof(complex double)*(size_t)4*iodata_vec[0].N*G);
           for (int col=0; col<2*G; col++) {
             /* work with col of 2N rows */
-            memset(&Zb[col*2*iodata_vec[0].N],0,sizeof(complex double)*(size_t)2*iodata_vec[0].N);
             for (int np=0; np<Npoly; np++) {
-               my_daxpy(4*iodata_vec[0].N, (double*)&Zspat[col*2*iodata_vec[0].N*Npoly+np*2*iodata_vec[0].N], B[ifreq*Npoly+np], (double*)&Zb[col*2*iodata_vec[0].N]);
+               my_daxpy(4*iodata_vec[0].N, (double*)&Zspat[col*2*iodata_vec[0].N*Npoly+np*2*iodata_vec[0].N], B[ifreq*Npoly+np], (double*)&Zb[cm*4*iodata_vec[0].N*G+col*2*iodata_vec[0].N]);
             }
           }
+        }
+
+        /* Re-calculate model for cluster id 'sp_diffuse_id' */
+        for(int cm=0; cm<mymscount; cm++) {
+          recalculate_diffuse_coherencies(iodata_vec[cm].u,iodata_vec[cm].v,iodata_vec[cm].w,coh_vec[cm],iodata_vec[cm].N,iodata_vec[cm].Nbase*iodata_vec[cm].tilesz,barr_vec[cm],carr_vec[cm],M,iodata_vec[cm].freq0,iodata_vec[cm].deltaf,iodata_vec[cm].deltat,iodata_vec[cm].dec0,Data::min_uvcut,Data::max_uvcut,sp_diffuse_id,sh_n0,sh_beta,Zb,Data::Nt);
         }
       }
       

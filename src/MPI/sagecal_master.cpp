@@ -379,40 +379,8 @@ sagecal_master(int argc, char **argv) {
      if (spatialreg_basis==SP_SHAPELET) {
       sh_beta=4.0*sqrt(l_max*l_max/(double)iodata.M); /* scale ~ 2 x sqrt(range(l)*delta(l)) or m */
       printf("shaplet scale %lf\n",sh_beta);
-      /* shapelet basis: real, so copy to complex part */
+      /* shapelet basis: real basis, complex part is zero */
       shapelet_modes(sh_n0,sh_beta,ll,mm,iodata.M,phivec);
-
-      /* create tensor */
-      double *Cf;
-      int sL=4,sM=3,sN=2;
-      double s_alpha=0.8, s_beta=0.9, s_gamma=1.1;
-      if ((Cf=(double*)calloc((size_t)(sL*sM*sN),sizeof(double)))==0) {
-       fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
-       exit(1);
-      }
-      double *s_h,*s_f,*s_g;
-      if ((s_h=(double*)calloc((size_t)(sL*sL),sizeof(double)))==0) {
-       fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
-       exit(1);
-      }
-      if ((s_f=(double*)calloc((size_t)(sM*sM),sizeof(double)))==0) {
-       fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
-       exit(1);
-      }
-      if ((s_g=(double*)calloc((size_t)(sN*sN),sizeof(double)))==0) {
-       fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
-       exit(1);
-      }
-      s_f[0]=-0.2; s_f[1]=0.11; s_f[2]=0.5; s_f[3]=1.1; s_f[4]=-1; s_f[5]=0.3;
-      s_f[6]=0.01; s_f[7]=-0.2; s_f[8]=0.2;
-      s_g[0]=0.3; s_g[1]=0.1; s_g[2]=-0.5; s_g[3]=-0.4;
-
-      shapelet_product_tensor(sL,sM,sN,s_alpha,s_beta,s_gamma,Cf);
-      shapelet_product(sL,sM,sN,s_alpha,s_beta,s_gamma,s_h,s_f,s_g,Cf);
-      free(Cf);
-      free(s_h);
-      free(s_f);
-      free(s_g);
      } else {
       sharmonic_modes(sh_n0,ll,mm,iodata.M,phivec);
      }
@@ -668,8 +636,9 @@ sagecal_master(int argc, char **argv) {
     if (Data::spatialreg && sp_diffuse_id>=0) {
        /* before admm iteration, send all necessary aux info */
        for (int cm=0; cm<nslaves; cm++) {
-         MPI_Send(&G, 1, MPI_INT, cm+1,TAG_SPATIAL, MPI_COMM_WORLD);
+         MPI_Send(&sh_n0, 1, MPI_INT, cm+1,TAG_SPATIAL, MPI_COMM_WORLD);
          MPI_Send(&iodata.Nms, 1, MPI_INT, cm+1,TAG_SPATIAL, MPI_COMM_WORLD);
+         MPI_Send(&sh_beta, 1, MPI_DOUBLE, cm+1, TAG_SPATIAL, MPI_COMM_WORLD);
          MPI_Send(B, Npoly*iodata.Nms, MPI_DOUBLE, cm+1,TAG_SPATIAL, MPI_COMM_WORLD);
        }
     }
