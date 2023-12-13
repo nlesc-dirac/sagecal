@@ -1386,6 +1386,27 @@ project_procrustes(int N,double *J,double *J1);
 extern int
 project_procrustes_block(int N,complex double *J,complex double *J1);
 
+
+/* copy x->y, re-arrange storage from 1 col format to 2 col format
+ * x:[0..7]: stat 1, [8..15]: stat 2, .... : 8N double, 4N complex
+ * y:[0..3]: stat 1, 4N+[0..3]: stat1, [4..7]:stat 2, 4N+[4..7]: stat 2 etc
+ * x,y: 8N double or 4N complex
+ * x: each 8 double values for one station
+ * y: 2 cols, each 4 double values for one station in col 1 and col 2
+ */
+extern int
+copy_1col_2col(int N, double *x, double *y);
+
+
+/* copy x->y, re-arrange storage from 2 col format to 1 col format
+ * x:[0..3]: stat 1, 4N+[0..3]: stat1, [4..7]:stat 2, 4N+[4..7]: stat 2 etc
+ * y:[0..7]: stat 1, [8..15]: stat 2, .... : 8N double, 4N complex
+ * x,y: 8N double or 4N complex
+ * y: each 8 double values for one station
+ * x: 2 cols, each 4 double values for one station in col 1 and col 2
+ */
+extern int
+copy_2col_1col(int N, double *x, double *y);
 /****************************** consensus_poly.c ****************************/
 /* build matrix with polynomial terms
   B : Npoly x Nf, each row is one basis function
