@@ -397,6 +397,10 @@ shapelet_product(int L, int M, int N, double alpha, double beta, double gamma,
     double *h, double *f, double *g, double *C);
 
 extern int
+shapelet_product_jones(int L, int M, int N, double alpha, double beta, double gamma,
+    complex double *h, complex double *f, complex double *g, double *C);
+
+extern int
 plot_spatial_model(complex double *Zspat, double *B, int Npoly, int N, int G, int Nfreq, int axes_M, int freq, int plot_type, int basis, double beta, const char *filename);
 /****************************** predict_withbeam.c ****************************/
 /* precalculate cluster coherencies

@@ -498,21 +498,6 @@ kronecker_prod(int M, int N, double *A, double *B, double *C) {
     fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
     exit(1);
   }
-  printf("A=\n");
-  for (int i=0; i<M; i++) {
-    for (int j=0; j<N; j++) {
-      printf("%lf ",A[i+j*M]);
-    }
-    printf("\n");
-  }
-  printf("B=\n");
-  for (int i=0; i<M; i++) {
-    for (int j=0; j<N; j++) {
-      printf("%lf ",B[i+j*M]);
-    }
-    printf("\n");
-  }
-
 
   for (int i=0; i<M; i++) {
     for (int j=0; j<N; j++) {
@@ -530,13 +515,6 @@ kronecker_prod(int M, int N, double *A, double *B, double *C) {
     }
   }
 
-  printf("C=\n");
-  for (int i=0; i<M*M; i++) {
-    for (int j=0; j<N*N; j++) {
-      printf("%lf ",C[i+j*M*M]);
-    }
-    printf("\n");
-  }
   free(aB);
   return 0;
 }
@@ -622,6 +600,79 @@ shapelet_product(int L, int M, int N, double alpha, double beta, double gamma,
   }
 
   free(fg);
+  free(Cl);
+  return 0;
+}
+
+/* find in terms of shapelet decompositions (2D)
+ * h = f x g
+ * where f, g, and h are given as shapelet decompositions, each item in h,f,g are Jones matrices of 2x2 size
+ * h: L^2 x 2x2 modes, alpha scale
+ * f: M^2 x 2x2 modes, beta scale
+ * g: N^2 x 2x2 modes, gamma scale
+ * input : f, g
+ * output : h
+ * h: LxL modes : out
+ * f: MxM modes : in 
+ * g: NxN modes : in
+ * C: LxMxN tensor C(l,m,n) : in (pre-calculated)
+ */
+int
+shapelet_product_jones(int L, int M, int N, double alpha, double beta, double gamma,
+    complex double *h, complex double *f, complex double *g, double *C) {
+
+  printf("Input h %dx%d f %dx%d g %dx%d (x 4)\n",L,L,M,M,N,N);
+#ifdef DEBUG
+  for (int m=0; m<M*M; m++) {
+    printf("f %d %lf+j*(%lf) %lf+j*(%lf) %lf+j*(%lf) %lf+j*(%lf)\n",m,creal(f[4*m]),cimag(f[4*m]),creal(f[4*m+1]),cimag(f[4*m+1]),creal(f[4*m+2]),cimag(f[4*m+2]),creal(f[4*m+3]),cimag(f[4*m+3]));
+  }
+  for (int m=0; m<N*N; m++) {
+    printf("g %d %lf+j*(%lf) %lf+j*(%lf) %lf+j*(%lf) %lf+j*(%lf)\n",m,creal(g[4*m]),cimag(g[4*m]),creal(g[4*m+1]),cimag(g[4*m+1]),creal(g[4*m+2]),cimag(g[4*m+2]),creal(g[4*m+3]),cimag(g[4*m+3]));
+  }
+  for (int l=0; l<L; l++) {
+    printf("%d =\n",l);
+    for (int m=0; m<M; m++) {
+      for (int n=0; n<N; n++) {
+         /* column major order */
+         printf("%lf ",C[l*M*N+m+n*M]);
+      }
+      printf("\n");
+    }
+  }
+#endif
+
+  /* cannot find f x g^T : M^2 x N^2 matrix, stored as M^2*N^2 vector
+   * because each item in f,g are 2x2 matrices */
+
+  /* storage to find kronecker product */
+  double *Cl;
+  if ((Cl=(double*)calloc((size_t)(M*M*N*N),sizeof(double)))==0) {
+    fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
+    exit(1);
+  }
+  for (int l1=0; l1<L; l1++) {
+    double *Cl1=&C[l1*M*N]; //C[l1,:,:] MxN matrix
+    for (int l2=0; l2<L; l2++) {
+      double *Cl2=&C[l2*M*N]; //C[l2,:,:] MxN matrix
+      /* find kronecker product Cl=kron(Cl2,Cl1) */
+      kronecker_prod(M,N,Cl2,Cl1,Cl);
+      /* Hadamard prod Cl . (f x g)  and sum, fxg=J_f * J_g, 2x2 product */
+      double sum=0.0;
+#pragma GCC ivdep
+      for (int ci=0; ci<M*M*N*N; ci++) {
+        sum+=Cl[ci]*ci;
+      }
+      printf("h(%d,%d) %lf\n",l1,l2,sum);
+      h[l1+l2*L]=sum;
+    }
+  }
+
+#ifdef DEBUG
+  for (int m=0; m<L*L; m++) {
+    printf("h %d %lf+j*(%lf) %lf+j*(%lf) %lf+j*(%lf) %lf+j*(%lf)\n",m,creal(h[4*m]),cimag(h[4*m]),creal(h[4*m+1]),cimag(h[4*m+1]),creal(h[4*m+2]),cimag(h[4*m+2]),creal(h[4*m+3]),cimag(h[4*m+3]));
+  }
+#endif
+
   free(Cl);
   return 0;
 }
