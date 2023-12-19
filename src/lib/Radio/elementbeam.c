@@ -147,14 +147,14 @@ set_elementcoeffs(int element_type,  double frequency, elementcoeff *ecoeff) {
 #endif
  
   /* factorial array */
-  int *factorial;
-  if ((factorial=(int*)calloc((size_t)ecoeff->Nmodes,sizeof(int)))==0) {
+  double *factorial;
+  if ((factorial=(double*)calloc((size_t)ecoeff->Nmodes,sizeof(double)))==0) {
     fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
     exit(1);
   }
-  factorial[0]=1; /* 0! */
+  factorial[0]=1.0; /* 0! */
   for (int i=1; i<ecoeff->Nmodes; i++) {
-    factorial[i]=factorial[i-1]*i;
+    factorial[i]=factorial[i-1]*(double)i;
   }
 
   /* calculate preamble for basis calculation */
@@ -163,7 +163,7 @@ set_elementcoeffs(int element_type,  double frequency, elementcoeff *ecoeff) {
     for (int m=-n; m<=n; m+=2) {
       int absm=m>=0?m:-m; /* |m| */
       /* sqrt { ((n-|m|)/2)! / pi ((n+|m|)/2)! } */
-      ecoeff->preamble[idx]=sqrt(M_1_PI*(double)factorial[(n-absm)/2]/(double)factorial[(n+absm)/2]);
+      ecoeff->preamble[idx]=sqrt(M_1_PI*factorial[(n-absm)/2]/factorial[(n+absm)/2]);
       /* (-1)^(n-|m|)/2 */
       if (((n-absm)/2)%2) {ecoeff->preamble[idx]=-ecoeff->preamble[idx];}
       /* 1/beta^{1+|m|} */
@@ -295,14 +295,14 @@ set_elementcoeffs_wb(int element_type,  double *frequencies, int Nf,  elementcoe
 #endif
  
   /* factorial array */
-  int *factorial;
-  if ((factorial=(int*)calloc((size_t)ecoeff->Nmodes,sizeof(int)))==0) {
+  double *factorial;
+  if ((factorial=(double *)calloc((size_t)ecoeff->Nmodes,sizeof(double)))==0) {
     fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
     exit(1);
   }
-  factorial[0]=1; /* 0! */
+  factorial[0]=1.0; /* 0! */
   for (int i=1; i<ecoeff->Nmodes; i++) {
-    factorial[i]=factorial[i-1]*i;
+    factorial[i]=factorial[i-1]*(double)i;
   }
 
   /* calculate preamble for basis calculation */
@@ -311,7 +311,7 @@ set_elementcoeffs_wb(int element_type,  double *frequencies, int Nf,  elementcoe
     for (int m=-n; m<=n; m+=2) {
       int absm=m>=0?m:-m; /* |m| */
       /* sqrt { ((n-|m|)/2)! / pi ((n+|m|)/2)! } */
-      ecoeff->preamble[idx]=sqrt(M_1_PI*(double)factorial[(n-absm)/2]/(double)factorial[(n+absm)/2]);
+      ecoeff->preamble[idx]=sqrt(M_1_PI*factorial[(n-absm)/2]/factorial[(n+absm)/2]);
       /* (-1)^(n-|m|)/2 */
       if (((n-absm)/2)%2) {ecoeff->preamble[idx]=-ecoeff->preamble[idx];}
       /* 1/beta^{1+|m|} */
@@ -614,7 +614,7 @@ sharmonic_modes(int n0,double *th, double *ph, int Nt, complex double *output) {
     fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
     exit(1);
  }
- fact[0]=1;
+ fact[0]=1.0;
  for (l=1; l<=(2*n0-1); l++) {
     fact[l]=(l)*fact[l-1];
  }

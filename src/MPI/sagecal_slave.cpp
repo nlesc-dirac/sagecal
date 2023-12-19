@@ -214,7 +214,8 @@ cerr<<"Error: Worker "<<myrank<<": Recheck your allocation or reduce number of w
            sp_diffuse_id=ci;
            printf("Cluster id %d (ordinal %d) is being used as foreground (diffuse) model\n",Data::ddid,sp_diffuse_id);
          }
-       }
+
+        }
      }
      printf("Total effective clusters: %d\n",Mt);
      /* create an array with chunk sizes for each cluster */
@@ -228,6 +229,19 @@ cerr<<"Error: Worker "<<myrank<<": Recheck your allocation or reduce number of w
        chunkvec[ci]=carr_vec[0][ci].nchunk;
       }
      }
+
+
+    /* FIXME open text files for each MS, each line re,im XX,XY,YX,YY */
+    vector<FILE *> debug_vec(mymscount);
+    if (Data::spatialreg && sp_diffuse_id>=0) {
+         for(int cm=0; cm<mymscount; cm++) {
+           string filebuff=std::string(myms[cm])+std::string(".coh.txt\0");
+           if ((debug_vec[cm]=fopen(filebuff.c_str(),"w+"))==0) {
+             fprintf(stderr,"%s: %d: no file\n",__FILE__,__LINE__);
+             exit(1);
+            }
+         }
+    }
 
     vector<double *> p_vec(mymscount);
     vector<double **> pm_vec(mymscount);
@@ -866,6 +880,16 @@ cout<<myrank<<" : "<<cm<<": downweight ratio ("<<iodata_vec[cm].fratio<<") based
         /* Re-calculate model for cluster id 'sp_diffuse_id' */
         for(int cm=0; cm<mymscount; cm++) {
           recalculate_diffuse_coherencies(iodata_vec[cm].u,iodata_vec[cm].v,iodata_vec[cm].w,coh_vec[cm],iodata_vec[cm].N,iodata_vec[cm].Nbase*iodata_vec[cm].tilesz,barr_vec[cm],carr_vec[cm],M,iodata_vec[cm].freq0,iodata_vec[cm].deltaf,iodata_vec[cm].deltat,iodata_vec[cm].dec0,Data::min_uvcut,Data::max_uvcut,sp_diffuse_id,sh_n0,sh_beta,&Zb[cm*4*iodata_vec[0].N*G],Data::Nt);
+
+          /* FIXME: save calculated coherencies in text file, re,im XX,XY,YX,YY */
+          if (admm>=Nadmm-Data::admm_cadence) {
+          for (int nb=0; nb<iodata_vec[cm].Nbase*iodata_vec[cm].tilesz; nb++) {
+            fprintf(debug_vec[cm],"%lf %lf %lf %lf %lf %lf %lf %lf\n",creal(coh_vec[cm][4*M*nb+4*sp_diffuse_id]),cimag(coh_vec[cm][4*M*nb+4*sp_diffuse_id]),
+            creal(coh_vec[cm][4*M*nb+4*sp_diffuse_id+1]),cimag(coh_vec[cm][4*M*nb+4*sp_diffuse_id+1]),
+            creal(coh_vec[cm][4*M*nb+4*sp_diffuse_id+2]),cimag(coh_vec[cm][4*M*nb+4*sp_diffuse_id+2]),
+            creal(coh_vec[cm][4*M*nb+4*sp_diffuse_id+3]),cimag(coh_vec[cm][4*M*nb+4*sp_diffuse_id+3]));
+          }
+          }
         }
       }
       
@@ -1109,6 +1133,10 @@ cout<<myrank<<" : "<<cm<<": downweight ratio ("<<iodata_vec[cm].fratio<<") based
       free(Zspat);
       free(Zb);
       free(B);
+      /* FIXME close files */
+      for(int cm=0; cm<mymscount; cm++) {
+         fclose(debug_vec[cm]);
+      }
   }
   /**********************************************************/
 

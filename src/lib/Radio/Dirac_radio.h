@@ -146,9 +146,6 @@ read_arho_fromfile(const char *admm_rho_file,int Mt,double *arho, int M, double 
 /****************************** predict.c ****************************/
 /************* extended source contributions ************/
 extern complex double
-shapelet_contrib(void*dd, double u, double v, double w);
-
-extern complex double
 gaussian_contrib(void*dd, double u, double v, double w);
 
 extern complex double
@@ -379,6 +376,11 @@ sharmonic_modes(int n0,double *th, double *ph, int Nt, complex double *output);
 
 
 /****************************** shapelet.c ****************************/
+extern complex double
+shapelet_contrib(void*dd, double u, double v, double w);
+extern int
+shapelet_contrib_vector(complex double *modes, int n0, double beta, double u, double v, double w, complex double *coh);
+
 /* shapelet basis (rectangular, real valued),
  * n0: total modes=n0^2
  * beta: scale factor
@@ -398,7 +400,7 @@ shapelet_product(int L, int M, int N, double alpha, double beta, double gamma,
 
 extern int
 shapelet_product_jones(int L, int M, int N, double alpha, double beta, double gamma,
-    complex double *h, complex double *f, complex double *g, double *C);
+    complex double *h, complex double *f, complex double *g, double *C, int hermitian);
 
 extern int
 plot_spatial_model(complex double *Zspat, double *B, int Npoly, int N, int G, int Nfreq, int axes_M, int freq, int plot_type, int basis, double beta, const char *filename);

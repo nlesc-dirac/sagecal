@@ -17,7 +17,7 @@
  $Id$
  */
 
-
+#define _GNU_SOURCE
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -34,6 +34,207 @@ H_e(double x, int n) {
 	if(n==1) return 2*x;
 	return 2*x*H_e(x,n-1)-2*(n-1)*H_e(x,n-2);
 }
+
+/******************** shapelet stuff **********************/
+/** calculate the UV mode vectors (scalar version, only 1 point)
+ * in: u,v: arrays of the grid points in UV domain
+ *      beta: scale factor
+ *      n0: number of modes in each dimension
+ * out:
+ *      Av: array of mode vectors size 1 times n0.n0, in column major order
+ *      cplx: array of integers, size n0*n0, if 1 this mode is imaginary, else real
+ *
+ */
+static int
+calculate_uv_mode_vectors_scalar(double u, double v, double beta, int n0, double **Av, int **cplx) {
+
+	int xci,zci,Ntot;
+
+	double **shpvl, *fact;
+	int n1,n2,start;
+	double xval;
+	int signval;
+
+  Ntot=2; /* u,v seperately */
+	/* set up factorial array */
+  if ((fact=(double*)calloc((size_t)(n0),sizeof(double)))==0) {
+	  fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
+	  exit(1);
+	}
+  fact[0]=1.0;
+	for (xci=1; xci<(n0); xci++) {
+		fact[xci]=(xci)*fact[xci-1];
+	}
+
+	/* setup array to store calculated shapelet value */
+	/* need max storage Ntot x n0 */
+  if ((shpvl=(double**)calloc((size_t)(Ntot),sizeof(double*)))==0) {
+	  fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
+	  exit(1);
+	}
+	for (xci=0; xci<Ntot; xci++) {
+   if ((shpvl[xci]=(double*)calloc((size_t)(n0),sizeof(double)))==0) {
+	   fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
+	   exit(1);
+	 }
+	}
+
+
+	/* start filling in the array from the positive values */
+	zci=0;
+  xval=u*beta;
+  double expval=exp(-0.5*xval*xval);
+	for (xci=0; xci<n0; xci++) {
+		shpvl[zci][xci]=H_e(xval,xci)*expval/sqrt((double)(2<<xci)*fact[xci]);
+	}
+	zci=1;
+  xval=v*beta;
+  expval=exp(-0.5*xval*xval);
+	for (xci=0; xci<n0; xci++) {
+		shpvl[zci][xci]=H_e(xval,xci)*expval/sqrt((double)(2<<xci)*fact[xci]);
+	}
+
+
+	/* now calculate the mode vectors */
+	/* each vector is 1 x 1 length and there are n0*n0 of them */
+  if ((*Av=(double*)calloc((size_t)((n0)*(n0)),sizeof(double)))==0) {
+	  fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
+	  exit(1);
+	}
+  if ((*cplx=(int*)calloc((size_t)((n0)*(n0)),sizeof(int)))==0) {
+	  fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
+	  exit(1);
+	}
+
+  for (n2=0; n2<(n0); n2++) {
+	 for (n1=0; n1<(n0); n1++) {
+	  (*cplx)[n2*n0+n1]=((n1+n2)%2==0?0:1) /* even (real) or odd (imaginary)*/;
+		/* sign */
+		if ((*cplx)[n2*n0+n1]==0) {
+			signval=(((n1+n2)/2)%2==0?1:-1);
+		} else {
+			signval=(((n1+n2-1)/2)%2==0?1:-1);
+		}
+
+    /* fill in 1*1*(zci) to 1*1*(zci+1)-1 */
+		start=(n2*(n0)+n1);
+		if (signval==-1) {
+        (*Av)[start]=-shpvl[0][n1]*shpvl[1][n2];
+		} else {
+        (*Av)[start]=shpvl[0][n1]*shpvl[1][n2];
+		}
+	 }
+	}
+
+	free(fact);
+	for (xci=0; xci<Ntot; xci++) {
+	 free(shpvl[xci]);
+	}
+	free(shpvl);
+
+  return 0;
+}
+
+
+/* Fourier space contribution with a scalar shapelet model */
+complex double
+shapelet_contrib(void*dd, double u, double v, double w) {
+  exinfo_shapelet *dp=(exinfo_shapelet*)dd;
+  int *cplx;
+  double *Av;
+  int ci,M;
+  double a,b,cosph,sinph,ut,vt,up,vp;
+
+  double realsum,imagsum;
+
+  /* first the rotation due to projection */
+ // up=u*(dp->cxi)-v*(dp->cphi)*(dp->sxi)+w*(dp->sphi)*(dp->sxi);
+ // vp=u*(dp->sxi)+v*(dp->cphi)*(dp->cxi)-w*(dp->sphi)*(dp->cxi);
+  if (dp->use_projection) {
+   up=-u*(dp->cxi)+v*(dp->cphi)*(dp->sxi)-w*(dp->sphi)*(dp->sxi);
+   vp=-u*(dp->sxi)-v*(dp->cphi)*(dp->cxi)+w*(dp->sphi)*(dp->cxi);
+  } else {
+   up=u;
+   vp=v;
+  }
+
+  /* linear transformations, if any */
+//  a=1.0;
+//  b=dp->eY/dp->eX;
+  a=1.0/dp->eX;
+  b=1.0/dp->eY;
+  //cosph=cos(dp->eP);
+  //sinph=sin(dp->eP);
+  sincos(dp->eP,&sinph,&cosph);
+  ut=a*(cosph*up-sinph*vp);
+  vt=b*(sinph*up+cosph*vp);
+  /* note: we decompose f(-l,m) so the Fourier transform is F(-u,v)
+   so negate the u grid */
+  calculate_uv_mode_vectors_scalar(-ut, vt, dp->beta, dp->n0, &Av, &cplx);
+  realsum=imagsum=0.0;
+  M=(dp->n0)*(dp->n0);
+  for (ci=0; ci<M; ci++) {
+    if (cplx[ci]) {
+     imagsum+=dp->modes[ci]*Av[ci];
+    } else {
+     realsum+=dp->modes[ci]*Av[ci];
+    }
+  }
+
+  free(Av);
+  free(cplx);
+  //return 2.0*M_PI*(realsum+_Complex_I*imagsum);
+  return 2.0*M_PI*(realsum+_Complex_I*imagsum)*a*b;
+}
+
+/* Fourier space contribution with a vector (4 correlations) shapelet model */
+/* modes: 4*n0*n0 models (2x2)x modes
+ * n0: model order (n0^2 basis)
+ * beta: model scale
+ * u,v,w: baseline coords 
+ * out:
+ * coh: 4x1 correlations output
+ */
+int
+shapelet_contrib_vector(complex double *modes, int n0, double beta, double u, double v, double w, complex double *coh) {
+  int *cplx;
+  double *Av;
+  int ci,M;
+  double a,b,cosph,sinph,ut,vt,up,vp;
+
+  double realsum,imagsum;
+
+  /* note: we decompose f(-l,m) so the Fourier transform is F(-u,v)
+   so negate the u grid */
+  calculate_uv_mode_vectors_scalar(-u, v, beta, n0, &Av, &cplx);
+  M=n0*n0;
+  coh[0]=coh[1]=coh[2]=coh[3]=0.0;
+  for (ci=0; ci<M; ci++) {
+    /* modes[4*ci],modes[4*ci+1],modes[4*ci+2],modes[4*ci+3] map to
+     * XX,XY,YX,YY */
+    complex double coeff;
+    if (cplx[ci]) {
+     coeff=0.0+_Complex_I*Av[ci];
+    } else {
+     coeff=Av[ci]+_Complex_I*0.0;
+    }
+    coh[0]+=modes[4*ci]*coeff;
+    coh[1]+=modes[4*ci+1]*coeff;
+    coh[2]+=modes[4*ci+2]*coeff;
+    coh[3]+=modes[4*ci+3]*coeff;
+  }
+
+  coh[0] *=2.0*M_PI;
+  coh[1] *=2.0*M_PI;
+  coh[2] *=2.0*M_PI;
+  coh[3] *=2.0*M_PI;
+
+  free(Av);
+  free(cplx);
+  return 0;
+}
+
+
 
 /* struct for sorting coordinates */
 typedef struct coordval_{
@@ -330,6 +531,9 @@ shapelet_modes(int n0,double beta, double *x, double *y, int N, complex double *
 l: 0..L-1, m: 0..M-1, n: 0..N-1
 
 L: LxMxN storage
+
+Note for large values of L,M,N the values of H will be very large
+
 */
 static int
 L_mat(int L, int M, int N, double a, double b, double c, double *H) {
@@ -476,6 +680,10 @@ shapelet_product_tensor(int L, int M, int N, double alpha, double beta, double g
     }
   }
 
+  /* Normalize B to account for the very large values expected in H */
+  double Bnorm=my_dnrm2(L*M*N,B);
+  my_dscal(L*M*N,1.0/Bnorm,B);
+
   free(H);
   free(fact);
 
@@ -604,12 +812,36 @@ shapelet_product(int L, int M, int N, double alpha, double beta, double gamma,
   return 0;
 }
 
+/* Jones matrix multiplication
+   C=A*B
+*/
+static void
+amb(complex double * __restrict a, complex double * __restrict b, complex double * __restrict c) {
+ c[0]=(a[0]*b[0]+a[1]*b[2]);
+ c[1]=(a[0]*b[1]+a[1]*b[3]);
+ c[2]=(a[2]*b[0]+a[3]*b[2]);
+ c[3]=(a[2]*b[1]+a[3]*b[3]);
+}
+
+/* Jones matrix multiplication
+   C=A*B^H
+*/
+static void
+ambt(complex double * __restrict a, complex double * __restrict b, complex double * __restrict c) {
+ c[0]=a[0]*conj(b[0])+a[1]*conj(b[1]);
+ c[1]=a[0]*conj(b[2])+a[1]*conj(b[3]);
+ c[2]=a[2]*conj(b[0])+a[3]*conj(b[1]);
+ c[3]=a[2]*conj(b[2])+a[3]*conj(b[3]);
+}
+
+
 /* find in terms of shapelet decompositions (2D)
  * h = f x g
  * where f, g, and h are given as shapelet decompositions, each item in h,f,g are Jones matrices of 2x2 size
  * h: L^2 x 2x2 modes, alpha scale
  * f: M^2 x 2x2 modes, beta scale
  * g: N^2 x 2x2 modes, gamma scale
+ * hermitian: if 1, find f x g^H (Jones matrix Hermitian)
  * input : f, g
  * output : h
  * h: LxL modes : out
@@ -619,9 +851,9 @@ shapelet_product(int L, int M, int N, double alpha, double beta, double gamma,
  */
 int
 shapelet_product_jones(int L, int M, int N, double alpha, double beta, double gamma,
-    complex double *h, complex double *f, complex double *g, double *C) {
+    complex double *h, complex double *f, complex double *g, double *C, int hermitian) {
 
-  printf("Input h %dx%d f %dx%d g %dx%d (x 4)\n",L,L,M,M,N,N);
+  //printf("Input h %dx%d %lf f %dx%d %lf g %dx%d %lf (x 4)\n",L,L,alpha,M,M,beta,N,N,gamma);
 #ifdef DEBUG
   for (int m=0; m<M*M; m++) {
     printf("f %d %lf+j*(%lf) %lf+j*(%lf) %lf+j*(%lf) %lf+j*(%lf)\n",m,creal(f[4*m]),cimag(f[4*m]),creal(f[4*m+1]),cimag(f[4*m+1]),creal(f[4*m+2]),cimag(f[4*m+2]),creal(f[4*m+3]),cimag(f[4*m+3]));
@@ -642,8 +874,33 @@ shapelet_product_jones(int L, int M, int N, double alpha, double beta, double ga
 #endif
 
   /* cannot find f x g^T : M^2 x N^2 matrix, stored as M^2*N^2 vector
-   * because each item in f,g are 2x2 matrices */
+   * because each item in f,g are 2x2 matrices,
+   * fg: rows 4*M^2 cols N^2 */
+  complex double *fg;
+  if ((fg=(complex double*)calloc((size_t)(M*M*N*N*4),sizeof(complex double)))==0) {
+    fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
+    exit(1);
+  }
+  for (int m=0; m<M*M; m++) {
+    for (int n=0; n<N*N; n++) {
+      /* select J1=f[4*m,..4*m+3] and J2=g[4*n..4*n+3],
+       * find J=J1 x J2^H, or J=J1 x J2, store at fg[4*M^2*n+4*m] */
+      if (hermitian) {
+       ambt(&f[4*m],&g[4*n],&fg[4*M*M*n+4*m]);
+      } else {
+       amb(&f[4*m],&g[4*n],&fg[4*M*M*n+4*m]);
+      }
+    }
+  }
 
+#ifdef DEBUG
+  for (int m=0; m<M*M; m++) {
+    for (int n=0; n<N*N; n++) {
+      printf("fg %d %d %lf+j*(%lf) %lf+j*(%lf) %lf+j*(%lf) %lf+j*(%lf)\n",creal(fg[4*M*M*n+4*m]),cimag(fg[4*M*M*n+4*m]),creal(fg[4*M*M*n+4*m+1]),cimag(fg[4*M*M*n+4*m+1]),creal(fg[4*M*M*n+4*m+2]),cimag(fg[4*M*M*n+4*m+2]),creal(fg[4*M*M*n+4*m+3]),cimag(fg[4*M*M*n+4*m+3]));
+    }
+  }
+#endif
+ 
   /* storage to find kronecker product */
   double *Cl;
   if ((Cl=(double*)calloc((size_t)(M*M*N*N),sizeof(double)))==0) {
@@ -656,14 +913,23 @@ shapelet_product_jones(int L, int M, int N, double alpha, double beta, double ga
       double *Cl2=&C[l2*M*N]; //C[l2,:,:] MxN matrix
       /* find kronecker product Cl=kron(Cl2,Cl1) */
       kronecker_prod(M,N,Cl2,Cl1,Cl);
-      /* Hadamard prod Cl . (f x g)  and sum, fxg=J_f * J_g, 2x2 product */
-      double sum=0.0;
+      /* Hadamard prod Cl . (f x g)  and sum, fxg=J_f * J_g^H, 2x2 product */
+      complex double sum[4]={0.0,0.0,0.0,0.0};
 #pragma GCC ivdep
       for (int ci=0; ci<M*M*N*N; ci++) {
-        sum+=Cl[ci]*ci;
+        sum[0]+=Cl[ci]*fg[4*ci];
+        sum[1]+=Cl[ci]*fg[4*ci+1];
+        sum[2]+=Cl[ci]*fg[4*ci+2];
+        sum[3]+=Cl[ci]*fg[4*ci+3];
       }
-      printf("h(%d,%d) %lf\n",l1,l2,sum);
-      h[l1+l2*L]=sum;
+//      printf("h(%d,%d) %lf+j*(%lf)\n",l1,l2,creal(sum[0]),cimag(sum[0]));
+//      printf("h(%d,%d) %lf+j*(%lf)\n",l1,l2,creal(sum[1]),cimag(sum[1]));
+//      printf("h(%d,%d) %lf+j*(%lf)\n",l1,l2,creal(sum[2]),cimag(sum[2]));
+//      printf("h(%d,%d) %lf+j*(%lf)\n",l1,l2,creal(sum[3]),cimag(sum[3]));
+      h[(l1+l2*L)*4]=sum[0];
+      h[(l1+l2*L)*4+1]=sum[1];
+      h[(l1+l2*L)*4+2]=sum[2];
+      h[(l1+l2*L)*4+3]=sum[3];
     }
   }
 
@@ -673,10 +939,11 @@ shapelet_product_jones(int L, int M, int N, double alpha, double beta, double ga
   }
 #endif
 
+  //printf("Norms Cl:%e f:%e g:%e h:%e\n",my_dnrm2(M*M*N*N,Cl),my_dnrm2(4*M*M,(double*)f),my_dnrm2(4*N*N,(double*)g),my_dnrm2(4*L*L,(double*)h));
+  free(fg);
   free(Cl);
   return 0;
 }
-
 
 
 /* 
