@@ -881,13 +881,19 @@ cout<<myrank<<" : "<<cm<<": downweight ratio ("<<iodata_vec[cm].fratio<<") based
         for(int cm=0; cm<mymscount; cm++) {
           recalculate_diffuse_coherencies(iodata_vec[cm].u,iodata_vec[cm].v,iodata_vec[cm].w,coh_vec[cm],iodata_vec[cm].N,iodata_vec[cm].Nbase*iodata_vec[cm].tilesz,barr_vec[cm],carr_vec[cm],M,iodata_vec[cm].freq0,iodata_vec[cm].deltaf,iodata_vec[cm].deltat,iodata_vec[cm].dec0,Data::min_uvcut,Data::max_uvcut,sp_diffuse_id,sh_n0,sh_beta,&Zb[cm*4*iodata_vec[0].N*G],Data::Nt);
 
-          /* FIXME: save calculated coherencies in text file, re,im XX,XY,YX,YY */
+          /* FIXME: save calculated coherencies in text file, re,im XX,XY,YX,YY,
+           * note that coherencies need to be multiplied by the solutions to make sense */
           if (admm>=Nadmm-Data::admm_cadence) {
           for (int nb=0; nb<iodata_vec[cm].Nbase*iodata_vec[cm].tilesz; nb++) {
-            fprintf(debug_vec[cm],"%lf %lf %lf %lf %lf %lf %lf %lf\n",creal(coh_vec[cm][4*M*nb+4*sp_diffuse_id]),cimag(coh_vec[cm][4*M*nb+4*sp_diffuse_id]),
+            fprintf(debug_vec[cm],"%e %e %e %e %e %e %e %e\n",creal(coh_vec[cm][4*M*nb+4*sp_diffuse_id]),cimag(coh_vec[cm][4*M*nb+4*sp_diffuse_id]),
             creal(coh_vec[cm][4*M*nb+4*sp_diffuse_id+1]),cimag(coh_vec[cm][4*M*nb+4*sp_diffuse_id+1]),
             creal(coh_vec[cm][4*M*nb+4*sp_diffuse_id+2]),cimag(coh_vec[cm][4*M*nb+4*sp_diffuse_id+2]),
             creal(coh_vec[cm][4*M*nb+4*sp_diffuse_id+3]),cimag(coh_vec[cm][4*M*nb+4*sp_diffuse_id+3]));
+/*fprintf(debug_vec[cm],"%e %e %e %e %e %e %e %e\n",creal(coh_vec[cm][4*M*nb+4*4]),cimag(coh_vec[cm][4*M*nb+4*4]),
+            creal(coh_vec[cm][4*M*nb+4*4+1]),cimag(coh_vec[cm][4*M*nb+4*4+1]),
+            creal(coh_vec[cm][4*M*nb+4*4+2]),cimag(coh_vec[cm][4*M*nb+4*4+2]),
+            creal(coh_vec[cm][4*M*nb+4*4+3]),cimag(coh_vec[cm][4*M*nb+4*4+3]));
+            */
           }
           }
         }

@@ -200,9 +200,6 @@ shapelet_contrib_vector(complex double *modes, int n0, double beta, double u, do
   int *cplx;
   double *Av;
   int ci,M;
-  double a,b,cosph,sinph,ut,vt,up,vp;
-
-  double realsum,imagsum;
 
   /* note: we decompose f(-l,m) so the Fourier transform is F(-u,v)
    so negate the u grid */
