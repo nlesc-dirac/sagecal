@@ -378,10 +378,11 @@ sagecal_master(int argc, char **argv) {
      }
      if (spatialreg_basis==SP_SHAPELET) {
       sh_beta=4.0*sqrt(l_max*l_max/(double)iodata.M); /* scale ~ 2 x sqrt(range(l)*delta(l)) or m */
-      printf("shaplet scale %lf\n",sh_beta);
+      printf("Using shaplet spatial basis with scale %lf\n",sh_beta);
       /* shapelet basis: real basis, complex part is zero */
       shapelet_modes(sh_n0,sh_beta,ll,mm,iodata.M,phivec);
      } else {
+      printf("Using spherical harmonic spatial basis\n");
       sharmonic_modes(sh_n0,ll,mm,iodata.M,phivec);
      }
 #ifdef DEBUG1
@@ -924,7 +925,7 @@ sagecal_master(int argc, char **argv) {
               my_daxpys(iodata.N,&Zerr[cm*iodata.N*8*Npoly+np*iodata.N*4+Npoly*iodata.N*4+3],4,alphak[cm],&X[cm*iodata.N*8*Npoly+7],8);
              }
            }
-           printf("SP: ||Z-Zbar||=%lf ||Z||=%lf ||X||=%lf\n",my_dnrm2(iodata.N*8*Npoly*iodata.M,Zerr)/((double)iodata.N*8*Npoly*iodata.M),my_dnrm2(iodata.N*8*Npoly*iodata.M,Z)/((double)iodata.N*8*Npoly*iodata.M),my_dnrm2(iodata.N*8*Npoly*iodata.M,X)/((double)iodata.N*8*Npoly*iodata.M));
+           printf("SP: ADMM %d: ||Z-Zbar||=%lf ||Z||=%lf ||X||=%lf\n",admm,my_dnrm2(iodata.N*8*Npoly*iodata.M,Zerr)/((double)iodata.N*8*Npoly*iodata.M),my_dnrm2(iodata.N*8*Npoly*iodata.M,Z)/((double)iodata.N*8*Npoly*iodata.M),my_dnrm2(iodata.N*8*Npoly*iodata.M,X)/((double)iodata.N*8*Npoly*iodata.M));
            /* 5. feed Zbar and X to next update of Z
              already done above*/
          }
@@ -1006,7 +1007,6 @@ sagecal_master(int argc, char **argv) {
 
         /* spatial regularization with a valid diffuse model: send each worker updated spatial model for its next MS */
         if (Data::spatialreg && sp_diffuse_id>=0 && !(admm%Data::admm_cadence)) {
-          cout<<"Master: send spatial model to workers size "<< iodata.N*8*Npoly*G<< endl;
           for (int cm=0; cm<nslaves; cm++) {
              MPI_Send(Zspat, iodata.N*8*Npoly*G, MPI_DOUBLE, cm+1,TAG_SPATIAL, MPI_COMM_WORLD);
           }
@@ -1016,7 +1016,7 @@ sagecal_master(int argc, char **argv) {
       }
       
       if (Data::use_global_solution) {
-      cout<<"Using Global"<<endl;
+      cout<<"Using global solution for residual calculation"<<endl;
 
       /* get back final solutions from each worker */
       /* get Y_i+rho J_i */

@@ -541,12 +541,6 @@ cerr<<"Error: Worker "<<myrank<<": Recheck your allocation or reduce number of w
           exit(1);
          }
          MPI_Recv(B, Npoly*Nms, MPI_DOUBLE, 0,TAG_SPATIAL, MPI_COMM_WORLD, &status);
-         cout<<myrank<<" freq ";
-         for(int cm=0; cm<mymscount; cm++) {
-           cout<<myids[cm]<<" ";
-         }
-         cout<<endl;
-         cout<<"Shapelet "<<sh_n0<<" beta="<<sh_beta<<endl;
     }
 
     while(1) {
@@ -555,7 +549,7 @@ cerr<<"Error: Worker "<<myrank<<": Recheck your allocation or reduce number of w
      MPI_Recv(&msgcode,1,MPI_INT,0,TAG_CTRL,MPI_COMM_WORLD,&status);
      /* assume all MS are the same size */  
      if (msgcode==CTRL_END || !msitr[0]->more()) {
-cout<<"Worker "<<myrank<<" quitting"<<endl;
+      cout<<"Worker "<<myrank<<" quitting"<<endl;
       break;
      } else if (msgcode==CTRL_SKIP) {
       /* skip to next timeslot */
@@ -861,7 +855,6 @@ cout<<myrank<<" : "<<cm<<": downweight ratio ("<<iodata_vec[cm].fratio<<") based
 
       /* spatial regularization with a valid diffuse model: get spatial model from master, apply spatial model to the diffuse model, and predict visibilities for all MS */
       if (Data::spatialreg && sp_diffuse_id>=0 && !(admm%Data::admm_cadence)) {
-        cout<<myrank<<": Got spatial model size "<< iodata_vec[0].N*8*Npoly*G<<endl;
         MPI_Recv(Zspat, iodata_vec[0].N*8*Npoly*G, MPI_DOUBLE, 0,TAG_SPATIAL, MPI_COMM_WORLD, &status);
         /* find product B x Zspat for a selected frequency */
         /* Zspat: 2N Npoly x 2G, each column (2N Npoly) reduce it to 2N by multiply and sum of Npoly values of B */

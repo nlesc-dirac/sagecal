@@ -241,9 +241,7 @@ recalculate_diffuse_coherencies(double *u, double *v, double *w, complex double 
         exit(1);
       }
       /* find info about the given cluster */
-      printf("cluster %d has %d sources\n",cid,carr[cid].N);
       for (int ci=0; ci<carr[cid].N; ci++) {
-        printf("source %d type %d\n",ci,carr[cid].stype[ci]);
         if (carr[cid].stype[ci]!=STYPE_SHAPELET) {
            fprintf(stderr,"%s: %d: invalid source type, must be shapelet\n",__FILE__,__LINE__);
            exit(1);
@@ -252,7 +250,6 @@ recalculate_diffuse_coherencies(double *u, double *v, double *w, complex double 
         /* get shapelet info */
         exinfo_shapelet *sp=(exinfo_shapelet*) carr[cid].ex[ci];
 
-        printf("shapelet n0=%d beta=%lf\n",sp->n0,sp->beta);
         /* create tensor : product out (sp->n0,sp->beta),
          * product in (sp->n0,sp->beta) (sh_n0,sh_beta) */
         if ((Cf=(double*)calloc((size_t)(sp->n0*sp->n0*sh_n0),sizeof(double)))==0) {
@@ -304,7 +301,6 @@ recalculate_diffuse_coherencies(double *u, double *v, double *w, complex double 
         /*for (int stat=0; stat<N; stat++) {
           shapelet_product_jones(sp->n0,sp->n0,sh_n0,sp->beta,sp->beta,sh_beta,&C_Jq[4*sp->n0*sp->n0*stat],s_coh,&Zt[4*G*stat],Cf,1);
         } */
-        printf("starting threads finding h = C J_q^H for source %d\n",ci);
         for (int nth1=0; nth1<nth_s; nth1++) {
           threaddata_stat[nth1].sL=sp->n0;
           threaddata_stat[nth1].sM=sp->n0;
@@ -354,7 +350,6 @@ recalculate_diffuse_coherencies(double *u, double *v, double *w, complex double 
          }
         } */
 
-        printf("starting threads finding h = J_p (C J_q^H) for source %d\n",ci);
         for (int nth1=0; nth1<nth_s; nth1++) {
           /* station range, stat1=off+0 ... < off+Nstat, stat2=stat1 ... N */
           threaddata_stat[nth1].sL=sp->n0;
@@ -382,7 +377,6 @@ recalculate_diffuse_coherencies(double *u, double *v, double *w, complex double 
         free(C_Jq);
 
         /* predict visibilities */
-        printf("starting threads for vis predict source %d\n",ci);
         for (int nth1=0; nth1<nth; nth1++) {
           /* set the source id */
           threaddata[nth1].sid=ci;
