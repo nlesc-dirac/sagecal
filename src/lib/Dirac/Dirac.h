@@ -1543,6 +1543,23 @@ extern int
 update_spatialreg_fista(complex double *Z, complex double *Zbar, complex double *Phikk, complex double *Phi, int N, int M, int Npoly, int G, double mu, int maxiter);
 
 
+/*
+ * Z = arg min \| Z_k - Z Phi_k\|^2 + \lambda \|Z\|^2 + \mu \|Z\|_1
+ *  + \Psi^H ( Z - Z_diff ) + \gamma/2 \| Z - Z_diff \|^2
+ * Z : 2*Npoly*N x 2G matrix to be estimated (output)
+ * Zbar: each of Z_k (M values) : 2*Npoly*N x 2 (times M)
+ * Phikk : sum Phi_k x Phi_k^H + \lambda I : 2G x 2G
+ * Phi: each of Phi_K (M values) : 2G x 2 (times M)
+ * Z_diff: 2*Npoly*N x 2G constraint
+ * Psi: 2*Npoly*N x 2G Lagrange multiplier
+ * mu: L1 constraint
+ * maxiter: max iterations
+ * FISTA: fast iterative shrinkage thresholding Beck&Teboulle 2009
+ */
+extern int
+update_spatialreg_fista_with_diffconstraint(complex double *Z, complex double *Zbar, complex double *Phikk,
+    complex double *Phi, complex double *Z_diff, complex double *Psi,
+    int N, int M, int Npoly, int G, double mu, double gamma, int maxiter);
 /****************************** pngoutput.c ****************************/
 extern int
 convert_tensor_to_image(double *W, const char *filename, int N, int M, int normalize);

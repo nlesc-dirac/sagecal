@@ -296,12 +296,16 @@ sagecal_master(int argc, char **argv) {
    int spatialreg_basis=SP_SHAPELET; /* SP_SHAPELET: shapelet (l,m) basis, SP_SHARMONIC: spherical harmonic (phi,theta) basis */
    /* input parameter int sh_n0 shapelet or spherical harmonic model order */
    int G=sh_n0*sh_n0; /* total modes */
-   double sh_beta=1.0; /* scale factor for shapelet basis */
+   double sh_beta=1.0; /* scale factor for shapelet basis - will be reset later */
    /* elastic net regularization parameters sh_lambda (L2), sh_mu (L1) */
    complex double *phivec=0; /* vector to store spherical harmonic modes n0^2 per each  polar coordinate */
    complex double *Phi=0; /* basis matrices 2Gx2, M times */
    complex double *Phikk=0; /* sum of Phi_k x Phi_k^H : 2Gx2G */
    int sp_diffuse_id=-1; /* if -D 'id' gives a matching cluster id, set this to matching ordinal number in 0,1,... */
+   double sp_diff_lr=0.1; /* learning rate for spatial model used in diffuse sky update (sort of Polyak average) , updated fraction is sp_gamma*sp_diff_lr/2 (must be < 1) between Zspat and Zspat_diff : Zspat x factor + Zspat_diff x (1-factor) */
+   if (sp_gamma*sp_diff_lr>2.0) {
+     cout<<"Warning: regularization specified by -D option ("<<sp_gamma<<") is probably too high"<<endl;
+   }
    if (Data::spatialreg) {
 #ifdef DEBUG1
     if ((dfp=fopen("debug.m","w+"))==0) {
@@ -473,6 +477,8 @@ sagecal_master(int argc, char **argv) {
 
     complex double *Zbar=0; /* constraint for each direction, 2Nx2 x Npoly x M */
     complex double *Zspat=0; /* spatial constraint matrix, 2*Npoly*N x 2G */
+    complex double *Zspat_diff=0; /* spatial constrait matrix used by the diffuse model if any, 2*Npoly*N x 2G similar to  Zspat */
+    complex double *Psi_diff=0; /* Lagrange multiplier for constraint Zspat=Zspat_diff used by the diffuse model if any, 2*Npoly*N x 2G similar to  Zspat */
     double *X=0; /* Lagrange multiplier for spatial reg Z=Zbar, 2*2*Npoly*N x 2 x M (double) */
     /*SP: spatial update */
     if (Data::spatialreg) {
@@ -635,6 +641,16 @@ sagecal_master(int argc, char **argv) {
     setup_polynomials(B, Npoly, iodata.Nms, iodata.freqs, iodata.freq0,(Npoly==1?1:PolyType));
 
     if (Data::spatialreg && sp_diffuse_id>=0) {
+       /* Initialize spatial model used in diffuse sky to a nominal value,
+        * for example to match the nomianal beam model or initialize to all zero */
+       if ((Zspat_diff=(complex double*)calloc((size_t)iodata.N*4*Npoly*G,sizeof(complex double)))==0) {
+        fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
+        exit(1);
+       }
+       if ((Psi_diff=(complex double*)calloc((size_t)iodata.N*4*Npoly*G,sizeof(complex double)))==0) {
+        fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
+        exit(1);
+       }
        /* before admm iteration, send all necessary aux info */
        for (int cm=0; cm<nslaves; cm++) {
          MPI_Send(&sh_n0, 1, MPI_INT, cm+1,TAG_SPATIAL, MPI_COMM_WORLD);
@@ -701,6 +717,18 @@ sagecal_master(int argc, char **argv) {
       /* find sum (Nms values) rho[] B(:,i) B(:,i)^T per cluster (M values) */
 
       for (int admm=0; admm<Nadmm; admm++) {
+
+        /* spatial regularization with a valid diffuse model: send each worker updated spatial model for its next MS */
+        if (Data::spatialreg && sp_diffuse_id>=0 && !(admm%Data::admm_cadence)) {
+          /* at start of each ADMM iteration, set to zero */
+          if (!admm) {
+            memset(Zspat_diff,0,sizeof(complex double)*(size_t)iodata.N*4*Npoly*G);
+          }
+          for (int cm=0; cm<nslaves; cm++) {
+             MPI_Send(Zspat_diff, iodata.N*8*Npoly*G, MPI_DOUBLE, cm+1,TAG_SPATIAL, MPI_COMM_WORLD);
+          }
+        }
+
 #ifdef DEBUG
        /* at each iteration, save rhok array
           each row correspond to one frequency */
@@ -874,7 +902,25 @@ sagecal_master(int argc, char **argv) {
             }
            }
            /* 2. update Zspat taking proximal step (FISTA) */
-           update_spatialreg_fista(Zspat,Zbar,Phikk,Phi,iodata.N,iodata.M,Npoly,G,sh_mu, fista_maxiter);
+           if (sp_diffuse_id>=0) {
+            if (!admm) {
+             memset(Psi_diff,0,sizeof(complex double)*(size_t)iodata.N*4*Npoly*G);
+            }
+            /* min \sum_k (Z_k -Z Phi_k) + \lambda ||Z||^2 + \mu ||Z||_1 + \Psi^H(Z-Z_diff) + \gamma/2 ||Z-Z_diff||^2, note Phikk already has \lambda I added  */
+            update_spatialreg_fista_with_diffconstraint(Zspat,Zbar,Phikk,Phi,Zspat_diff,Psi_diff,iodata.N,iodata.M,Npoly,G,sh_mu, sp_gamma, fista_maxiter);
+            /* grad descent step to update Z_diff, grad = -1/2 Psi - gamma/2 (Z-Z_diff) */
+            /* Z_diff <= (1-lr gamma/2) Z_diff + lr gamma/2 Z + gamma/2 Psi */
+            my_cscal(2*Npoly*iodata.N*2*G, (1-sp_diff_lr*sp_gamma*0.5), Zspat_diff);
+            my_caxpy(2*Npoly*iodata.N*2*G, Zspat, sp_diff_lr*sp_gamma*0.5, Zspat_diff);
+            my_caxpy(2*Npoly*iodata.N*2*G, Psi_diff, sp_gamma*0.5, Zspat_diff);
+
+            /* update Lagrange multiplier \Psi = \Psi + \gamma (Z-Zdiff) */
+            my_caxpy(2*Npoly*iodata.N*2*G, Zspat, sp_gamma, Psi_diff);
+            my_caxpy(2*Npoly*iodata.N*2*G, Zspat_diff, -sp_gamma, Psi_diff);
+           } else {
+            /* min \sum_k (Z_k -Z Phi_k) + \lambda ||Z||^2 + \mu ||Z||_1, note Phikk already has \lambda I added  */
+            update_spatialreg_fista(Zspat,Zbar,Phikk,Phi,iodata.N,iodata.M,Npoly,G,sh_mu, fista_maxiter);
+           }
            /* 3. update Zbar from Zspat, Z_k = Z Phi_k */
            /* Note the row ordering is 2*N*Npoly x 2 x M (each M has 2 cols) */
            for (int cm=0; cm<iodata.M; cm++) {
@@ -925,7 +971,12 @@ sagecal_master(int argc, char **argv) {
               my_daxpys(iodata.N,&Zerr[cm*iodata.N*8*Npoly+np*iodata.N*4+Npoly*iodata.N*4+3],4,alphak[cm],&X[cm*iodata.N*8*Npoly+7],8);
              }
            }
-           printf("SP: ADMM %d: ||Z-Zbar||=%lf ||Z||=%lf ||X||=%lf\n",admm,my_dnrm2(iodata.N*8*Npoly*iodata.M,Zerr)/((double)iodata.N*8*Npoly*iodata.M),my_dnrm2(iodata.N*8*Npoly*iodata.M,Z)/((double)iodata.N*8*Npoly*iodata.M),my_dnrm2(iodata.N*8*Npoly*iodata.M,X)/((double)iodata.N*8*Npoly*iodata.M));
+           printf("SP: ADMM %d: ||Z-Zbar||=%lf ||Z||=%lf ||X||=%lf",admm,my_dnrm2(iodata.N*8*Npoly*iodata.M,Zerr)/((double)iodata.N*8*Npoly*iodata.M),my_dnrm2(iodata.N*8*Npoly*iodata.M,Z)/((double)iodata.N*8*Npoly*iodata.M),my_dnrm2(iodata.N*8*Npoly*iodata.M,X)/((double)iodata.N*8*Npoly*iodata.M));
+           if (sp_diffuse_id>=0) {
+            printf(" ||Z_diff||=%lf ||Psi||=%lf\n", my_dnrm2(iodata.N*8*Npoly*G,(double*)Zspat_diff)/((double)iodata.N*8*Npoly*G), my_dnrm2(iodata.N*8*Npoly*G,(double*)Psi_diff)/((double)iodata.N*8*Npoly*G));
+           } else {
+            printf("\n");
+           }
            /* 5. feed Zbar and X to next update of Z
              already done above*/
          }
@@ -1004,14 +1055,6 @@ sagecal_master(int argc, char **argv) {
            Scurrent[cm]=(Sbegin[cm]+Scurrent[cm]>=Send[cm]?0:Scurrent[cm]+1);
           }
         }
-
-        /* spatial regularization with a valid diffuse model: send each worker updated spatial model for its next MS */
-        if (Data::spatialreg && sp_diffuse_id>=0 && !(admm%Data::admm_cadence)) {
-          for (int cm=0; cm<nslaves; cm++) {
-             MPI_Send(Zspat, iodata.N*8*Npoly*G, MPI_DOUBLE, cm+1,TAG_SPATIAL, MPI_COMM_WORLD);
-          }
-        }
-
 
       }
       
@@ -1251,6 +1294,10 @@ sagecal_master(int argc, char **argv) {
      free(Phikk);
      free(Zbar);
      free(Zspat);
+     if (sp_diffuse_id>=0) {
+      free(Zspat_diff);
+      free(Psi_diff);
+     }
      free(X);
      free(alphak);
    }

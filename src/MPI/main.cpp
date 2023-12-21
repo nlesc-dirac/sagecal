@@ -34,7 +34,7 @@ using namespace Data;
 
 void
 print_copyright(void) {
-  cout<<"SAGECal-MPI 0.8.1 (C) 2011-2023 Sarod Yatawatta"<<endl;
+  cout<<"SAGECal-MPI 0.8.2 (C) 2011-2024 Sarod Yatawatta"<<endl;
 }
 
 
@@ -73,7 +73,7 @@ print_help(void) {
    cout << "-y exclude baselines length (lambda) higher than this in calibration : default "<<Data::max_uvcut << endl;
    cout <<endl<<"Advanced options:"<<endl;
    cout << "-k cluster_id : correct residuals with solution of this cluster : default "<<Data::ccid<< endl;
-   cout << "-D cluster_id : this cluster is treated as the diffuse foreground model (if -X is also enabled): default "<<Data::ddid<< endl;
+   cout << "-D cluster_id,gamma : cluster 'cluster_id' is treated as the diffuse foreground model (if -X is also enabled), gamma: regularization factor to apply spatial model to diffuse model: default "<<Data::ddid<<","<<Data::sp_gamma<<endl;
    cout << "-o robust rho, robust matrix inversion during correction: default "<<Data::rho<< endl;
    cout << "-J 0,1 : if >0, use phase only correction: default "<<Data::phaseOnly<< endl;
    cout << "-j 0,1,2... 0 : OSaccel, 1 no OSaccel, 2: OSRLM, 3: RLM, 4: RTR, 5: RRTR: 6: NSD, default "<<Data::solver_mode<< endl;
@@ -276,7 +276,19 @@ ParseCmdLine(int ac, char **av) {
                 }
                 break;
             case 'D': 
-                ddid= atoi(optarg);
+                {
+                  char gamma_[128];
+                  char ddid_[128];
+                  int matched=sscanf(optarg,"%127[^,],%127[^,]",ddid_,gamma_);
+                  if (matched==2) {
+                    sscanf(ddid_,"%d",&ddid);
+                    sscanf(gamma_,"%lf",&sp_gamma);
+                    cout<<"Diffuse sky model cluster "<<ddid<<" regularization "<<sp_gamma<<endl;
+                  } else {
+                    cout<<"Error: -D option has invalid parameters"<<endl;
+                    exit(1);
+                  }
+                }
                 break;
             case 'h': 
                 print_help();

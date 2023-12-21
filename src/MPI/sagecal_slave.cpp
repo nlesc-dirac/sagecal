@@ -650,6 +650,46 @@ cout<<myrank<<" : "<<cm<<": downweight ratio ("<<iodata_vec[cm].fratio<<") based
      /******************** ADMM  *******************************/
      int mmid_prev=-1;
      for (int admm=0; admm<Nadmm; admm++) {
+      /************************************************************************/
+      /* spatial regularization with a valid diffuse model: get spatial model from master, apply spatial model to the diffuse model, and predict visibilities for all MS */
+      if (Data::spatialreg && sp_diffuse_id>=0 && !(admm%Data::admm_cadence)) {
+        MPI_Recv(Zspat, iodata_vec[0].N*8*Npoly*G, MPI_DOUBLE, 0,TAG_SPATIAL, MPI_COMM_WORLD, &status);
+        /* find product B x Zspat for a selected frequency */
+        /* Zspat: 2N Npoly x 2G, each column (2N Npoly) reduce it to 2N by multiply and sum of Npoly values of B */
+        /* B x Zspat : 2N x 2G per each freq */
+        for(int cm=0; cm<mymscount; cm++) {
+          int ifreq=myids[cm];
+          memset(&Zb[cm*4*iodata_vec[0].N*G],0,sizeof(complex double)*(size_t)4*iodata_vec[0].N*G);
+          for (int col=0; col<2*G; col++) {
+            /* work with col of 2N rows */
+            for (int np=0; np<Npoly; np++) {
+               my_daxpy(4*iodata_vec[0].N, (double*)&Zspat[col*2*iodata_vec[0].N*Npoly+np*2*iodata_vec[0].N], B[ifreq*Npoly+np], (double*)&Zb[cm*4*iodata_vec[0].N*G+col*2*iodata_vec[0].N]);
+            }
+          }
+        }
+
+        /* Re-calculate model for cluster id 'sp_diffuse_id' */
+        for(int cm=0; cm<mymscount; cm++) {
+          recalculate_diffuse_coherencies(iodata_vec[cm].u,iodata_vec[cm].v,iodata_vec[cm].w,coh_vec[cm],iodata_vec[cm].N,iodata_vec[cm].Nbase*iodata_vec[cm].tilesz,barr_vec[cm],carr_vec[cm],M,iodata_vec[cm].freq0,iodata_vec[cm].deltaf,iodata_vec[cm].deltat,iodata_vec[cm].dec0,Data::min_uvcut,Data::max_uvcut,sp_diffuse_id,sh_n0,sh_beta,&Zb[cm*4*iodata_vec[0].N*G],Data::Nt);
+
+          /* FIXME: save calculated coherencies in text file, re,im XX,XY,YX,YY,
+           * note that coherencies need to be multiplied by the solutions to make sense */
+          if (admm>=Nadmm-Data::admm_cadence) {
+          for (int nb=0; nb<iodata_vec[cm].Nbase*iodata_vec[cm].tilesz; nb++) {
+            fprintf(debug_vec[cm],"%e %e %e %e %e %e %e %e\n",creal(coh_vec[cm][4*M*nb+4*sp_diffuse_id]),cimag(coh_vec[cm][4*M*nb+4*sp_diffuse_id]),
+            creal(coh_vec[cm][4*M*nb+4*sp_diffuse_id+1]),cimag(coh_vec[cm][4*M*nb+4*sp_diffuse_id+1]),
+            creal(coh_vec[cm][4*M*nb+4*sp_diffuse_id+2]),cimag(coh_vec[cm][4*M*nb+4*sp_diffuse_id+2]),
+            creal(coh_vec[cm][4*M*nb+4*sp_diffuse_id+3]),cimag(coh_vec[cm][4*M*nb+4*sp_diffuse_id+3]));
+/*fprintf(debug_vec[cm],"%e %e %e %e %e %e %e %e\n",creal(coh_vec[cm][4*M*nb+4*4]),cimag(coh_vec[cm][4*M*nb+4*4]),
+            creal(coh_vec[cm][4*M*nb+4*4+1]),cimag(coh_vec[cm][4*M*nb+4*4+1]),
+            creal(coh_vec[cm][4*M*nb+4*4+2]),cimag(coh_vec[cm][4*M*nb+4*4+2]),
+            creal(coh_vec[cm][4*M*nb+4*4+3]),cimag(coh_vec[cm][4*M*nb+4*4+3]));
+            */
+          }
+          }
+        }
+      }
+      /************************************************************************/
        /* receive which MS to work on in this ADMM iteration */
       int mmid;
       MPI_Recv(&mmid,1,MPI_INT,0,TAG_CTRL,MPI_COMM_WORLD,&status);
@@ -853,44 +893,7 @@ cout<<myrank<<" : "<<cm<<": downweight ratio ("<<iodata_vec[cm].fratio<<") based
       my_dcopy(iodata_vec[mmid].N*8*Mt, p_vec[mmid], 1, pres, 1);
       my_daxpy(iodata_vec[mmid].N*8*Mt, Z_vec[mmid], -1.0, pres);
 
-      /* spatial regularization with a valid diffuse model: get spatial model from master, apply spatial model to the diffuse model, and predict visibilities for all MS */
-      if (Data::spatialreg && sp_diffuse_id>=0 && !(admm%Data::admm_cadence)) {
-        MPI_Recv(Zspat, iodata_vec[0].N*8*Npoly*G, MPI_DOUBLE, 0,TAG_SPATIAL, MPI_COMM_WORLD, &status);
-        /* find product B x Zspat for a selected frequency */
-        /* Zspat: 2N Npoly x 2G, each column (2N Npoly) reduce it to 2N by multiply and sum of Npoly values of B */
-        /* B x Zspat : 2N x 2G per each freq */
-        for(int cm=0; cm<mymscount; cm++) {
-          int ifreq=myids[cm];
-          memset(&Zb[cm*4*iodata_vec[0].N*G],0,sizeof(complex double)*(size_t)4*iodata_vec[0].N*G);
-          for (int col=0; col<2*G; col++) {
-            /* work with col of 2N rows */
-            for (int np=0; np<Npoly; np++) {
-               my_daxpy(4*iodata_vec[0].N, (double*)&Zspat[col*2*iodata_vec[0].N*Npoly+np*2*iodata_vec[0].N], B[ifreq*Npoly+np], (double*)&Zb[cm*4*iodata_vec[0].N*G+col*2*iodata_vec[0].N]);
-            }
-          }
-        }
 
-        /* Re-calculate model for cluster id 'sp_diffuse_id' */
-        for(int cm=0; cm<mymscount; cm++) {
-          recalculate_diffuse_coherencies(iodata_vec[cm].u,iodata_vec[cm].v,iodata_vec[cm].w,coh_vec[cm],iodata_vec[cm].N,iodata_vec[cm].Nbase*iodata_vec[cm].tilesz,barr_vec[cm],carr_vec[cm],M,iodata_vec[cm].freq0,iodata_vec[cm].deltaf,iodata_vec[cm].deltat,iodata_vec[cm].dec0,Data::min_uvcut,Data::max_uvcut,sp_diffuse_id,sh_n0,sh_beta,&Zb[cm*4*iodata_vec[0].N*G],Data::Nt);
-
-          /* FIXME: save calculated coherencies in text file, re,im XX,XY,YX,YY,
-           * note that coherencies need to be multiplied by the solutions to make sense */
-          if (admm>=Nadmm-Data::admm_cadence) {
-          for (int nb=0; nb<iodata_vec[cm].Nbase*iodata_vec[cm].tilesz; nb++) {
-            fprintf(debug_vec[cm],"%e %e %e %e %e %e %e %e\n",creal(coh_vec[cm][4*M*nb+4*sp_diffuse_id]),cimag(coh_vec[cm][4*M*nb+4*sp_diffuse_id]),
-            creal(coh_vec[cm][4*M*nb+4*sp_diffuse_id+1]),cimag(coh_vec[cm][4*M*nb+4*sp_diffuse_id+1]),
-            creal(coh_vec[cm][4*M*nb+4*sp_diffuse_id+2]),cimag(coh_vec[cm][4*M*nb+4*sp_diffuse_id+2]),
-            creal(coh_vec[cm][4*M*nb+4*sp_diffuse_id+3]),cimag(coh_vec[cm][4*M*nb+4*sp_diffuse_id+3]));
-/*fprintf(debug_vec[cm],"%e %e %e %e %e %e %e %e\n",creal(coh_vec[cm][4*M*nb+4*4]),cimag(coh_vec[cm][4*M*nb+4*4]),
-            creal(coh_vec[cm][4*M*nb+4*4+1]),cimag(coh_vec[cm][4*M*nb+4*4+1]),
-            creal(coh_vec[cm][4*M*nb+4*4+2]),cimag(coh_vec[cm][4*M*nb+4*4+2]),
-            creal(coh_vec[cm][4*M*nb+4*4+3]),cimag(coh_vec[cm][4*M*nb+4*4+3]));
-            */
-          }
-          }
-        }
-      }
       
       /* primal residual : per one real parameter */ 
       /* to remove a load of network traffic and screen output, disable this info */
