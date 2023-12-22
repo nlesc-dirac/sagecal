@@ -362,7 +362,8 @@ sagecal_master(int argc, char **argv) {
        }
        double rr,tt;
        if (spatialreg_basis==SP_SHAPELET) {
-         rr=lmean;
+         /* diffuse sky shapelet model is in (-l,m) so negate */
+         rr=-lmean;
          tt=mmean;
        } else {
          /* transform l,m in [-1,1] to r in [0,pi/2],theta [0,2*pi] */

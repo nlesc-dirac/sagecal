@@ -999,7 +999,8 @@ plot_spatial_model(complex double *Zspat, double *B, int Npoly, int N, int n0, i
    for (int ci=0; ci<axes_M; ci++) {
        for (int cj=0; cj<axes_M; cj++) {
           if (spatialreg_basis==SP_SHAPELET) {
-           pn_theta[ci*axes_M+cj]=pn_ll[ci];
+           /* diffuse sky shapelet model is in (-l,m) so negate */
+           pn_theta[ci*axes_M+cj]=-pn_ll[ci];
            pn_phi[ci*axes_M+cj]=pn_mm[cj];
           } else {
            /* map (l,m) to r [0,pi/2] and theta[0,2*pi] */
