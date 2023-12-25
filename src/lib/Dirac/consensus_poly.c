@@ -1093,3 +1093,381 @@ soft_threshold_z(double *z, int N, double lambda, int Nt) {
 
    return 0;
 }
+
+
+
+/* 
+ * B_f Z Phi_k = J_0, where J_0 = 1_N \kron I_2
+ * B_f : 2N x 2Npoly N , Nf values
+ * Phi_k : 2G x 2, M values
+ * Z : 2Npoly N x 2G
+ * Z = (\sum_f B_f^T B_f)^{-1} (\sum_f B_f^T) J_0 (\sum_k Phi_k^H) (\sum_k Phi_k Phi_k^H)^{-1}
+ * Note: B: Npoly x  Nf, each row one basis function, use this to create B_f = B(:col) \kron I_2N = b_f^T \kron I_2N
+ * phi: MxG vector, Phi_k = I_2 \kron phi_k, G values, k=0..M-1
+ *
+ * Final product : (Bii_sum_b \kron I_2N) (1_N \kron I_2) (I_2 \kron sum_phi_Phi^T)
+ *
+ * Z: 2N Npoly x 2G output
+ */
+int 
+find_initial_spatial(double *B, complex double *phi, int Npoly, int N, int Nf, int M, int G, complex double *Z) {
+
+  double w[1],*WORK,*U,*S,*VT;
+  int status,lwork=1;
+  double *sum_b_f, *Bi, *Binv_b;
+
+  if ((sum_b_f=(double*)calloc((size_t)Npoly,sizeof(double)))==0) {
+    printf("%s: %d: no free memory\n",__FILE__,__LINE__);
+    exit(1);
+  }
+  if ((Bi=(double*)calloc((size_t)Npoly*Npoly,sizeof(double)))==0) {
+    printf("%s: %d: no free memory\n",__FILE__,__LINE__);
+    exit(1);
+  }
+
+  for (int ci=0; ci<Nf; ci++) {
+    my_daxpy(Npoly,&B[ci*Npoly],1.0,sum_b_f);
+    /* b_f x b_f^T */
+    my_dgemm('N','T',Npoly,Npoly,1,1.0,&B[ci*Npoly],Npoly,&B[ci*Npoly],Npoly,1.0,Bi,Npoly);
+  }
+
+#ifdef DEBUG
+  printf("BT=[\n");
+  for (int ci=0; ci<Nf; ci++) {
+   for(int cj=0; cj<Npoly; cj++) {
+    printf("%lf ",B[ci*Npoly+cj]);
+   }
+   printf("\n");
+  }
+  printf("];\nBi=[\n");
+  for (int ci=0; ci<Npoly; ci++) {
+   for(int cj=0; cj<Npoly; cj++) {
+    printf("%lf ",Bi[ci*Npoly+cj]);
+   }
+   printf("\n");
+  }
+  printf("];\nsum_b_f=[");
+  for (int ci=0; ci<Npoly; ci++) {
+    printf("%lf ",sum_b_f[ci]);
+  }
+  printf("];\n");
+#endif
+
+  if ((U=(double*)calloc((size_t)Npoly*Npoly,sizeof(double)))==0) {
+    printf("%s: %d: no free memory\n",__FILE__,__LINE__);
+    exit(1);
+  }
+  if ((VT=(double*)calloc((size_t)Npoly*Npoly,sizeof(double)))==0) {
+    printf("%s: %d: no free memory\n",__FILE__,__LINE__);
+    exit(1);
+  }
+  if ((S=(double*)calloc((size_t)Npoly,sizeof(double)))==0) {
+    printf("%s: %d: no free memory\n",__FILE__,__LINE__);
+    exit(1);
+  }
+
+  /* memory for SVD */
+  status=my_dgesvd('A','A',Npoly,Npoly,Bi,Npoly,S,U,Npoly,VT,Npoly,w,-1);
+  if (!status) {
+    lwork=(int)w[0];
+  } else {
+    printf("%s: %d: LAPACK error %d\n",__FILE__,__LINE__,status);
+    exit(1);
+  }
+  if ((WORK=(double*)calloc((size_t)lwork,sizeof(double)))==0) {
+    printf("%s: %d: no free memory\n",__FILE__,__LINE__);
+    exit(1);
+  }
+
+  status=my_dgesvd('A','A',Npoly,Npoly,Bi,Npoly,S,U,Npoly,VT,Npoly,WORK,lwork);
+  if (status) {
+    printf("%s: %d: LAPACK error %d\n",__FILE__,__LINE__,status);
+    exit(1);
+  }
+
+  /* find 1/singular values, and multiply columns of U with new singular values */
+  for (int ci=0; ci<Npoly; ci++) {
+   if (S[ci]>CLM_EPSILON) {
+    S[ci]=1.0/S[ci];
+   } else {
+    S[ci]=0.0;
+   }
+   my_dscal(Npoly,S[ci],&U[ci*Npoly]);
+  }
+
+  /* find product U 1/S V^T */
+  my_dgemm('N','N',Npoly,Npoly,Npoly,1.0,U,Npoly,VT,Npoly,0.0,Bi,Npoly);
+
+  free(U);
+  free(S);
+  free(VT);
+  free(WORK);
+
+#ifdef DEBUG
+  printf("Bii=[\n");
+  for (int ci=0; ci<Npoly; ci++) {
+   for(int cj=0; cj<Npoly; cj++) {
+    printf("%lf ",Bi[ci*Npoly+cj]);
+   }
+   printf("\n");
+  }
+  printf("];\n");
+#endif
+
+  if ((Binv_b=(double*)calloc((size_t)Npoly,sizeof(double)))==0) {
+    printf("%s: %d: no free memory\n",__FILE__,__LINE__);
+    exit(1);
+  }
+  /* (\sum_f B_f^T B_f)^{-1} (\sum_f B_f^T) 
+   * = ( (\sum_f b_f^T b_f)^{-1} \sum_f b_f ) \kron I_2N 
+   * so find the product Bi x sum_b_f
+   */
+  my_dgemv('N',Npoly,Npoly,1.0,Bi,Npoly,sum_b_f,1,0.0,Binv_b,1);
+
+#ifdef DEBUG
+  printf("Binv_sum_b_f=[");
+  for (int ci=0; ci<Npoly; ci++) {
+    printf("%lf ",Binv_b[ci]);
+  }
+  printf("];\n");
+#endif
+
+  complex double *Phi,*sum_phi_k;
+
+  if ((sum_phi_k=(complex double*)calloc((size_t)G,sizeof(complex double)))==0) {
+    printf("%s: %d: no free memory\n",__FILE__,__LINE__);
+    exit(1);
+  }
+  if ((Phi=(complex double*)calloc((size_t)G*G,sizeof(complex double)))==0) {
+    printf("%s: %d: no free memory\n",__FILE__,__LINE__);
+    exit(1);
+  }
+
+  for (int ci=0; ci<M; ci++) {
+    /* \sum_k phi_k = conj( \sum_k phi_k ) */
+    my_caxpy(G,&phi[ci*G],1.0,sum_phi_k);
+    /* phi_k x phi_k^H */
+    my_zgemm('N','C',G,G,1,1.0,&phi[ci*G],G,&phi[ci*G],G,1.0,Phi,G);
+  }
+
+#ifdef DEBUG
+  printf("sum_phi_k=[");
+  for (int ci=0; ci<G; ci++) {
+    printf("%lf+j*(%lf) ",creal(sum_phi_k[ci]),cimag(sum_phi_k[ci]));
+  }
+  printf("];\n");
+#endif
+
+  /* conjugate sum_phi_k */
+  for (int ci=0; ci<G; ci++) {
+    sum_phi_k[ci]=creal(sum_phi_k[ci])-_Complex_I*cimag(sum_phi_k[ci]);
+  }
+
+#ifdef DEBUG
+  printf("sum_phi_k_H=[");
+  for (int ci=0; ci<G; ci++) {
+    printf("%lf+j*(%lf) ",creal(sum_phi_k[ci]),cimag(sum_phi_k[ci]));
+  }
+  printf("];\n");
+#endif
+
+
+  complex double cw[1],*cWORK,*cU,*cVT;
+  double *RWORK; /* > 5 G */
+
+  if ((cU=(complex double*)calloc((size_t)G*G,sizeof(complex double)))==0) {
+    printf("%s: %d: no free memory\n",__FILE__,__LINE__);
+    exit(1);
+  }
+  if ((cVT=(complex double*)calloc((size_t)G*G,sizeof(complex double)))==0) {
+    printf("%s: %d: no free memory\n",__FILE__,__LINE__);
+    exit(1);
+  }
+  if ((S=(double*)calloc((size_t)G,sizeof(double)))==0) {
+    printf("%s: %d: no free memory\n",__FILE__,__LINE__);
+    exit(1);
+  }
+  if ((RWORK=(double*)calloc((size_t)6*G,sizeof(double)))==0) {
+    printf("%s: %d: no free memory\n",__FILE__,__LINE__);
+    exit(1);
+  }
+
+  status=my_zgesvd('A','A',G,G,Phi,G,S,cU,G,cVT,G,cw,-1,RWORK);
+  if (!status) {
+    lwork=(int)w[0];
+  } else {
+   fprintf(stderr,"%s: %d: LAPACK error %d\n",__FILE__,__LINE__,status);
+   exit(1);
+  }
+  if ((cWORK=(complex double*)malloc((size_t)(int)lwork*sizeof(complex double)))==0) {
+   fprintf(stderr,"%s: %d: No free memory\n",__FILE__,__LINE__);
+   exit(1);
+  }
+
+#ifdef DEBUG
+  printf("Phi=[\n");
+  for (int ci=0; ci<G; ci++) {
+   for(int cj=0; cj<G; cj++) {
+    printf("%lf+j*(%lf) ",creal(Phi[ci*G+cj]),cimag(Phi[ci*G+cj]));
+   }
+   printf("\n");
+  }
+  printf("];\n");
+#endif
+
+
+  status=my_zgesvd('A','A',G,G,Phi,G,S,cU,G,cVT,G,cWORK,lwork,RWORK);
+  if (status) {
+   fprintf(stderr,"%s: %d: LAPACK error %d\n",__FILE__,__LINE__,status);
+   exit(1);
+  }
+
+  /* find 1/singular values, and multiply columns of U with new singular values */
+  for (int ci=0; ci<G; ci++) {
+   if (S[ci]>CLM_EPSILON) {
+    S[ci]=1.0/S[ci];
+   } else {
+    S[ci]=0.0;
+   }
+   my_cscal(G,S[ci],&cU[ci*G]);
+  }
+
+
+  /* find product U 1/S V^T */
+  my_zgemm('N','N',G,G,G,1.0,cU,G,cVT,G,0.0,Phi,G);
+
+#ifdef DEBUG
+  printf("Phii=[\n");
+  for (int ci=0; ci<G; ci++) {
+   for(int cj=0; cj<G; cj++) {
+    printf("%lf+j*(%lf) ",creal(Phi[ci*G+cj]),cimag(Phi[ci*G+cj]));
+   }
+   printf("\n");
+  }
+  printf("];\n");
+#endif
+
+
+  free(cU);
+  free(cVT);
+  free(S);
+  free(RWORK);
+  free(cWORK);
+
+  complex double *sum_phi_Phii;
+  if ((sum_phi_Phii=(complex double*)calloc((size_t)G,sizeof(complex double)))==0) {
+    printf("%s: %d: no free memory\n",__FILE__,__LINE__);
+    exit(1);
+  }
+
+  /* find product sum_phi_k^H x Phii */
+  my_zgemm('C','N',1,G,G,1.0,sum_phi_k,G,Phi,G,0.0,sum_phi_Phii,1);
+
+#ifdef DEBUG
+  printf("sum_phi_Phii=[");
+  for (int ci=0; ci<G; ci++) {
+    printf("%lf+j*(%lf) ",creal(sum_phi_Phii[ci]),cimag(sum_phi_Phii[ci]));
+  }
+  printf("];\n");
+#endif
+
+  /* form I_2 \kron sum_phi_Phii^T :  2 x 2G */
+  complex double *Phi_rhs;
+  if ((Phi_rhs=(complex double*)calloc((size_t)2*2*G,sizeof(complex double)))==0) {
+    printf("%s: %d: no free memory\n",__FILE__,__LINE__);
+    exit(1);
+  }
+  my_ccopy(G, sum_phi_Phii, 1, Phi_rhs, 2);
+  my_ccopy(G, sum_phi_Phii, 1, &Phi_rhs[2*G+1], 2);
+
+#ifdef DEBUG
+  printf("Phi_rhs=[\n");
+  for (int ci=0; ci<2; ci++) {
+    for (int cj=0; cj<2*G; cj++) {
+    printf("%lf+j*(%lf) ",creal(Phi_rhs[2*cj+ci]),cimag(Phi_rhs[2*cj+ci]));
+    }
+    printf("\n");
+  }
+  printf("];\n");
+#endif
+
+  /* form 1_N \kron I_2 : 2N x 2 */
+  complex double *J_0;
+  if ((J_0=(complex double*)calloc((size_t)2*N*2,sizeof(complex double)))==0) {
+    printf("%s: %d: no free memory\n",__FILE__,__LINE__);
+    exit(1);
+  }
+
+  for (int ci=0; ci<N; ci++) {
+    J_0[2*ci]=1.0;
+    J_0[2*N+2*ci+1]=1.0;
+  }
+
+#ifdef DEBUG
+  printf("J_0=[\n");
+  for (int ci=0; ci<2*N; ci++) {
+    for (int cj=0; cj<2; cj++) {
+    printf("%lf+j*(%lf) ",creal(J_0[2*N*cj+ci]),cimag(J_0[2*N*cj+ci]));
+    }
+    printf("\n");
+  }
+  printf("];\n");
+#endif
+
+  complex double *J_Phi;
+  if ((J_Phi=(complex double*)calloc((size_t)2*N*2*G,sizeof(complex double)))==0) {
+    printf("%s: %d: no free memory\n",__FILE__,__LINE__);
+    exit(1);
+  }
+
+  /* form product (2Nx2) x (2x2G) = 2Nx2G */
+  my_zgemm('N','N',2*N,2*G,2,1.0,J_0,2*N,Phi_rhs,2,1.0,J_Phi,2*N);
+
+#ifdef DEBUG
+  printf("J_Phi=[\n");
+  for (int ci=0; ci<2*N; ci++) {
+    for (int cj=0; cj<2*G; cj++) {
+    printf("%lf+j*(%lf) ",creal(J_Phi[2*N*cj+ci]),cimag(J_Phi[2*N*cj+ci]));
+    }
+    printf("\n");
+  }
+  printf("];\n");
+#endif
+
+  /* form product (b_sum \kron I_2N) x J_Phi
+   * Npoly elements in b_sum, (Npoly*2N x 2N) x (2N x 2G)
+   * out row 0 : b[0] x J_Phi[row 0]
+   * out row 1 : b[1] x J_Phi[row 0]
+   * ..
+   * out row Npoly-1 : b[Npoly-1] x J_Phi[row 0]
+   * out row Npoly : b[0] x J_Phi[row 1]
+   * ..
+   * out row 2Npoly-1 : b[Npoly-1] x J_Phi[row 1] ...
+   * out row ci : b[ci%Npoly] x J_Phi[row ci/Npoly], ci = 0...2N*Npoly-1 
+   */
+
+  complex double *row;
+  if ((row=(complex double*)calloc((size_t)2*G,sizeof(complex double)))==0) {
+    printf("%s: %d: no free memory\n",__FILE__,__LINE__);
+    exit(1);
+  }
+
+  for (int ci=0; ci<2*N*Npoly; ci++) {
+   my_ccopy(2*G,&J_Phi[ci/Npoly],2*N,row,1);
+   my_cscal(2*G,sum_b_f[ci%Npoly],row);
+   my_ccopy(2*G,row,1,&Z[ci],2*N*Npoly);
+  }
+
+  free(sum_b_f);
+  free(Bi);
+  free(Binv_b);
+
+  free(Phi);
+  free(sum_phi_k);
+  free(sum_phi_Phii);
+  free(Phi_rhs);
+  free(J_0);
+  free(J_Phi);
+  free(row);
+  return 0;
+}

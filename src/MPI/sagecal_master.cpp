@@ -479,6 +479,7 @@ sagecal_master(int argc, char **argv) {
     complex double *Zbar=0; /* constraint for each direction, 2Nx2 x Npoly x M */
     complex double *Zspat=0; /* spatial constraint matrix, 2*Npoly*N x 2G */
     complex double *Zspat_diff=0; /* spatial constrait matrix used by the diffuse model if any, 2*Npoly*N x 2G similar to  Zspat */
+    complex double *Zspat_diff0=0; /* initial value for spatial constrait matrix used by the diffuse model if any, 2*Npoly*N x 2G similar to  Zspat */
     complex double *Psi_diff=0; /* Lagrange multiplier for constraint Zspat=Zspat_diff used by the diffuse model if any, 2*Npoly*N x 2G similar to  Zspat */
     double *X=0; /* Lagrange multiplier for spatial reg Z=Zbar, 2*2*Npoly*N x 2 x M (double) */
     /*SP: spatial update */
@@ -648,6 +649,15 @@ sagecal_master(int argc, char **argv) {
         fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
         exit(1);
        }
+       if ((Zspat_diff0=(complex double*)calloc((size_t)iodata.N*4*Npoly*G,sizeof(complex double)))==0) {
+        fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
+        exit(1);
+       }
+
+       /* B_f Zspat_diff_0 Phi_k = J_0, where J_0 = 1_N \kron I_2 */
+       /* B_f : 2N x 2Npoly N, Phi_k : 2G x 2, J_0 : 2N x 2, Z_spat_diff: 2Npoly N x 2G */
+       /* so Zspat_diff_0 = (\sum_f B_f^T B_f)^{-1} (\sum_f B_f^T) J_0 (\sum_k Phi_k^H) (\sum_k Phi_k Phi_k^H)^{-1} */
+       find_initial_spatial(B,phivec,Npoly,iodata.N,iodata.Nms,iodata.M,G,Zspat_diff0);
        if ((Psi_diff=(complex double*)calloc((size_t)iodata.N*4*Npoly*G,sizeof(complex double)))==0) {
         fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
         exit(1);
@@ -721,9 +731,9 @@ sagecal_master(int argc, char **argv) {
 
         /* spatial regularization with a valid diffuse model: send each worker updated spatial model for its next MS */
         if (Data::spatialreg && sp_diffuse_id>=0 && !(admm%Data::admm_cadence)) {
-          /* at start of each ADMM iteration, set to zero */
+          /* at start of each ADMM iteration, set to initial value */
           if (!admm) {
-            memset(Zspat_diff,0,sizeof(complex double)*(size_t)iodata.N*4*Npoly*G);
+            memcpy(Zspat_diff,Zspat_diff0,sizeof(complex double)*(size_t)iodata.N*4*Npoly*G);
           }
           for (int cm=0; cm<nslaves; cm++) {
              MPI_Send(Zspat_diff, iodata.N*8*Npoly*G, MPI_DOUBLE, cm+1,TAG_SPATIAL, MPI_COMM_WORLD);
@@ -1297,6 +1307,7 @@ sagecal_master(int argc, char **argv) {
      free(Zspat);
      if (sp_diffuse_id>=0) {
       free(Zspat_diff);
+      free(Zspat_diff0);
       free(Psi_diff);
      }
      free(X);

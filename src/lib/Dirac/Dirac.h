@@ -1496,6 +1496,8 @@ extern int
 update_rho_bb(double *rho, double *rhoupper, int N, int M, int Mt, clus_source_t *carr, double *Yhat, double *Yhat_k0, double *J, double *J_k0, int Nt);
 
 
+extern int
+find_initial_spatial(double *B, complex double *Phi, int Npoly, int N, int Nf, int M, int G, complex double *Z);
 /****************************** admm_solve.c ****************************/
 /* ADMM cost function  = normal_cost + ||Y^H(J-BZ)|| + rho/2 ||J-BZ||^2 */
 /* extra params
