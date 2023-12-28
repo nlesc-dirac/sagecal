@@ -201,3 +201,85 @@ update_spatialreg_fista_with_diffconstraint(complex double *Z, complex double *Z
   free(Y);
   return 0;
 }
+
+
+
+/* 
+ * Z_diff = arg min ||Z_diff - Z_diff0||^2 + \Psi^H(Z-Z_diff) + \gamma/2||Z-Z_diff||^2 + \lambda ||Z_diff||^2 + \mu||Z_diff||_1 
+ * Z_diff : Kx1  to be estimated (output)
+ * Z_diff, Z_diff0, Z, Psi: all Kx1
+ * lambda : L2 constraint
+ * mu: L1 constraint
+ * maxiter: max iterations
+ */
+int 
+update_diffusemodel_fista(complex double *Zdiff, complex double *Zdiff0, complex double *Psi, complex double *Z,
+    double lambda, double mu, double gamma, int K, int maxiter) {
+
+  /* gradient 
+   * (Z_diff-Z_diff0) -1/2 Psi - gamma/2 (Z-Z_diff) +lambda Z_diff : size Kx1
+   */
+  complex double *gradf;
+  complex double *Zold,*Y;
+  /* Lipschitz constant of gradient, use ||Zdiff0||^2 as estimate */
+  double L=my_cdot(K,Zdiff0,Zdiff0);
+  /* intial t */
+  double t=1.0;
+  if ((gradf=(complex double*)calloc((size_t)K,sizeof(complex double)))==0) {
+      fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
+      exit(1);
+  }
+  if ((Zold=(complex double*)calloc((size_t)K,sizeof(complex double)))==0) {
+      fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
+      exit(1);
+  }
+  if ((Y=(complex double*)calloc((size_t)K,sizeof(complex double)))==0) {
+      fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
+      exit(1);
+  }
+
+   /* reset Z to 0 */
+   memset(Zdiff,0,K*sizeof(complex double));
+
+   for (int it=0; it<maxiter; it++) {
+    /* Zold <- Zdiff */
+    memcpy(Zold,Zdiff,K*sizeof(complex double));
+
+    /* proximal step using Y instead of Z */
+    /* gradf=(1+gamma/2+lambda)Zdiff - Zdiff0 -gamma/2 Z - 1/2 Psi */
+    memcpy(gradf,Zdiff,K*sizeof(complex double));
+    my_cscal(K,1.0+0.5*gamma+lambda,gradf);
+    my_caxpy(K, Zdiff0, -1.0, gradf);
+    my_caxpy(K, Z, -0.5*gamma, gradf);
+    my_caxpy(K, Psi, -0.5, gradf);
+
+    my_caxpy(K, gradf, -1.0/L, Y);
+    /* soft threshold and update Z */
+    double thresh=t*mu;
+    for (int ci=0; ci<K; ci++) {
+       double r=creal(Y[ci]);
+       double r1=fabs(r)-thresh; 
+       double mplus=(r1>0.0?r1:0.0);
+       double realval=(r>0.0?mplus:-mplus);
+       r=cimag(Y[ci]);
+       r1=fabs(r)-thresh; 
+       mplus=(r1>0.0?r1:0.0);
+       double imagval=(r>0.0?mplus:-mplus);
+       Zdiff[ci]=realval+_Complex_I*imagval;
+       //printf("%lf %lf %lf %lf\n",creal(Y[ci]),cimag(Y[ci]),creal(Z[ci]),cimag(Z[ci]));
+    }
+    double t0=t;
+    t=(1.0+sqrt(1.0+4.0*t*t))*0.5;
+    /* update Y = Z + (t-1)/told (Z-Zold) = (1+(t-1)/told) Z - (t-1)/told Zold */
+    memcpy(Y,Zdiff,K*sizeof(complex double));
+    double scalefac=(t-1.0)/t0;
+    my_cscal(K,1.0+scalefac,Y);
+    my_caxpy(K, Zold, -scalefac, Y);
+    //printf("%lf %lf %lf %lf %lf\n",t,creal(Y[10]),cimag(Y[10]),creal(Z[10]),cimag(Z[10]));
+  }
+
+  free(gradf);
+  free(Zold);
+  free(Y);
+  return 0;
+}

@@ -1562,6 +1562,10 @@ extern int
 update_spatialreg_fista_with_diffconstraint(complex double *Z, complex double *Zbar, complex double *Phikk,
     complex double *Phi, complex double *Z_diff, complex double *Psi,
     int N, int M, int Npoly, int G, double mu, double gamma, int maxiter);
+
+extern int 
+update_diffusemodel_fista(complex double *Zdiff, complex double *Zdiff0, complex double *Psi, complex double *Z,
+    double lambda, double mu, double gamma, int K, int maxiter);
 /****************************** pngoutput.c ****************************/
 extern int
 convert_tensor_to_image(double *W, const char *filename, int N, int M, int normalize);

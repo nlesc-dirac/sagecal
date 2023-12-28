@@ -302,10 +302,6 @@ sagecal_master(int argc, char **argv) {
    complex double *Phi=0; /* basis matrices 2Gx2, M times */
    complex double *Phikk=0; /* sum of Phi_k x Phi_k^H : 2Gx2G */
    int sp_diffuse_id=-1; /* if -D 'id' gives a matching cluster id, set this to matching ordinal number in 0,1,... */
-   double sp_diff_lr=0.1; /* learning rate for spatial model used in diffuse sky update (sort of Polyak average) , updated fraction is sp_gamma*sp_diff_lr/2 (must be < 1) between Zspat and Zspat_diff : Zspat x factor + Zspat_diff x (1-factor) */
-   if (sp_gamma*sp_diff_lr>2.0) {
-     cout<<"Warning: regularization specified by -D option ("<<sp_gamma<<") is probably too high"<<endl;
-   }
    if (Data::spatialreg) {
 #ifdef DEBUG1
     if ((dfp=fopen("debug.m","w+"))==0) {
@@ -917,13 +913,16 @@ sagecal_master(int argc, char **argv) {
             if (!admm) {
              memset(Psi_diff,0,sizeof(complex double)*(size_t)iodata.N*4*Npoly*G);
             }
-            /* min \sum_k (Z_k -Z Phi_k) + \lambda ||Z||^2 + \mu ||Z||_1 + \Psi^H(Z-Z_diff) + \gamma/2 ||Z-Z_diff||^2, note Phikk already has \lambda I added  */
+            /* find Z, min \sum_k (Z_k -Z Phi_k) + \lambda ||Z||^2 + \mu ||Z||_1 + \Psi^H(Z-Z_diff) + \gamma/2 ||Z-Z_diff||^2, note Phikk already has \lambda I added  */
             update_spatialreg_fista_with_diffconstraint(Zspat,Zbar,Phikk,Phi,Zspat_diff,Psi_diff,iodata.N,iodata.M,Npoly,G,sh_mu, sp_gamma, fista_maxiter);
-            /* grad descent step to update Z_diff, grad = -1/2 Psi - gamma/2 (Z-Z_diff) */
+            /* find Z_diff, min ||Z_diff - Z_diff0||^2 + \Psi^H(Z-Z_diff) + \gamma/2||Z-Z_diff||^2 + \lambda ||Z_diff||^2 + \mu||Z_diff||_1 */
+            /* grad = (Z_diff-Z_diff0) -1/2 Psi - gamma/2 (Z-Z_diff) */
+            update_diffusemodel_fista(Zspat_diff,Zspat_diff0,Psi_diff,Zspat,sh_lambda,sh_mu,sp_gamma,2*Npoly*iodata.N*2*G,fista_maxiter);
             /* Z_diff <= (1-lr gamma/2) Z_diff + lr gamma/2 Z + gamma/2 Psi */
-            my_cscal(2*Npoly*iodata.N*2*G, (1-sp_diff_lr*sp_gamma*0.5), Zspat_diff);
-            my_caxpy(2*Npoly*iodata.N*2*G, Zspat, sp_diff_lr*sp_gamma*0.5, Zspat_diff);
-            my_caxpy(2*Npoly*iodata.N*2*G, Psi_diff, sp_gamma*0.5, Zspat_diff);
+            /*my_cscal(2*Npoly*iodata.N*2*G, (1-0.1*sp_gamma*0.5), Zspat_diff);
+            my_caxpy(2*Npoly*iodata.N*2*G, Zspat, 0.1*sp_gamma*0.5, Zspat_diff);
+            my_caxpy(2*Npoly*iodata.N*2*G, Psi_diff, sp_diff_lf*sp_gamma*0.5, Zspat_diff);
+            */
 
             /* update Lagrange multiplier \Psi = \Psi + \gamma (Z-Zdiff) */
             my_caxpy(2*Npoly*iodata.N*2*G, Zspat, sp_gamma, Psi_diff);
