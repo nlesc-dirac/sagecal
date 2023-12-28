@@ -915,14 +915,14 @@ sagecal_master(int argc, char **argv) {
             }
             /* find Z, min \sum_k (Z_k -Z Phi_k) + \lambda ||Z||^2 + \mu ||Z||_1 + \Psi^H(Z-Z_diff) + \gamma/2 ||Z-Z_diff||^2, note Phikk already has \lambda I added  */
             update_spatialreg_fista_with_diffconstraint(Zspat,Zbar,Phikk,Phi,Zspat_diff,Psi_diff,iodata.N,iodata.M,Npoly,G,sh_mu, sp_gamma, fista_maxiter);
-            /* find Z_diff, min ||Z_diff - Z_diff0||^2 + \Psi^H(Z-Z_diff) + \gamma/2||Z-Z_diff||^2 + \lambda ||Z_diff||^2 + \mu||Z_diff||_1 */
-            /* grad = (Z_diff-Z_diff0) -1/2 Psi - gamma/2 (Z-Z_diff) */
-            update_diffusemodel_fista(Zspat_diff,Zspat_diff0,Psi_diff,Zspat,sh_lambda,sh_mu,sp_gamma,2*Npoly*iodata.N*2*G,fista_maxiter);
-            /* Z_diff <= (1-lr gamma/2) Z_diff + lr gamma/2 Z + gamma/2 Psi */
-            /*my_cscal(2*Npoly*iodata.N*2*G, (1-0.1*sp_gamma*0.5), Zspat_diff);
-            my_caxpy(2*Npoly*iodata.N*2*G, Zspat, 0.1*sp_gamma*0.5, Zspat_diff);
-            my_caxpy(2*Npoly*iodata.N*2*G, Psi_diff, sp_diff_lf*sp_gamma*0.5, Zspat_diff);
-            */
+            /* find Z_diff, min ||Z_diff - Z_diff0||^2 + \Psi^H(Z-Z_diff) + \gamma/2||Z-Z_diff||^2 + \lambda ||Z_diff||^2 */
+            /* grad = (Z_diff-Z_diff0) -1/2 Psi - gamma/2 (Z-Z_diff) + \lambda Z_diff */
+            /* Z_diff <= (Z_diff0 + 1/2 Psi + gamma/2 Z) / ( 1  + gamma/2 + \lambda)  */
+
+            memcpy(Zspat_diff,Zspat_diff0,sizeof(complex double)*(size_t)iodata.N*4*Npoly*G);
+            my_caxpy(2*Npoly*iodata.N*2*G, Psi_diff, 0.5, Zspat_diff);
+            my_caxpy(2*Npoly*iodata.N*2*G, Zspat, 0.5*sp_gamma, Zspat_diff);
+            my_cscal(2*Npoly*iodata.N*2*G, 1.0/(1+0.5*sp_gamma+sh_lambda), Zspat_diff);
 
             /* update Lagrange multiplier \Psi = \Psi + \gamma (Z-Zdiff) */
             my_caxpy(2*Npoly*iodata.N*2*G, Zspat, sp_gamma, Psi_diff);
