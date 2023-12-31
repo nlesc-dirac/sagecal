@@ -10,6 +10,8 @@ set (objects
     stationbeam
     predict_withbeam
     elementbeam
+    shapelet
+    diffuse_predict
 )
 
 include_directories(${CMAKE_CURRENT_SOURCE_DIR})

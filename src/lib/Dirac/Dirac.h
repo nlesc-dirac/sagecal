@@ -1386,6 +1386,27 @@ project_procrustes(int N,double *J,double *J1);
 extern int
 project_procrustes_block(int N,complex double *J,complex double *J1);
 
+
+/* copy x->y, re-arrange storage from 1 col format to 2 col format
+ * x:[0..7]: stat 1, [8..15]: stat 2, .... : 8N double, 4N complex
+ * y:[0..3]: stat 1, 4N+[0..3]: stat1, [4..7]:stat 2, 4N+[4..7]: stat 2 etc
+ * x,y: 8N double or 4N complex
+ * x: each 8 double values for one station
+ * y: 2 cols, each 4 double values for one station in col 1 and col 2
+ */
+extern int
+copy_1col_2col(int N, double *x, double *y);
+
+
+/* copy x->y, re-arrange storage from 2 col format to 1 col format
+ * x:[0..3]: stat 1, 4N+[0..3]: stat1, [4..7]:stat 2, 4N+[4..7]: stat 2 etc
+ * y:[0..7]: stat 1, [8..15]: stat 2, .... : 8N double, 4N complex
+ * x,y: 8N double or 4N complex
+ * y: each 8 double values for one station
+ * x: 2 cols, each 4 double values for one station in col 1 and col 2
+ */
+extern int
+copy_2col_1col(int N, double *x, double *y);
 /****************************** consensus_poly.c ****************************/
 /* build matrix with polynomial terms
   B : Npoly x Nf, each row is one basis function
@@ -1475,6 +1496,8 @@ extern int
 update_rho_bb(double *rho, double *rhoupper, int N, int M, int Mt, clus_source_t *carr, double *Yhat, double *Yhat_k0, double *J, double *J_k0, int Nt);
 
 
+extern int
+find_initial_spatial(double *B, complex double *Phi, int Npoly, int N, int Nf, int M, int G, complex double *Z);
 /****************************** admm_solve.c ****************************/
 /* ADMM cost function  = normal_cost + ||Y^H(J-BZ)|| + rho/2 ||J-BZ||^2 */
 /* extra params
@@ -1522,9 +1545,26 @@ extern int
 update_spatialreg_fista(complex double *Z, complex double *Zbar, complex double *Phikk, complex double *Phi, int N, int M, int Npoly, int G, double mu, int maxiter);
 
 
+/*
+ * Z = arg min \| Z_k - Z Phi_k\|^2 + \lambda \|Z\|^2 + \mu \|Z\|_1
+ *  + \Psi^H ( Z - Z_diff ) + \gamma/2 \| Z - Z_diff \|^2
+ * Z : 2*Npoly*N x 2G matrix to be estimated (output)
+ * Zbar: each of Z_k (M values) : 2*Npoly*N x 2 (times M)
+ * Phikk : sum Phi_k x Phi_k^H + \lambda I : 2G x 2G
+ * Phi: each of Phi_K (M values) : 2G x 2 (times M)
+ * Z_diff: 2*Npoly*N x 2G constraint
+ * Psi: 2*Npoly*N x 2G Lagrange multiplier
+ * mu: L1 constraint
+ * maxiter: max iterations
+ * FISTA: fast iterative shrinkage thresholding Beck&Teboulle 2009
+ */
+extern int
+update_spatialreg_fista_with_diffconstraint(complex double *Z, complex double *Zbar, complex double *Phikk,
+    complex double *Phi, complex double *Z_diff, complex double *Psi,
+    int N, int M, int Npoly, int G, double mu, double gamma, int maxiter);
 /****************************** pngoutput.c ****************************/
 extern int
-convert_tensor_to_image(double *W, const char *filename, int N, int M);
+convert_tensor_to_image(double *W, const char *filename, int N, int M, int normalize);
 
 /****************************** lmfit.c ****************************/
 /****************************** lmfit_cuda.c ****************************/

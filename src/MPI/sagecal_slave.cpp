@@ -201,12 +201,21 @@ cerr<<"Error: Worker "<<myrank<<": Recheck your allocation or reduce number of w
       generate_baselines(iodata_vec[cm].Nbase,iodata_vec[cm].tilesz,iodata_vec[cm].N,barr_vec[cm],Data::Nt);
      }
 
+     int sp_diffuse_id=-1; /* if -D 'id' gives a matching cluster id, set this to matching ordinal number in 0,1,... */
+
      /* calculate actual no of parameters needed,
       this could be > M */
      Mt=0;
      for (ci=0; ci<M; ci++) {
-       //printf("cluster %d has %d time chunks\n",carr_vec[0][ci].id,carr_vec[0][ci].nchunk);
        Mt+=carr_vec[0][ci].nchunk;
+       /* also find if a cluster exists matching Data::ddid when spatial regularization is on */
+       if (Data::spatialreg) {
+         if (carr_vec[0][ci].id==Data::ddid) {
+           sp_diffuse_id=ci;
+           printf("Cluster id %d (ordinal %d) is being used as foreground (diffuse) model\n",Data::ddid,sp_diffuse_id);
+         }
+
+        }
      }
      printf("Total effective clusters: %d\n",Mt);
      /* create an array with chunk sizes for each cluster */
@@ -381,6 +390,18 @@ cerr<<"Error: Worker "<<myrank<<": Recheck your allocation or reduce number of w
     vector<double *> Z_vec(mymscount);
     vector<double *> Y_vec(mymscount);
 
+  /**********************************************************/
+    /* Spatial regularization, used if diffuse sky model is enabled */
+    int G=0,sh_n0=0;
+    int Nms;
+    double sh_beta; /* shapelet basis spatial scale */
+    complex double *Zspat=0; /* storage for spatial model, 2 Npoly N x 2 G */
+    double *B=0; /* polynomials in frequency Npoly x Nms */
+    complex double *Zb=0; /* storage for B_fxZspat, 2 N x 2 G x Freq, 2Nx2G blocks per freq */
+    /* each 2N x 2G : [2Nx2] [2Nx2] ... G times, : Z_1, Z_2, ... Z_G
+     * Similar to 2-col format of J, each 2x2 sub-block per station */
+  /**********************************************************/
+
     /* BB */
     vector<double *> Yhat0_vec(mymscount);
     vector<double *> J0_vec(mymscount);
@@ -486,13 +507,36 @@ cerr<<"Error: Worker "<<myrank<<": Recheck your allocation or reduce number of w
 #endif
 
 
+    if (Data::spatialreg && sp_diffuse_id>=0) {
+         MPI_Recv(&sh_n0, 1, MPI_INT, 0,TAG_SPATIAL, MPI_COMM_WORLD, &status);
+         MPI_Recv(&Nms, 1, MPI_INT, 0,TAG_SPATIAL, MPI_COMM_WORLD, &status);
+         MPI_Recv(&sh_beta, 1, MPI_DOUBLE, 0,TAG_SPATIAL, MPI_COMM_WORLD, &status);
+         G=sh_n0*sh_n0;
+
+         /* do all allocations here */
+         if ((Zspat=(complex double*)calloc((size_t)iodata_vec[0].N*4*Npoly*G,sizeof(complex double)))==0) {
+          fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
+          exit(1);
+         }
+         if ((Zb=(complex double*)calloc((size_t)iodata_vec[0].N*4*G*mymscount,sizeof(complex double)))==0) {
+          fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
+          exit(1);
+         }
+         /* freq polynomials, only frequency indices myids[cm] are needed */
+         if ((B=(double*)calloc((size_t)Npoly*Nms,sizeof(double)))==0) {
+          fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
+          exit(1);
+         }
+         MPI_Recv(B, Npoly*Nms, MPI_DOUBLE, 0,TAG_SPATIAL, MPI_COMM_WORLD, &status);
+    }
+
     while(1) {
      start_time = time(0);
      /* get start/end signal from master */
      MPI_Recv(&msgcode,1,MPI_INT,0,TAG_CTRL,MPI_COMM_WORLD,&status);
      /* assume all MS are the same size */  
      if (msgcode==CTRL_END || !msitr[0]->more()) {
-cout<<"Worker "<<myrank<<" quitting"<<endl;
+      cout<<"Worker "<<myrank<<" quitting"<<endl;
       break;
      } else if (msgcode==CTRL_SKIP) {
       /* skip to next timeslot */
@@ -593,6 +637,30 @@ cout<<myrank<<" : "<<cm<<": downweight ratio ("<<iodata_vec[cm].fratio<<") based
      /******************** ADMM  *******************************/
      int mmid_prev=-1;
      for (int admm=0; admm<Nadmm; admm++) {
+      /************************************************************************/
+      /* spatial regularization with a valid diffuse model: get spatial model from master, apply spatial model to the diffuse model, and predict visibilities for all MS */
+      if (Data::spatialreg && sp_diffuse_id>=0 && !(admm%Data::admm_cadence)) {
+        MPI_Recv(Zspat, iodata_vec[0].N*8*Npoly*G, MPI_DOUBLE, 0,TAG_SPATIAL, MPI_COMM_WORLD, &status);
+        /* find product B x Zspat for a selected frequency */
+        /* Zspat: 2N Npoly x 2G, each column (2N Npoly) reduce it to 2N by multiply and sum of Npoly values of B */
+        /* B x Zspat : 2N x 2G per each freq */
+        for(int cm=0; cm<mymscount; cm++) {
+          int ifreq=myids[cm];
+          memset(&Zb[cm*4*iodata_vec[0].N*G],0,sizeof(complex double)*(size_t)4*iodata_vec[0].N*G);
+          for (int col=0; col<2*G; col++) {
+            /* work with col of 2N rows */
+            for (int np=0; np<Npoly; np++) {
+               my_daxpy(4*iodata_vec[0].N, (double*)&Zspat[col*2*iodata_vec[0].N*Npoly+np*2*iodata_vec[0].N], B[ifreq*Npoly+np], (double*)&Zb[cm*4*iodata_vec[0].N*G+col*2*iodata_vec[0].N]);
+            }
+          }
+        }
+
+        /* Re-calculate model for cluster id 'sp_diffuse_id' */
+        for(int cm=0; cm<mymscount; cm++) {
+          recalculate_diffuse_coherencies(iodata_vec[cm].u,iodata_vec[cm].v,iodata_vec[cm].w,coh_vec[cm],iodata_vec[cm].N,iodata_vec[cm].Nbase*iodata_vec[cm].tilesz,barr_vec[cm],carr_vec[cm],M,iodata_vec[cm].freq0,iodata_vec[cm].deltaf,iodata_vec[cm].deltat,iodata_vec[cm].dec0,Data::min_uvcut,Data::max_uvcut,sp_diffuse_id,sh_n0,sh_beta,&Zb[cm*4*iodata_vec[0].N*G],Data::Nt);
+        }
+      }
+      /************************************************************************/
        /* receive which MS to work on in this ADMM iteration */
       int mmid;
       MPI_Recv(&mmid,1,MPI_INT,0,TAG_CTRL,MPI_COMM_WORLD,&status);
@@ -757,9 +825,7 @@ cout<<myrank<<" : "<<cm<<": downweight ratio ("<<iodata_vec[cm].fratio<<") based
 	  }
 	}
 
-      }
-      else {
-
+      } else {
       /* ADMM 3: get B_i Z from master */
       MPI_Recv(Z_vec[mmid], iodata_vec[mmid].N*8*Mt, MPI_DOUBLE, 0,TAG_CONSENSUS, MPI_COMM_WORLD, &status);
      
@@ -797,6 +863,8 @@ cout<<myrank<<" : "<<cm<<": downweight ratio ("<<iodata_vec[cm].fratio<<") based
       /* calculate primal residual J-BZ */
       my_dcopy(iodata_vec[mmid].N*8*Mt, p_vec[mmid], 1, pres, 1);
       my_daxpy(iodata_vec[mmid].N*8*Mt, Z_vec[mmid], -1.0, pres);
+
+
       
       /* primal residual : per one real parameter */ 
       /* to remove a load of network traffic and screen output, disable this info */
@@ -1034,7 +1102,11 @@ cout<<myrank<<" : "<<cm<<": downweight ratio ("<<iodata_vec[cm].fratio<<") based
   if (myrank==1) {
     free(chunkvec);
   }
-
+  if (Data::spatialreg && sp_diffuse_id>=0) {
+      free(Zspat);
+      free(Zb);
+      free(B);
+  }
   /**********************************************************/
 
    cout<<"Done."<<endl;    

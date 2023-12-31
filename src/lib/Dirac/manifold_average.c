@@ -865,3 +865,47 @@ calculate_manifold_average_projectback(int N,int M,int Nf,double *Y,int Niter,in
   return 0;
 
 }
+
+
+/* copy x->y, re-arrange storage from 1 col format to 2 col format
+ * x:[0..7]: stat 1, [8..15]: stat 2, .... : 8N double, 4N complex
+ * y:[0..3]: stat 1, 4N+[0..3]: stat1, [4..7]:stat 2, 4N+[4..7]: stat 2 etc
+ * x,y: 8N double or 4N complex
+ * x: each 8 double values for one station
+ * y: 2 cols, each 4 double values for one station in col 1 and col 2
+ */
+int
+copy_1col_2col(int N, double *x, double *y) {
+  my_dcopy(N, &x[0], 8, &y[0], 4);
+  my_dcopy(N, &x[0+1], 8, &y[0+1], 4);
+  my_dcopy(N, &x[0+4], 8, &y[0+2], 4);
+  my_dcopy(N, &x[0+5], 8, &y[0+3], 4);
+  my_dcopy(N, &x[0+2], 8, &y[4*N+0], 4);
+  my_dcopy(N, &x[0+3], 8, &y[4*N+1], 4);
+  my_dcopy(N, &x[0+6], 8, &y[4*N+2], 4);
+  my_dcopy(N, &x[0+7], 8, &y[4*N+3], 4);
+
+  return 0;
+}
+
+
+/* copy x->y, re-arrange storage from 2 col format to 1 col format
+ * x:[0..3]: stat 1, 4N+[0..3]: stat1, [4..7]:stat 2, 4N+[4..7]: stat 2 etc
+ * y:[0..7]: stat 1, [8..15]: stat 2, .... : 8N double, 4N complex
+ * x,y: 8N double or 4N complex
+ * y: each 8 double values for one station
+ * x: 2 cols, each 4 double values for one station in col 1 and col 2
+ */
+int
+copy_2col_1col(int N, double *x, double *y) {
+  my_dcopy(N, &x[0], 4, &y[0], 8);
+  my_dcopy(N, &x[0+1], 4, &y[0+1], 8);
+  my_dcopy(N, &x[0+2], 4, &y[0+4], 8);
+  my_dcopy(N, &x[0+3], 4, &y[0+5], 8);
+  my_dcopy(N, &x[4*N+0], 4, &y[0+2], 8);
+  my_dcopy(N, &x[4*N+1], 4, &y[0+3], 8);
+  my_dcopy(N, &x[4*N+2], 4, &y[0+6], 8);
+  my_dcopy(N, &x[4*N+3], 4, &y[0+7], 8);
+
+  return 0;
+}

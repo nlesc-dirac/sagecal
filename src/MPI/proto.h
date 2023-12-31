@@ -51,8 +51,9 @@
 #ifndef TAG_CHUNK
 #define TAG_CHUNK 109
 #endif
-
-
+#ifndef TAG_SPATIAL
+#define TAG_SPATIAL 110
+#endif
 
 
 

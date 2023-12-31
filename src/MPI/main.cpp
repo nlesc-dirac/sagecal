@@ -34,7 +34,7 @@ using namespace Data;
 
 void
 print_copyright(void) {
-  cout<<"SAGECal-MPI 0.8.1 (C) 2011-2023 Sarod Yatawatta"<<endl;
+  cout<<"SAGECal-MPI 0.8.2 (C) 2011-2024 Sarod Yatawatta"<<endl;
 }
 
 
@@ -73,6 +73,7 @@ print_help(void) {
    cout << "-y exclude baselines length (lambda) higher than this in calibration : default "<<Data::max_uvcut << endl;
    cout <<endl<<"Advanced options:"<<endl;
    cout << "-k cluster_id : correct residuals with solution of this cluster : default "<<Data::ccid<< endl;
+   cout << "-D cluster_id,gamma : cluster 'cluster_id' is treated as the diffuse foreground model (if -X is also enabled), gamma: regularization factor to apply spatial model to diffuse model: default "<<Data::ddid<<","<<Data::sp_gamma<<endl;
    cout << "-o robust rho, robust matrix inversion during correction: default "<<Data::rho<< endl;
    cout << "-J 0,1 : if >0, use phase only correction: default "<<Data::phaseOnly<< endl;
    cout << "-j 0,1,2... 0 : OSaccel, 1 no OSaccel, 2: OSRLM, 3: RLM, 4: RTR, 5: RRTR: 6: NSD, default "<<Data::solver_mode<< endl;
@@ -96,7 +97,9 @@ print_help(void) {
    cout << "-M minibatches, must be >0, split data to this many minibatches: default "<<Data::stochastic_calib_minibatches<< endl;
    cout << "-w mini-bands, must be >0, split channels to this many mini-bands for bandpass calibration: default "<<Data::stochastic_calib_bands<< endl;
    cout << "-u alpha, must be >0, alpha is the regularization factor used in passing global Z to local value and in spatial regularization. Can be overridden by using -G option, default "<<Data::federated_reg_alpha<< endl;
-   cout << "-X lambda,mu,n0,fista_maxiter,cadence: if defined, enable spatial regularization: (lambda: L2, mu: L1, n0: model order with n0^2 modes, fista_maxiter: FISTA iterations, cadence: update cadence):  default:"<<Data::spatialreg<<endl;
+   cout<<endl<<"Spatial regularization:"<<endl;
+   cout << "-X lambda,mu,n0,fista_maxiter,cadence: if defined, enable spatial regularization: (lambda: L2, mu: L1, n0: model order with n0^2 modes, fista_maxiter: FISTA iterations, cadence: update cadence):  default:"<<Data::spatialreg<<", ";
+   cout<< "Also see the -D option."<<endl;
    cout <<"Report bugs to <sarod@users.sf.net>"<<endl;
 }
 
@@ -104,7 +107,7 @@ print_help(void) {
 void 
 ParseCmdLine(int ac, char **av) {
     int c;
-    while((c=getopt(ac, av, ":c:e:f:g:j:k:l:m:n:o:p:q:r:s:t:u:w:x:y:A:B:C:E:F:G:H:I:J:K:L:M:N:O:P:Q:R:S:T:U:W:X:MVh"))!= -1)
+    while((c=getopt(ac, av, ":c:e:f:g:j:k:l:m:n:o:p:q:r:s:t:u:w:x:y:A:B:C:D:E:F:G:H:I:J:K:L:M:N:O:P:Q:R:S:T:U:W:X:MVh"))!= -1)
     {
         switch(c)
         {
@@ -270,6 +273,21 @@ ParseCmdLine(int ac, char **av) {
                   cout<<"Error: -X option has invalid parameters"<<endl;
                   exit(1);
                 }
+                }
+                break;
+            case 'D': 
+                {
+                  char gamma_[128];
+                  char ddid_[128];
+                  int matched=sscanf(optarg,"%127[^,],%127[^,]",ddid_,gamma_);
+                  if (matched==2) {
+                    sscanf(ddid_,"%d",&ddid);
+                    sscanf(gamma_,"%lf",&sp_gamma);
+                    cout<<"Diffuse sky model cluster "<<ddid<<" regularization "<<sp_gamma<<endl;
+                  } else {
+                    cout<<"Error: -D option has invalid parameters"<<endl;
+                    exit(1);
+                  }
                 }
                 break;
             case 'h': 

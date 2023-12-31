@@ -67,7 +67,7 @@
 /* max source name length, increase it if names get longer */
 #define MAX_SNAME 2048
 
-/* soure types */
+/* source types */
 #define STYPE_POINT 0
 #define STYPE_GAUSSIAN 1
 #define STYPE_DISK 2
@@ -146,9 +146,6 @@ read_arho_fromfile(const char *admm_rho_file,int Mt,double *arho, int M, double 
 /****************************** predict.c ****************************/
 /************* extended source contributions ************/
 extern complex double
-shapelet_contrib(void*dd, double u, double v, double w);
-
-extern complex double
 gaussian_contrib(void*dd, double u, double v, double w);
 
 extern complex double
@@ -225,6 +222,10 @@ precalculate_coherencies_multifreq(double *u, double *v, double *w, complex doub
    int Nbase, baseline_t *barr,  clus_source_t *carr, int M, double *freqs, int Nchan, double fdelta, double tdelta, double dec0, double uvmin, double uvmax, int Nt);
 
 
+/****************************** diffuse_predict.c ****************************/
+extern int
+recalculate_diffuse_coherencies(double *u, double *v, double *w, complex double *x, int N,
+   int Nbase, baseline_t *barr,  clus_source_t *carr, int M, double freq0, double fdelta, double tdelta, double dec0, double uvmin, double uvmax, int diffuse_cluster, int sh_n0, double sh_beta, complex double *Z, int Nt);
 /****************************** transforms.c ****************************/
 #ifndef ASEC2RAD
 #define ASEC2RAD 4.848136811095359935899141e-6
@@ -366,13 +367,43 @@ eval_elementcoeffs_wb(double r, double theta, elementcoeff *ecoeff, int findex);
  l=0,1,2,....,n0-1 : total n0
  m=(0),(-1,0,1),(-2,-1,0,1,2),....(-l,-l+1,...,l-1,l) : total 2*l+1
  total no of modes=(n0)^2
- * th,ph: array of theta,phi values, both of size Nt (not a grid)
+ * th,ph: array of theta,phi values, both of size Nt (not a uniform grid)
  * range th: 0..pi/2, ph: 0..2*pi
  * output: n0^2 (per each mode) x Nt vector
  */
 extern int
 sharmonic_modes(int n0,double *th, double *ph, int Nt, complex double *output);
 
+
+/****************************** shapelet.c ****************************/
+extern complex double
+shapelet_contrib(void*dd, double u, double v, double w);
+extern int
+shapelet_contrib_vector(complex double *modes, int n0, double beta, double u, double v, double w, complex double *coh);
+
+/* shapelet basis (rectangular, real valued),
+ * n0: total modes=n0^2
+ * beta: scale factor
+ * x,y : grid points, total N
+ * output: n0^2 (per mode) x N, real/imag same value
+ */
+extern int
+shapelet_modes(int n0,double beta, double *x, double *y, int N, complex double *output);
+
+extern int
+shapelet_product_tensor(int L, int M, int N, double alpha, double beta, double gamma,
+    double *B);
+
+extern int
+shapelet_product(int L, int M, int N, double alpha, double beta, double gamma,
+    double *h, double *f, double *g, double *C);
+
+extern int
+shapelet_product_jones(int L, int M, int N, double alpha, double beta, double gamma,
+    complex double *h, complex double *f, complex double *g, double *C, int hermitian);
+
+extern int
+plot_spatial_model(complex double *Zspat, double *B, int Npoly, int N, int G, int Nfreq, int axes_M, int freq, int plot_type, int basis, double beta, const char *filename);
 /****************************** predict_withbeam.c ****************************/
 /* precalculate cluster coherencies
   u,v,w: u,v,w coordinates (wavelengths) size Nbase*tilesz x 1 

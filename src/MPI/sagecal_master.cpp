@@ -293,12 +293,15 @@ sagecal_master(int argc, char **argv) {
 #endif
    clus_source_t *carr;
    double *ll=0,*mm=0; /* Mx1 centroid coords (polar) */
-   /* input parameter int sh_n0 spherical harmonic model order */
-   /* elastic net regularization parameters sh_lambda (L2), sh_mu (L1) */
+   int spatialreg_basis=SP_SHAPELET; /* SP_SHAPELET: shapelet (l,m) basis, SP_SHARMONIC: spherical harmonic (phi,theta) basis */
+   /* input parameter int sh_n0 shapelet or spherical harmonic model order */
    int G=sh_n0*sh_n0; /* total modes */
+   double sh_beta=1.0; /* scale factor for shapelet basis - will be reset later */
+   /* elastic net regularization parameters sh_lambda (L2), sh_mu (L1) */
    complex double *phivec=0; /* vector to store spherical harmonic modes n0^2 per each  polar coordinate */
    complex double *Phi=0; /* basis matrices 2Gx2, M times */
    complex double *Phikk=0; /* sum of Phi_k x Phi_k^H : 2Gx2G */
+   int sp_diffuse_id=-1; /* if -D 'id' gives a matching cluster id, set this to matching ordinal number in 0,1,... */
    if (Data::spatialreg) {
 #ifdef DEBUG1
     if ((dfp=fopen("debug.m","w+"))==0) {
@@ -321,11 +324,17 @@ sagecal_master(int argc, char **argv) {
      }
      double *P;
      double lmean,mmean;
+     double l_max=0; /* max +ve or -ve value, to determine scale factor for shapelet basis */
      /* find centroid of each cluster, weighted by P=|sI|+|sQ|+|sU|+|sV|
       * for example, llmean=dot(P,ll)/N, N: sources */
      int idx=0;
      /* Note: cluster odering is in reverse */
      for (int ci=0; ci<M1; ci++) {
+       /* check if a cluster id exists matching Data::ddid */
+       if (carr[ci].id==Data::ddid) {
+         sp_diffuse_id=ci;
+         printf("Cluster id %d (ordinal %d) is being used as foreground (diffuse) model\n",Data::ddid,sp_diffuse_id);
+       }
        if (carr[ci].N>1) {
         if ((P=(double*)calloc((size_t)carr[ci].N,sizeof(double)))==0) {
          fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
@@ -344,9 +353,19 @@ sagecal_master(int argc, char **argv) {
         lmean=carr[ci].ll[0];
         mmean=carr[ci].mm[0];
        }
-       /* transform l,m in [-1,1] to r in [0,pi/2],theta [0,2*pi] */
-       double rr=sqrt(lmean*lmean+mmean*mmean)*M_PI_2;
-       double tt=atan2(mmean,lmean);
+       if (l_max<MAX(fabs(lmean),fabs(mmean))) {
+         l_max=MAX(fabs(lmean),fabs(mmean));
+       }
+       double rr,tt;
+       if (spatialreg_basis==SP_SHAPELET) {
+         /* diffuse sky shapelet model is in (-l,m) so negate */
+         rr=-lmean;
+         tt=mmean;
+       } else {
+         /* transform l,m in [-1,1] to r in [0,pi/2],theta [0,2*pi] */
+         rr=sqrt(lmean*lmean+mmean*mmean)*M_PI_2;
+         tt=atan2(mmean,lmean);
+       }
        /* copy coordinates to array, considering hybrid clustering */
        for (int cj=0; cj<carr[ci].nchunk; cj++) {
          ll[idx]=rr;
@@ -358,7 +377,15 @@ sagecal_master(int argc, char **argv) {
       fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
       exit(1);
      }
-     sharmonic_modes(sh_n0,ll,mm,iodata.M,phivec);
+     if (spatialreg_basis==SP_SHAPELET) {
+      sh_beta=4.0*sqrt(l_max*l_max/(double)iodata.M); /* scale ~ 2 x sqrt(range(l)*delta(l)) or m */
+      printf("Using shaplet spatial basis with scale %lf\n",sh_beta);
+      /* shapelet basis: real basis, complex part is zero */
+      shapelet_modes(sh_n0,sh_beta,ll,mm,iodata.M,phivec);
+     } else {
+      printf("Using spherical harmonic spatial basis\n");
+      sharmonic_modes(sh_n0,ll,mm,iodata.M,phivec);
+     }
 #ifdef DEBUG1
      fprintf(dfp,"phi=[\n");
      for (int ci=0; ci<iodata.M*G; ci++) {
@@ -381,7 +408,7 @@ sagecal_master(int argc, char **argv) {
      /* find product Phik*Phik^H (2Gx2G) and add up */
      for (int ci=0; ci<iodata.M; ci++) {
        /* C= alpha * op(A)*op(B)+beta * C */
-       my_zgemm('N','C',2*G,2*G,2,1.0,&Phi[ci*2*G*2],2*G,&Phi[ci*2*G*2],2*G,1.0,Phikk,2*G);
+       my_zgemm('N','C',2*G,2*G,2,1.0+_Complex_I*0.0,&Phi[ci*2*G*2],2*G,&Phi[ci*2*G*2],2*G,1.0+_Complex_I*0.0,Phikk,2*G);
      }
      /* add \lambda I to Phikk */
      for (int ci=0; ci<2*G; ci++) {
@@ -401,69 +428,10 @@ sagecal_master(int argc, char **argv) {
    }
 #endif
 
-   double *pn_ll=0,*pn_mm=0;
-   double *pn_phi=0,*pn_theta=0;
+   /**************** for plotting of spatial model *****************/
    int pn_axes_M=30; /* l,m axis size M */
-   int pn_grid_M=pn_axes_M*pn_axes_M;
-   complex double *pn_phivec=0; /* basis vector */
-   complex double *pn_Phi=0; /* basis matrix */
-   complex double *pn_Zbar=0; /* constraint for each pixel, 2*Npoly*N x 2 x pn_grid_M */
-   double *pn_J=0; /* storage for B_f Z, for selected freq, all pixels, (complex) 2Nx2xpn_grid_M */
-   if (Data::spatialreg) { 
-     /* plotting : initialize */
-     if ((pn_ll=(double*)calloc((size_t)pn_axes_M,sizeof(double)))==0) {
-      fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
-      exit(1);
-     }
-     if ((pn_mm=(double*)calloc((size_t)pn_axes_M,sizeof(double)))==0) {
-      fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
-      exit(1);
-     }
-     if ((pn_phivec=(complex double*)calloc((size_t)pn_grid_M*G,sizeof(complex double)))==0) {
-      fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
-      exit(1);
-     }
-     for (int ci=0; ci<pn_axes_M; ci++) {
-       pn_ll[ci]=(0.9-(-0.9))*(double)ci/(double)(pn_axes_M)-0.9;
-       pn_mm[ci]=(0.9-(-0.9))*(double)ci/(double)(pn_axes_M)-0.9;
-     }
-     if ((pn_theta=(double*)calloc((size_t)pn_grid_M,sizeof(double)))==0) {
-      fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
-      exit(1);
-     }
-     if ((pn_phi=(double*)calloc((size_t)pn_grid_M,sizeof(double)))==0) {
-      fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
-      exit(1);
-     }
-     for (int ci=0; ci<pn_axes_M; ci++) {
-       for (int cj=0; cj<pn_axes_M; cj++) {
-          /* map (l,m) to r [0,pi/2] and theta[0,2*pi] */
-          double rr=sqrt(pn_ll[ci]*pn_ll[ci]+pn_mm[cj]*pn_mm[cj])*M_PI_2;
-          double tt=atan2(pn_mm[cj],pn_ll[ci]);
-          pn_theta[ci*pn_axes_M+cj]=rr;
-          pn_phi[ci*pn_axes_M+cj]=tt;
-       }
-     }
-     sharmonic_modes(sh_n0,pn_theta,pn_phi,pn_grid_M,pn_phivec);
-     /* Phi = I \kron phi_vec */
-     if ((pn_Phi=(complex double*)calloc((size_t)pn_grid_M*2*G*2,sizeof(complex double)))==0) {
-      fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
-      exit(1);
-     }
-     for (int ci=0; ci<pn_grid_M; ci++) {
-       memcpy(&pn_Phi[ci*2*G*2],&pn_phivec[ci*G],G*sizeof(complex double));
-       memcpy(&pn_Phi[ci*2*G*2+3*G],&pn_phivec[ci*G],G*sizeof(complex double));
-     }
-
-     if ((pn_Zbar=(complex double*)calloc((size_t)iodata.N*4*Npoly*pn_grid_M,sizeof(complex double)))==0) {
-       fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
-       exit(1);
-     }
-     if ((pn_J=(double*)calloc((size_t)iodata.N*8*pn_grid_M,sizeof(double)))==0) {
-       fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
-       exit(1);
-     }
-   }
+   int pn_nfreq=0;//iodata.Nms-1; /* freq to plot */
+   /**************** end plotting of spatial model *****************/
 
     /* ADMM memory : allocated together for all MS */
     double *Z,*Y,*z;
@@ -504,8 +472,11 @@ sagecal_master(int argc, char **argv) {
     }
     
 
-    complex double *Zbar=0; /* constraint for each direction, 2*Npoly*N x 2 x M */
+    complex double *Zbar=0; /* constraint for each direction, 2Nx2 x Npoly x M */
     complex double *Zspat=0; /* spatial constraint matrix, 2*Npoly*N x 2G */
+    complex double *Zspat_diff=0; /* spatial constrait matrix used by the diffuse model if any, 2*Npoly*N x 2G similar to  Zspat */
+    complex double *Zspat_diff0=0; /* initial value for spatial constrait matrix used by the diffuse model if any, 2*Npoly*N x 2G similar to  Zspat */
+    complex double *Psi_diff=0; /* Lagrange multiplier for constraint Zspat=Zspat_diff used by the diffuse model if any, 2*Npoly*N x 2G similar to  Zspat */
     double *X=0; /* Lagrange multiplier for spatial reg Z=Zbar, 2*2*Npoly*N x 2 x M (double) */
     /*SP: spatial update */
     if (Data::spatialreg) {
@@ -667,6 +638,35 @@ sagecal_master(int argc, char **argv) {
     /* each Npoly blocks is bases evaluated at one freq, catch if Npoly=1 */
     setup_polynomials(B, Npoly, iodata.Nms, iodata.freqs, iodata.freq0,(Npoly==1?1:PolyType));
 
+    if (Data::spatialreg && sp_diffuse_id>=0) {
+       /* Initialize spatial model used in diffuse sky to a nominal value,
+        * for example to match the nomianal beam model or initialize to all zero */
+       if ((Zspat_diff=(complex double*)calloc((size_t)iodata.N*4*Npoly*G,sizeof(complex double)))==0) {
+        fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
+        exit(1);
+       }
+       if ((Zspat_diff0=(complex double*)calloc((size_t)iodata.N*4*Npoly*G,sizeof(complex double)))==0) {
+        fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
+        exit(1);
+       }
+
+       /* B_f Zspat_diff_0 Phi_k = J_0, where J_0 = 1_N \kron I_2 */
+       /* B_f : 2N x 2Npoly N, Phi_k : 2G x 2, J_0 : 2N x 2, Z_spat_diff: 2Npoly N x 2G */
+       /* so Zspat_diff_0 = (\sum_f B_f^T B_f)^{-1} (\sum_f B_f^T) J_0 (\sum_k Phi_k^H) (\sum_k Phi_k Phi_k^H)^{-1} */
+       find_initial_spatial(B,phivec,Npoly,iodata.N,iodata.Nms,iodata.M,G,Zspat_diff0);
+       if ((Psi_diff=(complex double*)calloc((size_t)iodata.N*4*Npoly*G,sizeof(complex double)))==0) {
+        fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
+        exit(1);
+       }
+       /* before admm iteration, send all necessary aux info */
+       for (int cm=0; cm<nslaves; cm++) {
+         MPI_Send(&sh_n0, 1, MPI_INT, cm+1,TAG_SPATIAL, MPI_COMM_WORLD);
+         MPI_Send(&iodata.Nms, 1, MPI_INT, cm+1,TAG_SPATIAL, MPI_COMM_WORLD);
+         MPI_Send(&sh_beta, 1, MPI_DOUBLE, cm+1, TAG_SPATIAL, MPI_COMM_WORLD);
+         MPI_Send(B, Npoly*iodata.Nms, MPI_DOUBLE, cm+1,TAG_SPATIAL, MPI_COMM_WORLD);
+       }
+    }
+
 
     /* determine how many iterations are needed */
     int Ntime=(iodata.totalt+iodata.tilesz-1)/iodata.tilesz;
@@ -717,11 +717,25 @@ sagecal_master(int argc, char **argv) {
        my_dscal(iodata.M,fratio[cm],&rhok[cm*iodata.M]);
       }
 
+
+
       /* Note(x): sum rho*B(:,i)*B(:,i)^T and its inverse changes with iteration, because rho might be updated */
       /* find sum fratio[i] * B(:,i)B(:,i)^T, and its pseudoinverse */
       /* find sum (Nms values) rho[] B(:,i) B(:,i)^T per cluster (M values) */
 
       for (int admm=0; admm<Nadmm; admm++) {
+
+        /* spatial regularization with a valid diffuse model: send each worker updated spatial model for its next MS */
+        if (Data::spatialreg && sp_diffuse_id>=0 && !(admm%Data::admm_cadence)) {
+          /* at start of each ADMM iteration, set to initial value */
+          if (!admm) {
+            memcpy(Zspat_diff,Zspat_diff0,sizeof(complex double)*(size_t)iodata.N*4*Npoly*G);
+          }
+          for (int cm=0; cm<nslaves; cm++) {
+             MPI_Send(Zspat_diff, iodata.N*8*Npoly*G, MPI_DOUBLE, cm+1,TAG_SPATIAL, MPI_COMM_WORLD);
+          }
+        }
+
 #ifdef DEBUG
        /* at each iteration, save rhok array
           each row correspond to one frequency */
@@ -833,9 +847,21 @@ sagecal_master(int argc, char **argv) {
          }
          /* no need to scale by 1/rho above, because Bii is already divided by 1/rho */
          /* add (alpha Zbar - X) if spatial regularization is enabled */
+         /* Zbar-2col, X,z-1col */
          if (Data::spatialreg && admm>0) {
+           double *Zbar_r=(double*)Zbar;
            for (int cm=0; cm<iodata.M; cm++) {
-             my_daxpy(iodata.N*8*Npoly,(double*)&Zbar[cm*2*Npoly*iodata.N*2],alphak[cm],&z[cm*4*Npoly*iodata.N*2]);
+             for (int np=0; np<Npoly; np++) {
+              my_daxpys(iodata.N,&Zbar_r[cm*iodata.N*8*Npoly+np*iodata.N*4+0],4,alphak[cm],&z[cm*iodata.N*8*Npoly+0],8);
+              my_daxpys(iodata.N,&Zbar_r[cm*iodata.N*8*Npoly+np*iodata.N*4+1],4,alphak[cm],&z[cm*iodata.N*8*Npoly+1],8);
+              my_daxpys(iodata.N,&Zbar_r[cm*iodata.N*8*Npoly+np*iodata.N*4+2],4,alphak[cm],&z[cm*iodata.N*8*Npoly+4],8);
+              my_daxpys(iodata.N,&Zbar_r[cm*iodata.N*8*Npoly+np*iodata.N*4+3],4,alphak[cm],&z[cm*iodata.N*8*Npoly+5],8);
+
+              my_daxpys(iodata.N,&Zbar_r[cm*iodata.N*8*Npoly+np*iodata.N*4+Npoly*iodata.N*4+0],4,alphak[cm],&z[cm*iodata.N*8*Npoly+2],8);
+              my_daxpys(iodata.N,&Zbar_r[cm*iodata.N*8*Npoly+np*iodata.N*4+Npoly*iodata.N*4+1],4,alphak[cm],&z[cm*iodata.N*8*Npoly+3],8);
+              my_daxpys(iodata.N,&Zbar_r[cm*iodata.N*8*Npoly+np*iodata.N*4+Npoly*iodata.N*4+2],4,alphak[cm],&z[cm*iodata.N*8*Npoly+6],8);
+              my_daxpys(iodata.N,&Zbar_r[cm*iodata.N*8*Npoly+np*iodata.N*4+Npoly*iodata.N*4+3],4,alphak[cm],&z[cm*iodata.N*8*Npoly+7],8);
+             }
            }
            my_daxpy(iodata.N*8*Npoly*iodata.M,X,-1.0,z);
          }
@@ -853,28 +879,102 @@ sagecal_master(int argc, char **argv) {
           cout<<"Timeslot:"<<ct<<" ADMM:"<<admm<<endl;
          }
 
-         if (Data::spatialreg && !(admm%admm_cadence)) {
+         if (Data::spatialreg && !(admm%Data::admm_cadence)) {
            /*SP: spatial update */
            /* 1. update Zbar  from global sol Z (copy) */
-           memcpy(Zbar,Z,iodata.N*8*Npoly*iodata.M*sizeof(double));
-           /* 2. update Zspat taking proximal step (FISTA) */
-           update_spatialreg_fista(Zspat,Zbar,Phikk,Phi,iodata.N,iodata.M,Npoly,G,sh_mu, fista_maxiter);
-           /* 3. update Zbar from Zspat, Z_k = Z Phi_k */
+           /* Note the row ordering Z: 2*2*N x Npoly (for each M)
+            * Zbar: 2*N*Npoly x 2 ( note 2 columns ) for each M */
+           /* Z-1col Zbar-2col */
+           /* Split each 4N of Z into two 2N values, copy to first half and second half of Zbar */
+           double *Zbar_r=(double*)Zbar;
            for (int cm=0; cm<iodata.M; cm++) {
-             my_zgemm('N','N',2*Npoly*iodata.N,2,2*G,1.0,Zspat,2*Npoly*iodata.N,&Phi[cm*2*G*2],2*G,0.0,&Zbar[cm*2*Npoly*iodata.N*2],2*Npoly*iodata.N);
+            for (int np=0; np<Npoly; np++) {
+             my_dcopy(iodata.N,&Z[cm*iodata.N*8*Npoly+np*iodata.N*8+0],8,&Zbar_r[cm*iodata.N*8*Npoly+np*iodata.N*4+0],4);
+             my_dcopy(iodata.N,&Z[cm*iodata.N*8*Npoly+np*iodata.N*8+1],8,&Zbar_r[cm*iodata.N*8*Npoly+np*iodata.N*4+1],4);
+             my_dcopy(iodata.N,&Z[cm*iodata.N*8*Npoly+np*iodata.N*8+4],8,&Zbar_r[cm*iodata.N*8*Npoly+np*iodata.N*4+2],4);
+             my_dcopy(iodata.N,&Z[cm*iodata.N*8*Npoly+np*iodata.N*8+5],8,&Zbar_r[cm*iodata.N*8*Npoly+np*iodata.N*4+3],4);
+
+             my_dcopy(iodata.N,&Z[cm*iodata.N*8*Npoly+np*iodata.N*8+2],8,&Zbar_r[cm*iodata.N*8*Npoly+np*iodata.N*4+Npoly*iodata.N*4+0],4);
+             my_dcopy(iodata.N,&Z[cm*iodata.N*8*Npoly+np*iodata.N*8+3],8,&Zbar_r[cm*iodata.N*8*Npoly+np*iodata.N*4+Npoly*iodata.N*4+1],4);
+             my_dcopy(iodata.N,&Z[cm*iodata.N*8*Npoly+np*iodata.N*8+6],8,&Zbar_r[cm*iodata.N*8*Npoly+np*iodata.N*4+Npoly*iodata.N*4+2],4);
+             my_dcopy(iodata.N,&Z[cm*iodata.N*8*Npoly+np*iodata.N*8+7],8,&Zbar_r[cm*iodata.N*8*Npoly+np*iodata.N*4+Npoly*iodata.N*4+3],4);
+            }
+           }
+           /* 2. update Zspat taking proximal step (FISTA) */
+           if (sp_diffuse_id>=0) {
+            if (!admm) {
+             memset(Psi_diff,0,sizeof(complex double)*(size_t)iodata.N*4*Npoly*G);
+            }
+            /* find Z, min \sum_k (Z_k -Z Phi_k) + \lambda ||Z||^2 + \mu ||Z||_1 + \Psi^H(Z-Z_diff) + \gamma/2 ||Z-Z_diff||^2, note Phikk already has \lambda I added  */
+            update_spatialreg_fista_with_diffconstraint(Zspat,Zbar,Phikk,Phi,Zspat_diff,Psi_diff,iodata.N,iodata.M,Npoly,G,sh_mu, sp_gamma, fista_maxiter);
+            /* find Z_diff, min ||Z_diff - Z_diff0||^2 + \Psi^H(Z-Z_diff) + \gamma/2||Z-Z_diff||^2 + \lambda ||Z_diff||^2 */
+            /* grad = (Z_diff-Z_diff0) -1/2 Psi - gamma/2 (Z-Z_diff) + \lambda Z_diff */
+            /* Z_diff <= (Z_diff0 + 1/2 Psi + gamma/2 Z) / ( 1  + gamma/2 + \lambda)  */
+
+            memcpy(Zspat_diff,Zspat_diff0,sizeof(complex double)*(size_t)iodata.N*4*Npoly*G);
+            my_caxpy(2*Npoly*iodata.N*2*G, Psi_diff, 0.5, Zspat_diff);
+            my_caxpy(2*Npoly*iodata.N*2*G, Zspat, 0.5*sp_gamma, Zspat_diff);
+            my_cscal(2*Npoly*iodata.N*2*G, 1.0/(1+0.5*sp_gamma+sh_lambda), Zspat_diff);
+
+            /* update Lagrange multiplier \Psi = \Psi + \gamma (Z-Zdiff) */
+            my_caxpy(2*Npoly*iodata.N*2*G, Zspat, sp_gamma, Psi_diff);
+            my_caxpy(2*Npoly*iodata.N*2*G, Zspat_diff, -sp_gamma, Psi_diff);
+           } else {
+            /* min \sum_k (Z_k -Z Phi_k) + \lambda ||Z||^2 + \mu ||Z||_1, note Phikk already has \lambda I added  */
+            update_spatialreg_fista(Zspat,Zbar,Phikk,Phi,iodata.N,iodata.M,Npoly,G,sh_mu, fista_maxiter);
+           }
+           /* 3. update Zbar from Zspat, Z_k = Z Phi_k */
+           /* Note the row ordering is 2*N*Npoly x 2 x M (each M has 2 cols) */
+           for (int cm=0; cm<iodata.M; cm++) {
+             my_zgemm('N','N',2*Npoly*iodata.N,2,2*G,1.0+_Complex_I*0.0,Zspat,2*Npoly*iodata.N,&Phi[cm*2*G*2],2*G,0.0+_Complex_I*0.0,&Zbar[cm*2*Npoly*iodata.N*2],2*Npoly*iodata.N);
            }
            /* 4. update X comparing Zbar, Z */
            /* Zerr=Z-Zbar */
-           my_dcopy(iodata.N*8*Npoly*iodata.M,Z,1,Zerr,1);
+           /* Note the row ordering Z: 2N*2 x Npoly (for each M) and
+            * Zbar: 2*N*Npoly x 2 (for each M) */
+           /* Z-1col Zerr-2col */
+           for (int cm=0; cm<iodata.M; cm++) {
+            for (int np=0; np<Npoly; np++) {
+             my_dcopy(iodata.N,&Z[cm*iodata.N*8*Npoly+np*iodata.N*8+0],8,&Zerr[cm*iodata.N*8*Npoly+np*iodata.N*4+0],4);
+             my_dcopy(iodata.N,&Z[cm*iodata.N*8*Npoly+np*iodata.N*8+1],8,&Zerr[cm*iodata.N*8*Npoly+np*iodata.N*4+1],4);
+             my_dcopy(iodata.N,&Z[cm*iodata.N*8*Npoly+np*iodata.N*8+4],8,&Zerr[cm*iodata.N*8*Npoly+np*iodata.N*4+2],4);
+             my_dcopy(iodata.N,&Z[cm*iodata.N*8*Npoly+np*iodata.N*8+5],8,&Zerr[cm*iodata.N*8*Npoly+np*iodata.N*4+3],4);
+
+             my_dcopy(iodata.N,&Z[cm*iodata.N*8*Npoly+np*iodata.N*8+2],8,&Zerr[cm*iodata.N*8*Npoly+np*iodata.N*4+Npoly*iodata.N*4+0],4);
+             my_dcopy(iodata.N,&Z[cm*iodata.N*8*Npoly+np*iodata.N*8+3],8,&Zerr[cm*iodata.N*8*Npoly+np*iodata.N*4+Npoly*iodata.N*4+1],4);
+             my_dcopy(iodata.N,&Z[cm*iodata.N*8*Npoly+np*iodata.N*8+6],8,&Zerr[cm*iodata.N*8*Npoly+np*iodata.N*4+Npoly*iodata.N*4+2],4);
+             my_dcopy(iodata.N,&Z[cm*iodata.N*8*Npoly+np*iodata.N*8+7],8,&Zerr[cm*iodata.N*8*Npoly+np*iodata.N*4+Npoly*iodata.N*4+3],4);
+            }
+           }
            my_daxpy(iodata.N*8*Npoly*iodata.M,(double*)Zbar,-1.0,Zerr);
            /* X = X + alpha (Z - Zbar) */
            if (!admm) {
             memset(X,0,sizeof(double)*(size_t)iodata.N*8*Npoly*iodata.M);
            }
+           /* Zerr-2col X-1col */
            for (int cm=0; cm<iodata.M; cm++) {
-             my_daxpy(iodata.N*8*Npoly,&Zerr[cm*iodata.N*8*Npoly],alphak[cm],&X[cm*iodata.N*8*Npoly]);
+             //my_daxpy(iodata.N*8*Npoly,&Zerr[cm*iodata.N*8*Npoly],alphak[cm],&X[cm*iodata.N*8*Npoly]);
+             for (int np=0; np<Npoly; np++) {
+              //my_daxpy(iodata.N*4,&Zerr[cm*iodata.N*8*Npoly+np*iodata.N*4],alphak[cm],&X[cm*iodata.N*8*Npoly]);
+              //my_daxpy(iodata.N*4,&Zerr[cm*iodata.N*8*Npoly+Npoly*iodata.N*4+np*iodata.N*4],alphak[cm],&X[cm*iodata.N*8*Npoly+iodata.N*4]);
+
+              my_daxpys(iodata.N,&Zerr[cm*iodata.N*8*Npoly+np*iodata.N*4+0],4,alphak[cm],&X[cm*iodata.N*8*Npoly+0],8);
+              my_daxpys(iodata.N,&Zerr[cm*iodata.N*8*Npoly+np*iodata.N*4+1],4,alphak[cm],&X[cm*iodata.N*8*Npoly+1],8);
+              my_daxpys(iodata.N,&Zerr[cm*iodata.N*8*Npoly+np*iodata.N*4+2],4,alphak[cm],&X[cm*iodata.N*8*Npoly+4],8);
+              my_daxpys(iodata.N,&Zerr[cm*iodata.N*8*Npoly+np*iodata.N*4+3],4,alphak[cm],&X[cm*iodata.N*8*Npoly+5],8);
+
+              my_daxpys(iodata.N,&Zerr[cm*iodata.N*8*Npoly+np*iodata.N*4+Npoly*iodata.N*4+0],4,alphak[cm],&X[cm*iodata.N*8*Npoly+2],8);
+              my_daxpys(iodata.N,&Zerr[cm*iodata.N*8*Npoly+np*iodata.N*4+Npoly*iodata.N*4+1],4,alphak[cm],&X[cm*iodata.N*8*Npoly+3],8);
+              my_daxpys(iodata.N,&Zerr[cm*iodata.N*8*Npoly+np*iodata.N*4+Npoly*iodata.N*4+2],4,alphak[cm],&X[cm*iodata.N*8*Npoly+6],8);
+              my_daxpys(iodata.N,&Zerr[cm*iodata.N*8*Npoly+np*iodata.N*4+Npoly*iodata.N*4+3],4,alphak[cm],&X[cm*iodata.N*8*Npoly+7],8);
+             }
            }
-           printf("SP: ||Z-Zbar||=%lf ||Z||=%lf ||X||=%lf\n",my_dnrm2(iodata.N*8*Npoly*iodata.M,Zerr)/((double)iodata.N*8*Npoly*iodata.M),my_dnrm2(iodata.N*8*Npoly*iodata.M,Z)/((double)iodata.N*8*Npoly*iodata.M),my_dnrm2(iodata.N*8*Npoly*iodata.M,X)/((double)iodata.N*8*Npoly*iodata.M));
+           printf("SP: ADMM %d: ||Z-Zbar||=%lf ||Z||=%lf ||X||=%lf",admm,my_dnrm2(iodata.N*8*Npoly*iodata.M,Zerr)/((double)iodata.N*8*Npoly*iodata.M),my_dnrm2(iodata.N*8*Npoly*iodata.M,Z)/((double)iodata.N*8*Npoly*iodata.M),my_dnrm2(iodata.N*8*Npoly*iodata.M,X)/((double)iodata.N*8*Npoly*iodata.M));
+           if (sp_diffuse_id>=0) {
+            printf(" ||Z_diff||=%lf ||Psi||=%lf\n", my_dnrm2(iodata.N*8*Npoly*G,(double*)Zspat_diff)/((double)iodata.N*8*Npoly*G), my_dnrm2(iodata.N*8*Npoly*G,(double*)Psi_diff)/((double)iodata.N*8*Npoly*G));
+           } else {
+            printf("\n");
+           }
            /* 5. feed Zbar and X to next update of Z
              already done above*/
          }
@@ -953,10 +1053,11 @@ sagecal_master(int argc, char **argv) {
            Scurrent[cm]=(Sbegin[cm]+Scurrent[cm]>=Send[cm]?0:Scurrent[cm]+1);
           }
         }
+
       }
       
       if (Data::use_global_solution) {
-      cout<<"Using Global"<<endl;
+      cout<<"Using global solution for residual calculation"<<endl;
 
       /* get back final solutions from each worker */
       /* get Y_i+rho J_i */
@@ -987,9 +1088,21 @@ sagecal_master(int argc, char **argv) {
          }
          /* no need to scale by 1/rho here, because Bii is already divided by 1/rho */
          /* add (alpha Zbar - X) if spatial regularization is enabled */
+         /* Zbar-2col, X,z-1col */
          if (Data::spatialreg) {
+           double *Zbar_r=(double*)Zbar;
            for (int cm=0; cm<iodata.M; cm++) {
-             my_daxpy(iodata.N*8*Npoly,(double*)&Zbar[cm*2*Npoly*iodata.N*2],alphak[cm],&z[cm*4*Npoly*iodata.N*2]);
+             for (int np=0; np<Npoly; np++) {
+              my_daxpys(iodata.N,&Zbar_r[cm*iodata.N*8*Npoly+np*iodata.N*4+0],4,alphak[cm],&z[cm*iodata.N*8*Npoly+0],8);
+              my_daxpys(iodata.N,&Zbar_r[cm*iodata.N*8*Npoly+np*iodata.N*4+1],4,alphak[cm],&z[cm*iodata.N*8*Npoly+1],8);
+              my_daxpys(iodata.N,&Zbar_r[cm*iodata.N*8*Npoly+np*iodata.N*4+2],4,alphak[cm],&z[cm*iodata.N*8*Npoly+4],8);
+              my_daxpys(iodata.N,&Zbar_r[cm*iodata.N*8*Npoly+np*iodata.N*4+3],4,alphak[cm],&z[cm*iodata.N*8*Npoly+5],8);
+
+              my_daxpys(iodata.N,&Zbar_r[cm*iodata.N*8*Npoly+np*iodata.N*4+Npoly*iodata.N*4+0],4,alphak[cm],&z[cm*iodata.N*8*Npoly+2],8);
+              my_daxpys(iodata.N,&Zbar_r[cm*iodata.N*8*Npoly+np*iodata.N*4+Npoly*iodata.N*4+1],4,alphak[cm],&z[cm*iodata.N*8*Npoly+3],8);
+              my_daxpys(iodata.N,&Zbar_r[cm*iodata.N*8*Npoly+np*iodata.N*4+Npoly*iodata.N*4+2],4,alphak[cm],&z[cm*iodata.N*8*Npoly+6],8);
+              my_daxpys(iodata.N,&Zbar_r[cm*iodata.N*8*Npoly+np*iodata.N*4+Npoly*iodata.N*4+3],4,alphak[cm],&z[cm*iodata.N*8*Npoly+7],8);
+             }
            }
            my_daxpy(iodata.N*8*Npoly*iodata.M,X,-1.0,z);
          }
@@ -1067,55 +1180,9 @@ sagecal_master(int argc, char **argv) {
 
      if (Data::spatialreg) { 
        /* plotting : create plot */
-       /* Z_k = Z Phi_k */
-       for(int cm=0; cm<pn_grid_M; cm++) {
-         my_zgemm('N','N',2*Npoly*iodata.N,2,2*G,1.0,Zspat,2*Npoly*iodata.N,&pn_Phi[cm*2*G*2],2*G,0.0,&pn_Zbar[cm*2*Npoly*iodata.N*2],2*Npoly*iodata.N);
-       }
-       /* evaluate B_f Z_k, k all pixels */
-       int nfreq=0; /* selected freq */
-       for (int p=0; p<pn_grid_M; p++) {
-         memset(&pn_J[8*iodata.N*p],0,sizeof(double)*(size_t)iodata.N*8);
-         for (int ci=0; ci<Npoly; ci++) {
-           my_daxpy(8*iodata.N, (double*)&pn_Zbar[p*4*iodata.N*Npoly+ci*4*iodata.N], B[nfreq*Npoly+ci], &pn_J[8*iodata.N*p]);
-         }
-       }
-       /* re-arrange pixel values into pn_grid_M blocks, N times for stations */
-       double *pixval=0;
-       if ((pixval=(double*)calloc((size_t)pn_grid_M*iodata.N,sizeof(double)))==0) {
-        fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
-        exit(1);
-       }
-       for (int cm=0; cm<iodata.N; cm++) {
-#pragma GCC ivdep
-         for (int ci=0; ci<pn_grid_M; ci++) {
-           pixval[ci+cm*pn_grid_M]=pn_J[8*cm+ci*8*iodata.N]*pn_J[8*cm+ci*8*iodata.N]
-             +pn_J[8*cm+ci*8*iodata.N+1]*pn_J[8*cm+ci*8*iodata.N+1]
-             +pn_J[8*cm+ci*8*iodata.N+6]*pn_J[8*cm+ci*8*iodata.N+6]
-             +pn_J[8*cm+ci*8*iodata.N+7]*pn_J[8*cm+ci*8*iodata.N+7];
-         }
-       }
        std::string imagename=std::string("J_")+std::to_string(ct)+std::string(".ppm");
-       convert_tensor_to_image(pixval, imagename.c_str(), iodata.N, pn_axes_M);
-#ifdef DEBUG1
-       FILE *dfp;
-       if ((dfp=fopen("debug.m","w+"))==0) {
-        fprintf(stderr,"%s: %d: no file\n",__FILE__,__LINE__);
-        exit(1);
-       }
-       fprintf(dfp,"N=%d;\nM=%d;\n",iodata.N,pn_axes_M);
-       fprintf(dfp,"Jvec=[\n");
-       for (int ci=0; ci<pn_grid_M*4*iodata.N; ci++) {
-         fprintf(dfp,"%lf+j*(%lf)\n",pn_J[2*ci],pn_J[2*ci+1]);
-       }
-       fprintf(dfp,"];\n");
-       fprintf(dfp,"Pix=[\n");
-       for (int ci=0; ci<pn_grid_M*iodata.N; ci++) {
-         fprintf(dfp,"%lf\n",pixval[ci]);
-       }
-       fprintf(dfp,"];\n");
-       fclose(dfp);
-#endif /* DEBUG1 */
-       free(pixval);
+       /* this is slow, because the basis vectors need to be re-calculated, but this keeps the code cleaner */
+       plot_spatial_model(Zspat,B,Npoly,iodata.N,sh_n0,iodata.Nms,pn_axes_M,pn_nfreq,0,spatialreg_basis,sh_beta,imagename.c_str());
      }
 
     } /* time */
@@ -1131,18 +1198,6 @@ sagecal_master(int argc, char **argv) {
       if (Data::spatialreg) {
         fclose(sp_sfp);
       }
-    }
-
-    if (Data::spatialreg) { 
-       /* plotting : free resources */
-       free(pn_ll);
-       free(pn_mm);
-       free(pn_theta);
-       free(pn_phi);
-       free(pn_phivec);
-       free(pn_Phi);
-       free(pn_Zbar);
-       free(pn_J);
     }
 
 #ifdef DEBUG
@@ -1233,6 +1288,11 @@ sagecal_master(int argc, char **argv) {
      free(Phikk);
      free(Zbar);
      free(Zspat);
+     if (sp_diffuse_id>=0) {
+      free(Zspat_diff);
+      free(Zspat_diff0);
+      free(Psi_diff);
+     }
      free(X);
      free(alphak);
    }

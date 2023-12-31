@@ -160,6 +160,8 @@ namespace Data
     extern int linsolv;
     extern int solver_mode;
     extern int ccid;
+    extern int ddid; /* diffuse sky model cluster id */
+    extern double sp_gamma; /* regularization for spatial model constraint with diffuse sky */
     extern double rho;
     extern char *solfile;
     extern char *initsolfile;
