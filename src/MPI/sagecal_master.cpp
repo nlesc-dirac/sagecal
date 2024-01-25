@@ -379,7 +379,7 @@ sagecal_master(int argc, char **argv) {
      }
      if (spatialreg_basis==SP_SHAPELET) {
       sh_beta=4.0*sqrt(l_max*l_max/(double)iodata.M); /* scale ~ 2 x sqrt(range(l)*delta(l)) or m */
-      printf("Using shaplet spatial basis with scale %lf\n",sh_beta);
+      printf("Using shapelet spatial basis with scale %lf\n",sh_beta);
       /* shapelet basis: real basis, complex part is zero */
       shapelet_modes(sh_n0,sh_beta,ll,mm,iodata.M,phivec);
      } else {

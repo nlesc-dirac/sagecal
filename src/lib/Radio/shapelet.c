@@ -983,9 +983,12 @@ plot_spatial_model(complex double *Zspat, double *B, int Npoly, int N, int n0, i
       fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
       exit(1);
    }
+   /* depending on the basis, determine plotting domain,
+    * shapelet: [-beta*n0/2,beta*n0/2], spherical harmonic: [-0.9,0.9] */
+   double plot_limit=(spatialreg_basis==SP_SHAPELET?0.5*beta*(double)n0:0.9);
    for (int ci=0; ci<axes_M; ci++) {
-       pn_ll[ci]=(0.9-(-0.9))*((double)ci+0.5)/(double)(axes_M)-0.9;
-       pn_mm[ci]=(0.9-(-0.9))*((double)ci+0.5)/(double)(axes_M)-0.9;
+       pn_ll[ci]=(plot_limit-(-plot_limit))*((double)ci+0.5)/(double)(axes_M)-plot_limit;
+       pn_mm[ci]=pn_ll[ci];
    }
    if ((pn_theta=(double*)calloc((size_t)pn_grid_M,sizeof(double)))==0) {
       fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
@@ -1122,23 +1125,14 @@ plot_spatial_model(complex double *Zspat, double *B, int Npoly, int N, int n0, i
      if (plot_type==0) { /* ||J||^2 */
 #pragma GCC ivdep
          for (int ci=0; ci<pn_grid_M; ci++) {
-/*           pixval[ci+cm*pn_grid_M]=pn_J[8*cm+ci*8*N]*pn_J[8*cm+ci*8*N] // real J11
-             +pn_J[8*cm+ci*8*N+1]*pn_J[8*cm+ci*8*N+1] // imag J11
-             +pn_J[8*cm+ci*8*N+2]*pn_J[8*cm+ci*8*N+2] // real J21
-             +pn_J[8*cm+ci*8*N+3]*pn_J[8*cm+ci*8*N+3] // imag J21
-             +pn_J[8*cm+ci*8*N+4]*pn_J[8*cm+ci*8*N+4] // real J12
-             +pn_J[8*cm+ci*8*N+5]*pn_J[8*cm+ci*8*N+5] // imag J12
-             +pn_J[8*cm+ci*8*N+6]*pn_J[8*cm+ci*8*N+6] // real J22
-             +pn_J[8*cm+ci*8*N+7]*pn_J[8*cm+ci*8*N+7]; // imag J22
-*/
           pixval[ci+cm*pn_grid_M]=pn_J[ci*8*N+4*cm]*pn_J[ci*8*N+4*cm] // real J11
-              +pn_J[ci*8*N+4*cm+1]*pn_J[ci*8*N+4*cm+1]
-              +pn_J[ci*8*N+4*cm+2]*pn_J[ci*8*N+4*cm+2]
-              +pn_J[ci*8*N+4*cm+3]*pn_J[ci*8*N+4*cm+3]
-              +pn_J[ci*8*N+4*cm+4*N+0]*pn_J[ci*8*N+4*cm+4*N+0]
-              +pn_J[ci*8*N+4*cm+4*N+1]*pn_J[ci*8*N+4*cm+4*N+1]
-              +pn_J[ci*8*N+4*cm+4*N+2]*pn_J[ci*8*N+4*cm+4*N+2]
-              +pn_J[ci*8*N+4*cm+4*N+3]*pn_J[ci*8*N+4*cm+4*N+3];
+              +pn_J[ci*8*N+4*cm+1]*pn_J[ci*8*N+4*cm+1] // imag J11
+              +pn_J[ci*8*N+4*cm+2]*pn_J[ci*8*N+4*cm+2] // real J21
+              +pn_J[ci*8*N+4*cm+3]*pn_J[ci*8*N+4*cm+3] // imag J21
+              +pn_J[ci*8*N+4*cm+4*N+0]*pn_J[ci*8*N+4*cm+4*N+0] // real J12
+              +pn_J[ci*8*N+4*cm+4*N+1]*pn_J[ci*8*N+4*cm+4*N+1] // imag J12
+              +pn_J[ci*8*N+4*cm+4*N+2]*pn_J[ci*8*N+4*cm+4*N+2] // real J22
+              +pn_J[ci*8*N+4*cm+4*N+3]*pn_J[ci*8*N+4*cm+4*N+3]; // imag J22
 
          }
      } else if (plot_type==1) { /* angle(J11) */

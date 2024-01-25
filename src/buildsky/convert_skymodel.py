@@ -206,6 +206,72 @@ def convert_sky_bbs_lsm(infilename,outfilename):
    \]             # skip ]
    [\S\s]+""",re.VERBOSE)
 
+ pp2_nofreq=re.compile(r"""
+   ^(?P<col1>[A-Za-z0-9_.]+[-+][A-Za-z0-9_.]+)  # column 1 name: must start with a character, patterns like 'J175809.2+06082' or 'J202016.4-000035'
+   \s*             # skip white space
+   \,           # skip comma
+   \s*             # skip white space
+   (?P<col2>\S+)  # source type i.e. 'POINT', 'GAUSSIAN'
+   \s*             # skip white space
+   \,           # skip comma
+   \s*             # skip white space
+   (?P<col3>\S+)  # patch name i.e. 'CENTER'
+   \s*             # skip white space
+   \,           # skip comma
+   \s*             # skip white space
+   (?P<col4>\d+)   # RA angle - hr 
+   \:           # skip colon
+   (?P<col5>\d+)   # RA angle - min 
+   \:           # skip colon
+   (?P<col6>\d+(\.\d+)?)   # RA angle - sec
+   \s*             # skip white space
+   \,           # skip comma
+   \s*             # skip white space
+   (?P<col7>[-+]?\d+)   # Dec angle - hr 
+   \.           # skip dot 
+   (?P<col8>\d+)   # Dec angle - min 
+   \.           # skip dot
+   (?P<col9>\d+(\.\d+)?)   # Dec angle - sec
+   \s*             # skip white space
+   \,           # skip comma
+   \s*             # skip white space
+   (?P<col10>[-+]?\d+(\.\d+)?([eE](-|\+)(\d+))?)   # sI
+   \s*             # skip white space
+   \,           # skip comma
+   \s*             # skip white space
+   (?P<col11>[-+]?\d+(\.\d+)?([eE](-|\+)(\d+))?)   # sQ
+   \s*             # skip white space
+   \,           # skip comma
+   \s*             # skip white space
+   (?P<col12>[-+]?\d+(\.\d+)?([eE](-|\+)(\d+))?)   # sU
+   \s*             # skip white space
+   \,           # skip comma
+   \s*             # skip white space
+   (?P<col13>[-+]?\d+(\.\d+)?([eE](-|\+)(\d+))?)   # sV
+   \s*             # skip white space
+   \,           # skip comma
+   \s*             # skip white space
+   (?P<col14>[-+]?\d+(\.\d+)?([eE](-|\+)(\d+))?)   # bMaj
+   \s*             # skip white space
+   \,           # skip comma
+   \s*             # skip white space
+   (?P<col15>[-+]?\d+(\.\d+)?([eE](-|\+)(\d+))?)   # bMin
+   \s*             # skip white space
+   \,           # skip comma
+   \s*             # skip white space
+   (?P<col16>[-+]?\d+(\.\d+)?([eE](-|\+)(\d+))?)   # bPA
+   \s*             # skip white space
+   \,           # skip comma
+   \s*             # skip white space
+   \,           # skip comma
+   \s*             # skip white space
+   \[             # skip [
+   \s*             # skip white space
+   (?P<col18>[-+]?\d+(\.\d+)?([eE](-|\+)(\d+))?)   # [spec_index] 
+   \s*             # skip white space
+   \]             # skip ]
+   [\S\s]+""",re.VERBOSE)
+
  pp3=re.compile(r"""
    ^(?P<col1>[A-Za-z0-9_.-/+]+)  # column 1 name: must start with a character
    \s*             # skip white space
@@ -398,6 +464,7 @@ def convert_sky_bbs_lsm(infilename,outfilename):
  outfile.write("## LSM file\n")
  outfile.write("### Name  | RA (hr,min,sec) | DEC (deg,min,sec) | I | Q | U |  V | SI0 | SI1 | SI2 | RM | eX | eY | eP | freq0\n")
  outfile.write("### Missing values, freq0 = 150e6\n")
+ freq0=150e6
  for eachline in all:
    v=pp4.search(eachline)
    if v!=None:
@@ -467,7 +534,7 @@ def convert_sky_bbs_lsm(infilename,outfilename):
             sname='G'+sname
           strline=sname+' '+str(v.group('col4'))+' '+str(v.group('col5'))+' '+str(v.group('col6'))
           strline=strline+' '+str(v.group('col7'))+' '+str(v.group('col8'))+' '+str(v.group('col9'))+' '+str(v.group('col10'))
-          strline=strline+' '+str(v.group('col11'))+' '+str(v.group('col12'))+' '+str(v.group('col13'))+' '+str(v.group('col18'))+'0 0'
+          strline=strline+' '+str(v.group('col11'))+' '+str(v.group('col12'))+' '+str(v.group('col13'))+' '+str(v.group('col18'))+'0 0 0' # last 0 for RM
           # need the right conversion factor for Gaussians: Bmaj,Bmin arcsec (rad) diameter, PA (deg) West-> counterclockwise, BDSM its North->counterclockwise
           if stype=='GAUSSIAN':
             bmaj=float(v.group('col14'))*(0.5/3600.0)*math.pi/180.0
@@ -491,7 +558,7 @@ def convert_sky_bbs_lsm(infilename,outfilename):
             #print 'Error in source '+strline
 ################################################################################
    else:
-     v=pp2.search(eachline)
+     v=pp2_nofreq.search(eachline)
      if v!= None:
 ################################################################################
         print(eachline)
@@ -502,7 +569,7 @@ def convert_sky_bbs_lsm(infilename,outfilename):
           sname='G'+sname
         strline=sname+' '+str(v.group('col4'))+' '+str(v.group('col5'))+' '+str(v.group('col6'))
         strline=strline+' '+str(v.group('col7'))+' '+str(v.group('col8'))+' '+str(v.group('col9'))+' '+str(v.group('col10'))
-        strline=strline+' '+str(v.group('col11'))+' '+str(v.group('col12'))+' '+str(v.group('col13'))+' '+str(v.group('col18'))+'0 0'
+        strline=strline+' '+str(v.group('col11'))+' '+str(v.group('col12'))+' '+str(v.group('col13'))+' '+str(v.group('col18'))+'0 0 0' # last 0 for RM
         # need the right conversion factor for Gaussians: Bmaj,Bmin arcsec (rad) diameter, PA (deg) West-> counterclockwise, BDSM its North->counterclockwise
         if stype=='GAUSSIAN':
           bmaj=float(v.group('col14'))*(0.5/3600)*math.pi/180.0
@@ -518,7 +585,10 @@ def convert_sky_bbs_lsm(infilename,outfilename):
           bpa=0.0
         
         strline=strline+' 0 '+str(bmaj)+' '+str(bmin)+' '+str(bpa)
-        strline=strline+' '+str(v.group('col17'))+'\n'
+        if v.groupdict().get('col17'):
+         strline=strline+' '+str(v.group('col17'))+'\n'
+        else:
+         strline=strline+' '+str(freq0)+'\n'
         print(strline)
         # only write good sources
         if not bad_source:
