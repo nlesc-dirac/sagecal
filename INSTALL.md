@@ -26,8 +26,8 @@ The option *-DBLA_VENDOR=OpenBLAS* is to select OpenBLAS explicitly, but other B
 To only build *libdirac* (shared) library, use *-DLIB_ONLY=1* option (also *-DBLA_VENDOR* to select the BLAS flavour). This library can be used with pkg-config using *lib/pkgconfig/libdirac.pc*. To build *libdirac* with GPU support, use *-DHAVE_CUDA=ON* with *-DLIB_ONLY=1* and give *-fPIC* compiler flag (for both *-DCMAKE_CXX_FLAGS* and *-DCMAKE_C_FLAGS*). With GPU support, only a static library is built because it needs to match the GPU architecture.
 
 ### Vectorized math operations
-SAGECal can use ***libmvec*** vectorized math operations, both in GPU and CPU versions. In order to enable this, use compiler options *-fopenmp -ffast-math -lmvec -lm* for both gcc and g++. Also *-mavx*, *-mavx2* etc. can be added. Here is an example for CPU version
+SAGECal can use ***libmvec*** vectorized math operations, both in GPU and CPU versions. In order to enable this, use compiler options *-ffast-math -lmvec -lm* for both gcc and g++. Also *-mavx*, *-mavx2* etc. can be added. Here is an example for CPU version
 
 ```
-cmake ..  -DCMAKE_CXX_FLAGS='-g -O3 -Wall -fopenmp -ffast-math -lmvec -lm -mavx2' -DCMAKE_C_FLAGS='-g -O3 -Wall -ffast-math -lmvec -lm -mavx2' 
+cmake ..  -DCMAKE_CXX_FLAGS='-g -O3 -Wall -ffast-math -lmvec -lm -mavx2' -DCMAKE_C_FLAGS='-g -O3 -Wall -ffast-math -lmvec -lm -mavx2' 
 ```
