@@ -23,8 +23,8 @@ RUN git clone --depth 1 --branch master \
      mkdir build-ubuntu && cd build-ubuntu && \
      cmake -DCMAKE_INSTALL_PREFIX=/opt/sagecal \
      -DBLA_VENDOR=OpenBLAS \
-     -DCMAKE_CXX_FLAGS="-O3 -fopenmp -ffast-math -lmvec -lm" \
-     -DCMAKE_C_FLAGS="-O3 -fopenmp -ffast-math -lmvec -lm" .. && \
+     -DCMAKE_CXX_FLAGS="-O3 -ffast-math -lmvec -lm" \
+     -DCMAKE_C_FLAGS="-O3 -ffast-math -lmvec -lm" .. && \
      make -j4 && \
      make install
 RUN ls -alsrt /opt/sagecal && \
