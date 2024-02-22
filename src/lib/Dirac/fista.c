@@ -44,6 +44,8 @@ update_spatialreg_fista(complex double *Z, complex double *Zbar, complex double 
   double L=my_cdot(2*G*2*G,Phikk,Phikk);
   /* if L<1/1e-3, might diverge, so catch it */
   if (L<1.0/1e-3) { L=1.0/1e-3; }
+  /* if 1/L too small, will give zero solution, so catch it */
+  if (L>1.0/1e-9) { L=1.0/1e-9; }
   /* intial t */
   double t=1.0;
   if ((gradf=(complex double*)calloc((size_t)2*Npoly*N*2*G,sizeof(complex double)))==0) {
@@ -134,6 +136,8 @@ update_spatialreg_fista_with_diffconstraint(complex double *Z, complex double *Z
   double L=my_cdot(2*G*2*G,Phikk,Phikk);
   /* if L<1/1e-3, might diverge, so catch it */
   if (L<1.0/1e-3) { L=1.0/1e-3; }
+  /* if 1/L too small, will give zero solution, so catch it */
+  if (L>1.0/1e-9) { L=1.0/1e-9; }
   /* intial t */
   double t=1.0;
   if ((gradf=(complex double*)calloc((size_t)2*Npoly*N*2*G,sizeof(complex double)))==0) {
