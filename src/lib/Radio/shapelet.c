@@ -63,7 +63,7 @@ calculate_uv_mode_vectors_scalar(double u, double v, double beta, int n0, double
 	}
   fact[0]=1.0;
 	for (xci=1; xci<(n0); xci++) {
-		fact[xci]=(xci)*fact[xci-1];
+		fact[xci]=((double)xci)*fact[xci-1];
 	}
 
 	/* setup array to store calculated shapelet value */
@@ -425,7 +425,7 @@ shapelet_modes(int n0,double beta, double *x, double *y, int N, complex double *
 	}
   fact[0]=1;
 	for (xci=1; xci<(n0); xci++) {
-		fact[xci]=(xci)*fact[xci-1];
+		fact[xci]=((double)xci)*fact[xci-1];
 	}
 
 #ifdef DEBUG
@@ -658,7 +658,7 @@ shapelet_product_tensor(int L, int M, int N, double alpha, double beta, double g
 	}
   fact[0]=1.0;
 	for (int ci=1; ci<(n0); ci++) {
-		fact[ci]=(ci)*fact[ci-1];
+		fact[ci]=((double)ci)*fact[ci-1];
 	}
 
   /* B_lmn(a,b,c) = nu/sqrt(-2^{l+m+n} sqrt(pi) l! m! n! a b c) L_lmn(sqrt(2)nu/a, sqrt(2)nu/b, sqrt(2)nu/c)
