@@ -541,77 +541,28 @@ H_e(float x, int n) {
   return Hn;
 }
 
-__device__ void
-calculate_uv_mode_vectors_scalar00(float u, float v, float beta, int n0, float *Av, int *cplx) {
-
-  int xci,zci,Ntot;
-
-  float **shpvl, *fact;
-  int n1,n2,start;
-  float xval;
-  int signval;
-
-  Ntot=2; /* u,v seperately */
-  /* set up factorial array */
-  fact=(float *)malloc((size_t)(n0)*sizeof(float));
-  fact[0]=1.0f;
-  for (xci=1; xci<(n0); xci++) {
-    fact[xci]=((float)xci)*fact[xci-1];
+/* Hermite polynomial, non recursive version, suitable for large n
+ scaled down, He/sqrt(2^n * n!) to prevent overflow */
+__device__ float
+H_e_scaled(float x, int n, float *fact) {
+  const float scalefactor=sqrtf((float)(2<<n)*fact[n]);
+  if(n==0) return 1.0f/scalefactor;
+  if(n==1) return 2.0f*x/scalefactor;
+  /* else iterate */
+  float Hn_1,Hn,Hnp1;
+  Hn_1=1.0f/scalefactor;
+  Hn=2.0f*x/scalefactor;
+  int ci;
+  for (ci=1; ci<n; ci++) {
+    Hnp1=2.0f*x*Hn-2.0f*((float)ci)*Hn_1;
+    Hn_1=Hn;
+    Hn=Hnp1;
   }
 
-  /* setup array to store calculated shapelet value */
-  /* need max storage Ntot x n0 */
-  shpvl=(float**)malloc((size_t)(Ntot)*sizeof(float*));
-  for (xci=0; xci<Ntot; xci++) {
-   shpvl[xci]=(float*)malloc((size_t)(n0)*sizeof(float));
-  }
-
-
-  /* start filling in the array from the positive values */
-  zci=0;
-  xval=u*beta;
-  float expval=__expf(-0.5f*(float)xval*xval);
-  for (xci=0; xci<n0; xci++) {
-    shpvl[zci][xci]=H_e(xval,xci)*expval/__fsqrt_rn((float)(2<<xci)*fact[xci]);
-  }
-  zci=1;
-  xval=v*beta;
-  expval=__expf(-0.5f*(float)xval*xval);
-  for (xci=0; xci<n0; xci++) {
-    shpvl[zci][xci]=H_e(xval,xci)*expval/__fsqrt_rn((float)(2<<xci)*fact[xci]);
-  }
-
-  /* now calculate the mode vectors */
-  /* each vector is 1 x 1 length and there are n0*n0 of them */
-
-  for (n2=0; n2<(n0); n2++) {
-   for (n1=0; n1<(n0); n1++) {
-    cplx[n2*n0+n1]=((n1+n2)%2==0?0:1) /* even (real) or odd (imaginary)*/;
-    /* sign */
-    if (cplx[n2*n0+n1]==0) {
-      signval=(((n1+n2)/2)%2==0?1:-1);
-    } else {
-      signval=(((n1+n2-1)/2)%2==0?1:-1);
-    }
-
-    /* fill in 1*1*(zci) to 1*1*(zci+1)-1 */
-    start=(n2*(n0)+n1);
-    if (signval==-1) {
-        Av[start]=-shpvl[0][n1]*shpvl[1][n2];
-    } else {
-        Av[start]=shpvl[0][n1]*shpvl[1][n2];
-    }
-   }
-  }
-
-  free(fact);
-  for (xci=0; xci<Ntot; xci++) {
-   free(shpvl[xci]);
-  }
-  free(shpvl);
+  return Hn;
 }
 
-
+#define LARGE_MODE_LIMIT 20
 __device__ void
 calculate_uv_mode_vectors_scalar(float u, float v, float beta, int n0, float *Av, int *cplx, float *fact, float *shpvl) {
 
@@ -626,10 +577,18 @@ calculate_uv_mode_vectors_scalar(float u, float v, float beta, int n0, float *Av
   float expvalu=__expf(-0.5f*xvalu*xvalu);
   float xvalv=v*beta;
   float expvalv=__expf(-0.5f*xvalv*xvalv);
-  for (xci=0; xci<n0; xci++) {
-    shpvl[xci]=H_e(xvalu,xci)*expvalu/__fsqrt_rn((float)(2<<xci)*fact[xci]);
+  if (n0 < LARGE_MODE_LIMIT) {
+    for (xci=0; xci<n0; xci++) {
+      shpvl[xci]=H_e(xvalu,xci)*expvalu/__fsqrt_rn((float)(2<<xci)*fact[xci]);
 
-    shpvl[xci+n0]=H_e(xvalv,xci)*expvalv/__fsqrt_rn((float)(2<<xci)*fact[xci]);
+      shpvl[xci+n0]=H_e(xvalv,xci)*expvalv/__fsqrt_rn((float)(2<<xci)*fact[xci]);
+    }
+  } else {
+    for (xci=0; xci<n0; xci++) {
+      shpvl[xci]=H_e_scaled(xvalu,xci,fact)*expvalu;
+
+      shpvl[xci+n0]=H_e_scaled(xvalv,xci,fact)*expvalv;
+    }
   }
 
   /* now calculate the mode vectors */
