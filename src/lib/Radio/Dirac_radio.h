@@ -223,9 +223,10 @@ precalculate_coherencies_multifreq(double *u, double *v, double *w, complex doub
 
 
 /****************************** diffuse_predict.c ****************************/
+/* have_cuda: if 1, use GPU version, else only CPU version */
 extern int
 recalculate_diffuse_coherencies(double *u, double *v, double *w, complex double *x, int N,
-   int Nbase, baseline_t *barr,  clus_source_t *carr, int M, double freq0, double fdelta, double tdelta, double dec0, double uvmin, double uvmax, int diffuse_cluster, int sh_n0, double sh_beta, complex double *Z, int Nt);
+   int Nbase, baseline_t *barr,  clus_source_t *carr, int M, double freq0, double fdelta, double tdelta, double dec0, double uvmin, double uvmax, int diffuse_cluster, int sh_n0, double sh_beta, complex double *Z, int Nt, int use_cuda);
 /****************************** transforms.c ****************************/
 #ifndef ASEC2RAD
 #define ASEC2RAD 4.848136811095359935899141e-6

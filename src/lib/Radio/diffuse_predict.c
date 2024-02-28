@@ -117,6 +117,66 @@ shapelet_pred_threadfn(void *data) {
   return NULL;
 }
 
+/*****************************************************************************/
+#ifdef HAVE_CUDA
+static void *
+shapelet_pred_threadfn_cuda(void *data) {
+  thread_data_shap_t *t=(thread_data_shap_t*)data;
+
+  complex double coh[4];
+  int cm=t->cid;
+  int sid=t->sid;
+  double freq0=t->freq0;
+
+  double fdelta2=t->fdelta*0.5;
+
+  /* we only predict for cluster id cm, and for only one source sid */
+  for (int ci=0; ci<t->Nb; ci++) {
+   int stat1=t->barr[ci+t->boff].sta1;
+   int stat2=t->barr[ci+t->boff].sta2;
+   double Gn=2.0*M_PI*(t->u[ci]*t->carr[cm].ll[sid]+t->v[ci]*t->carr[cm].mm[sid]+t->w[ci]*t->carr[cm].nn[sid]);
+   double sin_n,cos_n;
+   sincos(freq0*Gn,&sin_n,&cos_n);
+   /* freq smearing */
+   if (Gn!=0.0) {
+     double smfac=Gn*fdelta2;
+     Gn =fabs(sin(smfac)/smfac);
+   } else {
+     Gn =1.0;
+   }
+   /* multiply (re, im) phase term with smear factor */
+   sin_n*=Gn;
+   cos_n*=Gn;
+
+   /* shapelet contribution */
+   /* modes: n0*n0*4 values &Jp_C_Jq[4*n0*n0*(stat1*t->N+stat2)] */
+   complex double *modes=&(t->modes[4*t->modes_n0*t->modes_n0*(stat1*t->N+stat2)]);
+   shapelet_contrib_vector(modes,t->modes_n0,t->modes_beta,t->u[ci]*freq0,t->v[ci]*freq0,t->w[ci]*freq0,coh);
+   complex double phterm=cos_n+_Complex_I*sin_n;
+
+   coh[0]*=phterm;
+   coh[1]*=phterm;
+   coh[2]*=phterm;
+   coh[3]*=phterm;
+   /* add or replace coherencies for this cluster */
+   if (t->sid==0) {
+     /* first source will replace, resetting the accumulation to start from 0 */
+     t->coh[4*t->M*ci+4*t->cid]=coh[0];
+     t->coh[4*t->M*ci+4*t->cid+1]=coh[1];
+     t->coh[4*t->M*ci+4*t->cid+2]=coh[2];
+     t->coh[4*t->M*ci+4*t->cid+3]=coh[3];
+   } else {
+     t->coh[4*t->M*ci+4*t->cid]+=coh[0];
+     t->coh[4*t->M*ci+4*t->cid+1]+=coh[1];
+     t->coh[4*t->M*ci+4*t->cid+2]+=coh[2];
+     t->coh[4*t->M*ci+4*t->cid+3]+=coh[3];
+   }
+  }
+
+  return NULL;
+}
+#endif /* HAVE_CUDA */
+/*****************************************************************************/
 static void *
 shapelet_prod_one_threadfn(void *data) {
   thread_data_stat_t *t=(thread_data_stat_t*)data;
@@ -150,7 +210,7 @@ shapelet_prod_two_threadfn(void *data) {
  */
 int
 recalculate_diffuse_coherencies(double *u, double *v, double *w, complex double *x, int N,
-   int Nbase, baseline_t *barr,  clus_source_t *carr, int M, double freq0, double fdelta, double tdelta, double dec0, double uvmin, double uvmax, int cid, int sh_n0, double sh_beta, complex double *Z, int Nt) {
+   int Nbase, baseline_t *barr,  clus_source_t *carr, int M, double freq0, double fdelta, double tdelta, double dec0, double uvmin, double uvmax, int cid, int sh_n0, double sh_beta, complex double *Z, int Nt, int use_cuda) {
 
 
       /* thread setup - divide baselines */
@@ -383,7 +443,15 @@ recalculate_diffuse_coherencies(double *u, double *v, double *w, complex double 
           threaddata[nth1].modes=Jp_C_Jq;
           threaddata[nth1].modes_n0=sp->n0;
           threaddata[nth1].modes_beta=sp->beta;
+#ifdef HAVE_CUDA
+          if (!use_cuda) {
           pthread_create(&th_array[nth1],&attr,shapelet_pred_threadfn,(void*)(&threaddata[nth1]));
+          } else {
+          pthread_create(&th_array[nth1],&attr,shapelet_pred_threadfn_cuda,(void*)(&threaddata[nth1]));
+          }
+#else
+          pthread_create(&th_array[nth1],&attr,shapelet_pred_threadfn,(void*)(&threaddata[nth1]));
+#endif /* HAVE_CUDA */
         }
         for (int nth1=0; nth1<nth; nth1++) {
           pthread_join(th_array[nth1],NULL);

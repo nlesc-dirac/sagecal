@@ -617,6 +617,7 @@ calculate_uv_mode_vectors_scalar(float u, float v, float beta, int n0, float *Av
 }
 
 
+#define SMALLEST_SPATIAL_SCALE_FAC 100.0f
 
 __device__ cuDoubleComplex
 shapelet_contrib__(int *dd, float u, float v, float w) {
@@ -644,8 +645,9 @@ shapelet_contrib__(int *dd, float u, float v, float w) {
   ut=a*(cosph*up-sinph*vp);
   vt=b*(sinph*up+cosph*vp);
   /* if u,v is way off the scale (beta) of shapelet modes, the result is almost always zero,
-     so check this here and return 0, otherwise spurious nans may result */
-  if (__fdiv_rz(100.0f,__fsqrt_rz(ut*ut+vt*vt))<dp->beta) {
+     so check this here and return 0, otherwise spurious nans may result,
+   i.e., predict only for spatial scales l,m > beta * scale_factor ~ beta * 0.01 */
+  if (__fdiv_rz(SMALLEST_SPATIAL_SCALE_FAC,__fsqrt_rz(ut*ut+vt*vt))<dp->beta) {
    return make_cuDoubleComplex(0.0,0.0);
   }
   /* note: we decompose f(-l,m) so the Fourier transform is F(-u,v)
