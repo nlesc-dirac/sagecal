@@ -478,6 +478,11 @@ precess_source_locations_deprecated(double jd_tdb, clus_source_t *carr, int M, d
 
 /****************************** predict_withbeam_cuda.c ****************************/
 #ifdef HAVE_CUDA
+/* copy Nx1 double array x to device as float
+   first allocate device memory (need to be freed later) */
+extern void
+dtofcopy(int N, float **x_d, double *x);
+
 /* if dobeam==0, beam calculation is off
    else, flag to determine if full (element+array), array only, or element only beam is calculated
  */

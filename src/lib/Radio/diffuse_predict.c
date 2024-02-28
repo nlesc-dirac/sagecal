@@ -45,6 +45,11 @@ typedef struct thread_data_shap_ {
   complex double *modes; /* all modes, 4*n0*n0*stations^2 (only half is calculated) */
   int modes_n0; /* basis n0xn0 */
   double modes_beta; /* scale */
+
+#ifdef HAVE_CUDA
+  int tid; /* this thread id */
+  taskhist *hst; /* for load balancing GPUs */
+#endif /* HAVE_CUDA */
 } thread_data_shap_t;
 
 
@@ -122,6 +127,11 @@ shapelet_pred_threadfn(void *data) {
 static void *
 shapelet_pred_threadfn_cuda(void *data) {
   thread_data_shap_t *t=(thread_data_shap_t*)data;
+
+  /* kernel will spawn threads to cover baselines t->Nb,
+   * which can be lower than the total baselines */
+  int card;
+  card=select_work_gpu(MAX_GPU_ID,t->hst);
 
   complex double coh[4];
   int cm=t->cid;
@@ -221,6 +231,12 @@ recalculate_diffuse_coherencies(double *u, double *v, double *w, complex double 
       Nthb0=(Nbase+Nt-1)/Nt;
       pthread_attr_init(&attr);
       pthread_attr_setdetachstate(&attr,PTHREAD_CREATE_JOINABLE);
+
+#ifdef HAVE_CUDA
+      taskhist thst;
+      init_task_hist(&thst);
+#endif /* HAVE_CUDA */
+
       if ((th_array=(pthread_t*)malloc((size_t)Nt*sizeof(pthread_t)))==0) {
        fprintf(stderr,"%s: %d: No free memory\n",__FILE__,__LINE__);
        exit(1);
@@ -444,10 +460,12 @@ recalculate_diffuse_coherencies(double *u, double *v, double *w, complex double 
           threaddata[nth1].modes_n0=sp->n0;
           threaddata[nth1].modes_beta=sp->beta;
 #ifdef HAVE_CUDA
+          threaddata[nth1].hst=&thst;
+          threaddata[nth1].tid=nth1;
           if (!use_cuda) {
-          pthread_create(&th_array[nth1],&attr,shapelet_pred_threadfn,(void*)(&threaddata[nth1]));
+            pthread_create(&th_array[nth1],&attr,shapelet_pred_threadfn,(void*)(&threaddata[nth1]));
           } else {
-          pthread_create(&th_array[nth1],&attr,shapelet_pred_threadfn_cuda,(void*)(&threaddata[nth1]));
+            pthread_create(&th_array[nth1],&attr,shapelet_pred_threadfn_cuda,(void*)(&threaddata[nth1]));
           }
 #else
           pthread_create(&th_array[nth1],&attr,shapelet_pred_threadfn,(void*)(&threaddata[nth1]));
@@ -460,6 +478,10 @@ recalculate_diffuse_coherencies(double *u, double *v, double *w, complex double 
         free(Jp_C_Jq);
       }
 
+
+#ifdef HAVE_CUDA
+      destroy_task_hist(&thst);
+#endif
 
       pthread_attr_destroy(&attr);
       free(th_array);

@@ -135,7 +135,7 @@ typedef struct thread_data_corr_t_ {
 
 /* copy Nx1 double array x to device as float
    first allocate device memory */
-static void
+void
 dtofcopy(int N, float **x_d, double *x) {
   float *xhost=0;
   cudaError_t err;
@@ -166,7 +166,6 @@ dtofcopy(int N, float **x_d, double *x) {
   checkCudaError(err,__FILE__,__LINE__);
 
   *x_d=xc;
-
 }
 
 static void *
