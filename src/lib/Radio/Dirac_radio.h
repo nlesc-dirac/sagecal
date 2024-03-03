@@ -550,6 +550,9 @@ cudakernel_correct_residuals(int B, int N, int Nb, int boff, int F, int nchunk, 
 
 extern void
 cudakernel_convert_time(int T, double *time_utc);
+
+extern void
+cudakernel_calculate_shapelet_coherencies(float u, float v, float *modes, float *fact, int n0, float beta, double *coh);
 #endif /* !HAVE_CUDA */
 
 

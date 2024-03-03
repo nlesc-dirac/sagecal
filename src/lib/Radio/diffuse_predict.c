@@ -24,6 +24,9 @@
 
 #include "Dirac.h"
 #include "Dirac_radio.h"
+#ifdef HAVE_CUDA
+#include "Dirac_GPUtune.h"
+#endif
 #include <math.h>
 
 typedef struct thread_data_shap_ {
@@ -124,6 +127,18 @@ shapelet_pred_threadfn(void *data) {
 
 /*****************************************************************************/
 #ifdef HAVE_CUDA
+#define CUDA_DEBUG
+static void
+checkCudaError(cudaError_t err, char *file, int line)
+{
+#ifdef CUDA_DEBUG
+    if(!err)
+        return;
+    fprintf(stderr,"GPU (CUDA): %s %s %d\n", cudaGetErrorString(err),file,line);
+    exit(EXIT_FAILURE);
+#endif
+}
+
 static void *
 shapelet_pred_threadfn_cuda(void *data) {
   thread_data_shap_t *t=(thread_data_shap_t*)data;
@@ -133,6 +148,20 @@ shapelet_pred_threadfn_cuda(void *data) {
   int card;
   card=select_work_gpu(MAX_GPU_ID,t->hst);
 
+  cudaError_t err;
+  err=cudaSetDevice(card);
+  checkCudaError(err,__FILE__,__LINE__);
+
+  /* allocate device mem */
+  float *modesd; /* shapelet modes 4*n0*n0 complex (float) values */
+  double *cohd; /* coherencies 8x1 */
+  float *factd;
+  
+  err=cudaMalloc((void**) &cohd, 8*sizeof(double));
+  checkCudaError(err,__FILE__,__LINE__);
+  err=cudaMalloc((void**) &factd, t->modes_n0*sizeof(float));
+  checkCudaError(err,__FILE__,__LINE__);
+
   complex double coh[4];
   int cm=t->cid;
   int sid=t->sid;
@@ -140,10 +169,28 @@ shapelet_pred_threadfn_cuda(void *data) {
 
   double fdelta2=t->fdelta*0.5;
 
-  /* we only predict for cluster id cm, and for only one source sid */
+  /* set up factorial array */
+  float *fact;
+  if ((fact=(float *)calloc((size_t)(t->modes_n0),sizeof(float)))==0) {
+    fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
+    exit(1);
+  }
+  fact[0]=1.0f;
+  for (int ci=1; ci<(t->modes_n0); ci++) {
+    fact[ci]=((float)ci)*fact[ci-1];
+  }
+  err=cudaMemcpy(factd, fact, t->modes_n0*sizeof(float), cudaMemcpyHostToDevice);
+  checkCudaError(err,__FILE__,__LINE__);
+  free(fact);
+
+  /* we only predict for cluster id cm, and for only one source sid,
+   * so source flux and l,m,n coords are scalars */
+   /* we copy u,v,w,l,m,n values to GPU and perform calculation per-baseline,
+    * CUDA threads parallelize over the modes : n0xn0 ~ large value */
   for (int ci=0; ci<t->Nb; ci++) {
    int stat1=t->barr[ci+t->boff].sta1;
    int stat2=t->barr[ci+t->boff].sta2;
+
    double Gn=2.0*M_PI*(t->u[ci]*t->carr[cm].ll[sid]+t->v[ci]*t->carr[cm].mm[sid]+t->w[ci]*t->carr[cm].nn[sid]);
    double sin_n,cos_n;
    sincos(freq0*Gn,&sin_n,&cos_n);
@@ -161,13 +208,25 @@ shapelet_pred_threadfn_cuda(void *data) {
    /* shapelet contribution */
    /* modes: n0*n0*4 values &Jp_C_Jq[4*n0*n0*(stat1*t->N+stat2)] */
    complex double *modes=&(t->modes[4*t->modes_n0*t->modes_n0*(stat1*t->N+stat2)]);
-   shapelet_contrib_vector(modes,t->modes_n0,t->modes_beta,t->u[ci]*freq0,t->v[ci]*freq0,t->w[ci]*freq0,coh);
+   //shapelet_contrib_vector(modes,t->modes_n0,t->modes_beta,t->u[ci]*freq0,t->v[ci]*freq0,t->w[ci]*freq0,coh);
+
+
+   dtofcopy(8*t->modes_n0*t->modes_n0,&modesd,(double*)modes);
+   cudakernel_calculate_shapelet_coherencies((float)t->u[ci]*freq0,(float)t->v[ci]*freq0,modesd,factd,t->modes_n0,(float)t->modes_beta,cohd);
+   err=cudaFree(modesd);
+   checkCudaError(err,__FILE__,__LINE__);
+
+   err=cudaMemcpy((double*)coh, cohd, sizeof(double)*8, cudaMemcpyDeviceToHost);
+   checkCudaError(err,__FILE__,__LINE__);
+
+
    complex double phterm=cos_n+_Complex_I*sin_n;
 
    coh[0]*=phterm;
    coh[1]*=phterm;
    coh[2]*=phterm;
    coh[3]*=phterm;
+
    /* add or replace coherencies for this cluster */
    if (t->sid==0) {
      /* first source will replace, resetting the accumulation to start from 0 */
@@ -182,6 +241,16 @@ shapelet_pred_threadfn_cuda(void *data) {
      t->coh[4*t->M*ci+4*t->cid+3]+=coh[3];
    }
   }
+
+  cudaDeviceSynchronize();
+
+  err=cudaFree(cohd);
+  checkCudaError(err,__FILE__,__LINE__);
+  err=cudaFree(factd);
+  checkCudaError(err,__FILE__,__LINE__);
+
+  /* reset error state */
+  err=cudaGetLastError();
 
   return NULL;
 }
@@ -452,28 +521,46 @@ recalculate_diffuse_coherencies(double *u, double *v, double *w, complex double 
         free(Cf);
         free(C_Jq);
 
-        /* predict visibilities */
+        /* predict visibilities - use threads only using CPU prediction
+         * otherwise, do sequential prediction */
+#ifndef HAVE_CUDA
         for (int nth1=0; nth1<nth; nth1++) {
           /* set the source id */
           threaddata[nth1].sid=ci;
           threaddata[nth1].modes=Jp_C_Jq;
           threaddata[nth1].modes_n0=sp->n0;
           threaddata[nth1].modes_beta=sp->beta;
-#ifdef HAVE_CUDA
-          threaddata[nth1].hst=&thst;
-          threaddata[nth1].tid=nth1;
-          if (!use_cuda) {
-            pthread_create(&th_array[nth1],&attr,shapelet_pred_threadfn,(void*)(&threaddata[nth1]));
-          } else {
-            pthread_create(&th_array[nth1],&attr,shapelet_pred_threadfn_cuda,(void*)(&threaddata[nth1]));
-          }
-#else
           pthread_create(&th_array[nth1],&attr,shapelet_pred_threadfn,(void*)(&threaddata[nth1]));
-#endif /* HAVE_CUDA */
         }
         for (int nth1=0; nth1<nth; nth1++) {
           pthread_join(th_array[nth1],NULL);
         }
+#else /* HAVE_CUDA */
+        use_cuda=0;
+        if (!use_cuda) {
+         for (int nth1=0; nth1<nth; nth1++) {
+          /* set the source id */
+          threaddata[nth1].sid=ci;
+          threaddata[nth1].modes=Jp_C_Jq;
+          threaddata[nth1].modes_n0=sp->n0;
+          threaddata[nth1].modes_beta=sp->beta;
+          pthread_create(&th_array[nth1],&attr,shapelet_pred_threadfn,(void*)(&threaddata[nth1]));
+         }
+         for (int nth1=0; nth1<nth; nth1++) {
+          pthread_join(th_array[nth1],NULL);
+         }
+        } else {
+          for (int nth1=0; nth1<nth; nth1++) {
+            threaddata[nth1].sid=ci;
+            threaddata[nth1].modes=Jp_C_Jq;
+            threaddata[nth1].modes_n0=sp->n0;
+            threaddata[nth1].modes_beta=sp->beta;
+            threaddata[nth1].hst=&thst;
+            threaddata[nth1].tid=nth1;
+            shapelet_pred_threadfn_cuda((void*)&threaddata[nth1]);
+          }
+        }
+#endif  /* HAVE_CUDA */
 
         free(Jp_C_Jq);
       }

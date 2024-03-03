@@ -21,6 +21,8 @@
 #include <string.h>
 #include "Dirac.h"
 
+#define FISTA_L_MIN 1e2
+#define FISTA_L_MAX 1e7
 
 /* 
  * Z = arg min \| Z_k - Z Phi_k\|^2 + \lambda \|Z\|^2 + \mu \|Z\|_1
@@ -42,10 +44,13 @@ update_spatialreg_fista(complex double *Z, complex double *Zbar, complex double 
   complex double *Zold,*Y;
   /* Lipschitz constant of gradient, use ||Phikk||^2 as estimate */
   double L=my_cdot(2*G*2*G,Phikk,Phikk);
-  /* if L<1/1e-3, might diverge, so catch it */
-  if (L<1.0/1e-3) { L=1.0/1e-3; }
+  printf("FISTA L=%lf\n",L);
+  /* if 1/L too large, might diverge, so catch it */
+  if (L<FISTA_L_MIN) { L=FISTA_L_MIN; }
   /* if 1/L too small, will give zero solution, so catch it */
-  if (L>1.0/1e-7) { L=1.0/1e-7; }
+  if (L>FISTA_L_MAX) { L=FISTA_L_MAX; }
+
+  printf("FISTA lr=%lf\n",1.0/L);
   /* intial t */
   double t=1.0;
   if ((gradf=(complex double*)calloc((size_t)2*Npoly*N*2*G,sizeof(complex double)))==0) {
@@ -79,7 +84,7 @@ update_spatialreg_fista(complex double *Z, complex double *Zbar, complex double 
     /* take gradient descent step Y - 1/L gradf */
     my_caxpy(2*Npoly*N*2*G, gradf, -1.0/L, Y);
     /* soft threshold and update Z */
-    double thresh=t*mu;
+    double thresh=mu/L;
     for (int ci=0; ci<2*Npoly*N*2*G; ci++) {
        double r=creal(Y[ci]);
        double r1=fabs(r)-thresh; 
@@ -94,12 +99,13 @@ update_spatialreg_fista(complex double *Z, complex double *Zbar, complex double 
     }
     double t0=t;
     t=(1.0+sqrt(1.0+4.0*t*t))*0.5;
-    /* update Y = Z + (t-1)/told (Z-Zold) = (1+(t-1)/told) Z - (t-1)/told Zold */
+    /* Zold <= Zold-Z */
+    my_caxpy(2*Npoly*N*2*G, Z, -1.0, Zold);
+    printf("FISTA %d %lf ||grad||=%lf ||Z-Zold||=%lf\n",it,t,my_dnrm2(2*2*Npoly*N*2*G,(double*)gradf),my_dnrm2(2*2*Npoly*N*2*G,(double*)Zold)/my_dnrm2(2*2*Npoly*N*2*G,(double*)Z));
+    /* update Y = Z + (told-1)/t(Z-Zold) */
     memcpy(Y,Z,2*Npoly*N*2*G*sizeof(complex double));
-    double scalefac=(t-1.0)/t0;
-    my_cscal(2*Npoly*N*2*G,1.0+scalefac,Y);
+    double scalefac=(t0-1.0)/t;
     my_caxpy(2*Npoly*N*2*G, Zold, -scalefac, Y);
-    //printf("%lf %lf %lf %lf %lf\n",t,creal(Y[10]),cimag(Y[10]),creal(Z[10]),cimag(Z[10]));
   }
 
   free(gradf);
@@ -134,10 +140,13 @@ update_spatialreg_fista_with_diffconstraint(complex double *Z, complex double *Z
   complex double *Zold,*Y;
   /* Lipschitz constant of gradient, use ||Phikk||^2 as estimate */
   double L=my_cdot(2*G*2*G,Phikk,Phikk);
-  /* if L<1/1e-3, might diverge, so catch it */
-  if (L<1.0/1e-3) { L=1.0/1e-3; }
+  printf("FISTA L=%lf\n",L);
+  /* if 1/L too large, might diverge, so catch it */
+  if (L<FISTA_L_MIN) { L=FISTA_L_MIN; }
   /* if 1/L too small, will give zero solution, so catch it */
-  if (L>1.0/1e-7) { L=1.0/1e-7; }
+  if (L>FISTA_L_MAX) { L=FISTA_L_MAX; }
+
+  printf("FISTA lr=%lf\n",1.0/L);
   /* intial t */
   double t=1.0;
   if ((gradf=(complex double*)calloc((size_t)2*Npoly*N*2*G,sizeof(complex double)))==0) {
@@ -181,7 +190,7 @@ update_spatialreg_fista_with_diffconstraint(complex double *Z, complex double *Z
     /* take gradient descent step Y - 1/L gradf */
     my_caxpy(2*Npoly*N*2*G, gradf, -1.0/L, Y);
     /* soft threshold and update Z */
-    double thresh=t*mu;
+    double thresh=mu/L;
     for (int ci=0; ci<2*Npoly*N*2*G; ci++) {
        double r=creal(Y[ci]);
        double r1=fabs(r)-thresh; 
@@ -196,12 +205,13 @@ update_spatialreg_fista_with_diffconstraint(complex double *Z, complex double *Z
     }
     double t0=t;
     t=(1.0+sqrt(1.0+4.0*t*t))*0.5;
-    /* update Y = Z + (t-1)/told (Z-Zold) = (1+(t-1)/told) Z - (t-1)/told Zold */
+    /* Zold=Z-Zold */
+    my_caxpy(2*Npoly*N*2*G, Z, -1.0, Zold);
+    printf("FISTA %d %lf ||grad||=%lf ||Z-Zold||=%lf\n",it,t,my_dnrm2(2*2*Npoly*N*2*G,(double*)gradf),my_dnrm2(2*2*Npoly*N*2*G,(double*)Zold)/my_dnrm2(2*2*Npoly*N*2*G,(double*)Z));
+    /* update Y = Z + (told-1)/t(Z-Zold) */
     memcpy(Y,Z,2*Npoly*N*2*G*sizeof(complex double));
-    double scalefac=(t-1.0)/t0;
-    my_cscal(2*Npoly*N*2*G,1.0+scalefac,Y);
+    double scalefac=(t0-1.0)/t;
     my_caxpy(2*Npoly*N*2*G, Zold, -scalefac, Y);
-    //printf("%lf %lf %lf %lf %lf\n",t,creal(Y[10]),cimag(Y[10]),creal(Z[10]),cimag(Z[10]));
   }
 
   free(gradf);
