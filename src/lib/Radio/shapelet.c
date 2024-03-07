@@ -848,7 +848,7 @@ ambt(complex double * __restrict a, complex double * __restrict b, complex doubl
  */
 int
 shapelet_product_jones(int L, int M, int N, double alpha, double beta, double gamma,
-    complex double *h, complex double *f, complex double *g, double *C, int hermitian) {
+    complex double *__restrict h, complex double *__restrict f, complex double *__restrict g, double *__restrict C, int hermitian) {
 
   //printf("Input h %dx%d %lf f %dx%d %lf g %dx%d %lf (x 4)\n",L,L,alpha,M,M,beta,N,N,gamma);
 #ifdef DEBUG
@@ -904,10 +904,10 @@ shapelet_product_jones(int L, int M, int N, double alpha, double beta, double ga
     fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
     exit(1);
   }
-  for (int l1=0; l1<L; l1++) {
-    double *Cl1=&C[l1*M*N]; //C[l1,:,:] MxN matrix
-    for (int l2=0; l2<L; l2++) {
-      double *Cl2=&C[l2*M*N]; //C[l2,:,:] MxN matrix
+  for (int l2=0; l2<L; l2++) {
+    double *Cl2=&C[l2*M*N]; //C[l2,:,:] MxN matrix
+    for (int l1=0; l1<L; l1++) {
+      double *Cl1=&C[l1*M*N]; //C[l1,:,:] MxN matrix
       /* find kronecker product Cl=kron(Cl2,Cl1) */
       kronecker_prod(M,N,Cl2,Cl1,Cl);
       /* Hadamard prod Cl . (f x g)  and sum, fxg=J_f * J_g^H, 2x2 product */
@@ -936,7 +936,7 @@ shapelet_product_jones(int L, int M, int N, double alpha, double beta, double ga
   }
 #endif
 
-  //printf("Norms Cl:%e f:%e g:%e h:%e\n",my_dnrm2(M*M*N*N,Cl),my_dnrm2(4*M*M,(double*)f),my_dnrm2(4*N*N,(double*)g),my_dnrm2(4*L*L,(double*)h));
+  //printf("Norms Cl:%e f:%e g:%e h:%e\n",my_dnrm2(M*M*N*N,Cl),my_dnrm2(8*M*M,(double*)f),my_dnrm2(8*N*N,(double*)g),my_dnrm2(8*L*L,(double*)h));
   free(fg);
   free(Cl);
   return 0;

@@ -101,7 +101,7 @@ update_spatialreg_fista(complex double *Z, complex double *Zbar, complex double 
     t=(1.0+sqrt(1.0+4.0*t*t))*0.5;
     /* Zold <= Zold-Z */
     my_caxpy(2*Npoly*N*2*G, Z, -1.0, Zold);
-    printf("FISTA %d %lf ||grad||=%lf ||Z-Zold||=%lf\n",it,t,my_dnrm2(2*2*Npoly*N*2*G,(double*)gradf),my_dnrm2(2*2*Npoly*N*2*G,(double*)Zold)/my_dnrm2(2*2*Npoly*N*2*G,(double*)Z));
+    printf("FISTA %d ||grad||=%lf ||Z-Zold||=%lf\n",it,my_dnrm2(2*2*Npoly*N*2*G,(double*)gradf),my_dnrm2(2*2*Npoly*N*2*G,(double*)Zold)/my_dnrm2(2*2*Npoly*N*2*G,(double*)Z));
     /* update Y = Z + (told-1)/t(Z-Zold) */
     memcpy(Y,Z,2*Npoly*N*2*G*sizeof(complex double));
     double scalefac=(t0-1.0)/t;
@@ -207,7 +207,7 @@ update_spatialreg_fista_with_diffconstraint(complex double *Z, complex double *Z
     t=(1.0+sqrt(1.0+4.0*t*t))*0.5;
     /* Zold=Z-Zold */
     my_caxpy(2*Npoly*N*2*G, Z, -1.0, Zold);
-    printf("FISTA %d %lf ||grad||=%lf ||Z-Zold||=%lf\n",it,t,my_dnrm2(2*2*Npoly*N*2*G,(double*)gradf),my_dnrm2(2*2*Npoly*N*2*G,(double*)Zold)/my_dnrm2(2*2*Npoly*N*2*G,(double*)Z));
+    printf("FISTA %d ||grad||=%lf ||Z-Zold||=%lf\n",it,my_dnrm2(2*2*Npoly*N*2*G,(double*)gradf),my_dnrm2(2*2*Npoly*N*2*G,(double*)Zold)/my_dnrm2(2*2*Npoly*N*2*G,(double*)Z));
     /* update Y = Z + (told-1)/t(Z-Zold) */
     memcpy(Y,Z,2*Npoly*N*2*G*sizeof(complex double));
     double scalefac=(t0-1.0)/t;

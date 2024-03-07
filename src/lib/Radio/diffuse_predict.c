@@ -263,6 +263,8 @@ shapelet_prod_one_threadfn(void *data) {
   for (int stat=0; stat<t->Nstat; stat++) {
      //shapelet_product_jones(sp->n0,sp->n0,sh_n0,sp->beta,sp->beta,sh_beta,&C_Jq[4*sp->n0*sp->n0*stat],s_coh,&Zt[4*G*stat],Cf,1);
      shapelet_product_jones(t->sL,t->sM,t->sN,t->alpha,t->beta,t->gamma,&(t->h_arr[4*t->sL*t->sL*(stat+t->off)]),t->f_arr,&(t->g_arr[4*t->sN*t->sN*(stat+t->off)]),t->Cf,t->hermitian);
+     // For debugging, C_Jq <= s_coh
+     //memcpy(&(t->h_arr[4*t->sL*t->sL*(stat+t->off)]),t->f_arr,t->sL*t->sL*4*sizeof(complex double));
   }
 
   return NULL;
@@ -278,6 +280,8 @@ shapelet_prod_two_threadfn(void *data) {
       for (int stat2=stat1+t->off; stat2<t->N; stat2++) {
           //shapelet_product_jones(sp->n0,sh_n0,sp->n0,sp->beta,sh_beta,sp->beta,&Jp_C_Jq[4*sp->n0*sp->n0*(stat1*N+stat2)],&Zt[4*G*stat1],&C_Jq[4*sp->n0*sp->n0*stat2],Cf,0);
           shapelet_product_jones(t->sL,t->sM,t->sN,t->alpha,t->beta,t->gamma,&t->h_arr[4*t->sL*t->sL*((stat1+t->off)*t->N+stat2)],&t->f_arr[4*t->sM*t->sM*(stat1+t->off)],&t->g_arr[4*t->sN*t->sN*stat2],t->Cf,t->hermitian);
+          // For debugging, Jp_C_Jq <= C_Jq
+          //memcpy(&t->h_arr[4*t->sL*t->sL*((stat1+t->off)*t->N+stat2)],&t->g_arr[4*t->sN*t->sN*stat2],t->sL*t->sL*4*sizeof(complex double));
       }
   }
   return NULL;
