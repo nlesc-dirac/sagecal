@@ -295,7 +295,6 @@ int
 recalculate_diffuse_coherencies(double *u, double *v, double *w, complex double *x, int N,
    int Nbase, baseline_t *barr,  clus_source_t *carr, int M, double freq0, double fdelta, double tdelta, double dec0, double uvmin, double uvmax, int cid, int sh_n0, double sh_beta, complex double *Z, int Nt, int use_cuda) {
 
-
       /* thread setup - divide baselines */
       int Nthb0,Nthb;
       pthread_attr_t attr;
@@ -304,6 +303,16 @@ recalculate_diffuse_coherencies(double *u, double *v, double *w, complex double 
       Nthb0=(Nbase+Nt-1)/Nt;
       pthread_attr_init(&attr);
       pthread_attr_setdetachstate(&attr,PTHREAD_CREATE_JOINABLE);
+
+      /* calculate norm of original data */
+      double start_nrm=my_dnrm2_inc(Nbase,(double*)&x[8*cid+0],8*M)
+       +my_dnrm2_inc(Nbase,(double*)&x[8*cid+1],8*M)
+       +my_dnrm2_inc(Nbase,(double*)&x[8*cid+2],8*M)
+       +my_dnrm2_inc(Nbase,(double*)&x[8*cid+3],8*M)
+       +my_dnrm2_inc(Nbase,(double*)&x[8*cid+4],8*M)
+       +my_dnrm2_inc(Nbase,(double*)&x[8*cid+5],8*M)
+       +my_dnrm2_inc(Nbase,(double*)&x[8*cid+6],8*M)
+       +my_dnrm2_inc(Nbase,(double*)&x[8*cid+7],8*M);
 
 #ifdef HAVE_CUDA
       taskhist thst;
@@ -579,5 +588,29 @@ recalculate_diffuse_coherencies(double *u, double *v, double *w, complex double 
       free(threaddata);
       free(threaddata_stat);
       free(Zt);
-  return 0;
+
+      /* calculate norm of updated data */
+      double end_nrm=my_dnrm2_inc(Nbase,(double*)&x[8*cid+0],8*M)
+       +my_dnrm2_inc(Nbase,(double*)&x[8*cid+1],8*M)
+       +my_dnrm2_inc(Nbase,(double*)&x[8*cid+2],8*M)
+       +my_dnrm2_inc(Nbase,(double*)&x[8*cid+3],8*M)
+       +my_dnrm2_inc(Nbase,(double*)&x[8*cid+4],8*M)
+       +my_dnrm2_inc(Nbase,(double*)&x[8*cid+5],8*M)
+       +my_dnrm2_inc(Nbase,(double*)&x[8*cid+6],8*M)
+       +my_dnrm2_inc(Nbase,(double*)&x[8*cid+7],8*M);
+
+    printf("Norm changed from %lf to %lf\n",start_nrm,end_nrm);
+     /* scale back so that norm is preserved */
+    /* if (end_nrm>0.0) {
+      double scaleup=start_nrm/end_nrm;
+      my_dscal_inc(Nbase,scaleup,(double*)&x[8*cid+0],8*M);
+      my_dscal_inc(Nbase,scaleup,(double*)&x[8*cid+1],8*M);
+      my_dscal_inc(Nbase,scaleup,(double*)&x[8*cid+2],8*M);
+      my_dscal_inc(Nbase,scaleup,(double*)&x[8*cid+3],8*M);
+      my_dscal_inc(Nbase,scaleup,(double*)&x[8*cid+4],8*M);
+      my_dscal_inc(Nbase,scaleup,(double*)&x[8*cid+5],8*M);
+      my_dscal_inc(Nbase,scaleup,(double*)&x[8*cid+6],8*M);
+      my_dscal_inc(Nbase,scaleup,(double*)&x[8*cid+7],8*M);
+     }*/
+     return 0;
 }

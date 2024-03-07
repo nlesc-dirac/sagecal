@@ -61,6 +61,11 @@ __attribute__ ((target(MIC)))
   dscal_(&N,&a,x,&i);
 }
 void
+my_dscal_inc(int N, double a, double *x, int inc) {
+  extern void dscal_(int *N, double *alpha, double *x, int *incx);
+  dscal_(&N,&a,x,&inc);
+}
+void
 my_sscal(int N, float a, float *x) {
 #ifdef USE_MIC
 __attribute__ ((target(MIC)))
@@ -90,6 +95,14 @@ __attribute__ ((target(MIC)))
   extern double  dnrm2_(int *N, double *x, int *incx);
   int i=1;
   return(dnrm2_(&N,x,&i));
+}
+double
+my_dnrm2_inc(int N, double *x, int inc) {
+#ifdef USE_MIC
+__attribute__ ((target(MIC)))
+#endif
+  extern double  dnrm2_(int *N, double *x, int *incx);
+  return(dnrm2_(&N,x,&inc));
 }
 float
 my_fnrm2(int N, float *x) {

@@ -193,7 +193,7 @@ def annotate_lsm_sky(infilename,clusterfilename,outfilename,clid=None,color='yel
     v=pp.search(eachline)
     if v!= None:
        # iterate over list of source names (names can also have a '.')
-       CL[str(v.group('col1'))]=re.split('[^a-zA-Z0-9_\.]+',re.sub('\n','',str(v.group('col3'))))
+       CL[str(v.group('col1'))]=re.split(r'[^a-zA-Z0-9_\.]+',re.sub('\n','',str(v.group('col3'))))
 
   print('Read %d clusters'%len(CL))
 

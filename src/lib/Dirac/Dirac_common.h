@@ -654,6 +654,8 @@ __attribute__ ((target(MIC)))
 #endif
 extern void
 my_dscal(int N, double a, double *x);
+extern void
+my_dscal_inc(int N, double a, double *x, int inc);
 #ifdef USE_MIC
 __attribute__ ((target(MIC)))
 #endif
@@ -673,6 +675,8 @@ __attribute__ ((target(MIC)))
 #endif
 extern double
 my_dnrm2(int N, double *x);
+extern double
+my_dnrm2_inc(int N, double *x, int inc);
 #ifdef USE_MIC
 __attribute__ ((target(MIC)))
 #endif

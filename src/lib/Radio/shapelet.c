@@ -783,10 +783,10 @@ shapelet_product(int L, int M, int N, double alpha, double beta, double gamma,
     fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
     exit(1);
   }
-  for (int l1=0; l1<L; l1++) {
-    double *Cl1=&C[l1*M*N]; //C[l1,:,:] MxN matrix
-    for (int l2=0; l2<L; l2++) {
-      double *Cl2=&C[l2*M*N]; //C[l2,:,:] MxN matrix
+  for (int l2=0; l2<L; l2++) {
+    double *Cl2=&C[l2*M*N]; //C[l2,:,:] MxN matrix
+    for (int l1=0; l1<L; l1++) {
+      double *Cl1=&C[l1*M*N]; //C[l1,:,:] MxN matrix
       /* find kronecker product Cl=kron(Cl2,Cl1) */
       kronecker_prod(M,N,Cl2,Cl1,Cl);
       /* Hadamard prod Cl . fg and sum */
