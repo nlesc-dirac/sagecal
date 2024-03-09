@@ -407,6 +407,9 @@ recalculate_diffuse_coherencies(double *u, double *v, double *w, complex double 
 
         /* get shapelet info */
         exinfo_shapelet *sp=(exinfo_shapelet*) carr[cid].ex[ci];
+        /* since beta -> beta*2*pi in model FT, divide back 
+         * to get scale in image space */
+        double beta_img=sp->beta/(2.0*M_PI);
 
         /* create tensor : product out (sp->n0,sp->beta),
          * product in (sp->n0,sp->beta) (sh_n0,sh_beta) */
@@ -414,7 +417,7 @@ recalculate_diffuse_coherencies(double *u, double *v, double *w, complex double 
          fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
          exit(1);
         }
-        shapelet_product_tensor(sp->n0,sp->n0,sh_n0,sp->beta,sp->beta,sh_beta,Cf);
+        shapelet_product_tensor(sp->n0,sp->n0,sh_n0,beta_img,beta_img,sh_beta,Cf);
 
         /* allocate memory to store the product C J_q^H, 
          * n0*n0*2x2  for each station */
@@ -463,8 +466,8 @@ recalculate_diffuse_coherencies(double *u, double *v, double *w, complex double 
           threaddata_stat[nth1].sL=sp->n0;
           threaddata_stat[nth1].sM=sp->n0;
           threaddata_stat[nth1].sN=sh_n0;
-          threaddata_stat[nth1].alpha=sp->beta;
-          threaddata_stat[nth1].beta=sp->beta;
+          threaddata_stat[nth1].alpha=beta_img;
+          threaddata_stat[nth1].beta=beta_img;;
           threaddata_stat[nth1].gamma=sh_beta;
         
           threaddata_stat[nth1].h_arr=C_Jq;
@@ -490,7 +493,7 @@ recalculate_diffuse_coherencies(double *u, double *v, double *w, complex double 
          fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
          exit(1);
         }
-        shapelet_product_tensor(sp->n0,sh_n0,sp->n0,sp->beta,sh_beta,sp->beta,Cf);
+        shapelet_product_tensor(sp->n0,sh_n0,sp->n0,beta_img,sh_beta,beta_img,Cf);
 
         complex double *Jp_C_Jq=0;
         if ((Jp_C_Jq=(complex double*)calloc((size_t)(2*N*N*2*sp->n0*sp->n0),sizeof(complex double)))==0) {
@@ -513,9 +516,9 @@ recalculate_diffuse_coherencies(double *u, double *v, double *w, complex double 
           threaddata_stat[nth1].sL=sp->n0;
           threaddata_stat[nth1].sM=sh_n0;
           threaddata_stat[nth1].sN=sp->n0;
-          threaddata_stat[nth1].alpha=sp->beta;
+          threaddata_stat[nth1].alpha=beta_img;
           threaddata_stat[nth1].beta=sh_beta;
-          threaddata_stat[nth1].gamma=sp->beta;
+          threaddata_stat[nth1].gamma=beta_img;
 
           threaddata_stat[nth1].h_arr=Jp_C_Jq;
           threaddata_stat[nth1].f_arr=Zt;
