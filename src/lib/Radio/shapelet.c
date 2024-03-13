@@ -679,7 +679,8 @@ shapelet_product_tensor(int L, int M, int N, double alpha, double beta, double g
 
   /* Normalize B to account for the very large values expected in H */
   double Bnorm=my_dnrm2(L*M*N,B);
-  my_dscal(L*M*N,1.0/Bnorm,B);
+  /* numerator (L*M*N)^(1/8) */
+  my_dscal(L*M*N,pow((double)L*M*N,0.125)/Bnorm,B);
 
   free(H);
   free(fact);
