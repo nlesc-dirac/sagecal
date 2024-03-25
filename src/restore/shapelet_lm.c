@@ -265,7 +265,7 @@ calculate_mode_vectors(double *x, int Nx, double *y, int Ny, int *M, double
 				*/
 				 xval=grid[zci]/(*beta);
 				 //shpvl[zci][xci]=inv_beta*pi_4r*H_e(xval,xci)*exp(-0.5*xval*xval)/sqrt((2<<xci)*fact[xci]);
-				 shpvl[zci][xci]=H_e(xval,xci)*exp(-0.5*xval*xval)/sqrt((double)(2<<xci)*fact[xci]);
+				 shpvl[zci][xci]=H_e(xval,xci)*exp(-0.5*xval*xval)/sqrt(pow(2.0,(double)xci+1)*fact[xci]);
 		   }
 		 }
 	}
@@ -554,7 +554,7 @@ calculate_mode_vectors_bi(double *x, double *y, int N,  double beta, int n0, dou
 				*/
 				 double xvalt=grid[zci]/(beta);
 				 //shpvl[zci][xci]=inv_beta*pi_4r*H_e(xval,xci)*exp(-0.5*xval*xval)/sqrt((2<<xci)*fact[xci]);
-				 shpvl[zci][xci]=H_e(xvalt,xci)*exp(-0.5*xvalt*xvalt)/sqrt((2<<xci)*fact[xci]);
+				 shpvl[zci][xci]=H_e(xvalt,xci)*exp(-0.5*xvalt*xvalt)/sqrt(pow(2.0,(double)xci+1)*fact[xci]);
 		   }
 		 }
 	}
