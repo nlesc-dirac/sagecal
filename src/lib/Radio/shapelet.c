@@ -85,13 +85,13 @@ calculate_uv_mode_vectors_scalar(double u, double v, double beta, int n0, double
   xval=u*beta;
   double expval=exp(-0.5*xval*xval);
 	for (xci=0; xci<n0; xci++) {
-		shpvl[zci][xci]=H_e(xval,xci)*expval/sqrt((double)(2<<xci)*fact[xci]);
+		shpvl[zci][xci]=H_e(xval,xci)*expval/sqrt(pow(2.0,(double)xci+1)*fact[xci]);
 	}
 	zci=1;
   xval=v*beta;
   expval=exp(-0.5*xval*xval);
 	for (xci=0; xci<n0; xci++) {
-		shpvl[zci][xci]=H_e(xval,xci)*expval/sqrt((double)(2<<xci)*fact[xci]);
+		shpvl[zci][xci]=H_e(xval,xci)*expval/sqrt(pow(2.0,(double)xci+1)*fact[xci]);
 	}
 
 
@@ -462,7 +462,7 @@ shapelet_modes(int n0,double beta, double *x, double *y, int N, complex double *
 				/*take into account the scaling
 				*/
 				 double xvalt=grid[zci]/(beta);
-				 shpvl[zci][xci]=H_e(xvalt,xci)*exp(-0.5*xvalt*xvalt)/sqrt((2<<xci)*fact[xci]);
+				 shpvl[zci][xci]=H_e(xvalt,xci)*exp(-0.5*xvalt*xvalt)/sqrt(pow(2.0,(double)xci+1)*fact[xci]);
 		   }
 		 }
 	}
@@ -669,7 +669,7 @@ shapelet_product_tensor(int L, int M, int N, double alpha, double beta, double g
         /* only even l+m+n are non zero, so -2^{l+m+n}=2^{l+m+n} */
         if ((l+m+n)%2 ==0) {
          /* note that we use column major order in B, row m and col n = m+nM, NOT mN+n */
-         B[l*M*N+m+n*M]=nu/sqrt((double)(1<<(l+m+n))*sqrt(M_PI)* fact[l]*fact[m]*fact[n]*alpha*beta*gamma) * H[l*M*N+m*N+n];
+         B[l*M*N+m+n*M]=nu*( H[l*M*N+m*N+n]/sqrt((double)(pow(2.0,(double)(l+m+n)))*sqrt(M_PI)* fact[l]*fact[m]*fact[n]*alpha*beta*gamma) );
         } else {
          B[l*M*N+m+n*M]=0.0;
         }
@@ -742,21 +742,33 @@ int
 shapelet_product(int L, int M, int N, double alpha, double beta, double gamma,
     double *h, double *f, double *g, double *C) {
 
+  printf("alpha=%lf;\n",alpha);
+  printf("beta=%lf;\n",beta);
+  printf("gamma=%lf;\n",gamma);
+  printf("L=%d;\n",L);
+  printf("M=%d;\n",M);
+  printf("N=%d;\n",N);
+  printf("f=[\n");
   for (int m=0; m<M*M; m++) {
-    printf("f %d %lf\n",m,f[m]);
+    printf("%lf\n",f[m]);
   }
+  printf("]; f=reshape(f,%d,%d);\n",M,M);
+  printf("g=[\n");
   for (int n=0; n<N*N; n++) {
-    printf("g %d %lf\n",n,g[n]);
+    printf("%lf\n",g[n]);
   }
+  printf("]; g=reshape(g,%d,%d);\n",N,N);
+  printf("Cf=zeros(%d,%d,%d);\n",L,M,N);
   for (int l=0; l<L; l++) {
-    printf("%d =\n",l);
+    printf("Cf(%d,:,:)=[\n",l+1);
     for (int m=0; m<M; m++) {
       for (int n=0; n<N; n++) {
          /* column major order */
-         printf("%lf ",C[l*M*N+m+n*M]);
+         printf("%le ",C[l*M*N+m+n*M]);
       }
       printf("\n");
     }
+    printf("];\n");
   }
 
   /* find f x g^T : M^2 x N^2 matrix, stored as M^2*N^2 vector */
@@ -770,13 +782,13 @@ shapelet_product(int L, int M, int N, double alpha, double beta, double gamma,
     my_dscal(M*M,g[ci],&fg[ci*M*M]);
   }
 
-  printf("fg=\n");
+  printf("fg=[\n");
   for (int ci=0; ci<M*M; ci++) {
     for (int cj=0; cj<N*N; cj++) {
-      printf("%lf ",fg[ci+cj*M*M]);
+      printf("%lf\n",fg[ci+cj*M*M]);
     }
-    printf("\n");
   }
+  printf("];\n");
 
   /* storage to find kronecker product */
   double *Cl;
@@ -796,14 +808,15 @@ shapelet_product(int L, int M, int N, double alpha, double beta, double gamma,
       for (int ci=0; ci<M*M*N*N; ci++) {
         sum+=Cl[ci]*fg[ci];
       }
-      printf("h(%d,%d) %lf\n",l1,l2,sum);
       h[l1+l2*L]=sum;
     }
   }
 
+  printf("h=[\n");
   for (int l=0; l<L*L; l++) {
-    printf("h %d %lf\n",l,h[l]);
+    printf("%lf\n",h[l]);
   }
+  printf("]; h=reshape(h,%d,%d);\n",L,L);
 
   free(fg);
   free(Cl);

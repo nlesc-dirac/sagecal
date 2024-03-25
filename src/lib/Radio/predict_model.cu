@@ -95,7 +95,7 @@ __device__ float4
 eval_elementcoeff(float r, float theta, int M, float beta, const float2 *pattern_theta,
      const float2 *pattern_phi, const float *pattern_preamble) {
   float4 eval={0.f,0.f,0.f,0.f};
-  float rb=powf(r/beta,2);
+  float rb=powf(r/beta,2.0f);
   float ex=expf(-0.5f*rb);
 
   int idx=0;
@@ -545,7 +545,7 @@ H_e(float x, int n) {
  scaled down, He/sqrt(2^n * n!) to prevent overflow */
 __device__ float
 H_e_scaled(float x, int n, float *fact) {
-  const float scalefactor=sqrtf((float)(2<<n)*fact[n]);
+  const float scalefactor=sqrtf(powf(2.0f,(float)n+1)*fact[n]);
   if(n==0) return 1.0f/scalefactor;
   if(n==1) return 2.0f*x/scalefactor;
   /* else iterate */
@@ -579,9 +579,9 @@ calculate_uv_mode_vectors_scalar(float u, float v, float beta, int n0, float *Av
   float expvalv=__expf(-0.5f*xvalv*xvalv);
   if (n0 < LARGE_MODE_LIMIT) {
     for (xci=0; xci<n0; xci++) {
-      shpvl[xci]=H_e(xvalu,xci)*expvalu/__fsqrt_rn((float)(2<<xci)*fact[xci]);
+      shpvl[xci]=H_e(xvalu,xci)*expvalu/__fsqrt_rn(powf(2.0f,(float)xci+1)*fact[xci]);
 
-      shpvl[xci+n0]=H_e(xvalv,xci)*expvalv/__fsqrt_rn((float)(2<<xci)*fact[xci]);
+      shpvl[xci+n0]=H_e(xvalv,xci)*expvalv/__fsqrt_rn(powf(2.0f,(float)xci+1)*fact[xci]);
     }
   } else {
     for (xci=0; xci<n0; xci++) {
@@ -1516,8 +1516,8 @@ kernel_fns_shapelet_coh(float u, float v, const float *__restrict__ modes, const
 
   int val_finite=__fdiv_rz(SMALLEST_SPATIAL_SCALE_FAC,__fsqrt_rz(uu*uu+vv*vv))>beta?1:0; 
   if (val_finite && n<n0*n0 && n1<n0 && n2<n0) {
-   float basis=H_e(uu,n1)/__fsqrt_rn((float)(2<<n1)*fact[n1])*__expf(-0.5f*uu*uu)
-      *H_e(vv,n2)/__fsqrt_rn((float)(2<<n2)*fact[n2])*__expf(-0.5f*vv*vv);
+   float basis=H_e(uu,n1)/__fsqrt_rn(powf(2.0f,(float)n1+1)*fact[n1])*__expf(-0.5f*uu*uu)
+      *H_e(vv,n2)/__fsqrt_rn(powf(2.0f,(float)n2+1)*fact[n2])*__expf(-0.5f*vv*vv);
 
    if((n1+n2)%2==0)  {/* even (basis is real) or odd (basis is imaginary)*/;
     /* multiply 8 values of modes[] */
