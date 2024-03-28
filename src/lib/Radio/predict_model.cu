@@ -541,28 +541,6 @@ H_e(float x, int n) {
   return Hn;
 }
 
-/* Hermite polynomial, non recursive version, suitable for large n
- scaled down, He/sqrt(2^n * n!) to prevent overflow */
-__device__ float
-H_e_scaled(float x, int n, float *fact) {
-  const float scalefactor=sqrtf(powf(2.0f,(float)n+1)*fact[n]);
-  if(n==0) return 1.0f/scalefactor;
-  if(n==1) return 2.0f*x/scalefactor;
-  /* else iterate */
-  float Hn_1,Hn,Hnp1;
-  Hn_1=1.0f/scalefactor;
-  Hn=2.0f*x/scalefactor;
-  int ci;
-  for (ci=1; ci<n; ci++) {
-    Hnp1=2.0f*x*Hn-2.0f*((float)ci)*Hn_1;
-    Hn_1=Hn;
-    Hn=Hnp1;
-  }
-
-  return Hn;
-}
-
-#define LARGE_MODE_LIMIT 20
 __device__ void
 calculate_uv_mode_vectors_scalar(float u, float v, float beta, int n0, float *Av, int *cplx, float *fact, float *shpvl) {
 
@@ -577,18 +555,10 @@ calculate_uv_mode_vectors_scalar(float u, float v, float beta, int n0, float *Av
   float expvalu=__expf(-0.5f*xvalu*xvalu);
   float xvalv=v*beta;
   float expvalv=__expf(-0.5f*xvalv*xvalv);
-  if (n0 < LARGE_MODE_LIMIT) {
-    for (xci=0; xci<n0; xci++) {
+  for (xci=0; xci<n0; xci++) {
       shpvl[xci]=H_e(xvalu,xci)*expvalu/__fsqrt_rn(powf(2.0f,(float)xci+1)*fact[xci]);
 
       shpvl[xci+n0]=H_e(xvalv,xci)*expvalv/__fsqrt_rn(powf(2.0f,(float)xci+1)*fact[xci]);
-    }
-  } else {
-    for (xci=0; xci<n0; xci++) {
-      shpvl[xci]=H_e_scaled(xvalu,xci,fact)*expvalu;
-
-      shpvl[xci+n0]=H_e_scaled(xvalv,xci,fact)*expvalv;
-    }
   }
 
   /* now calculate the mode vectors */

@@ -138,13 +138,11 @@ update_spatialreg_fista_with_diffconstraint(complex double *Z, complex double *Z
   complex double *Zold,*Y;
   /* Lipschitz constant of gradient, use ||Phikk||^2 as estimate */
   double L=my_cdot(2*G*2*G,Phikk,Phikk);
-  printf("FISTA L=%lf\n",L);
   /* if 1/L too large, might diverge, so catch it */
   if (L<FISTA_L_MIN) { L=FISTA_L_MIN; }
   /* if 1/L too small, will give zero solution, so catch it */
   if (L>FISTA_L_MAX) { L=FISTA_L_MAX; }
 
-  printf("FISTA lr=%lf\n",1.0/L);
   /* intial t */
   double t=1.0;
   if ((gradf=(complex double*)calloc((size_t)2*Npoly*N*2*G,sizeof(complex double)))==0) {
