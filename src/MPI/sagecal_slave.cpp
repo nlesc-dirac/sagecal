@@ -230,7 +230,8 @@ cerr<<"Error: Worker "<<myrank<<": Recheck your allocation or reduce number of w
       }
      }
 
-    /* FIXME open text files for each MS, each line re,im XX,XY,YX,YY */
+#ifdef DEBUG
+    /* open text files for each MS, each line re,im XX,XY,YX,YY */
     vector<FILE *> debug_vec(mymscount);
     if (Data::spatialreg && sp_diffuse_id>=0) {
          for(int cm=0; cm<mymscount; cm++) {
@@ -241,6 +242,7 @@ cerr<<"Error: Worker "<<myrank<<": Recheck your allocation or reduce number of w
             }
          }
     }
+#endif /* DEBUG */
 
     vector<double *> p_vec(mymscount);
     vector<double **> pm_vec(mymscount);
@@ -679,7 +681,8 @@ cout<<myrank<<" : "<<cm<<": downweight ratio ("<<iodata_vec[cm].fratio<<") based
           recalculate_diffuse_coherencies(iodata_vec[cm].u,iodata_vec[cm].v,iodata_vec[cm].w,coh_vec[cm],iodata_vec[cm].N,iodata_vec[cm].Nbase*iodata_vec[cm].tilesz,barr_vec[cm],carr_vec[cm],M,iodata_vec[cm].freq0,iodata_vec[cm].deltaf,iodata_vec[cm].deltat,iodata_vec[cm].dec0,Data::min_uvcut,Data::max_uvcut,sp_diffuse_id,sh_n0,sh_beta,&Zb[cm*4*iodata_vec[0].N*G],Data::Nt,0);
 #endif /* HAVE_CUDA */
 
-          /* FIXME: save calculated coherencies in text file, re,im XX,XY,YX,YY,
+#ifdef DEBUG
+          /* save calculated coherencies in text file, re,im XX,XY,YX,YY,
            * note that coherencies need to be multiplied by the solutions to make sense */
           if (admm>=Nadmm-Data::admm_cadence) {
           for (int nb=0; nb<iodata_vec[cm].Nbase*iodata_vec[cm].tilesz; nb++) {
@@ -689,6 +692,7 @@ cout<<myrank<<" : "<<cm<<": downweight ratio ("<<iodata_vec[cm].fratio<<") based
             creal(coh_vec[cm][4*M*nb+4*sp_diffuse_id+3]),cimag(coh_vec[cm][4*M*nb+4*sp_diffuse_id+3]));
           }
           }
+#endif /* DEBUG */
         }
       }
       /************************************************************************/
@@ -1137,10 +1141,13 @@ cout<<myrank<<" : "<<cm<<": downweight ratio ("<<iodata_vec[cm].fratio<<") based
       free(Zspat);
       free(Zb);
       free(B);
-      /* FIXME close files */
+
+#ifdef DEBUG
+      /* close files */
       for(int cm=0; cm<mymscount; cm++) {
          fclose(debug_vec[cm]);
       }
+#endif /* DEBUG */
   }
   /**********************************************************/
 
