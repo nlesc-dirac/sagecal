@@ -95,7 +95,7 @@ __device__ float4
 eval_elementcoeff(float r, float theta, int M, float beta, const float2 *pattern_theta,
      const float2 *pattern_phi, const float *pattern_preamble) {
   float4 eval={0.f,0.f,0.f,0.f};
-  float rb=powf(r/beta,2);
+  float rb=powf(r/beta,2.0f);
   float ex=expf(-0.5f*rb);
 
   int idx=0;
@@ -542,77 +542,6 @@ H_e(float x, int n) {
 }
 
 __device__ void
-calculate_uv_mode_vectors_scalar00(float u, float v, float beta, int n0, float *Av, int *cplx) {
-
-  int xci,zci,Ntot;
-
-  float **shpvl, *fact;
-  int n1,n2,start;
-  float xval;
-  int signval;
-
-  Ntot=2; /* u,v seperately */
-  /* set up factorial array */
-  fact=(float *)malloc((size_t)(n0)*sizeof(float));
-  fact[0]=1.0f;
-  for (xci=1; xci<(n0); xci++) {
-    fact[xci]=((float)xci)*fact[xci-1];
-  }
-
-  /* setup array to store calculated shapelet value */
-  /* need max storage Ntot x n0 */
-  shpvl=(float**)malloc((size_t)(Ntot)*sizeof(float*));
-  for (xci=0; xci<Ntot; xci++) {
-   shpvl[xci]=(float*)malloc((size_t)(n0)*sizeof(float));
-  }
-
-
-  /* start filling in the array from the positive values */
-  zci=0;
-  xval=u*beta;
-  float expval=__expf(-0.5f*(float)xval*xval);
-  for (xci=0; xci<n0; xci++) {
-    shpvl[zci][xci]=H_e(xval,xci)*expval/__fsqrt_rn((float)(2<<xci)*fact[xci]);
-  }
-  zci=1;
-  xval=v*beta;
-  expval=__expf(-0.5f*(float)xval*xval);
-  for (xci=0; xci<n0; xci++) {
-    shpvl[zci][xci]=H_e(xval,xci)*expval/__fsqrt_rn((float)(2<<xci)*fact[xci]);
-  }
-
-  /* now calculate the mode vectors */
-  /* each vector is 1 x 1 length and there are n0*n0 of them */
-
-  for (n2=0; n2<(n0); n2++) {
-   for (n1=0; n1<(n0); n1++) {
-    cplx[n2*n0+n1]=((n1+n2)%2==0?0:1) /* even (real) or odd (imaginary)*/;
-    /* sign */
-    if (cplx[n2*n0+n1]==0) {
-      signval=(((n1+n2)/2)%2==0?1:-1);
-    } else {
-      signval=(((n1+n2-1)/2)%2==0?1:-1);
-    }
-
-    /* fill in 1*1*(zci) to 1*1*(zci+1)-1 */
-    start=(n2*(n0)+n1);
-    if (signval==-1) {
-        Av[start]=-shpvl[0][n1]*shpvl[1][n2];
-    } else {
-        Av[start]=shpvl[0][n1]*shpvl[1][n2];
-    }
-   }
-  }
-
-  free(fact);
-  for (xci=0; xci<Ntot; xci++) {
-   free(shpvl[xci]);
-  }
-  free(shpvl);
-}
-
-
-__device__ void
 calculate_uv_mode_vectors_scalar(float u, float v, float beta, int n0, float *Av, int *cplx, float *fact, float *shpvl) {
 
   int xci;
@@ -627,9 +556,9 @@ calculate_uv_mode_vectors_scalar(float u, float v, float beta, int n0, float *Av
   float xvalv=v*beta;
   float expvalv=__expf(-0.5f*xvalv*xvalv);
   for (xci=0; xci<n0; xci++) {
-    shpvl[xci]=H_e(xvalu,xci)*expvalu/__fsqrt_rn((float)(2<<xci)*fact[xci]);
+      shpvl[xci]=H_e(xvalu,xci)*expvalu/__fsqrt_rn(powf(2.0f,(float)xci+1)*fact[xci]);
 
-    shpvl[xci+n0]=H_e(xvalv,xci)*expvalv/__fsqrt_rn((float)(2<<xci)*fact[xci]);
+      shpvl[xci+n0]=H_e(xvalv,xci)*expvalv/__fsqrt_rn(powf(2.0f,(float)xci+1)*fact[xci]);
   }
 
   /* now calculate the mode vectors */
@@ -658,6 +587,7 @@ calculate_uv_mode_vectors_scalar(float u, float v, float beta, int n0, float *Av
 }
 
 
+#define SMALLEST_SPATIAL_SCALE_FAC 100.0f
 
 __device__ cuDoubleComplex
 shapelet_contrib__(int *dd, float u, float v, float w) {
@@ -685,8 +615,9 @@ shapelet_contrib__(int *dd, float u, float v, float w) {
   ut=a*(cosph*up-sinph*vp);
   vt=b*(sinph*up+cosph*vp);
   /* if u,v is way off the scale (beta) of shapelet modes, the result is almost always zero,
-     so check this here and return 0, otherwise spurious nans may result */
-  if (__fdiv_rz(100.0f,__fsqrt_rz(ut*ut+vt*vt))<dp->beta) {
+     so check this here and return 0, otherwise spurious nans may result,
+   i.e., predict only for spatial scales l,m > beta * scale_factor ~ beta * 0.01 */
+  if (__fdiv_rz(SMALLEST_SPATIAL_SCALE_FAC,__fsqrt_rz(ut*ut+vt*vt))<dp->beta) {
    return make_cuDoubleComplex(0.0,0.0);
   }
   /* note: we decompose f(-l,m) so the Fourier transform is F(-u,v)
@@ -1539,6 +1470,139 @@ kernel_convert_time(int T, double *time_utc) {
 
 }
 
+
+__global__ void
+kernel_fns_shapelet_coh(float u, float v, const float *__restrict__ modes, const float *__restrict__ fact, int n0, float beta, float *J_C_J) {
+  extern __shared__ float Jprod[]; /* 8*threads shared mem per block */
+  /* global thread index : equal to the mode [0,n0*n0-1]*/
+  unsigned int n = threadIdx.x + blockDim.x*blockIdx.x;
+  int tid = threadIdx.x;
+
+  /* separate mode to n1,n2 */
+  unsigned int n1=n%n0;
+  unsigned int n2=n/n0;
+  float uu=u*beta;
+  float vv=v*beta;
+
+  int val_finite=__fdiv_rz(SMALLEST_SPATIAL_SCALE_FAC,__fsqrt_rz(uu*uu+vv*vv))>beta?1:0; 
+  if (val_finite && n<n0*n0 && n1<n0 && n2<n0) {
+   float basis=H_e(uu,n1)/__fsqrt_rn(powf(2.0f,(float)n1+1)*fact[n1])*__expf(-0.5f*uu*uu)
+      *H_e(vv,n2)/__fsqrt_rn(powf(2.0f,(float)n2+1)*fact[n2])*__expf(-0.5f*vv*vv);
+
+   if((n1+n2)%2==0)  {/* even (basis is real) or odd (basis is imaginary)*/;
+    /* multiply 8 values of modes[] */
+    Jprod[8*tid]=basis*modes[8*n];
+    Jprod[8*tid+1]=basis*modes[8*n+1];
+    Jprod[8*tid+2]=basis*modes[8*n+2];
+    Jprod[8*tid+3]=basis*modes[8*n+3];
+    Jprod[8*tid+4]=basis*modes[8*n+4];
+    Jprod[8*tid+5]=basis*modes[8*n+5];
+    Jprod[8*tid+6]=basis*modes[8*n+6];
+    Jprod[8*tid+7]=basis*modes[8*n+7];
+   } else {
+    Jprod[8*tid+1]=basis*modes[8*n];
+    Jprod[8*tid]=-basis*modes[8*n+1];
+    Jprod[8*tid+3]=basis*modes[8*n+2];
+    Jprod[8*tid+2]=-basis*modes[8*n+3];
+    Jprod[8*tid+5]=basis*modes[8*n+4];
+    Jprod[8*tid+4]=-basis*modes[8*n+5];
+    Jprod[8*tid+7]=basis*modes[8*n+6];
+    Jprod[8*tid+6]=-basis*modes[8*n+7];
+   }
+  } else {
+   Jprod[8*tid]=Jprod[8*tid+1]=Jprod[8*tid+2]=Jprod[8*tid+3]=
+    Jprod[8*tid+4]=Jprod[8*tid+5]=Jprod[8*tid+6]=Jprod[8*tid+7]=0.0f;
+  }
+  __syncthreads();
+  // Build summation tree over elements, assuming blockDim.x is power of 2.
+  for(int s=blockDim.x/2; s>0; s=s/2) {
+    if(tid < s) {
+      Jprod[8*tid] += Jprod[8*(tid + s)];
+      Jprod[8*tid+1] += Jprod[8*(tid + s)+1];
+      Jprod[8*tid+2] += Jprod[8*(tid + s)+2];
+      Jprod[8*tid+3] += Jprod[8*(tid + s)+3];
+      Jprod[8*tid+4] += Jprod[8*(tid + s)+4];
+      Jprod[8*tid+5] += Jprod[8*(tid + s)+5];
+      Jprod[8*tid+6] += Jprod[8*(tid + s)+6];
+      Jprod[8*tid+7] += Jprod[8*(tid + s)+7];
+    }
+   __syncthreads();
+  }
+
+  /* copy back the sum to proper location in ed */
+  if(tid==0) {
+   J_C_J[8*blockIdx.x]=Jprod[0];
+   J_C_J[8*blockIdx.x+1]=Jprod[1];
+   J_C_J[8*blockIdx.x+2]=Jprod[2];
+   J_C_J[8*blockIdx.x+3]=Jprod[3];
+   J_C_J[8*blockIdx.x+4]=Jprod[4];
+   J_C_J[8*blockIdx.x+5]=Jprod[5];
+   J_C_J[8*blockIdx.x+6]=Jprod[6];
+   J_C_J[8*blockIdx.x+7]=Jprod[7];
+  }
+}
+
+
+__global__ void
+plus_reduce(const float *__restrict__ input, int N, int blockDim_2, double *coh) {
+ // Each block loads its 8 elements into shared memory
+ extern __shared__ float x[];
+ int tid = threadIdx.x;
+ int i = blockIdx.x*blockDim.x + threadIdx.x;
+ if (i<N) {
+  x[8*tid] =input[8*i];
+  x[8*tid+1] =input[8*i+1];
+  x[8*tid+2] =input[8*i+2];
+  x[8*tid+3] =input[8*i+3];
+  x[8*tid+4] =input[8*i+4];
+  x[8*tid+5] =input[8*i+5];
+  x[8*tid+6] =input[8*i+6];
+  x[8*tid+7] =input[8*i+7];
+ } else {
+  x[8*tid] =0.0f;
+  x[8*tid+1] =0.0f;
+  x[8*tid+2] =0.0f;
+  x[8*tid+3] =0.0f;
+  x[8*tid+4] =0.0f;
+  x[8*tid+5] =0.0f;
+  x[8*tid+6] =0.0f;
+  x[8*tid+7] =0.0f;
+ }
+ __syncthreads();
+ // Build summation tree over elements, handling case where B is not a power of two.
+  int nTotalThreads = blockDim_2; // Total number of threads, rounded up to the next power of two
+  while(nTotalThreads > 1) {
+   int halfPoint = (nTotalThreads >> 1); // divide by two
+    if (tid < halfPoint) {
+     int thread2 = tid + halfPoint;
+     if (thread2 < blockDim.x) { // Skipping the fictitious threads blockDim.x ... blockDim_2-1
+      x[8*tid] = x[8*tid]+x[8*thread2];
+      x[8*tid+1] = x[8*tid+1]+x[8*thread2+1];
+      x[8*tid+2] = x[8*tid+2]+x[8*thread2+2];
+      x[8*tid+3] = x[8*tid+3]+x[8*thread2+3];
+      x[8*tid+4] = x[8*tid+4]+x[8*thread2+4];
+      x[8*tid+5] = x[8*tid+5]+x[8*thread2+5];
+      x[8*tid+6] = x[8*tid+6]+x[8*thread2+6];
+      x[8*tid+7] = x[8*tid+7]+x[8*thread2+7];
+     }
+    }
+    __syncthreads();
+    nTotalThreads = halfPoint; // Reducing the binary tree size by two
+ }
+
+ /* add back to total */
+ if( tid == 0 ) {
+  coh[0]=(double)x[tid];
+  coh[1]=(double)x[tid+1];
+  coh[2]=(double)x[tid+2];
+  coh[3]=(double)x[tid+3];
+  coh[4]=(double)x[tid+4];
+  coh[5]=(double)x[tid+5];
+  coh[6]=(double)x[tid+6];
+  coh[7]=(double)x[tid+7];
+ }
+}
+
 /* only use extern if calling code is C */
 extern "C"
 {
@@ -1822,4 +1886,57 @@ cudakernel_convert_time(int T, double *time_utc) {
 }
 
 
+/* need power of 2 for tree reduction to work */
+static int
+NearestPowerOf2 (int n){
+  if (!n) return n;  //(0 == 2^0)
+
+  int x = 1;
+  while(x < n) {
+      x <<= 1;
+  }
+  return x;
+}
+
+#define CUDA_DBG
+/* calculate visibilites for shapelet model at u,v,
+modes: (device memory) n0*n0*(2x2)x2 double, n0*n0*(2x2) complex double
+fact: (device memory) n0 factorial array
+coh: (device memory) 8x1 double, 4x1 complex double
+*/
+void
+cudakernel_calculate_shapelet_coherencies(float u, float v, float *modes, float *fact, int n0, float beta, double *coh) {
+
+#ifdef CUDA_DBG
+  cudaError_t error;
+  error = cudaGetLastError();
+#endif
+
+  /* split n0*n0 modes into threads */
+  int ThreadsPerBlock=DEFAULT_TH_PER_BK;
+  int BlocksPerGrid=(n0*n0+ThreadsPerBlock-1)/ThreadsPerBlock;
+  /* each thread computes basis for that mode (n1,n2), finds the product
+     of basis with modes (2x2 complex),
+     thereafter, summation over each block, and result written back to global mem */
+
+  /* global mem to store summation per block */
+  float *J_C_J;
+  cudaMalloc((void**)&J_C_J, 8*sizeof(float)*BlocksPerGrid);
+  cudaMemset(J_C_J, 0, 8*sizeof(float)*BlocksPerGrid);
+  /* shared mem: 8*ThreadsPerBlock */
+  kernel_fns_shapelet_coh<<< BlocksPerGrid, ThreadsPerBlock, 8*sizeof(float)*ThreadsPerBlock >>>(-u, v, modes, fact, n0, beta, J_C_J);
+
+  /* launch 1 block, threads=BlocksPerGrid */
+  plus_reduce<<< 1, BlocksPerGrid, 8*sizeof(float)*BlocksPerGrid>>>(J_C_J, BlocksPerGrid, NearestPowerOf2(BlocksPerGrid), coh);
+  
+  cudaFree(J_C_J);
+#ifdef CUDA_DBG
+  error = cudaGetLastError();
+  if(error != cudaSuccess) {
+    // print the CUDA error message and exit
+    fprintf(stderr,"CUDA error: %s :%s: %d\n", cudaGetErrorString(error),__FILE__,__LINE__);
+    exit(-1);
+  }
+#endif
+}
 } /* extern "C" */

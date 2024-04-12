@@ -616,7 +616,7 @@ sharmonic_modes(int n0,double *th, double *ph, int Nt, complex double *output) {
  }
  fact[0]=1.0;
  for (l=1; l<=(2*n0-1); l++) {
-    fact[l]=(l)*fact[l-1];
+    fact[l]=((double)l)*fact[l-1];
  }
 
 

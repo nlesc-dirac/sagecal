@@ -223,9 +223,10 @@ precalculate_coherencies_multifreq(double *u, double *v, double *w, complex doub
 
 
 /****************************** diffuse_predict.c ****************************/
+/* have_cuda: if 1, use GPU version, else only CPU version */
 extern int
 recalculate_diffuse_coherencies(double *u, double *v, double *w, complex double *x, int N,
-   int Nbase, baseline_t *barr,  clus_source_t *carr, int M, double freq0, double fdelta, double tdelta, double dec0, double uvmin, double uvmax, int diffuse_cluster, int sh_n0, double sh_beta, complex double *Z, int Nt);
+   int Nbase, baseline_t *barr,  clus_source_t *carr, int M, double freq0, double fdelta, double tdelta, double dec0, double uvmin, double uvmax, int diffuse_cluster, int sh_n0, double sh_beta, complex double *Z, int Nt, int use_cuda);
 /****************************** transforms.c ****************************/
 #ifndef ASEC2RAD
 #define ASEC2RAD 4.848136811095359935899141e-6
@@ -477,6 +478,11 @@ precess_source_locations_deprecated(double jd_tdb, clus_source_t *carr, int M, d
 
 /****************************** predict_withbeam_cuda.c ****************************/
 #ifdef HAVE_CUDA
+/* copy Nx1 double array x to device as float
+   first allocate device memory (need to be freed later) */
+extern void
+dtofcopy(int N, float **x_d, double *x);
+
 /* if dobeam==0, beam calculation is off
    else, flag to determine if full (element+array), array only, or element only beam is calculated
  */
@@ -544,6 +550,9 @@ cudakernel_correct_residuals(int B, int N, int Nb, int boff, int F, int nchunk, 
 
 extern void
 cudakernel_convert_time(int T, double *time_utc);
+
+extern void
+cudakernel_calculate_shapelet_coherencies(float u, float v, float *modes, float *fact, int n0, float beta, double *coh);
 #endif /* !HAVE_CUDA */
 
 

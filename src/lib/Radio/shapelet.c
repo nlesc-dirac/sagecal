@@ -63,7 +63,7 @@ calculate_uv_mode_vectors_scalar(double u, double v, double beta, int n0, double
 	}
   fact[0]=1.0;
 	for (xci=1; xci<(n0); xci++) {
-		fact[xci]=(xci)*fact[xci-1];
+		fact[xci]=((double)xci)*fact[xci-1];
 	}
 
 	/* setup array to store calculated shapelet value */
@@ -85,13 +85,13 @@ calculate_uv_mode_vectors_scalar(double u, double v, double beta, int n0, double
   xval=u*beta;
   double expval=exp(-0.5*xval*xval);
 	for (xci=0; xci<n0; xci++) {
-		shpvl[zci][xci]=H_e(xval,xci)*expval/sqrt((double)(2<<xci)*fact[xci]);
+		shpvl[zci][xci]=H_e(xval,xci)*expval/sqrt(pow(2.0,(double)xci+1)*fact[xci]);
 	}
 	zci=1;
   xval=v*beta;
   expval=exp(-0.5*xval*xval);
 	for (xci=0; xci<n0; xci++) {
-		shpvl[zci][xci]=H_e(xval,xci)*expval/sqrt((double)(2<<xci)*fact[xci]);
+		shpvl[zci][xci]=H_e(xval,xci)*expval/sqrt(pow(2.0,(double)xci+1)*fact[xci]);
 	}
 
 
@@ -425,7 +425,7 @@ shapelet_modes(int n0,double beta, double *x, double *y, int N, complex double *
 	}
   fact[0]=1;
 	for (xci=1; xci<(n0); xci++) {
-		fact[xci]=(xci)*fact[xci-1];
+		fact[xci]=((double)xci)*fact[xci-1];
 	}
 
 #ifdef DEBUG
@@ -462,7 +462,7 @@ shapelet_modes(int n0,double beta, double *x, double *y, int N, complex double *
 				/*take into account the scaling
 				*/
 				 double xvalt=grid[zci]/(beta);
-				 shpvl[zci][xci]=H_e(xvalt,xci)*exp(-0.5*xvalt*xvalt)/sqrt((2<<xci)*fact[xci]);
+				 shpvl[zci][xci]=H_e(xvalt,xci)*exp(-0.5*xvalt*xvalt)/sqrt(pow(2.0,(double)xci+1)*fact[xci]);
 		   }
 		 }
 	}
@@ -658,7 +658,7 @@ shapelet_product_tensor(int L, int M, int N, double alpha, double beta, double g
 	}
   fact[0]=1.0;
 	for (int ci=1; ci<(n0); ci++) {
-		fact[ci]=(ci)*fact[ci-1];
+		fact[ci]=((double)ci)*fact[ci-1];
 	}
 
   /* B_lmn(a,b,c) = nu/sqrt(-2^{l+m+n} sqrt(pi) l! m! n! a b c) L_lmn(sqrt(2)nu/a, sqrt(2)nu/b, sqrt(2)nu/c)
@@ -669,7 +669,7 @@ shapelet_product_tensor(int L, int M, int N, double alpha, double beta, double g
         /* only even l+m+n are non zero, so -2^{l+m+n}=2^{l+m+n} */
         if ((l+m+n)%2 ==0) {
          /* note that we use column major order in B, row m and col n = m+nM, NOT mN+n */
-         B[l*M*N+m+n*M]=nu/sqrt((double)(1<<(l+m+n))*sqrt(M_PI)* fact[l]*fact[m]*fact[n]*alpha*beta*gamma) * H[l*M*N+m*N+n];
+         B[l*M*N+m+n*M]=nu*( H[l*M*N+m*N+n]/sqrt((double)(pow(2.0,(double)(l+m+n)))*sqrt(M_PI)* fact[l]*fact[m]*fact[n]*alpha*beta*gamma) );
         } else {
          B[l*M*N+m+n*M]=0.0;
         }
@@ -679,7 +679,8 @@ shapelet_product_tensor(int L, int M, int N, double alpha, double beta, double g
 
   /* Normalize B to account for the very large values expected in H */
   double Bnorm=my_dnrm2(L*M*N,B);
-  my_dscal(L*M*N,1.0/Bnorm,B);
+  /* numerator (L*M*N)^(1/8) */
+  my_dscal(L*M*N,pow((double)L*M*N,0.125)/Bnorm,B);
 
   free(H);
   free(fact);
@@ -741,21 +742,33 @@ int
 shapelet_product(int L, int M, int N, double alpha, double beta, double gamma,
     double *h, double *f, double *g, double *C) {
 
+  printf("alpha=%lf;\n",alpha);
+  printf("beta=%lf;\n",beta);
+  printf("gamma=%lf;\n",gamma);
+  printf("L=%d;\n",L);
+  printf("M=%d;\n",M);
+  printf("N=%d;\n",N);
+  printf("f=[\n");
   for (int m=0; m<M*M; m++) {
-    printf("f %d %lf\n",m,f[m]);
+    printf("%lf\n",f[m]);
   }
+  printf("]; f=reshape(f,%d,%d);\n",M,M);
+  printf("g=[\n");
   for (int n=0; n<N*N; n++) {
-    printf("g %d %lf\n",n,g[n]);
+    printf("%lf\n",g[n]);
   }
+  printf("]; g=reshape(g,%d,%d);\n",N,N);
+  printf("Cf=zeros(%d,%d,%d);\n",L,M,N);
   for (int l=0; l<L; l++) {
-    printf("%d =\n",l);
+    printf("Cf(%d,:,:)=[\n",l+1);
     for (int m=0; m<M; m++) {
       for (int n=0; n<N; n++) {
          /* column major order */
-         printf("%lf ",C[l*M*N+m+n*M]);
+         printf("%le ",C[l*M*N+m+n*M]);
       }
       printf("\n");
     }
+    printf("];\n");
   }
 
   /* find f x g^T : M^2 x N^2 matrix, stored as M^2*N^2 vector */
@@ -769,13 +782,13 @@ shapelet_product(int L, int M, int N, double alpha, double beta, double gamma,
     my_dscal(M*M,g[ci],&fg[ci*M*M]);
   }
 
-  printf("fg=\n");
+  printf("fg=[\n");
   for (int ci=0; ci<M*M; ci++) {
     for (int cj=0; cj<N*N; cj++) {
-      printf("%lf ",fg[ci+cj*M*M]);
+      printf("%lf\n",fg[ci+cj*M*M]);
     }
-    printf("\n");
   }
+  printf("];\n");
 
   /* storage to find kronecker product */
   double *Cl;
@@ -783,10 +796,10 @@ shapelet_product(int L, int M, int N, double alpha, double beta, double gamma,
     fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
     exit(1);
   }
-  for (int l1=0; l1<L; l1++) {
-    double *Cl1=&C[l1*M*N]; //C[l1,:,:] MxN matrix
-    for (int l2=0; l2<L; l2++) {
-      double *Cl2=&C[l2*M*N]; //C[l2,:,:] MxN matrix
+  for (int l2=0; l2<L; l2++) {
+    double *Cl2=&C[l2*M*N]; //C[l2,:,:] MxN matrix
+    for (int l1=0; l1<L; l1++) {
+      double *Cl1=&C[l1*M*N]; //C[l1,:,:] MxN matrix
       /* find kronecker product Cl=kron(Cl2,Cl1) */
       kronecker_prod(M,N,Cl2,Cl1,Cl);
       /* Hadamard prod Cl . fg and sum */
@@ -795,14 +808,15 @@ shapelet_product(int L, int M, int N, double alpha, double beta, double gamma,
       for (int ci=0; ci<M*M*N*N; ci++) {
         sum+=Cl[ci]*fg[ci];
       }
-      printf("h(%d,%d) %lf\n",l1,l2,sum);
       h[l1+l2*L]=sum;
     }
   }
 
+  printf("h=[\n");
   for (int l=0; l<L*L; l++) {
-    printf("h %d %lf\n",l,h[l]);
+    printf("%lf\n",h[l]);
   }
+  printf("]; h=reshape(h,%d,%d);\n",L,L);
 
   free(fg);
   free(Cl);
@@ -848,7 +862,7 @@ ambt(complex double * __restrict a, complex double * __restrict b, complex doubl
  */
 int
 shapelet_product_jones(int L, int M, int N, double alpha, double beta, double gamma,
-    complex double *h, complex double *f, complex double *g, double *C, int hermitian) {
+    complex double *__restrict h, complex double *__restrict f, complex double *__restrict g, double *__restrict C, int hermitian) {
 
   //printf("Input h %dx%d %lf f %dx%d %lf g %dx%d %lf (x 4)\n",L,L,alpha,M,M,beta,N,N,gamma);
 #ifdef DEBUG
@@ -904,10 +918,10 @@ shapelet_product_jones(int L, int M, int N, double alpha, double beta, double ga
     fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
     exit(1);
   }
-  for (int l1=0; l1<L; l1++) {
-    double *Cl1=&C[l1*M*N]; //C[l1,:,:] MxN matrix
-    for (int l2=0; l2<L; l2++) {
-      double *Cl2=&C[l2*M*N]; //C[l2,:,:] MxN matrix
+  for (int l2=0; l2<L; l2++) {
+    double *Cl2=&C[l2*M*N]; //C[l2,:,:] MxN matrix
+    for (int l1=0; l1<L; l1++) {
+      double *Cl1=&C[l1*M*N]; //C[l1,:,:] MxN matrix
       /* find kronecker product Cl=kron(Cl2,Cl1) */
       kronecker_prod(M,N,Cl2,Cl1,Cl);
       /* Hadamard prod Cl . (f x g)  and sum, fxg=J_f * J_g^H, 2x2 product */
@@ -936,7 +950,7 @@ shapelet_product_jones(int L, int M, int N, double alpha, double beta, double ga
   }
 #endif
 
-  //printf("Norms Cl:%e f:%e g:%e h:%e\n",my_dnrm2(M*M*N*N,Cl),my_dnrm2(4*M*M,(double*)f),my_dnrm2(4*N*N,(double*)g),my_dnrm2(4*L*L,(double*)h));
+  //printf("Norms Cl:%e f:%e g:%e h:%e\n",my_dnrm2(M*M*N*N,Cl),my_dnrm2(8*M*M,(double*)f),my_dnrm2(8*N*N,(double*)g),my_dnrm2(8*L*L,(double*)h));
   free(fg);
   free(Cl);
   return 0;

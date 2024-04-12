@@ -230,6 +230,20 @@ cerr<<"Error: Worker "<<myrank<<": Recheck your allocation or reduce number of w
       }
      }
 
+#ifdef DEBUG
+    /* open text files for each MS, each line re,im XX,XY,YX,YY */
+    vector<FILE *> debug_vec(mymscount);
+    if (Data::spatialreg && sp_diffuse_id>=0) {
+         for(int cm=0; cm<mymscount; cm++) {
+           string filebuff=std::string(myms[cm])+std::string(".coh.txt\0");
+           if ((debug_vec[cm]=fopen(filebuff.c_str(),"w+"))==0) {
+             fprintf(stderr,"%s: %d: no file\n",__FILE__,__LINE__);
+             exit(1);
+            }
+         }
+    }
+#endif /* DEBUG */
+
     vector<double *> p_vec(mymscount);
     vector<double **> pm_vec(mymscount);
 
@@ -657,7 +671,28 @@ cout<<myrank<<" : "<<cm<<": downweight ratio ("<<iodata_vec[cm].fratio<<") based
 
         /* Re-calculate model for cluster id 'sp_diffuse_id' */
         for(int cm=0; cm<mymscount; cm++) {
-          recalculate_diffuse_coherencies(iodata_vec[cm].u,iodata_vec[cm].v,iodata_vec[cm].w,coh_vec[cm],iodata_vec[cm].N,iodata_vec[cm].Nbase*iodata_vec[cm].tilesz,barr_vec[cm],carr_vec[cm],M,iodata_vec[cm].freq0,iodata_vec[cm].deltaf,iodata_vec[cm].deltat,iodata_vec[cm].dec0,Data::min_uvcut,Data::max_uvcut,sp_diffuse_id,sh_n0,sh_beta,&Zb[cm*4*iodata_vec[0].N*G],Data::Nt);
+#ifdef HAVE_CUDA
+     if (GPUpredict) {
+          recalculate_diffuse_coherencies(iodata_vec[cm].u,iodata_vec[cm].v,iodata_vec[cm].w,coh_vec[cm],iodata_vec[cm].N,iodata_vec[cm].Nbase*iodata_vec[cm].tilesz,barr_vec[cm],carr_vec[cm],M,iodata_vec[cm].freq0,iodata_vec[cm].deltaf,iodata_vec[cm].deltat,iodata_vec[cm].dec0,Data::min_uvcut,Data::max_uvcut,sp_diffuse_id,sh_n0,sh_beta,&Zb[cm*4*iodata_vec[0].N*G],Data::Nt,1);
+     } else {
+          recalculate_diffuse_coherencies(iodata_vec[cm].u,iodata_vec[cm].v,iodata_vec[cm].w,coh_vec[cm],iodata_vec[cm].N,iodata_vec[cm].Nbase*iodata_vec[cm].tilesz,barr_vec[cm],carr_vec[cm],M,iodata_vec[cm].freq0,iodata_vec[cm].deltaf,iodata_vec[cm].deltat,iodata_vec[cm].dec0,Data::min_uvcut,Data::max_uvcut,sp_diffuse_id,sh_n0,sh_beta,&Zb[cm*4*iodata_vec[0].N*G],Data::Nt,0);
+     }
+#else 
+          recalculate_diffuse_coherencies(iodata_vec[cm].u,iodata_vec[cm].v,iodata_vec[cm].w,coh_vec[cm],iodata_vec[cm].N,iodata_vec[cm].Nbase*iodata_vec[cm].tilesz,barr_vec[cm],carr_vec[cm],M,iodata_vec[cm].freq0,iodata_vec[cm].deltaf,iodata_vec[cm].deltat,iodata_vec[cm].dec0,Data::min_uvcut,Data::max_uvcut,sp_diffuse_id,sh_n0,sh_beta,&Zb[cm*4*iodata_vec[0].N*G],Data::Nt,0);
+#endif /* HAVE_CUDA */
+
+#ifdef DEBUG
+          /* save calculated coherencies in text file, re,im XX,XY,YX,YY,
+           * note that coherencies need to be multiplied by the solutions to make sense */
+          if (admm>=Nadmm-Data::admm_cadence) {
+          for (int nb=0; nb<iodata_vec[cm].Nbase*iodata_vec[cm].tilesz; nb++) {
+            fprintf(debug_vec[cm],"%e %e %e %e %e %e %e %e\n",creal(coh_vec[cm][4*M*nb+4*sp_diffuse_id]),cimag(coh_vec[cm][4*M*nb+4*sp_diffuse_id]),
+            creal(coh_vec[cm][4*M*nb+4*sp_diffuse_id+1]),cimag(coh_vec[cm][4*M*nb+4*sp_diffuse_id+1]),
+            creal(coh_vec[cm][4*M*nb+4*sp_diffuse_id+2]),cimag(coh_vec[cm][4*M*nb+4*sp_diffuse_id+2]),
+            creal(coh_vec[cm][4*M*nb+4*sp_diffuse_id+3]),cimag(coh_vec[cm][4*M*nb+4*sp_diffuse_id+3]));
+          }
+          }
+#endif /* DEBUG */
         }
       }
       /************************************************************************/
@@ -1106,6 +1141,13 @@ cout<<myrank<<" : "<<cm<<": downweight ratio ("<<iodata_vec[cm].fratio<<") based
       free(Zspat);
       free(Zb);
       free(B);
+
+#ifdef DEBUG
+      /* close files */
+      for(int cm=0; cm<mymscount; cm++) {
+         fclose(debug_vec[cm]);
+      }
+#endif /* DEBUG */
   }
   /**********************************************************/
 
