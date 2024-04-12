@@ -200,6 +200,9 @@ Spatial regularization (with distributed multi-directional calibration) enables 
 
 After each solution, images showing the spatial model (amplitude) will be created as ```.PPM``` files.
 
+#### 5a) Diffuse sky models in calibration
+When a spatial model is enabled, it is also possible to apply the spatial model onto a model of a diffuse sky background. The diffuse sky model can have any number of shapelet components. They all should belong to one cluster (say cluster *45*). With ```-D``` option, it is possible to enable the use of diffuse sky model with the spatial model, like ```-D 45,0.1```, where *0.1* is the regularization factor used while applying the spatial model. The larger this regularization is, the more strongly the spatial model will be enforced onto the diffuse sky model.
+
 ### 6) Solution format
 All SAGECal solutions are stored as text files. Lines starting with '#' are comments.
 The first non-comment line includes some general information, i.e.
