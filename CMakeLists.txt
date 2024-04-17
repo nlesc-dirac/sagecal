@@ -123,6 +123,20 @@ pkg_check_modules(GLIB_PKG glib-2.0)
 if (GLIB_PKG_FOUND)
     include_directories(${GLIB_PKG_INCLUDE_DIRS})
 endif()
+
+#CSPICE find if -DCSPICE_PREFIX=... given
+set(CSPICE_PREFIX
+  ""
+  CACHE FILEPATH "Path to CSPICE install root")
+if(NOT "${CSPICE_PREFIX}" STREQUAL "")
+  set(ENV{PKG_CONFIG_PATH} "${CSPICE_PREFIX}/lib/pkgconfig")
+  pkg_search_module(CSPICE libcspice)
+endif()
+if(CSPICE_FOUND)
+  message(STATUS "Found CSPICE: ${CSPICE_INCLUDE_DIRS}")
+  include_directories(${CSPICE_INCLUDE_DIRS})
+  add_definitions(-DHAVE_CSPICE)
+endif()
 #--------------------------------------- check environment variables
 
 # Check pre-defined environment variables

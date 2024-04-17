@@ -40,6 +40,7 @@ if(HAVE_CUDA)
         ${LAPACK_LIBRARIES}
         ${WCSLIB_LIBRARIES}
         ${GLIB_PKG_LIBRARIES}
+        $<$<1:${CSPICE_FOUND}>:${CSPICE_LINK_LIBRARIES}>
         -lpthread
         -lm
         ${CUDA_CUBLAS_LIBRARIES}
