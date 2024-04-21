@@ -96,7 +96,11 @@ cspice_load_kernels(void) {
 
   } else {
     fprintf(stderr,"CSPICE kernel path 'CSPICE_KERNEL_PATH' is not found in environment variables\n");
-    fprintf(stderr,"Download the kernels pck00011.tpc, naif0012.tls,\n moon_de440_220930.tf, moon_pa_de440_200625.bpc\n");
+    fprintf(stderr,"Download the kernels\n"
+    "https://naif.jpl.nasa.gov/pub/naif/generic_kernels/pck/pck00011.tpc\n"
+    "https://naif.jpl.nasa.gov/pub/naif/generic_kernels/lsk/naif0012.tls\n"
+    "https://naif.jpl.nasa.gov/pub/naif/generic_kernels/fk/satellites/moon_de440_220930.tf\n"
+    "https://naif.jpl.nasa.gov/pub/naif/generic_kernels/pck/moon_pa_de440_200625.bpc\n");
     fprintf(stderr,"And rerun the program after setting the directory where these kernels stored as CSPICE_KERNEL_PATH\n");
     exit(1);
   }
