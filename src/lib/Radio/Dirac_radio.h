@@ -376,6 +376,12 @@ extern int
 sharmonic_modes(int n0,double *th, double *ph, int Nt, complex double *output);
 
 
+/****************************** cspice_utils.c ************************************/
+#ifdef HAVE_CSPICE
+extern void
+cspice_load_kernels(void);
+#endif /* HAVE_CSPICE */
+
 /****************************** shapelet.c ****************************/
 extern complex double
 shapelet_contrib(void*dd, double u, double v, double w);
