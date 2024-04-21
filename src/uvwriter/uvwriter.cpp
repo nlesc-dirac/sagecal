@@ -91,6 +91,22 @@ cspice_load_kernels(void) {
     printf("loading %s\n",fullname);
     furnsh_c(fullname);
     free(fullname);
+
+    /* following kernel only needed for ITRF93 frame */
+    /*
+    kname="/earth_000101_240713_240419.bpc\0";
+    fullname=(char*)calloc((size_t)strlen((char*)cspice_path)+1+strlen((char*)kname),sizeof(char));
+    if (fullname == 0 ) {
+         fprintf(stderr,"%s: %d: no free memory",__FILE__,__LINE__);
+         exit(1);
+    }
+    strcpy(fullname,cspice_path);
+    strcpy((char*)&(fullname[strlen(cspice_path)]),kname);
+    printf("loading %s\n",fullname);
+    furnsh_c(fullname);
+    free(fullname);
+    */
+
   } else {
     fprintf(stderr,"CSPICE kernel path 'CSPICE_KERNEL_PATH' is not found in environment variables\n");
     fprintf(stderr,"Download the kernels pck00011.tpc, naif0012.tls,\n moon_de440_220930.tf, moon_pa_de440_200625.bpc\n");
@@ -149,11 +165,12 @@ main(int argc, char **argv) {
   ArrayColumn<double> position(_ant,MSAntenna::columnName(MSAntennaEnums::POSITION));
   double *xyz=new double[3*N];
   for (size_t ci=0; ci<N; ci++) {
-    double *_pos=position(ci).data();
-    //printf("Ant %ld %lf %lf %lf\n",ci,_pos[0],_pos[1],_pos[2]);
-    xyz[3*ci]=_pos[0];
-    xyz[3*ci+1]=_pos[1];
-    xyz[3*ci+2]=_pos[2];
+    Array<double> _pos=position(ci);
+    double *pos_p=_pos.data();
+    //printf("Ant %ld %lf %lf %lf\n",ci,pos_p[0],pos_p[1],pos_p[2]);
+    xyz[3*ci]=pos_p[0];
+    xyz[3*ci+1]=pos_p[1];
+    xyz[3*ci+2]=pos_p[2];
   }
 
   MSField _field = Table(ms.field());
@@ -185,8 +202,6 @@ main(int argc, char **argv) {
 
     double old_t0=0.0;
 
-    /* unit vector pointing to phase center */
-    double e[3]={0.0,0.0,0.0};
     for (size_t row=0; row<n_row; row++) {
       size_t i=a1(row);
       size_t j=a2(row);
@@ -194,6 +209,7 @@ main(int argc, char **argv) {
       double *uvwp=uvw.data();
 //      printf("utc %lf ant %ld %ld uvw %lf %lf %lf\n",tut(row),i,j,uvwp[0],uvwp[1],uvwp[2]);
       double t0=tut(row);
+      double rotmat[3][3];
       if (old_t0 != t0) {
         /* rotate direction vector to this time */
         /* convert t0 (s) to JD (days) */
@@ -211,14 +227,18 @@ main(int argc, char **argv) {
         /* rotate v2000 onto lunar frame */
         mxv_c(mtrans,v2000,srcrect);
 
+        SpiceDouble s_radius,s_lon,s_lat;
+        reclat_c( srcrect, &s_radius, &s_lon, &s_lat );
+        /* [u,v,w]^T=[sinH cosH 0; -sindel*cosH sindel*sinH cosdel; cosdel*cosH -cosdel*sinH sindel] [x y z]^T */
+        double H=s_lon;
+        double del=M_PI_2-s_lat;
+        rotmat[0][0]=sin(H); rotmat[0][1]=cos(H); rotmat[0][2]=0.0;
+        rotmat[1][0]=-sin(del)*cos(H); rotmat[1][1]=sin(del)*sin(H); rotmat[1][2]=cos(del);
+        rotmat[2][0]=cos(del)*cos(H); rotmat[2][1]=-cos(del)*sin(H); rotmat[2][2]=sin(del);
+
+
         //printf("source J2000 %lf,%lf,%lf MOON %lf,%lf,%lf\n",v2000[0],v2000[1],v2000[2],
         // srcrect[0],srcrect[1],srcrect[2]);
-
-        /* unit vector pointing to phase center */
-        double smag=sqrt(srcrect[0]*srcrect[0]+srcrect[1]*srcrect[1]+srcrect[2]*srcrect[2]);
-        e[0]=srcrect[0]/smag;
-        e[1]=srcrect[1]/smag;
-        e[2]=srcrect[2]/smag;
 
         old_t0=t0;
       }
@@ -232,15 +252,15 @@ main(int argc, char **argv) {
       
        /* project v onto plane normal to unit vector e */
        /* dot product v.e */
-       double v_e=v[0]*e[0]+v[1]*e[1]+v[2]*e[2];
-       /* projected v = v - (v . e) e */
-       v[0] -= v_e*e[0];
-       v[1] -= v_e*e[1];
-       v[2] -= v_e*e[2];
+       double vloc[3];
+       mxv_c(rotmat,v,vloc);
 
-       uvwp[0]=v[0];
-       uvwp[1]=v[1];
-       uvwp[2]=v[2];
+       //printf("old %lf %lf %lf new %lf %lf %lf\n",uvwp[0],uvwp[1],uvwp[2],vloc[0],vloc[1],vloc[2]);
+
+       uvwp[0]=vloc[0];
+       uvwp[1]=vloc[1];
+       uvwp[2]=vloc[2];
+
        uvwCol.put(row,uvw);
       }
     }
