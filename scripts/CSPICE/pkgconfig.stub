@@ -1,0 +1,12 @@
+exec_prefix="${prefix}"
+libdir="${prefix}/lib"
+includedir="${prefix}/include"
+
+Name: CSPICE
+Description: 
+URL:
+Version: 0.0.1
+Requires: 
+Requires.private: 
+Cflags: -I"${includedir}"
+Libs: -L"${libdir}" -lcspice
