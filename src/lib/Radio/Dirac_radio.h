@@ -380,6 +380,15 @@ sharmonic_modes(int n0,double *th, double *ph, int Nt, complex double *output);
 #ifdef HAVE_CSPICE
 extern void
 cspice_load_kernels(void);
+
+extern int
+cspice_xyz_to_latlon(double x,double y, double z,double *lon, double *lat, double *alt);
+
+/* calculate element beam, same as element_beam(..) but transforms are in lunar frame
+ * also a mutex is needed as CSPICE is not thread safe
+ */
+extern int
+cspice_element_beam_lunar(double ra, double dec, double f, double f0, int N, double *longitude, double *latitude, double time_jd, elementcoeff *ecoeff, double *elementgain, int wideband, int findex, pthread_mutex_t *mutex);
 #endif /* HAVE_CSPICE */
 
 /****************************** shapelet.c ****************************/

@@ -190,7 +190,8 @@ precal_threadfn(void *data) {
      }
 
      if (t->dobeam==DOBEAM_ELEMENT || t->dobeam==DOBEAM_FULL
-         ||t->dobeam==DOBEAM_ELEMENT_WB ||t->dobeam==DOBEAM_FULL_WB) {
+         ||t->dobeam==DOBEAM_ELEMENT_WB ||t->dobeam==DOBEAM_FULL_WB
+         ||t->dobeam==DOBEAM_ALO || t->dobeam==DOBEAM_ALO_WB) {
        /* add up terms together with Ejones multiplication */
        for (cn=0; cn<t->carr[cm].N; cn++) {
          complex double *E1=(complex double*)&t->elementbeam[tslot*(t->N*8*t->carr[cm].N)+cn*t->N*8+sta1*8]; /* 8 values */
@@ -410,7 +411,8 @@ precal_threadfn_multifreq(void *data) {
      }
 
      if (t->dobeam==DOBEAM_ELEMENT || t->dobeam==DOBEAM_FULL
-         ||t->dobeam==DOBEAM_ELEMENT_WB ||t->dobeam==DOBEAM_FULL_WB) {
+         ||t->dobeam==DOBEAM_ELEMENT_WB ||t->dobeam==DOBEAM_FULL_WB
+         ||t->dobeam==DOBEAM_ALO || t->dobeam==DOBEAM_ALO_WB) {
        /* add up terms together with Ejones multiplication */
        for (cn=0; cn<t->carr[cm].N; cn++) {
          complex double *E1=(complex double*)&t->elementbeam[tslot*(t->N*8*t->carr[cm].N)+cn*t->N*8+sta1*8]; /* 8 values */
@@ -526,6 +528,19 @@ precalbeam_threadfn(void *data) {
     }
    }
   }
+#ifdef HAVE_CSPICE
+ } else if (t->dobeam==DOBEAM_ALO || t->dobeam==DOBEAM_ALO_WB) {
+    /* iterate over all timeslots */
+    for (ct=0;ct<t->Ntime;ct++) {
+   /* iterate over frequencies */
+   for (cf=0; cf<t->Nf; cf++) {
+   /* iterate over sources */
+  for (cn=t->soff; cn<t->soff+t->Ns; cn++) {
+     cspice_element_beam_lunar(t->carr[cm].ra[cn], t->carr[cm].dec[cn], t->freqs[cf], t->freq0, t->N, t->longitude, t->latitude, t->time_utc[ct], t->ecoeff, &(t->elementgain[ct*(8*t->N*t->carr[cm].N*t->Nf)+cf*(8*t->N*t->carr[cm].N)+cn*8*t->N]),(t->dobeam==DOBEAM_ALO?0:1),cf,t->cspice_mutex);
+    }
+   }
+  }
+#endif
  } else {
   fprintf(stderr,"%s: %d: Invalid mode for beam calculation\n",__FILE__,__LINE__);
  }
@@ -615,7 +630,8 @@ precalculate_coherencies_withbeam(double *u, double *v, double *w, complex doubl
      }
    } 
    if (doBeam==DOBEAM_ELEMENT || doBeam==DOBEAM_FULL
-       ||doBeam==DOBEAM_ELEMENT_WB || doBeam==DOBEAM_FULL_WB) {
+       ||doBeam==DOBEAM_ELEMENT_WB || doBeam==DOBEAM_FULL_WB
+       ||doBeam==DOBEAM_ALO || doBeam==DOBEAM_ALO_WB) {
     /* element beam is common to all stations,
        but az,el might be different, so
        per direction 8 values (2x2 complex): 8N*tilesz, for a cluster with M sources
@@ -789,7 +805,8 @@ precalculate_coherencies_multifreq_withbeam(double *u, double *v, double *w, com
      }
    }
    if (doBeam==DOBEAM_ELEMENT || doBeam==DOBEAM_FULL
-       ||doBeam==DOBEAM_ELEMENT_WB || doBeam==DOBEAM_FULL_WB) {
+       ||doBeam==DOBEAM_ELEMENT_WB || doBeam==DOBEAM_FULL_WB
+       ||doBeam==DOBEAM_ALO || doBeam==DOBEAM_ALO_WB) {
     /* element beam is common to all stations,
        but az,el might be different, so
        per direction 8 values (2x2 complex): 8N*tilesz*Nchan, for a cluster with M sources
@@ -1061,7 +1078,8 @@ visibilities_threadfn_multifreq(void *data) {
      free(tempfr);
 
      if (t->dobeam==DOBEAM_ELEMENT || t->dobeam==DOBEAM_FULL
-         ||t->dobeam==DOBEAM_ELEMENT_WB || t->dobeam==DOBEAM_FULL_WB) {
+         ||t->dobeam==DOBEAM_ELEMENT_WB || t->dobeam==DOBEAM_FULL_WB
+         ||t->dobeam==DOBEAM_ALO || t->dobeam==DOBEAM_ALO_WB) {
       complex double *CO=0;
       if (posix_memalign((void*)&CO,sizeof(complex double),((size_t)t->carr[cm].N*4*sizeof(complex double)))!=0) {
       fprintf(stderr,"%s: %d: No free memory\n",__FILE__,__LINE__);
@@ -1231,6 +1249,9 @@ predict_visibilities_multifreq_withbeam(double *u,double *v,double *w,double *x,
     exit(1);
   }
 
+#ifdef HAVE_CSPICE
+  pthread_mutex_t cspice_mutex=PTHREAD_MUTEX_INITIALIZER;
+#endif
 
   if (add_to_data==SIMUL_ONLY) {
    /* set output column to zero */
@@ -1288,7 +1309,8 @@ predict_visibilities_multifreq_withbeam(double *u,double *v,double *w,double *x,
      }
    }
    if (doBeam==DOBEAM_ELEMENT || doBeam==DOBEAM_FULL
-       ||doBeam==DOBEAM_ELEMENT_WB || doBeam==DOBEAM_FULL_WB) {
+       ||doBeam==DOBEAM_ELEMENT_WB || doBeam==DOBEAM_FULL_WB
+       ||doBeam==DOBEAM_ALO || doBeam==DOBEAM_ALO_WB) {
     /* element beam is common to all stations,
        but az,el might be different, so
        per direction 8 values (2x2 complex): 8N*tilesz*Nchan, for a cluster with M sources
@@ -1336,6 +1358,10 @@ predict_visibilities_multifreq_withbeam(double *u,double *v,double *w,double *x,
      beamdata[nth1].beamgain=beamgain;
      beamdata[nth1].elementgain=elementgain;
      beamdata[nth1].dobeam=doBeam;
+
+#ifdef HAVE_CSPICE
+     beamdata[nth1].cspice_mutex=&cspice_mutex;
+#endif
      pthread_create(&th_array[nth1],&attr,precalbeam_threadfn,(void*)(&beamdata[nth1]));
 
      ci=ci+Nthb;
@@ -1559,7 +1585,8 @@ predict_visibilities_multifreq_withsol_withbeam(double *u,double *v,double *w,do
      }
    }
    if (doBeam==DOBEAM_ELEMENT || doBeam==DOBEAM_FULL
-       ||doBeam==DOBEAM_ELEMENT_WB || doBeam==DOBEAM_FULL_WB) {
+       ||doBeam==DOBEAM_ELEMENT_WB || doBeam==DOBEAM_FULL_WB
+       ||doBeam==DOBEAM_ALO || doBeam==DOBEAM_ALO_WB) {
     /* element beam is common to all stations,
        but az,el might be different, so
        per direction 8 values (2x2 complex): 8N*tilesz*Nchan, for a cluster with M sources
@@ -1846,7 +1873,8 @@ residual_threadfn_multifreq(void *data) {
      }
 
     if (t->dobeam==DOBEAM_ELEMENT || t->dobeam==DOBEAM_FULL
-        ||t->dobeam==DOBEAM_ELEMENT_WB ||t->dobeam==DOBEAM_FULL_WB) {
+        ||t->dobeam==DOBEAM_ELEMENT_WB ||t->dobeam==DOBEAM_FULL_WB
+        ||t->dobeam==DOBEAM_ALO || t->dobeam==DOBEAM_ALO_WB) {
      /* add up terms together with Ejones multiplication */
      for (cn=0; cn<t->carr[cm].N; cn++) {
        complex double *E1=(complex double*)&t->elementbeam[tslot*(t->N*8*t->carr[cm].N*t->Nchan)+cf*(t->N*8*t->carr[cm].N)+cn*t->N*8+sta1*8]; /* 8 values */
@@ -2083,7 +2111,8 @@ calculate_residuals_multifreq_withbeam(double *u,double *v,double *w,double *p,d
      }
    }
    if (doBeam==DOBEAM_ELEMENT || doBeam==DOBEAM_FULL
-       ||doBeam==DOBEAM_ELEMENT_WB || doBeam==DOBEAM_FULL_WB) {
+       ||doBeam==DOBEAM_ELEMENT_WB || doBeam==DOBEAM_FULL_WB
+       ||doBeam==DOBEAM_ALO || doBeam==DOBEAM_ALO_WB) {
     /* element beam is common to all stations,
        but az,el might be different, so
        per direction 8 values (2x2 complex): 8N*tilesz*Nchan, for a cluster with M sources

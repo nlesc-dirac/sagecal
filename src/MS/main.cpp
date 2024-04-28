@@ -66,6 +66,9 @@ print_help(void) {
    cout << "-z ignore_clusters: if only doing a simulation (with an input solution file using -p option), ignore the cluster ids listed in this file" << endl;
    cout << "-b 0,1 : if 1, solve for each channel: default " <<Data::doChan<< endl;
    cout << "-B 0,1,2,3,4,5,6 : predict "<<DOBEAM_ARRAY<<": array beam, "<<DOBEAM_FULL<<": array+element beam, "<<DOBEAM_ELEMENT<<": element beam, "<<DOBEAM_ARRAY_WB<<": array beam (per channel), "<<DOBEAM_FULL_WB<<": array+element (per channel) "<<DOBEAM_ELEMENT_WB<<": element beam (per channel) : default " <<Data::doBeam<< endl;
+#ifdef HAVE_CSPICE
+   cout << "  For builds with CSPICE (lunar): "<<DOBEAM_ALO<<": ALO element beam, "<<DOBEAM_ALO_WB<<": ALO wideband element beam"<<endl;
+#endif
 #ifdef HAVE_CUDA
    cout << "-E 0,1 : if 1, use GPU for model computing: default " <<Data::GPUpredict<< endl;
 #endif
@@ -147,7 +150,11 @@ ParseCmdLine(int ac, char **av) {
                 break;
             case 'B':
                 doBeam= atoi(optarg);
+#ifdef HAVE_CSPICE
+                if (doBeam>8) { doBeam=DOBEAM_ARRAY; }
+#else
                 if (doBeam>6) { doBeam=DOBEAM_ARRAY; }
+#endif
                 break;
             case 'E':
                 GPUpredict=atoi(optarg);

@@ -34,6 +34,6 @@ and you are ready to link with sagecal.
 
 
 # Linking with sagecal
-Use cmake flag ```-DCSPICE_PREFIX=/full_path_to/cspice/lib``` to point to ```cspice/lib``` directory created after builiding CSPICE.
+Use cmake flag ```-DCSPICE_PREFIX=/full_path_to/cspice``` to point to ```cspice``` directory created after exctracting CSPICE.
 
-vr 26 apr 2024 23:08:20 CEST
+za 27 apr 2024  9:23:45 CEST
