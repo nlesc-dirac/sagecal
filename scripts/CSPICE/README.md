@@ -36,4 +36,17 @@ and you are ready to link with sagecal.
 # Linking with sagecal
 Use cmake flag ```-DCSPICE_PREFIX=/full_path_to/cspice``` to point to ```cspice``` directory created after exctracting CSPICE.
 
-za 27 apr 2024  9:23:45 CEST
+
+# Download kernels
+The following kernels are required.
+
+```
+wget https://naif.jpl.nasa.gov/pub/naif/generic_kernels/pck/pck00011.tpc
+wget https://naif.jpl.nasa.gov/pub/naif/generic_kernels/lsk/naif0012.tls
+wget https://naif.jpl.nasa.gov/pub/naif/generic_kernels/fk/satellites/moon_de440_220930.tf
+wget https://naif.jpl.nasa.gov/pub/naif/generic_kernels/pck/moon_pa_de440_200625.bpc
+```
+
+Download them and save them in a directory, and set your environment variable ```CSPICE_KERNEL_PATH``` to point to this directory before running sagecal.
+
+zo 28 apr 2024 20:16:15 CEST
