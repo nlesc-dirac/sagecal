@@ -236,9 +236,7 @@ Data::readAuxData(const char *fname, Data::IOData *data, Data::LBeam *binfo) {
      binfo->elType=(data->freq0<100e6?ELEM_LBA:ELEM_HBA);
    } else if ( !tel.compare("ALO") ) {
      binfo->elType=ELEM_ALO;
-#ifdef HAVE_CSPICE
-     cspice_load_kernels();
-#else
+#ifndef HAVE_CSPICE
      std::cout<<"Warning: telecope "<<tel<<", but CSPICE is not found"<<std::endl;
 #endif
    } else {

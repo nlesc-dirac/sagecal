@@ -72,6 +72,14 @@ run_fullbatch_calibration(void) {
     } else if (doBeam==DOBEAM_FULL_WB||doBeam==DOBEAM_ELEMENT_WB||doBeam==DOBEAM_ALO_WB) {
      set_elementcoeffs_wb(beam.elType, iodata.freqs, iodata.Nchan, &ecoeff);
     }
+    if (doBeam==DOBEAM_ALO || doBeam==DOBEAM_ALO_WB) {
+#ifdef HAVE_CSPICE
+      cspice_load_kernels();
+#else
+      std::cout<<"Error: Lunar beam calculation requested by -B option, but CSPICE is not found"<<std::endl;
+      exit(1);
+#endif
+    }
 
 #ifdef HAVE_OPENBLAS
     openblas_set_num_threads(1);//Data::Nt;
