@@ -16,6 +16,8 @@
 - Bandpass calibration and unprecedented RFI mitigation with stochastic LBFGS
 - Stochastic calibration for handling data at highest resolution (with federated averaging and consensus optimization)
 - Spectral and spatial regularization of calibration solutions
+- Large scale diffuse sky models via shapelet decomposition
+- Lunar frame interferometric simulation via the SPICE toolkit
 
 Please read INSTALL.md for installation instructions, but 'cmake' should work in most cases. We give a brief guide to use SAGECal here but there is extensive documentation in the links at the end.
 
