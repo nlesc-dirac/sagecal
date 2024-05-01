@@ -154,8 +154,8 @@ main(int argc, char **argv) {
         SpiceDouble s_radius,s_lon,s_lat;
         reclat_c( srcrect, &s_radius, &s_lon, &s_lat );
         /* [u,v,w]^T=[sinH cosH 0; -sindel*cosH sindel*sinH cosdel; cosdel*cosH -cosdel*sinH sindel] [x y z]^T */
-        double H=s_lon;
-        double del=M_PI_2-s_lat;
+        double H=-s_lon;
+        double del=s_lat;
         rotmat[0][0]=sin(H); rotmat[0][1]=cos(H); rotmat[0][2]=0.0;
         rotmat[1][0]=-sin(del)*cos(H); rotmat[1][1]=sin(del)*sin(H); rotmat[1][2]=cos(del);
         rotmat[2][0]=cos(del)*cos(H); rotmat[2][1]=-cos(del)*sin(H); rotmat[2][2]=sin(del);
