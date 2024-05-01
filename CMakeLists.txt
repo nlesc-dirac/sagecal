@@ -123,6 +123,20 @@ pkg_check_modules(GLIB_PKG glib-2.0)
 if (GLIB_PKG_FOUND)
     include_directories(${GLIB_PKG_INCLUDE_DIRS})
 endif()
+
+#CSPICE find if -DCSPICE_PREFIX=... given
+set(CSPICE_PREFIX
+  ""
+  CACHE FILEPATH "Path to CSPICE install root")
+if(NOT "${CSPICE_PREFIX}" STREQUAL "")
+  set(ENV{PKG_CONFIG_PATH} "${CSPICE_PREFIX}/lib/pkgconfig")
+  pkg_search_module(CSPICE libcspice)
+endif()
+if(CSPICE_FOUND)
+  message(STATUS "Found CSPICE: ${CSPICE_INCLUDE_DIRS}")
+  include_directories(${CSPICE_INCLUDE_DIRS})
+  add_definitions(-DHAVE_CSPICE)
+endif()
 #--------------------------------------- check environment variables
 
 # Check pre-defined environment variables
@@ -181,8 +195,6 @@ message(STATUS "\n############################\n#   Configuration summary\n#####
 message (STATUS "CMAKE_SYSTEM .............. = ${CMAKE_SYSTEM}")
 message (STATUS "CMAKE_INSTALL_PREFIX ...... = ${CMAKE_INSTALL_PREFIX}")
 message (STATUS "CMAKE_BUILD_TYPE .......... = ${CMAKE_BUILD_TYPE}")
-# message (STATUS "BUILD_SHARED_LIBS ......... = ${BUILD_SHARED_LIBS}")
-# message (STATUS "USE_STACKTRACE ............ = ${USE_STACKTRACE}")
 message (STATUS "CMAKE_CXX_COMPILER ........ = ${CMAKE_CXX_COMPILER}")
 message (STATUS "CMAKE_CXX_FLAGS_RELEASE ... = ${CMAKE_CXX_FLAGS_RELEASE}")
 
@@ -224,11 +236,8 @@ message (STATUS "OpenBLAS_LIB .............. = ${OpenBLAS_LIB}")
 message (STATUS "GLIB_PKG_INCLUDE_DIRS...... = ${GLIB_PKG_INCLUDE_DIRS}")
 message (STATUS "GLIB_PKG_LIBRARIES......... = ${GLIB_PKG_LIBRARIES}")
 
-#message (STATUS "LAPACK-INC ................ = ${LAPACK_INCLUDE_DIR}")
 message (STATUS "LAPACK_LIBRARIES........... = ${LAPACK_LIBRARIES}")
 
-# message (STATUS "GFORTRAN-INC  ............. = ${GFORTRAN_INCLUDE_DIR}")
-# message (STATUS "GFORTRAN-LIBS ............. = ${LIBGFORTRAN_LIBRARIES}")
 message (STATUS "CMAKE_Fortran_COMPILER..... = ${CMAKE_Fortran_COMPILER}")
 
 message (STATUS "CFITSIO_ROOT_DIR........... = ${CFITSIO_ROOT_DIR}")
@@ -237,10 +246,6 @@ message (STATUS "CFITSIO_LIB................ = ${CFITSIO_LIB}")
 
 message (STATUS "WCSLIB_INCLUDE_DIRS........ = ${WCSLIB_INCLUDE_DIRS}")
 message (STATUS "WCSLIB_LIBRARIES .......... = ${WCSLIB_LIBRARIES}")
-
-# message (STATUS "HDF5_INCLUDE_DIR........... = ${HDF5_INCLUDE_DIRS}")
-# message (STATUS "HDF5_LIBRARIES............. = ${HDF5_LIBRARIES}")
-
 
 #--------------------------------------- include directories
 add_subdirectory(src)

@@ -14,6 +14,11 @@ set (objects
     diffuse_predict
 )
 
+if(CSPICE_FOUND)
+    set(extra_objects cspice_utils)
+    set(objects ${objects} ${extra_objects})
+endif()
+
 include_directories(${CMAKE_CURRENT_SOURCE_DIR})
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/../Dirac)
 include_directories(${GLIB_PKG_INCLUDE_DIRS})

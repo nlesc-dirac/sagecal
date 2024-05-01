@@ -28,3 +28,10 @@ if(NOT LIB_ONLY)
    message(STATUS "\n WCSLIB not found, so skipping buildsky/restore")
   endif()
 endif()
+
+
+if(NOT LIB_ONLY)
+  if(CSPICE_FOUND)
+   add_subdirectory(uvwriter)
+  endif()
+endif()

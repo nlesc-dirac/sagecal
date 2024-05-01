@@ -618,7 +618,7 @@ cout<<myrank<<" : "<<cm<<": downweight ratio ("<<iodata_vec[cm].fratio<<") based
      for(int cm=0; cm<mymscount; cm++) {
      /* precess source locations (also beam pointing) from J2000 to JAPP if we do any beam predictions,
       using first time slot as epoch */
-      if (doBeam && !sources_precessed) {
+      if (doBeam && !sources_precessed && (beam_vec[cm].elType!=ELEM_ALO)) {
         Data::precess_source_locations(beam_vec[cm].time_utc[iodata_vec[cm].tilesz/2],carr_vec[cm],M,&beam_vec[cm].p_ra0,&beam_vec[cm].p_dec0,&beam_vec[cm].b_ra0,&beam_vec[cm].b_dec0,Data::Nt);
        sources_precessed=1;
       }

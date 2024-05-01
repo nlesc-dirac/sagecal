@@ -1,4 +1,4 @@
-do 15 jun 2023 14:23:00 CEST
+di 30 apr 2024 13:00:36 CEST
 # SAGECal Installation
 
 ## Cmake Build
@@ -31,3 +31,7 @@ SAGECal can use ***libmvec*** vectorized math operations, both in GPU and CPU ve
 ```
 cmake ..  -DCMAKE_CXX_FLAGS='-g -O3 -Wall -ffast-math -lmvec -lm -mavx2' -DCMAKE_C_FLAGS='-g -O3 -Wall -ffast-math -lmvec -lm -mavx2' 
 ```
+
+
+### Linking with CSPICE
+See [linking with CSPICE](https://github.com/nlesc-dirac/sagecal/blob/cspice/scripts/CSPICE/README.md).

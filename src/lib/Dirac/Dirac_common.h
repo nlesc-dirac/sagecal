@@ -141,6 +141,14 @@ typedef struct exinfo_shapelet_ {
 #ifndef DOBEAM_ELEMENT_WB
 #define DOBEAM_ELEMENT_WB 6
 #endif
+/* following flags is only to be used for ALO (lunar) simulation,
+ * will need the use of CSPICE */
+#ifndef DOBEAM_ALO
+#define DOBEAM_ALO 7
+#endif
+#ifndef DOBEAM_ALO_WB
+#define DOBEAM_ALO_WB 8
+#endif
 
 typedef struct elementcoff_ {
   int M; /* model order 1,2,3.. */
@@ -261,6 +269,10 @@ typedef struct thread_data_arrayfac_ {
   double *elementgain; /* output : element beam */
   elementcoeff *ecoeff; /* element beam coefficients */
   int dobeam; /* which part of beam to calculate */
+
+#ifdef HAVE_CSPICE
+  pthread_mutex_t *cspice_mutex; /* mutex for CSPICE routines */
+#endif
 } thread_data_arrayfac_t;
 
 

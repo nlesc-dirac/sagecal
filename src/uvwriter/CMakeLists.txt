@@ -26,12 +26,11 @@ FILE(GLOB SRCFILES *.cpp)
 target_link_libraries(${target} dirac-radio)
 target_link_libraries(${target} dirac)
 
-if(HAVE_CUDA)
 
-    cuda_add_executable(sagecal_gpu ${SRCFILES})
-    add_dependencies(sagecal_gpu dirac-radio dirac)
-
-    target_link_libraries(sagecal_gpu
+if (HAVE_CUDA)
+  cuda_add_executable(uvwriter ${SRCFILES})
+  add_dependencies(uvwriter dirac-radio dirac)
+  target_link_libraries(uvwriter
         -ldirac-radio
         -ldirac
         ${CASACORE_LIBRARIES}
@@ -45,19 +44,14 @@ if(HAVE_CUDA)
         -lm
         ${CUDA_CUBLAS_LIBRARIES}
         ${CUDA_CUFFT_LIBRARIES}
-        ${CUDA_cusolver_LIBRARY}
-        ${CUDA_cudadevrt_LIBRARY}
+        ${CUDA_cusolver_LIBRARIES}
+        ${CUDA_cudadevrt_LIBRARIES}
         ${NVML_LIB_PATH}
-    )
-
-    install(TARGETS sagecal_gpu DESTINATION bin)
-
+  )
 else()
-
-    add_executable(sagecal ${SRCFILES})
-    add_dependencies(sagecal dirac-radio dirac)
-
-    target_link_libraries(sagecal
+  add_executable(uvwriter ${SRCFILES})
+  add_dependencies(uvwriter dirac-radio dirac)
+  target_link_libraries(uvwriter
         -ldirac-radio
         -ldirac
         ${CASACORE_LIBRARIES}
@@ -69,10 +63,6 @@ else()
         $<$<BOOL:${CSPICE_FOUND}>:${CSPICE_LINK_LIBRARIES}>
         -lpthread
         -lm
-    )
-
-    install(TARGETS sagecal DESTINATION bin)
-
+  )
 endif()
-
-
+install(TARGETS uvwriter DESTINATION bin)

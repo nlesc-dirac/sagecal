@@ -67,10 +67,18 @@ run_fullbatch_calibration(void) {
     if (Data::randomize) {
      srand(time(0)); /* use different seed */
     }
-    if (doBeam==DOBEAM_FULL||doBeam==DOBEAM_ELEMENT) {
+    if (doBeam==DOBEAM_FULL||doBeam==DOBEAM_ELEMENT||doBeam==DOBEAM_ALO) {
      set_elementcoeffs(beam.elType, iodata.freq0, &ecoeff);
-    } else if (doBeam==DOBEAM_FULL_WB||doBeam==DOBEAM_ELEMENT_WB) {
+    } else if (doBeam==DOBEAM_FULL_WB||doBeam==DOBEAM_ELEMENT_WB||doBeam==DOBEAM_ALO_WB) {
      set_elementcoeffs_wb(beam.elType, iodata.freqs, iodata.Nchan, &ecoeff);
+    }
+    if (doBeam==DOBEAM_ALO || doBeam==DOBEAM_ALO_WB) {
+#ifdef HAVE_CSPICE
+      cspice_load_kernels();
+#else
+      std::cout<<"Error: Lunar beam calculation requested by -B option, but CSPICE is not found"<<std::endl;
+      exit(1);
+#endif
     }
 
 #ifdef HAVE_OPENBLAS
@@ -324,7 +332,7 @@ run_fullbatch_calibration(void) {
     }
     /* precess source locations (also beam pointing) from J2000 to JAPP if we do any beam predictions,
       using first time slot as epoch */
-    if (doBeam && !sources_precessed) {
+    if (doBeam && !sources_precessed && (beam.elType!=ELEM_ALO)) {
       Data::precess_source_locations(beam.time_utc[iodata.tilesz/2],carr,M,&beam.p_ra0,&beam.p_dec0,&beam.b_ra0,&beam.b_dec0,Data::Nt);
       sources_precessed=1;
     }
@@ -532,11 +540,15 @@ run_fullbatch_calibration(void) {
       predict_visibilities_multifreq(iodata.u,iodata.v,iodata.w,iodata.xo,iodata.N,iodata.Nbase,iodata.tilesz,barr,carr,M,iodata.freqs,iodata.Nchan,iodata.deltaf,iodata.deltat,iodata.dec0,Data::Nt,Data::DoSim);
      } else {
       predict_visibilities_multifreq_withbeam(iodata.u,iodata.v,iodata.w,iodata.xo,iodata.N,iodata.Nbase,iodata.tilesz,barr,carr,M,iodata.freqs,iodata.Nchan,iodata.deltaf,iodata.deltat,iodata.dec0,
-  beam.bfType,beam.b_ra0,beam.b_dec0,beam.p_ra0,beam.p_dec0,iodata.freq0,beam.sx,beam.sy,beam.time_utc,beam.Nelem,beam.xx,beam.yy,beam.zz,&ecoeff,doBeam,Data::Nt,Data::DoSim);
+      beam.bfType,beam.b_ra0,beam.b_dec0,beam.p_ra0,beam.p_dec0,iodata.freq0,beam.sx,beam.sy,beam.time_utc,beam.Nelem,beam.xx,beam.yy,beam.zz,&ecoeff,doBeam,Data::Nt,Data::DoSim);
      }
 #endif
 #ifdef HAVE_CUDA
      if (GPUpredict) {
+      if (beam.elType==ELEM_ALO) {
+        fprintf(stderr,"GPU predict is not supported for this telescope, try CPU only predict\n");
+        exit(1);
+      }
       predict_visibilities_multifreq_withbeam_gpu(iodata.u,iodata.v,iodata.w,iodata.xo,iodata.N,iodata.Nbase,iodata.tilesz,barr,carr,M,iodata.freqs,iodata.Nchan,iodata.deltaf,iodata.deltat,iodata.dec0,
   beam.bfType,beam.b_ra0,beam.b_dec0,beam.p_ra0,beam.p_dec0,iodata.freq0,beam.sx,beam.sy,beam.time_utc,beam.Nelem,beam.xx,beam.yy,beam.zz,&ecoeff,doBeam,Data::Nt,Data::DoSim);
      } else {
@@ -544,11 +556,15 @@ run_fullbatch_calibration(void) {
        predict_visibilities_multifreq(iodata.u,iodata.v,iodata.w,iodata.xo,iodata.N,iodata.Nbase,iodata.tilesz,barr,carr,M,iodata.freqs,iodata.Nchan,iodata.deltaf,iodata.deltat,iodata.dec0,Data::Nt,Data::DoSim);
       } else {
        predict_visibilities_multifreq_withbeam(iodata.u,iodata.v,iodata.w,iodata.xo,iodata.N,iodata.Nbase,iodata.tilesz,barr,carr,M,iodata.freqs,iodata.Nchan,iodata.deltaf,iodata.deltat,iodata.dec0,
-       beam.bfType,beam.b_ra0,beam.b_dec0,beam.p_ra0,beam.p_dec0,iodata.freq0,beam.sx,beam.sy,beam.time_utc,beam.Nelem,beam.xx,beam.yy,beam.zz,&ecoeff,doBeam,Data::Nt,Data::DoSim);
+      beam.bfType,beam.b_ra0,beam.b_dec0,beam.p_ra0,beam.p_dec0,iodata.freq0,beam.sx,beam.sy,beam.time_utc,beam.Nelem,beam.xx,beam.yy,beam.zz,&ecoeff,doBeam,Data::Nt,Data::DoSim);
       }
      }
 #endif
     } else {
+     if (beam.elType==ELEM_ALO) {
+        fprintf(stderr,"GPU predict is not supported for this telescope, try CPU only predict\n");
+        exit(1);
+     }
      /* if solution file is given, read in the solutions and predict */
      read_solutions(sfp,p,carr,iodata.N,M);
 
@@ -734,7 +750,8 @@ run_fullbatch_calibration(void) {
   }
 
   if (doBeam==DOBEAM_FULL||doBeam==DOBEAM_ELEMENT
-      ||doBeam==DOBEAM_FULL_WB||doBeam==DOBEAM_ELEMENT_WB) {
+      ||doBeam==DOBEAM_FULL_WB||doBeam==DOBEAM_ELEMENT_WB
+      ||doBeam==DOBEAM_ALO||doBeam==DOBEAM_ALO_WB) {
    free_elementcoeffs(ecoeff);
   }
   /**********************************************************/

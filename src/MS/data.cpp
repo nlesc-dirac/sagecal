@@ -236,6 +236,9 @@ Data::readAuxData(const char *fname, Data::IOData *data, Data::LBeam *binfo) {
      binfo->elType=(data->freq0<100e6?ELEM_LBA:ELEM_HBA);
    } else if ( !tel.compare("ALO") ) {
      binfo->elType=ELEM_ALO;
+#ifndef HAVE_CSPICE
+     std::cout<<"Warning: telecope "<<tel<<", but CSPICE is not found"<<std::endl;
+#endif
    } else {
      std::cout<<"Warning: unknown telecope "<<tel<<", defaulting to LOFAR"<<std::endl;
      binfo->elType=(data->freq0<100e6?ELEM_LBA:ELEM_HBA);
@@ -291,12 +294,30 @@ Data::readAuxData(const char *fname, Data::IOData *data, Data::LBeam *binfo) {
        double *tx=_pos.data();
        binfo->sz[ci]=tx[2];
 
+       /* for ALO, use CSPICE to calculate longitude, latitude */
+#ifdef HAVE_CSPICE
+       if (binfo->elType==ELEM_ALO) {
+         double lat,lon,alt;
+         cspice_xyz_to_latlon(tx[0],tx[1],tx[2],&lon,&lat,&alt);
+         binfo->sx[ci]=lon;
+         binfo->sy[ci]=lat;
+         binfo->sz[ci]=alt;
+       } else {
+         MPosition stnpos(MVPosition(tx[0],tx[1],tx[2]),MPosition::ITRF);
+         Array<double> _radpos=stnpos.getAngle("rad").getValue();
+         tx=_radpos.data();
+         binfo->sx[ci]=tx[0];
+         binfo->sy[ci]=tx[1];
+       }
+#else
        MPosition stnpos(MVPosition(tx[0],tx[1],tx[2]),MPosition::ITRF);
        Array<double> _radpos=stnpos.getAngle("rad").getValue();
        tx=_radpos.data();
 
        binfo->sx[ci]=tx[0];
        binfo->sy[ci]=tx[1];
+#endif /* HAVE_CSPICE */
+
        /* following is the number of tiles */
        binfo->Nelem[ci]=offset.shape(ci)[1];
      }
@@ -455,12 +476,29 @@ Data::readAuxData(const char *fname, Data::IOData *data, Data::LBeam *binfo) {
        double *tx=_pos.data();
        binfo->sz[ci]=tx[2];
 
-       MPosition stnpos(MVPosition(tx[0],tx[1],tx[2]), MPosition::ITRF);
+       /* for ALO, use CSPICE to calculate longitude, latitude */
+#ifdef HAVE_CSPICE
+       if (binfo->elType==ELEM_ALO) {
+         double lat,lon,alt;
+         cspice_xyz_to_latlon(tx[0],tx[1],tx[2],&lon,&lat,&alt);
+         binfo->sx[ci]=lon;
+         binfo->sy[ci]=lat;
+         binfo->sz[ci]=alt;
+       } else {
+         MPosition stnpos(MVPosition(tx[0],tx[1],tx[2]),MPosition::ITRF);
+         Array<double> _radpos=stnpos.getAngle("rad").getValue();
+         tx=_radpos.data();
+         binfo->sx[ci]=tx[0];
+         binfo->sy[ci]=tx[1];
+       }
+#else
+       MPosition stnpos(MVPosition(tx[0],tx[1],tx[2]),MPosition::ITRF);
        Array<double> _radpos=stnpos.getAngle("rad").getValue();
        tx=_radpos.data();
 
        binfo->sx[ci]=tx[0];
        binfo->sy[ci]=tx[1];
+#endif /* HAVE_CSPICE */
 
        /* allocate storage for only 1 element */
        binfo->Nelem[ci]=1;
