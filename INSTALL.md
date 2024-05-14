@@ -1,4 +1,4 @@
-di 30 apr 2024 13:00:36 CEST
+di 14 mei 2024 14:27:33 CEST
 # SAGECal Installation
 
 ## Cmake Build
@@ -34,4 +34,4 @@ cmake ..  -DCMAKE_CXX_FLAGS='-g -O3 -Wall -ffast-math -lmvec -lm -mavx2' -DCMAKE
 
 
 ### Linking with CSPICE
-See [linking with CSPICE](https://github.com/nlesc-dirac/sagecal/blob/cspice/scripts/CSPICE/README.md).
+For lunar coordinate support, you need to first download and build CSPICE, for more information, see [linking with CSPICE](https://github.com/nlesc-dirac/sagecal/blob/scripts/CSPICE/README.md).
