@@ -206,7 +206,7 @@ def radec_to_lm_SIN(ra0,dec0,ra,dec):
 
 
 #### main clustering routine : Q clusters
-def cluster_this(skymodel,Q,outfile,max_iterations=5):
+def cluster_this(skymodel,Q,outfile,max_iterations=5,admm_rho_file=None):
    SKY=read_lsm_sky(skymodel)
    K=len(SKY)
 
@@ -233,8 +233,8 @@ def cluster_this(skymodel,Q,outfile,max_iterations=5):
       ci=ci+1
    # source names
    sources=list(SKY.keys())
-   # centroids of Q clusters
-   C=numpy.zeros([Q,2])
+   # Cluster information of Q clusters: (ra,dec, sumI, mean_l, mean_m)
+   C=numpy.zeros([Q,5])
    # 1: select the Q brightest sources, initialize cluster centroids as their locations
    sItmp=numpy.copy(X[:,2])
    for ci in range(0,Q):
@@ -243,7 +243,6 @@ def cluster_this(skymodel,Q,outfile,max_iterations=5):
       C[ci,0]=X[sImax,0]
       C[ci,1]=X[sImax,1]
       sItmp[sImax]=0.0
-   #print(C)
    # calculate weights
 
    # arrays to store which cluster each source belongs to
@@ -313,6 +312,9 @@ def cluster_this(skymodel,Q,outfile,max_iterations=5):
         # update centroid
         C[clusid,0]=ra1
         C[clusid,1]=dec1
+        C[clusid,2]=sumsI
+        C[clusid,3]=Lmean
+        C[clusid,4]=Mmean
       niter=niter+1
    
    if no_more_cluster_changes:
@@ -320,6 +322,7 @@ def cluster_this(skymodel,Q,outfile,max_iterations=5):
    # write output
    outF=open(outfile,'w+')
    outF.write('# Cluster file\n')
+   outF.write('# id hybrid source names\n')
    for (clusid,sourcelist) in list(D.items()):
      if negative_cluster_ids==False:
          outF.write(str(clusid+1)+' 1')
@@ -329,6 +332,30 @@ def cluster_this(skymodel,Q,outfile,max_iterations=5):
        outF.write(' '+sources[sourceid])
      outF.write('\n')
    outF.close()
+   if admm_rho_file:
+     # find max value of total flux
+     sImax=numpy.max(C[:,2])
+     lmdist_min=numpy.min(numpy.sqrt(C[:,3]**2+C[:,4]**2))
+     outF=open(admm_rho_file,'w+')
+     outF.write('# ADMM rho file\n')
+     outF.write('# id hybrid spectral_rho spatial_rho\n')
+     for (clusid,sourcelist) in list(D.items()):
+       if negative_cluster_ids==False:
+           outF.write(str(clusid+1)+' 1')
+       else:
+           outF.write(str(-clusid-1)+' 1')
+       # spectral_rho ~ scaled by total flux
+       outF.write(' '+str(C[clusid,2]/sImax*100.0))
+       # spatial rho ~ scaled by 1/sqrt(l^2+m^2)
+       lmdist=math.sqrt(C[clusid,3]**2+C[clusid,4]**2)
+       if lmdist > 1e-3:
+         outF.write(' '+str(lmdist_min/lmdist))
+       else:
+         outF.write(' 1.0')
+       outF.write('\n')
+     outF.close()
+
+
 
 if __name__ == '__main__':
   import sys
@@ -336,13 +363,12 @@ if __name__ == '__main__':
   parser.add_option('-s', '--skymodel', help='Input sky model')
   parser.add_option('-c', '--clusters', type='int', help='Number of clusters. Absolute value if negative and the cluster ids will be negative.')
   parser.add_option('-o', '--outfile', help='Output cluster file')
-  parser.add_option('-i', '--iterations', type='int', help='Number of iterations')
+  parser.add_option('-a', '--admm', help='Output ADMM regularization file', default=None)
+  parser.add_option('-i', '--iterations', type='int', help='Number of iterations', default=5)
   (opts,args)=parser.parse_args()
 
-  if opts.skymodel and opts.clusters and opts.outfile and opts.iterations:
-    cluster_this(opts.skymodel,opts.clusters,opts.outfile,opts.iterations)
-  elif opts.skymodel and opts.clusters and opts.outfile:
-    cluster_this(opts.skymodel,opts.clusters,opts.outfile)
+  if opts.skymodel and opts.clusters and opts.outfile:
+    cluster_this(opts.skymodel,opts.clusters,opts.outfile,opts.iterations,opts.admm)
   else:
-   parser.print_help()
+    parser.print_help()
   exit()
