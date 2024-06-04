@@ -1766,6 +1766,62 @@ sagefit_visibilities_dual_pt_flt(double *u, double *v, double *w, double *x, int
    int Nbase, int tilesz,  baseline_t *barr,  clus_source_t *carr, complex double *coh, int M, int Mt, double freq0, double fdelta, double *pp, double uvmin, int Nt, int max_emiter, int max_iter, int max_lbfgs, int lbfgs_m, int gpu_threads, int linsolv,int solver_mode,  double nulow, double nuhigh, int randomize, double *mean_nu, double *res_0, double *res_1);
 
 
+/****************************** lbfgsb.c ****************************/
+#ifndef HAVE_CUDA
+/* struct for passing info between batches in minibatch mode */
+typedef struct persistent_lbfgsb_data_t_ {
+  int lbfgs_m; /* LBFGS memory size */
+  int m; /* parameter size */
+
+  double *W; /* m x 2*lbfgs_m */
+  double *Y,*S; /* m x 2*lbfgs_m curvature matrices */
+  double *M; /* 2*lbfgs_m x 2*lbfgs_m */
+
+  int Nt; /* no. of threads */
+
+} persistent_lbfgsb_data_t;
+
+/* user routines for setting up and clearing persistent data structure
+   for using LBFGS-B (both fullbatch and minibatch versions) */
+/* initialization of persistent data, (user needs to call this)
+   Setting up minibatch info:
+   pt: blank struct persistent data 
+   n_minibatch:  how many minibatches (data is divided into this many)
+   (Note: total LBFGS iterations: itmax*n_minibatch*n_epoch)
+
+   Following are same as used in the lbfgs_fit routine 
+   m: size of parameter vector
+   n: size of data
+   lbfgs_m: LBFGS memory size
+   Nt: no. of threads
+*/
+extern int 
+lbfgsb_persist_init(persistent_lbfgsb_data_t *pt, int n_minibatch, int m, int n, int lbfgs_m, int Nt);
+
+/* clearing persistent struct after running stochastic LBFGS */
+extern int 
+lbfgsb_persist_clear(persistent_lbfgsb_data_t *pt);
+
+/* cost function : return a scalar cost, input : p (mx1) parameters, m: no. of params, adata: additional data
+   grad function: return gradient (mx1): input : p (mx1) parameters, g (mx1) gradient vector, m: no. of params, adata: additional data
+*/
+/*
+   p: parameters m x 1 (used as initial value, output final value)
+   p_low: lower bound parameters m x 1, p[] > p_low[]
+   p_high: upper bound parameters m x 1, p[] < p_high[]
+   itmax: max iterations
+   lbfgs_m: memory size
+   adata: additional user supplied data
+   indata: NULL if full batch mode, otherwise pass a persistent_lbfgsb_data_t for minibatch operation
+   see lbfgsb_persist_init() and lbfgsb_persist_clear() on how to set/clear this struct
+*/
+extern int
+lbfgsb_fit(
+   double (*cost_func)(double *p, int m, void *adata),
+   void (*grad_func)(double *p, double *g, int m, void *adata),
+   double *p, double *p_low, double *p_high, int m, int itmax, int lbfgs_m, void *adata, persistent_lbfgsb_data_t *indata);
+#endif /* !HAVE_CUDA */
+
 #ifdef __cplusplus
      } /* extern "C" */
 #endif
