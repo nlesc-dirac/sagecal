@@ -90,6 +90,7 @@ else()
         robust_lbfgs
         robustlm
         rtr_solve_robust
+        lbfgsb
     )
     set(objects ${objects} ${extra_objects})
 
