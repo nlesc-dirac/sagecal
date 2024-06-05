@@ -318,6 +318,32 @@ get_cauchy_point(double *x, double *g, double *x_low, double *x_high, int m, int
 }
  
 /* 
+ * x_low,x_high: lower/upper bounds of parameters mx1
+ * xc: mx1 the generalized cauchy point
+ * du: n_free_varsx1 solution for unconstrained minimization
+ * free_vars_index: n_free_varsx1 indices in [0,m-1] of the free variables
+ * m: parameters
+ * n_free_vars: number of free variables
+ *
+ * return :
+ * alpha_star: scalar
+ *
+ * Equation (5.8), Page 8.
+ */
+static double
+find_alpha(double *x_low, double *x_high, double *xc, double *du, int *free_vars_index, int m, int n_free_vars) {
+
+  double alpha_star=1.0;
+#pragma GCC ivdep
+  for (int ci=0; ci<n_free_vars; ci++) {
+    int idx=free_vars_index[ci];
+    alpha_star=(du[ci]>0.0 ? MIN(alpha_star, (x_high[idx]-xc[idx])/du[ci]) 
+        : (du[ci]<0.0 ? MIN(alpha_star, (x_low[idx]-xc[idx])/du[ci]) : alpha_star));
+  }
+  return alpha_star;
+}
+
+/* 
  * x: paramters mx1
  * g: gradient mx1
  * x_low,x_high: lower/upper bounds of parameters mx1
@@ -419,6 +445,8 @@ subspace_min(double *x, double *g, double *x_low, double *x_high, double *xc, do
   }
   /* v <= M*(WtZ*r) */
   my_dgemv('N',2*lbfgs_m,2*lbfgs_m,1.0,M,2*lbfgs_m,WtZr,1,0.0,v,1);
+  free(WtZr);
+
   double *N;
   if ((N=(double*)calloc((size_t)2*lbfgs_m*2*lbfgs_m,sizeof(double)))==0) {
      fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
@@ -439,23 +467,51 @@ subspace_min(double *x, double *g, double *x_low, double *x_high, double *xc, do
   double w[1];
   double *WORK=0;
   int status=my_dgels('N',2*lbfgs_m,2*lbfgs_m,1,N,2*lbfgs_m,v,2*lbfgs_m,w,-1);
+  if (status) {
+     fprintf(stderr,"%s: %d: LAPACK error\n",__FILE__,__LINE__);
+     exit(1);
+  }
   int lwork=(int)w[0];
   if ((WORK=(double*)calloc((size_t)lwork,sizeof(double)))==0) {
      fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
      exit(1);
   }
   status=my_dgels('N',2*lbfgs_m,2*lbfgs_m,1,N,2*lbfgs_m,v,2*lbfgs_m,WORK,lwork);
+  if (status) {
+     fprintf(stderr,"%s: %d: singular matrix\n",__FILE__,__LINE__);
+     exit(1);
+  }
+  free(WORK);
+  free(N);
 
+  double *du;
+  if ((du=(double*)calloc((size_t)n_free_vars,sizeof(double)))==0) {
+     fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
+     exit(1);
+  }
+  /* du <= -invtheta^2 * WtZ^T v */
+  my_dgemv('T',2*lbfgs_m,n_free_vars,-invtheta*invtheta,WtZ,2*lbfgs_m,v,1,0.0,du,1);
+  free(WtZ);
+  /* du <= -invtheta*r -invtheta^2 * WtZ^T v */
+  my_daxpy(n_free_vars,r,-invtheta,du);
+  free(r);
+  free(v);
 
+  /* find alpha_star */
+  double alpha_star=find_alpha(x_low,x_high,xc,du,free_vars_index,m,n_free_vars);
 
+  /* compute subspace minimization */
+  /* d_star = du <= alpha_star * du */
+  my_dscal(n_free_vars,alpha_star,du);
+  /* xbar <= xc */
+  my_dcopy(m,xc,1,xbar,1);
+#pragma GCC ivdep
+  for (int ci=0; ci<n_free_vars; ci++) {
+    xbar[free_vars_index[ci]] += du[ci];
+  }
 
   free(free_vars_index);
-  free(WtZ);
-  free(r);
-  free(WtZr);
-  free(v);
-  free(N);
-  free(WORK);
+  free(du);
   return 0;
 }
  
@@ -498,7 +554,11 @@ lbfgsb_fit_fullbatch(
      fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
      exit(1);
   }
-
+  double *xbar;
+  if ((xbar=(double*)calloc((size_t)m,sizeof(double)))==0) {
+     fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
+     exit(1);
+  }
 
   /* copy parameters */
   my_dcopy(m,p,1,xk,1);
@@ -510,6 +570,8 @@ lbfgsb_fit_fullbatch(
   double gradnrm=my_dnrm2(m,gk);
   
   double optimality=get_optimality(xk,gk,p_low,p_high,m);
+
+  int line_search_flag;
   while (ck<itmax && isnormal(gradnrm) && optimality>CLM_STOP_THRESH) {
     optimality=get_optimality(xk,gk,p_low,p_high,m);
 
@@ -517,6 +579,7 @@ lbfgsb_fit_fullbatch(
     my_dcopy(m,gk,1,gold,1);
 
     get_cauchy_point(xk, gk, p_low, p_high, m, lbfgs_m, theta, pt.W, pt.M, xc, c);
+    subspace_min(xk, gk, p_low, p_high, xc, c, m, lbfgs_m, theta, pt.W, pt.M, xbar, &line_search_flag);
 
     ck++;
   }
@@ -528,6 +591,7 @@ lbfgsb_fit_fullbatch(
   free(gold);
   free(xc);
   free(c);
+  free(xbar);
   return 0;
 }
 
