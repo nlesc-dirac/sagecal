@@ -70,8 +70,10 @@ lbfgsb_persist_clear(persistent_lbfgsb_data_t *pt) {
  * x_low,x_high: lower/upper bounds of parameters mx1
  * m: parameters
  *
- * return 
- * optimality
+ * return :
+ * optimality : scalar
+ *
+ * get the inf-norm of the projected gradient pp. 17, (6.1)
  */
 static double
 get_optimality(double *x, double *g, double *x_low, double *x_high, int m) {
@@ -124,12 +126,15 @@ compare_coordinates(const void *a, const void *b) {
  * t: mx1 breakpoints : initialized to 0
  * d: mx1 search directions
  * F: mx1 indices that sort t from low to high
+ *
+ * compute breakpoints for Cauchy point pp 5-6, (4.1), (4.2), pp. 8, CP initialize \mathcal{F}
  */
 static int
 get_breakpoints(double *x, double *g, double *x_low, double *x_high, int m, double *t, double *d, int *F) {
 
-  /* t <= 0, already done */
-  /* d = -g */
+  /* Note t <= 0, must be already done */
+
+  /* d <= -g */
   my_dcopy(m,g,1,d,1);
   my_dscal(m,-1.0,d);
 
@@ -176,12 +181,14 @@ get_breakpoints(double *x, double *g, double *x_low, double *x_high, int m, doub
  * m: parameters
  * lbfgs_m : memory size
  * theta: scale factor >0
- * W: m x lbfgs_m
+ * W: m x 2*lbfgs_m
  * M: 2*lbfgs_m x 2*lbfgs_m
  *
  * return :
  * xc: mx1 the generalized cauchy point
- * c: 2mx1 initialization vector for subspace minimization
+ * c: 2*lbfgs_mx1 initialization vector for subspace minimization, will be initialized to 0
+ *
+ * Generalized Cauchy point pp. 8-9, algorithm CP
  */
 static int
 get_cauchy_point(double *x, double *g, double *x_low, double *x_high, int m, int lbfgs_m, double theta, double *W, double *M, double *xc, double *c) {
@@ -204,13 +211,253 @@ get_cauchy_point(double *x, double *g, double *x_low, double *x_high, int m, int
 
   get_breakpoints(x, g, x_low, x_high, m, tt, d, F);
 
+  /* xc <= x */
+  my_dcopy(m,x,1,xc,1);
+  /* c <= 0 */
+  memset(c,0,sizeof(double)*(size_t)2*lbfgs_m);
 
+  double *p;
+  if ((p=(double*)calloc((size_t)2*lbfgs_m,sizeof(double)))==0) {
+     fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
+     exit(1);
+  }
+  /* p <= W^T d */
+  my_dgemv('T',m,2*lbfgs_m,1.0,W,m,d,1,0.0,p,1);
+  /* f' = fp <= - d^T d */
+  double fp=-my_ddot(m,d,d);
+  /* Mp <= M x p */
+  double *Mp;
+  if ((Mp=(double*)calloc((size_t)2*lbfgs_m,sizeof(double)))==0) {
+     fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
+     exit(1);
+  }
+  my_dgemv('N',2*lbfgs_m,2*lbfgs_m,1.0,M,2*lbfgs_m,p,1,0.0,Mp,1);
+  /* pMp <= p^T (M p) */
+  double pMp=my_ddot(2*lbfgs_m,p,Mp);
+  /* f'' = fpp <= -theta f' - p^T M p */
+  double fpp=-theta*fp - pMp;
+  /* keep a copy of fpp */
+  double fpp0=-theta*fp;
+  double dt_min=(fpp !=0.0 ? -fp/fpp : -fp/CLM_EPSILON);
+  /* find lowest index i where F[i] is positive (minimum t) */
+  int i=0;
+  while (i<m && F[i]<0.0) {i++;}
+  /* now we have a valid index i where F[i]>=0.0 */
+  int b=F[i];
+  double t=tt[b];
+  double t_old=0.0;
+  double dt=t-t_old;
+
+  double *wb;
+  if ((wb=(double*)calloc((size_t)2*lbfgs_m,sizeof(double)))==0) {
+     fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
+     exit(1);
+  }
+
+  while (i<m && dt_min < dt) {
+    xc[b]=(d[b]>0.0? x_high[b]: (d[b]<0.0? x_low[b] : xc[b]));
+    double zb=xc[b]-x[b];
+
+    /* c <= c + dt*p */
+    my_daxpy(2*lbfgs_m,p,dt,c);
+    double gb=g[b];
+    /* wb(^T) <= b-th row of W, so wb : row as a column vector */
+    my_dcopy(2*lbfgs_m,&W[b],m,wb,1);
+    /* Mp <= M x c */
+    my_dgemv('N',2*lbfgs_m,2*lbfgs_m,1.0,M,2*lbfgs_m,c,1,0.0,Mp,1);
+    /* wb^T (M c) */
+    double wb_Mc=my_ddot(2*lbfgs_m,wb,Mp);
+    /* Mp <= M x p */
+    my_dgemv('N',2*lbfgs_m,2*lbfgs_m,1.0,M,2*lbfgs_m,p,1,0.0,Mp,1);
+    /* wb^T (M p) */
+    double wb_Mp=my_ddot(2*lbfgs_m,wb,Mp);
+    /* Mp <= M x wb */
+    my_dgemv('N',2*lbfgs_m,2*lbfgs_m,1.0,M,2*lbfgs_m,wb,1,0.0,Mp,1);
+    /* wb^T (M wb) */
+    double wb_Mb=my_ddot(2*lbfgs_m,wb,Mp);
+
+    /* fp <= fp + dt * fpp + gb*gb + theta*gb*zb - gb *wb^T* (M*c) */
+    fp += dt*fpp + gb*gb + theta*gb*zb - gb*wb_Mc;
+    /* fpp <= fpp - theta*gb*gb -2*gb*wb^T (M p) - gb*gb*wb^T (M wb) */
+    fpp += -theta*gb*gb-2.0*gb*wb_Mp-gb*gb*wb_Mb;
+    fpp =MAX(CLM_EPSILON*fpp0,fpp);
+    /* p<= p + gb *wb */
+    my_daxpy(2*lbfgs_m,wb,gb,p);
+
+    d[b]=0.0;
+
+    dt_min=(fpp !=0.0 ? -fp/fpp : -fp/CLM_EPSILON);
+    t_old=t;
+    i++;
+    if (i<m) {
+      b=F[i];
+      t=tt[b];
+      dt=t-t_old;
+    }
+  }
+
+  /* perform final update */
+  dt_min=MAX(dt_min,0.0);
+  t_old+=dt_min;
+
+#pragma GCC ivdep
+  for (int cj=i; cj<m; cj++) {
+    int idx=F[cj];
+    xc[idx]+=t_old*d[idx];
+  }
+  /* c <= c + dt_min*p */
+  my_daxpy(2*lbfgs_m,p,dt_min,c);
+
+  free(wb);
+  free(Mp);
+  free(p);
   free(tt);
   free(d);
   free(F);
   return 0;
 }
  
+/* 
+ * x: paramters mx1
+ * g: gradient mx1
+ * x_low,x_high: lower/upper bounds of parameters mx1
+ * xc: mx1 the generalized cauchy point
+ * c: 2*lbfgs_mx1 initialization vector for subspace minimization
+ * m: parameters
+ * lbfgs_m : memory size
+ * theta: scale factor >0
+ * W: m x 2*lbfgs_m
+ * M: 2*lbfgs_m x 2*lbfgs_m
+ *
+ * return :
+ * xbar: mx1 minimizer,
+ * line_search_flag: bool
+ *
+ * subspace minimization for the quadratic model over free variables direct primal method, pp 12
+ */
+static int
+subspace_min(double *x, double *g, double *x_low, double *x_high, double *xc, double *c, int m, int lbfgs_m, double theta, double *W, double *M, double *xbar, int *line_search_flag) {
+
+  *line_search_flag=1;
+
+  /* collect indices of free variables */
+  int *free_vars_index;
+  if ((free_vars_index=(int*)calloc((size_t)m,sizeof(int)))==0) {
+     fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
+     exit(1);
+  }
+  int n_free_vars=0;
+  for (int ci=0; ci<m; ci++) {
+    if ((x[ci] != x_low[ci]) && (x[ci] != x_high[ci])) {
+      free_vars_index[n_free_vars]=ci;
+      n_free_vars++;
+    }
+  }
+  /* if no free variables found */
+  if (n_free_vars==0) {
+    /* xbar <= xc */
+    my_dcopy(m,xc,1,xbar,1);
+    *line_search_flag=0;
+    free(free_vars_index);
+    return 0;
+  }
+
+  /* WtZ = restriction of W to the free variables, size 2*lbfgs_m x |free_variables| 
+   * each column of WtZ (2*lbfgs_m values) = row of i-th free variable in W (2*lbfgs_m values) */
+
+  double *WtZ;
+  if ((WtZ=(double*)calloc((size_t)2*lbfgs_m*n_free_vars,sizeof(double)))==0) {
+     fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
+     exit(1);
+  }
+  for (int ci=0; ci<n_free_vars; ci++) {
+    my_dcopy(2*lbfgs_m,&W[free_vars_index[ci]],m,&WtZ[ci*2*lbfgs_m],1);
+  }
+  double *rr;
+  if ((rr=(double*)calloc((size_t)m,sizeof(double)))==0) {
+     fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
+     exit(1);
+  }
+  /* Mc <= M x c */
+  double *Mc;
+  if ((Mc=(double*)calloc((size_t)2*lbfgs_m,sizeof(double)))==0) {
+     fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
+     exit(1);
+  }
+  my_dgemv('N',2*lbfgs_m,2*lbfgs_m,1.0,M,2*lbfgs_m,c,1,0.0,Mc,1);
+  /* rr <= -W*(Mc) */
+  my_dgemv('N',m,2*lbfgs_m,1.0,W,m,Mc,1,0.0,rr,1);
+  my_dscal(m,-1.0,rr);
+  /* compute the reduced gradient of m(k), the quadratic model, restricted to free variables */
+  /* rr <= g + theta*(xc-x) - W*(M*c) */
+  my_daxpy(m,g,1.0,rr);
+  my_daxpy(m,xc,theta,rr);
+  my_daxpy(m,x,-theta,rr);
+  free(Mc);
+
+  double *r;
+  if ((r=(double*)calloc((size_t)n_free_vars,sizeof(double)))==0) {
+     fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
+     exit(1);
+  }
+  for (int ci=0; ci<n_free_vars; ci++) {
+    r[ci]=rr[free_vars_index[ci]];
+  }
+  free(rr);
+
+  double *WtZr;
+  if ((WtZr=(double*)calloc((size_t)2*lbfgs_m,sizeof(double)))==0) {
+     fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
+     exit(1);
+  }
+  /* WtZr <= WtZ* r */
+  my_dgemv('N',2*lbfgs_m,n_free_vars,1.0,WtZ,2*lbfgs_m,r,1,0.0,WtZr,1);
+  double *v;
+  if ((v=(double*)calloc((size_t)2*lbfgs_m,sizeof(double)))==0) {
+     fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
+     exit(1);
+  }
+  /* v <= M*(WtZ*r) */
+  my_dgemv('N',2*lbfgs_m,2*lbfgs_m,1.0,M,2*lbfgs_m,WtZr,1,0.0,v,1);
+  double *N;
+  if ((N=(double*)calloc((size_t)2*lbfgs_m*2*lbfgs_m,sizeof(double)))==0) {
+     fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
+     exit(1);
+  }
+  double invtheta=1.0/theta;
+  /* N <= invtheta*WtZ*WtZ^T */
+  my_dgemm('N','T',2*lbfgs_m,2*lbfgs_m,n_free_vars,invtheta,WtZ,2*lbfgs_m,WtZ,2*lbfgs_m,0.0,N,2*lbfgs_m);
+  /* N <= eye(2*lbfgs_m) - M N */
+  my_dgemm('N','N',2*lbfgs_m,2*lbfgs_m,2*lbfgs_m,-1.0,M,2*lbfgs_m,N,2*lbfgs_m,0.0,N,2*lbfgs_m);
+  /* update diagonal */
+  for (int ci=0; ci<2*lbfgs_m; ci++) {
+    N[ci+ci*2*lbfgs_m]+=1.0;
+  }
+  
+  /* solve N vv = v for v, replace v <= with solution vv */
+  /* workspace query */
+  double w[1];
+  double *WORK=0;
+  int status=my_dgels('N',2*lbfgs_m,2*lbfgs_m,1,N,2*lbfgs_m,v,2*lbfgs_m,w,-1);
+  int lwork=(int)w[0];
+  if ((WORK=(double*)calloc((size_t)lwork,sizeof(double)))==0) {
+     fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
+     exit(1);
+  }
+  status=my_dgels('N',2*lbfgs_m,2*lbfgs_m,1,N,2*lbfgs_m,v,2*lbfgs_m,WORK,lwork);
+
+
+
+
+  free(free_vars_index);
+  free(WtZ);
+  free(r);
+  free(WtZr);
+  free(v);
+  free(N);
+  free(WORK);
+  return 0;
+}
  
 static int
 lbfgsb_fit_fullbatch(
@@ -242,6 +489,16 @@ lbfgsb_fit_fullbatch(
      exit(1);
   }
 
+  double *xc,*c;
+  if ((xc=(double*)calloc((size_t)m,sizeof(double)))==0) {
+     fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
+     exit(1);
+  }
+  if ((c=(double*)calloc((size_t)2*lbfgs_m,sizeof(double)))==0) {
+     fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
+     exit(1);
+  }
+
 
   /* copy parameters */
   my_dcopy(m,p,1,xk,1);
@@ -258,6 +515,9 @@ lbfgsb_fit_fullbatch(
 
     my_dcopy(m,p,1,xold,1);
     my_dcopy(m,gk,1,gold,1);
+
+    get_cauchy_point(xk, gk, p_low, p_high, m, lbfgs_m, theta, pt.W, pt.M, xc, c);
+
     ck++;
   }
 
@@ -266,6 +526,8 @@ lbfgsb_fit_fullbatch(
   free(gk);
   free(xold);
   free(gold);
+  free(xc);
+  free(c);
   return 0;
 }
 
