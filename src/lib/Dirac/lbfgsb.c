@@ -93,9 +93,9 @@ get_optimality(double *x, double *g, double *x_low, double *x_high, int m) {
   /* pg = pg - x */
   my_daxpy(m,x,-1.0,pg);
 
-  /* return max(abs(pg)) */
+  /* return max(abs(pg)), index 1...m */
   int i_max=my_idamax(m,pg,1);
-  double optimality=pg[i_max];
+  double optimality=fabs(pg[i_max-1]);
   free(pg);
 
   return optimality;
@@ -159,13 +159,11 @@ get_breakpoints(double *x, double *g, double *x_low, double *x_high, int m, doub
   for (int ci=0; ci<m; ci++) {
     t_idx[ci].val=t[ci];
     t_idx[ci].idx=ci;
-    printf("before %d %lf\n",t_idx[ci].idx,t_idx[ci].val);
   }
   qsort(t_idx,m,sizeof(value_index_t),compare_coordinates);
 
 #pragma GCC ivdep
   for (int ci=0; ci<m; ci++) {
-    printf("after %d %lf\n",t_idx[ci].idx,t_idx[ci].val);
     F[ci]=t_idx[ci].idx;
   }
 
@@ -254,7 +252,7 @@ get_cauchy_point(double *x, double *g, double *x_low, double *x_high, int m, int
      exit(1);
   }
 
-  while (i<m && dt_min < dt) {
+  while ((i<m) && (dt_min > dt)) {
     xc[b]=(d[b]>0.0? x_high[b]: (d[b]<0.0? x_low[b] : xc[b]));
     double zb=xc[b]-x[b];
 
@@ -557,7 +555,7 @@ alpha_zoom(
   }
 
   double dphi0=my_ddot(m,g0,p);
-  double alpha,alpha_i;
+  double alpha=0.0,alpha_i;
   while (1) {
     alpha_i=0.5*(alpha_lo+alpha_hi);
     alpha=alpha_i;
@@ -624,7 +622,7 @@ strong_wolfe(
   const double c1=1e-4;
   const double c2=0.9;
   const double alpha_max=2.5;
-  double alpha_im1=0.0;
+  double alpha_im1=CLM_EPSILON;
   double alpha_i=1.0;
   double f_im1=f0;
   double dphi0=my_ddot(m,g0,p);
@@ -647,7 +645,7 @@ strong_wolfe(
     my_dcopy(m,x0,1,x,1);
     my_daxpy(m,p,alpha_i,x);
     double f_i=cost_func(x,m,adata);
-    if ((f_i > f0 + c1*dphi0) || ((i>0) && (f_i>f_im1))) {
+    if ((f_i > f0 + c1*dphi0) || ((i>1) && (f_i>f_im1))) {
       alpha=alpha_zoom(cost_func,grad_func,adata,f0,x0,g0,p,m,alpha_im1,alpha_i);
       break;
     }
@@ -676,6 +674,68 @@ strong_wolfe(
   return alpha;
 }
 
+/* 
+ * find B = pinv(A) using the SVD
+ * A, B: NxN matrices
+ */
+static int
+find_pseudo_inverse(double *A, double *B, int N) {
+  double *U,*VT,*S;
+  double w[1],*WORK;
+  int lwork=1;
+
+  if ((U=(double*)calloc((size_t)N*N,sizeof(double)))==0) {
+    printf("%s: %d: no free memory\n",__FILE__,__LINE__);
+    exit(1);
+  }
+  if ((VT=(double*)calloc((size_t)N*N,sizeof(double)))==0) {
+    printf("%s: %d: no free memory\n",__FILE__,__LINE__);
+    exit(1);
+  }
+  if ((S=(double*)calloc((size_t)N,sizeof(double)))==0) {
+    printf("%s: %d: no free memory\n",__FILE__,__LINE__);
+    exit(1);
+  }
+
+  int status=my_dgesvd('A','A',N,N,A,N,S,U,N,VT,N,w,-1);
+  if (!status) {
+    lwork=(int)w[0];
+  } else {
+    printf("%s: %d: LAPACK error %d\n",__FILE__,__LINE__,status);
+    exit(1);
+  }
+  if ((WORK=(double*)calloc((size_t)lwork,sizeof(double)))==0) {
+    printf("%s: %d: no free memory\n",__FILE__,__LINE__);
+    exit(1);
+  }
+
+  status=my_dgesvd('A','A',N,N,A,N,S,U,N,VT,N,WORK,lwork);
+  if (status) {
+    printf("%s: %d: LAPACK error %d\n",__FILE__,__LINE__,status);
+    exit(1);
+  }
+
+  /* find 1/singular values, and multiply columns of U with new singular values */
+  for (int ci=0; ci<N; ci++) {
+   if (S[ci]>CLM_EPSILON) {
+    S[ci]=1.0/S[ci];
+   } else {
+    S[ci]=0.0;
+   }
+   my_dscal(N,S[ci],&U[ci*N]);
+  }
+
+  /* find product U 1/S V^T */
+  my_dgemm('N','N',N,N,N,1.0,U,N,VT,N,0.0,B,N);
+
+
+  free(U);
+  free(VT);
+  free(S);
+  free(WORK);
+
+  return 0;
+}
  
 static int
 lbfgsb_fit_fullbatch(
@@ -687,7 +747,7 @@ lbfgsb_fit_fullbatch(
   persistent_lbfgsb_data_t pt;
   lbfgsb_persist_init(&pt,1,m,1,lbfgs_m,8);
   double theta=1.0;
-  int ck=0;
+  int n_iter=0;
 
   double *xk,*gk,*xold,*gold;
   if ((gk=(double*)calloc((size_t)m,sizeof(double)))==0) {
@@ -736,6 +796,19 @@ lbfgsb_fit_fullbatch(
      fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
      exit(1);
   }
+  double *A,*L,*MM;
+  if ((A=(double*)calloc((size_t)lbfgs_m*lbfgs_m,sizeof(double)))==0) {
+     fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
+     exit(1);
+  }
+  if ((MM=(double*)calloc((size_t)2*lbfgs_m*2*lbfgs_m,sizeof(double)))==0) {
+     fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
+     exit(1);
+  }
+  if ((L=(double*)calloc((size_t)lbfgs_m*lbfgs_m,sizeof(double)))==0) {
+     fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
+     exit(1);
+  }
 
   /* copy parameters */
   my_dcopy(m,p,1,xk,1);
@@ -748,9 +821,10 @@ lbfgsb_fit_fullbatch(
   
   double optimality=get_optimality(xk,gk,p_low,p_high,m);
 
+
   int line_search_flag;
-  while (ck<itmax && isnormal(gradnrm) && optimality>CLM_STOP_THRESH) {
-    optimality=get_optimality(xk,gk,p_low,p_high,m);
+  while (n_iter<itmax && isnormal(gradnrm) && optimality>CLM_STOP_THRESH) {
+    printf("iter %d optim %lf |grad| %lf cost %lf\n",n_iter,optimality,gradnrm,f);
 
     my_dcopy(m,xk,1,xold,1);
     my_dcopy(m,gk,1,gold,1);
@@ -767,9 +841,11 @@ lbfgsb_fit_fullbatch(
     }
     /* update solution x <= x + alpha ( xbar - x )*/
     my_daxpy(m,q,alpha,xk);
+    printf("alpha=%lf\n",alpha);
 
     f=cost_func(xk,m,adata);
     grad_func(xk,gk,m,adata);
+    gradnrm=my_dnrm2(m,gk);
     /* curvature pair */
     /* s = x-xold */
     my_dcopy(m,xk,1,s,1);
@@ -778,17 +854,17 @@ lbfgsb_fit_fullbatch(
     my_dcopy(m,gk,1,y,1);
     my_daxpy(m,gold,-1.0,y);
 
-    double curv=my_ddot(m,s,y);
-    if (curv < CLM_STOP_THRESH) {
-      fprintf(stderr,"%s: %d: negative curvature detected, skipping\n",__FILE__,__LINE__);
-      ck++;
+    double curv=fabs(my_ddot(m,s,y));
+    if (curv < CLM_EPSILON) {
+      printf("negative curvature %lf detected, skipping\n",curv);
+      n_iter++;
       continue;
     }
 
-    if (ck<lbfgs_m) {
+    if (n_iter<lbfgs_m) {
       /* add pair to history */
-      my_dcopy(m,y,1,&pt.Y[ck*m],1);
-      my_dcopy(m,s,1,&pt.S[ck*m],1);
+      my_dcopy(m,y,1,&pt.Y[n_iter*m],1);
+      my_dcopy(m,s,1,&pt.S[n_iter*m],1);
     } else {
       /* history already full, remove oldest curvature pair, 
        * just move colums 1,...lbfs_m-1 to columns 0...lbfgs_m-2 */
@@ -798,10 +874,53 @@ lbfgsb_fit_fullbatch(
       my_dcopy(m,s,1,&pt.S[(lbfgs_m-1)*m],1);
     }
 
+    theta=my_ddot(m,y,y)/my_ddot(m,y,s);
+    /* W[:,0:lbfgs_m]=Y */
+    my_dcopy(m*lbfgs_m,pt.Y,1,pt.W,1);
+    /* W[:,lbfgs_m:2*lbfgs_m]=theta*S */
+    my_dcopy(m*lbfgs_m,pt.S,1,&pt.W[m*lbfgs_m],1);
+    my_dscal(m*lbfgs_m,theta,&pt.W[m*lbfgs_m]);
+    /* A= S^T Y */
+    my_dgemm('T','N',lbfgs_m,lbfgs_m,m,1.0,pt.S,m,pt.Y,m,0.0,A,lbfgs_m);
 
+    /* MM <= 0 */
+    memset(MM,0,sizeof(double)*(size_t)2*lbfgs_m*2*lbfgs_m);
+    /* MM = [ D, L^T; L, theta*S^T*S ] block matrix, in pp. 4 (3.4) */
+    /* L=lower triangle of A (excluding the diagonal), L=tril(A,-1) */
+    memset(L,0,sizeof(double)*(size_t)lbfgs_m*lbfgs_m);
+    for (int ci=0; ci<lbfgs_m-1; ci++) {
+      my_dcopy(lbfgs_m-ci-1,&A[ci+1+ci*lbfgs_m],1,&L[ci+1+ci*lbfgs_m],1);
+    }
+    /* D diagonal of A, D=-1.0*diag(diag(A)) */
+    /* MM[0:lbfgs_m,0:lbfgs_m]=D */
+    for (int ci=0; ci<lbfgs_m; ci++) {
+      MM[ci*2*lbfgs_m+ci]=-A[ci*lbfgs_m+ci];
+    }
+    /* MM[0:lbfgs_m,lbfgs_m:2*lbfgs_m]=L.transpose() */
+    for (int ci=0; ci<lbfgs_m; ci++) {
+      my_dcopy(lbfgs_m,&L[ci],lbfgs_m,&MM[2*lbfgs_m*lbfgs_m+ci*2*lbfgs_m],1);
+    }
 
-    ck++;
+    /* MM[lbfgs_m:2*lbfgs_m,0:lbfgs_m]=L */
+    for (int ci=0; ci<lbfgs_m; ci++) {
+      my_dcopy(lbfgs_m,&L[ci*lbfgs_m],1,&MM[ci*2*lbfgs_m+lbfgs_m],1);
+    }
+           
+    /* MM[lbfgs_m:2*lbfgs_m,lbfgs_m:2*lbfgs_m]=theta*S^T * S, use A <= theta S^T S */
+    my_dgemm('T','N',lbfgs_m,lbfgs_m,m,theta,pt.S,m,pt.S,m,0.0,A,lbfgs_m);
+    for (int ci=0; ci<lbfgs_m; ci++) {
+      my_dcopy(lbfgs_m,&A[ci*lbfgs_m],1,&MM[2*lbfgs_m*lbfgs_m+ci*2*lbfgs_m+lbfgs_m],1);
+    }
+
+    /* M <= pinv(MM) */
+    find_pseudo_inverse(MM,pt.M,2*lbfgs_m);
+
+    optimality=get_optimality(xk,gk,p_low,p_high,m);
+    n_iter++;
   }
+
+  /* copy back solution to p */
+  my_dcopy(m,xk,1,p,1);
 
   lbfgsb_persist_clear(&pt);
   free(xk);
@@ -814,6 +933,9 @@ lbfgsb_fit_fullbatch(
   free(q);
   free(s);
   free(y);
+  free(A);
+  free(L);
+  free(MM);
   return 0;
 }
 
