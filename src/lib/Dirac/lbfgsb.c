@@ -625,7 +625,7 @@ strong_wolfe(
   const double c1=1e-4;
   const double c2=0.9;
   const double alpha_max=2.5;
-  double alpha_im1=CLM_EPSILON;
+  double alpha_im1=0.0;
   double alpha_i=1.0;
   double f_im1=f0;
   double dphi0=my_ddot(m,g0,p);
@@ -827,7 +827,9 @@ lbfgsb_fit_fullbatch(
 
   int line_search_flag;
   while (n_iter<itmax && isnormal(gradnrm) && optimality>CLM_STOP_THRESH) {
+#ifdef DEBUG
     printf("iter %d optim %lf |grad| %lf cost %lf\n",n_iter,optimality,gradnrm,f);
+#endif
 
     my_dcopy(m,xk,1,xold,1);
     my_dcopy(m,gk,1,gold,1);
@@ -842,9 +844,12 @@ lbfgsb_fit_fullbatch(
     if (line_search_flag) {
       alpha = strong_wolfe(cost_func,grad_func,adata,f,xk,gk,q,m);
     }
+    /* check if the step size is too small, or Nan, then stop */
+    if (!isnormal(alpha) || fabs(alpha)<=(double)m*CLM_EPSILON) {
+      break;
+    }
     /* update solution x <= x + alpha ( xbar - x )*/
     my_daxpy(m,q,alpha,xk);
-    printf("alpha=%lf\n",alpha);
 
     f=cost_func(xk,m,adata);
     grad_func(xk,gk,m,adata);
@@ -858,8 +863,10 @@ lbfgsb_fit_fullbatch(
     my_daxpy(m,gold,-1.0,y);
 
     double curv=fabs(my_ddot(m,s,y));
-    if (curv < CLM_EPSILON) {
-      printf("negative curvature %lf detected, skipping\n",curv);
+    if (curv < (double)m*CLM_EPSILON) {
+#ifdef DEBUG
+      printf("negative curvature %le detected, skipping\n",curv);
+#endif
       n_iter++;
       continue;
     }
