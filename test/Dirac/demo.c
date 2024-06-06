@@ -35,7 +35,7 @@ rosenbrok(double *p, int m, void *adata) {
 /* user specified gradient function */
 /* gradient
   g_{2i}: -alpha 4 x_{2i}*(x_{2i+1}-x_{2i}^2)-2(1-x_{2i})
-  g_{2i+1}: alpha 2 (x_{2i+1}-x_{2i})
+  g_{2i+1}: alpha 2 (x_{2i+1}-x_{2i}^2)
 
   grad function: return gradient (mx1): input : p (mx1) parameters, g (mx1) gradient, m: no. of params, adata: additional data
 */
