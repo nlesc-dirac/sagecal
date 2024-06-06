@@ -44,7 +44,7 @@ lbfgsb_persist_init(persistent_lbfgsb_data_t *pt, int n_minibatch,
      exit(1);
   }
   /* M: 2*lbfgs_m x 2*lbfgs_m */
-  if ((pt->S=(double*)calloc((size_t)2*lbfgs_m*2*lbfgs_m,sizeof(double)))==0) {
+  if ((pt->M=(double*)calloc((size_t)2*lbfgs_m*2*lbfgs_m,sizeof(double)))==0) {
      fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
      exit(1);
   }
@@ -515,6 +515,168 @@ subspace_min(double *x, double *g, double *x_low, double *x_high, double *xc, do
   return 0;
 }
  
+/* 
+ * cost_func: cost function R^m -> 1
+ * grad_func: gradient function R^m -> R^m
+ * adata : additional data needed by cost/grad functions
+ * f0: initial cost (scalar)
+ * x0: paramters mx1
+ * g0: gradient mx1
+ * p: mx1 initial search direction
+ * m: parameters
+ * alpha_lo,alpha_hi : lower/upper limit for alpha
+ *
+ * return :
+ * alpha: zoomed in step size
+ *
+ * Alg 3.6, pp. 61, Numerical optimization Nocedal & Wright
+ */
+static double
+alpha_zoom(
+   double (*cost_func)(double *p, int m, void *adata),
+   void (*grad_func)(double *p, double *g, int m, void *adata),
+   void *adata,
+   double f0, double *x0, double *g0, double *p, int m, double alpha_lo, double alpha_hi) {
+  const double c1=1e-4;
+  const double c2=0.9;
+  int i=0;
+  int max_iters=20;
+
+  double *x,*x_lo,*g_i;
+  if ((x=(double*)calloc((size_t)m,sizeof(double)))==0) {
+     fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
+     exit(1);
+  }
+  if ((x_lo=(double*)calloc((size_t)m,sizeof(double)))==0) {
+     fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
+     exit(1);
+  }
+  if ((g_i=(double*)calloc((size_t)m,sizeof(double)))==0) {
+     fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
+     exit(1);
+  }
+
+  double dphi0=my_ddot(m,g0,p);
+  double alpha,alpha_i;
+  while (1) {
+    alpha_i=0.5*(alpha_lo+alpha_hi);
+    alpha=alpha_i;
+    /* x <= x0 + alpha_i *p */
+    my_dcopy(m,x0,1,x,1);
+    my_daxpy(m,p,alpha_i,x);
+    double f_i=cost_func(x,m,adata);
+    /* x_lo <= x0 + alpha_lo *p */
+    my_dcopy(m,x0,1,x_lo,1);
+    my_daxpy(m,p,alpha_lo,x_lo);
+    double f_lo=cost_func(x_lo,m,adata);
+    if ((f_i > f0 + c1*alpha_i*dphi0) || (f_i>=f_lo)){
+      alpha_hi=alpha_i;
+    } else {
+      grad_func(x,g_i,m,adata);
+      double dphi=my_ddot(m,g_i,p);
+      if ((fabs(dphi) <= -c2*dphi0)) {
+        alpha=alpha_i;
+        break;
+      }
+      if (dphi*(alpha_hi-alpha_lo)>=0.0) {
+        alpha_hi=alpha_lo;
+      }
+      alpha_lo=alpha_i;
+    }
+    i++;
+    if (i>max_iters) {
+      alpha=alpha_i;
+      break;
+    }
+  }
+
+  free(x);
+  free(x_lo);
+  free(g_i);
+
+  return alpha;
+}
+
+/* 
+ * cost_func: cost function R^m -> 1
+ * grad_func: gradient function R^m -> R^m
+ * adata : additional data needed by cost/grad functions
+ * f0: initial cost (scalar)
+ * x0: paramters mx1
+ * g0: gradient mx1
+ * p: mx1 initial search direction
+ * m: parameters
+ *
+ * return :
+ * alpha: step size
+ *
+ * Compute a line search to satisfy the strong Wolfe conditions.
+ * Algorithm 3.5. Page 60. "Numerical Optimization". Nocedal & Wright.
+ */
+static double
+strong_wolfe(
+   double (*cost_func)(double *p, int m, void *adata),
+   void (*grad_func)(double *p, double *g, int m, void *adata),
+   void *adata,
+   double f0, double *x0, double *g0, double *p, int m) {
+
+  /* constants */
+  const double c1=1e-4;
+  const double c2=0.9;
+  const double alpha_max=2.5;
+  double alpha_im1=0.0;
+  double alpha_i=1.0;
+  double f_im1=f0;
+  double dphi0=my_ddot(m,g0,p);
+  int i=0;
+  int max_iters=20;
+  double alpha;
+
+  double *x,*g_i;
+  if ((x=(double*)calloc((size_t)m,sizeof(double)))==0) {
+     fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
+     exit(1);
+  }
+  if ((g_i=(double*)calloc((size_t)m,sizeof(double)))==0) {
+     fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
+     exit(1);
+  }
+
+  while (1) {
+    /* x <= x0 + alpha_i *p */
+    my_dcopy(m,x0,1,x,1);
+    my_daxpy(m,p,alpha_i,x);
+    double f_i=cost_func(x,m,adata);
+    if ((f_i > f0 + c1*dphi0) || ((i>0) && (f_i>f_im1))) {
+      alpha=alpha_zoom(cost_func,grad_func,adata,f0,x0,g0,p,m,alpha_im1,alpha_i);
+      break;
+    }
+    grad_func(x,g_i,m,adata);
+    double dphi=my_ddot(m,g_i,p);
+    if (fabs(dphi)<= -c2*dphi0) {
+      alpha=alpha_i;
+      break;
+    }
+    if (dphi>=0.0) {
+      alpha=alpha_zoom(cost_func,grad_func,adata,f0,x0,g0,p,m,alpha_i,alpha_im1);
+      break;
+    }
+    alpha_im1=alpha_i;
+    f_im1=f_i;
+    alpha_i +=0.8*(alpha_max-alpha_i);
+    if (i>max_iters) {
+      alpha=alpha_i;
+      break;
+    }
+    i++;
+  }
+
+  free(x);
+  free(g_i);
+  return alpha;
+}
+
+ 
 static int
 lbfgsb_fit_fullbatch(
    double (*cost_func)(double *p, int m, void *adata),
@@ -559,6 +721,21 @@ lbfgsb_fit_fullbatch(
      fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
      exit(1);
   }
+  double *q;
+  if ((q=(double*)calloc((size_t)m,sizeof(double)))==0) {
+     fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
+     exit(1);
+  }
+
+  double *s,*y;
+  if ((s=(double*)calloc((size_t)m,sizeof(double)))==0) {
+     fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
+     exit(1);
+  }
+  if ((y=(double*)calloc((size_t)m,sizeof(double)))==0) {
+     fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
+     exit(1);
+  }
 
   /* copy parameters */
   my_dcopy(m,p,1,xk,1);
@@ -575,11 +752,53 @@ lbfgsb_fit_fullbatch(
   while (ck<itmax && isnormal(gradnrm) && optimality>CLM_STOP_THRESH) {
     optimality=get_optimality(xk,gk,p_low,p_high,m);
 
-    my_dcopy(m,p,1,xold,1);
+    my_dcopy(m,xk,1,xold,1);
     my_dcopy(m,gk,1,gold,1);
 
     get_cauchy_point(xk, gk, p_low, p_high, m, lbfgs_m, theta, pt.W, pt.M, xc, c);
     subspace_min(xk, gk, p_low, p_high, xc, c, m, lbfgs_m, theta, pt.W, pt.M, xbar, &line_search_flag);
+
+    double alpha=1.0;
+    /* find search direction q <= xbar - x*/
+    my_dcopy(m,xbar,1,q,1);
+    my_daxpy(m,xk,-1.0,q);
+    if (line_search_flag) {
+      alpha = strong_wolfe(cost_func,grad_func,adata,f,xk,gk,q,m);
+    }
+    /* update solution x <= x + alpha ( xbar - x )*/
+    my_daxpy(m,q,alpha,xk);
+
+    f=cost_func(xk,m,adata);
+    grad_func(xk,gk,m,adata);
+    /* curvature pair */
+    /* s = x-xold */
+    my_dcopy(m,xk,1,s,1);
+    my_daxpy(m,xold,-1.0,s);
+    /* y = g-gold */
+    my_dcopy(m,gk,1,y,1);
+    my_daxpy(m,gold,-1.0,y);
+
+    double curv=my_ddot(m,s,y);
+    if (curv < CLM_STOP_THRESH) {
+      fprintf(stderr,"%s: %d: negative curvature detected, skipping\n",__FILE__,__LINE__);
+      ck++;
+      continue;
+    }
+
+    if (ck<lbfgs_m) {
+      /* add pair to history */
+      my_dcopy(m,y,1,&pt.Y[ck*m],1);
+      my_dcopy(m,s,1,&pt.S[ck*m],1);
+    } else {
+      /* history already full, remove oldest curvature pair, 
+       * just move colums 1,...lbfs_m-1 to columns 0...lbfgs_m-2 */
+      memmove(pt.Y,&pt.Y[m],m*(lbfgs_m-1)*sizeof(double));
+      memmove(pt.S,&pt.S[m],m*(lbfgs_m-1)*sizeof(double));
+      my_dcopy(m,y,1,&pt.Y[(lbfgs_m-1)*m],1);
+      my_dcopy(m,s,1,&pt.S[(lbfgs_m-1)*m],1);
+    }
+
+
 
     ck++;
   }
@@ -592,6 +811,9 @@ lbfgsb_fit_fullbatch(
   free(xc);
   free(c);
   free(xbar);
+  free(q);
+  free(s);
+  free(y);
   return 0;
 }
 
