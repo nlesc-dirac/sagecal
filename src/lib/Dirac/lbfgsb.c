@@ -142,6 +142,9 @@ get_breakpoints(double *x, double *g, double *x_low, double *x_high, int m, doub
   for (int ci=0; ci<m; ci++) {
     t[ci]=(g[ci] < 0.0 ? (x[ci]-x_high[ci])/g[ci] :
         (g[ci] > 0.0 ? (x[ci]-x_low[ci])/g[ci] : CLM_DBL_MAX));
+  }
+#pragma GCC ivdep
+  for (int ci=0; ci<m; ci++) {
     if (t[ci]<CLM_EPSILON) {
       d[ci]=0.0;
     }
@@ -717,7 +720,7 @@ find_pseudo_inverse(double *A, double *B, int N) {
 
   /* find 1/singular values, and multiply columns of U with new singular values */
   for (int ci=0; ci<N; ci++) {
-   if (S[ci]>CLM_EPSILON) {
+   if (S[ci]>CLM_EPSILON*(double)N) {
     S[ci]=1.0/S[ci];
    } else {
     S[ci]=0.0;
