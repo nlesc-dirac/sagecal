@@ -448,16 +448,22 @@ subspace_min(double *x, double *g, double *x_low, double *x_high, double *xc, do
   my_dgemv('N',2*lbfgs_m,2*lbfgs_m,1.0,M,2*lbfgs_m,WtZr,1,0.0,v,1);
   free(WtZr);
 
-  double *N;
+  double *N,*N_0;
   if ((N=(double*)calloc((size_t)2*lbfgs_m*2*lbfgs_m,sizeof(double)))==0) {
      fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
      exit(1);
   }
+  if ((N_0=(double*)calloc((size_t)2*lbfgs_m*2*lbfgs_m,sizeof(double)))==0) {
+     fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
+     exit(1);
+  }
+
   double invtheta=1.0/theta;
-  /* N <= invtheta*WtZ*WtZ^T */
-  my_dgemm('N','T',2*lbfgs_m,2*lbfgs_m,n_free_vars,invtheta,WtZ,2*lbfgs_m,WtZ,2*lbfgs_m,0.0,N,2*lbfgs_m);
-  /* N <= eye(2*lbfgs_m) - M N */
-  my_dgemm('N','N',2*lbfgs_m,2*lbfgs_m,2*lbfgs_m,-1.0,M,2*lbfgs_m,N,2*lbfgs_m,0.0,N,2*lbfgs_m);
+  /* N_0 <= invtheta*WtZ*WtZ^T */
+  my_dgemm('N','T',2*lbfgs_m,2*lbfgs_m,n_free_vars,invtheta,WtZ,2*lbfgs_m,WtZ,2*lbfgs_m,0.0,N_0,2*lbfgs_m);
+  /* N <= eye(2*lbfgs_m) - M N_0 */
+  my_dgemm('N','N',2*lbfgs_m,2*lbfgs_m,2*lbfgs_m,-1.0,M,2*lbfgs_m,N_0,2*lbfgs_m,0.0,N,2*lbfgs_m);
+  free(N_0);
   /* update diagonal */
   for (int ci=0; ci<2*lbfgs_m; ci++) {
     N[ci+ci*2*lbfgs_m]+=1.0;
