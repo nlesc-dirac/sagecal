@@ -27,6 +27,7 @@ lbfgsb_persist_init(persistent_lbfgsb_data_t *pt, int n_minibatch,
   pt->lbfgs_m=lbfgs_m;
   pt->m=m;
   pt->Nt=Nt;
+  pt->niter=0;
 
   /* W: m x lbfgs_m*2 */
   if ((pt->W=(double*)calloc((size_t)m*2*lbfgs_m,sizeof(double)))==0) {
@@ -49,6 +50,16 @@ lbfgsb_persist_init(persistent_lbfgsb_data_t *pt, int n_minibatch,
      exit(1);
   }
 
+  /* running_avg: mx1 */
+  if ((pt->running_avg=(double*)calloc((size_t)m,sizeof(double)))==0) {
+     fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
+     exit(1);
+  }
+  /* running_avg_sq: mx1 */
+  if ((pt->running_avg_sq=(double*)calloc((size_t)m,sizeof(double)))==0) {
+     fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
+     exit(1);
+  }
 
   return 0;
 }
@@ -61,6 +72,8 @@ lbfgsb_persist_clear(persistent_lbfgsb_data_t *pt) {
   free(pt->Y);
   free(pt->S);
   free(pt->M);
+  free(pt->running_avg);
+  free(pt->running_avg_sq);
   return 0;
 }
 
@@ -961,6 +974,247 @@ lbfgsb_fit_minibatch(
    double (*cost_func)(double *p, int m, void *adata),
    void (*grad_func)(double *p, double *g, int m, void *adata),
    double *p, double *p_low, double *p_high, int m, int itmax, int lbfgs_m, void *adata, persistent_lbfgsb_data_t *indata) {
+
+  /* sanity check persistent data */
+  if (indata->m!=m ||  indata->lbfgs_m!=lbfgs_m) {
+     fprintf(stderr,"%s: %d: persistent data does not match local settings\n",__FILE__,__LINE__);
+     exit(1);
+  }
+
+  double theta=1.0;
+  int n_iter=0;
+  double *xk,*gk,*xold,*gold;
+  if ((gk=(double*)calloc((size_t)m,sizeof(double)))==0) {
+     fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
+     exit(1);
+  }
+  if ((xk=(double*)calloc((size_t)m,sizeof(double)))==0) {
+     fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
+     exit(1);
+  }
+  if ((gold=(double*)calloc((size_t)m,sizeof(double)))==0) {
+     fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
+     exit(1);
+  }
+  if ((xold=(double*)calloc((size_t)m,sizeof(double)))==0) {
+     fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
+     exit(1);
+  }
+  double *xc,*c;
+  if ((xc=(double*)calloc((size_t)m,sizeof(double)))==0) {
+     fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
+     exit(1);
+  }
+  if ((c=(double*)calloc((size_t)2*lbfgs_m,sizeof(double)))==0) {
+     fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
+     exit(1);
+  }
+  double *xbar;
+  if ((xbar=(double*)calloc((size_t)m,sizeof(double)))==0) {
+     fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
+     exit(1);
+  }
+  double *q;
+  if ((q=(double*)calloc((size_t)m,sizeof(double)))==0) {
+     fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
+     exit(1);
+  }
+
+  double *s,*y;
+  if ((s=(double*)calloc((size_t)m,sizeof(double)))==0) {
+     fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
+     exit(1);
+  }
+  if ((y=(double*)calloc((size_t)m,sizeof(double)))==0) {
+     fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
+     exit(1);
+  }
+  double *A,*L,*MM;
+  if ((A=(double*)calloc((size_t)lbfgs_m*lbfgs_m,sizeof(double)))==0) {
+     fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
+     exit(1);
+  }
+  if ((MM=(double*)calloc((size_t)2*lbfgs_m*2*lbfgs_m,sizeof(double)))==0) {
+     fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
+     exit(1);
+  }
+  if ((L=(double*)calloc((size_t)lbfgs_m*lbfgs_m,sizeof(double)))==0) {
+     fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
+     exit(1);
+  }
+  
+  /* copy parameters */
+  my_dcopy(m,p,1,xk,1);
+  /* gradient */
+  grad_func(xk,gk,m,adata);
+  /* grad norm */
+  double gradnrm=my_dnrm2(m,gk);
+
+  double optimality=get_optimality(xk,gk,p_low,p_high,m);
+
+  int line_search_flag;
+  
+  while (n_iter<itmax && isnormal(gradnrm) && optimality>CLM_STOP_THRESH) {
+#ifdef DEBUG
+    printf("iter %d optim %lf |grad| %lf cost %lf\n",n_iter,optimality,gradnrm,f);
+#endif
+
+    /* increment global iteration count */
+    indata->niter++;
+    /* detect if we are at first iteration of a new batch */
+    int batch_changed=(indata->niter>1 && n_iter==0);
+    double alphabar=1.0;
+    /* if the batch has changed, update running averages */
+    if (batch_changed) {
+      double *g_min_rold,*g_min_rnew;
+      /* temp vectors : grad-running_avg(old) , grad - running_avg(new) */
+      /* running_avg_new = running_avg_old + (grad-running_avg(old))/niter */
+      if ((g_min_rold=(double*)calloc((size_t)m,sizeof(double)))==0) {
+       fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
+       exit(1);
+      }
+      if ((g_min_rnew=(double*)calloc((size_t)m,sizeof(double)))==0) {
+       fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
+       exit(1);
+      }
+      my_dcopy(m,gk,1,g_min_rold,1); /* g_min_rold <- grad */
+      my_daxpy(m,indata->running_avg,-1.0,g_min_rold); /* g_min_rold <- g_min_rold - running_avg(old) */
+      my_daxpy(m,g_min_rold,1.0/(double)indata->niter,indata->running_avg); /* running_avg <- running_avg + 1/niter . g_min_rold */
+
+      my_dcopy(m,gk,1,g_min_rnew,1);
+      my_daxpy(m,indata->running_avg,-1.0,g_min_rnew); /* g_min_rnew <- g_min_rnew - running_avg(new) */
+
+      /* this loop should be parallelized/vectorized */
+#pragma GCC ivdep
+      for (int it=0; it<m; it++) {
+        indata->running_avg_sq[it] += g_min_rold[it]*g_min_rnew[it];
+      }
+
+      /* estimate online variance
+        Note: for badly initialized cases, might need to increase initial value of alphabar
+        because of gradnrm is too large, alphabar becomes too small */
+      alphabar=10.0/(1.0+my_dasum(m,indata->running_avg_sq)/((double)(indata->niter-1)*gradnrm));
+#ifdef DEBUG
+      printf("iter=%d running_avg %lf gradnrm %lf alpha=%lf\n",indata->niter,my_dasum(m,indata->running_avg_sq),gradnrm,alphabar);
+#endif
+      free(g_min_rold);
+      free(g_min_rnew);
+    }
+
+    my_dcopy(m,xk,1,xold,1);
+    my_dcopy(m,gk,1,gold,1);
+
+    get_cauchy_point(xk, gk, p_low, p_high, m, lbfgs_m, theta, indata->W, indata->M, xc, c);
+    subspace_min(xk, gk, p_low, p_high, xc, c, m, lbfgs_m, theta, indata->W, indata->M, xbar, &line_search_flag);
+
+    double alpha=1.0;
+    /* find search direction q <= xbar - x*/
+    my_dcopy(m,xbar,1,q,1);
+    my_daxpy(m,xk,-1.0,q);
+    if (line_search_flag) {
+      //alpha = strong_wolfe(cost_func,grad_func,adata,f,xk,gk,q,m);
+      alpha = linesearch_backtrack(cost_func,xk,q,gk,m,alphabar,adata);
+    }
+    /* check if the step size is too small, or Nan, then stop */
+    if (!isnormal(alpha) || fabs(alpha)<=(double)m*CLM_EPSILON) {
+      break;
+    }
+    /* update solution x <= x + alpha ( xbar - x )*/
+    my_daxpy(m,q,alpha,xk);
+
+    grad_func(xk,gk,m,adata);
+    gradnrm=my_dnrm2(m,gk);
+    /* curvature pair */
+    /* s = x-xold */
+    my_dcopy(m,xk,1,s,1);
+    my_daxpy(m,xold,-1.0,s);
+    /* y = g-gold */
+    my_dcopy(m,gk,1,y,1);
+    my_daxpy(m,gold,-1.0,y);
+
+    double curv=fabs(my_ddot(m,s,y));
+    if (curv < (double)m*CLM_EPSILON) {
+#ifdef DEBUG
+      printf("negative curvature %le detected, skipping\n",curv);
+#endif
+      n_iter++;
+      continue;
+    }
+
+    if (n_iter<lbfgs_m) {
+      /* add pair to history */
+      my_dcopy(m,y,1,&indata->Y[n_iter*m],1);
+      my_dcopy(m,s,1,&indata->S[n_iter*m],1);
+    } else {
+      /* history already full, remove oldest curvature pair,
+       * just move colums 1,...lbfs_m-1 to columns 0...lbfgs_m-2 */
+      memmove(indata->Y,&indata->Y[m],m*(lbfgs_m-1)*sizeof(double));
+      memmove(indata->S,&indata->S[m],m*(lbfgs_m-1)*sizeof(double));
+      my_dcopy(m,y,1,&indata->Y[(lbfgs_m-1)*m],1);
+      my_dcopy(m,s,1,&indata->S[(lbfgs_m-1)*m],1);
+    }
+
+    theta=my_ddot(m,y,y)/my_ddot(m,y,s);
+    /* W[:,0:lbfgs_m]=Y */
+    my_dcopy(m*lbfgs_m,indata->Y,1,indata->W,1);
+    /* W[:,lbfgs_m:2*lbfgs_m]=theta*S */
+    my_dcopy(m*lbfgs_m,indata->S,1,&indata->W[m*lbfgs_m],1);
+    my_dscal(m*lbfgs_m,theta,&indata->W[m*lbfgs_m]);
+    /* A= S^T Y */
+    my_dgemm('T','N',lbfgs_m,lbfgs_m,m,1.0,indata->S,m,indata->Y,m,0.0,A,lbfgs_m);
+
+    /* MM <= 0 */
+    memset(MM,0,sizeof(double)*(size_t)2*lbfgs_m*2*lbfgs_m);
+    /* MM = [ D, L^T; L, theta*S^T*S ] block matrix, in pp. 4 (3.4) */
+    /* L=lower triangle of A (excluding the diagonal), L=tril(A,-1) */
+    memset(L,0,sizeof(double)*(size_t)lbfgs_m*lbfgs_m);
+    for (int ci=0; ci<lbfgs_m-1; ci++) {
+      my_dcopy(lbfgs_m-ci-1,&A[ci+1+ci*lbfgs_m],1,&L[ci+1+ci*lbfgs_m],1);
+    }
+    /* D diagonal of A, D=-1.0*diag(diag(A)) */
+    /* MM[0:lbfgs_m,0:lbfgs_m]=D */
+    for (int ci=0; ci<lbfgs_m; ci++) {
+      MM[ci*2*lbfgs_m+ci]=-A[ci*lbfgs_m+ci];
+    }
+    /* MM[0:lbfgs_m,lbfgs_m:2*lbfgs_m]=L.transpose() */
+    for (int ci=0; ci<lbfgs_m; ci++) {
+      my_dcopy(lbfgs_m,&L[ci],lbfgs_m,&MM[2*lbfgs_m*lbfgs_m+ci*2*lbfgs_m],1);
+    }
+
+    /* MM[lbfgs_m:2*lbfgs_m,0:lbfgs_m]=L */
+    for (int ci=0; ci<lbfgs_m; ci++) {
+      my_dcopy(lbfgs_m,&L[ci*lbfgs_m],1,&MM[ci*2*lbfgs_m+lbfgs_m],1);
+    }
+
+        /* MM[lbfgs_m:2*lbfgs_m,lbfgs_m:2*lbfgs_m]=theta*S^T * S, use A <= theta S^T S */
+    my_dgemm('T','N',lbfgs_m,lbfgs_m,m,theta,indata->S,m,indata->S,m,0.0,A,lbfgs_m);
+    for (int ci=0; ci<lbfgs_m; ci++) {
+      my_dcopy(lbfgs_m,&A[ci*lbfgs_m],1,&MM[2*lbfgs_m*lbfgs_m+ci*2*lbfgs_m+lbfgs_m],1);
+    }
+
+    /* M <= pinv(MM) */
+    find_pseudo_inverse(MM,indata->M,2*lbfgs_m);
+
+    optimality=get_optimality(xk,gk,p_low,p_high,m);
+    n_iter++;
+  }
+
+  /* copy back solution to p */
+  my_dcopy(m,xk,1,p,1);
+
+  free(xk);
+  free(gk);
+  free(xold);
+  free(gold);
+  free(xc);
+  free(c);
+  free(xbar);
+  free(q);
+  free(s);
+  free(y);
+  free(A);
+  free(L);
+  free(MM);
 
   return 0;
 }

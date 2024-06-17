@@ -144,6 +144,11 @@ linesearch(
    double (*func)(double *p, int m, void *adata),
    double *xk, double *pk, double alpha1, double sigma, double rho, double t1, double t2, double t3, int m, double step, void *adata);
 
+extern double
+linesearch_backtrack(
+   double (*func)(double *p, int m, void *adata),
+   double *xk, double *pk, double *gk, int m, double alpha0, void *adata);
+
 /* cost function : return a scalar cost, input : p (mx1) parameters, m: no. of params, adata: additional data
    grad function: return gradient (mx1): input : p (mx1) parameters, g (mx1) gradient vector, m: no. of params, adata: additional data
 */
@@ -1777,6 +1782,9 @@ typedef struct persistent_lbfgsb_data_t_ {
   double *Y,*S; /* m x 2*lbfgs_m curvature matrices */
   double *M; /* 2*lbfgs_m x 2*lbfgs_m */
 
+  /* 2 vectors : size mx1, for on-line estimation of var(grad), m: no. of params */
+  double *running_avg, *running_avg_sq;
+  int niter; /* keep track of cumulative no. of iterations, needed for online variance */
   int Nt; /* no. of threads */
 
 } persistent_lbfgsb_data_t;
