@@ -1083,7 +1083,7 @@ lbfgsb_fit_minibatch(
   
   while (n_iter<itmax && isnormal(gradnrm) && optimality>CLM_STOP_THRESH) {
 #ifdef DEBUG
-    printf("iter %d optim %lf |grad| %lf cost %lf\n",n_iter,optimality,gradnrm,f);
+    printf("iter %d optim %lf |grad| %lf cost %lf\n",n_iter,optimality,gradnrm,cost_func(xk,m,adata));
 #endif
 
     /* increment global iteration count */
