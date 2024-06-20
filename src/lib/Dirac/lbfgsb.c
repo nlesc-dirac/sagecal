@@ -21,8 +21,10 @@
 #include <pthread.h>
 
 int 
-lbfgsb_persist_init(persistent_lbfgsb_data_t *pt, int n_minibatch, 
+lbfgsb_persist_init(persistent_data_t *pt, int n_minibatch, 
     int m, int n, int lbfgs_m, int Nt) {
+  /* set unused memory to zero */
+  pt->y=pt->s=pt->rho=0;
 
   pt->lbfgs_m=lbfgs_m;
   pt->m=m;
@@ -91,7 +93,7 @@ lbfgsb_persist_init(persistent_lbfgsb_data_t *pt, int n_minibatch,
 
 
 int 
-lbfgsb_persist_clear(persistent_lbfgsb_data_t *pt) {
+lbfgsb_persist_clear(persistent_data_t *pt) {
 
   free(pt->W);
   free(pt->Y);
@@ -101,6 +103,21 @@ lbfgsb_persist_clear(persistent_lbfgsb_data_t *pt) {
   free(pt->running_avg_sq);
   free(pt->offsets);
   free(pt->lengths);
+  return 0;
+}
+
+int 
+lbfgsb_persist_reset(persistent_data_t *pt) {
+
+  memset(pt->running_avg,0,sizeof(double)*(size_t)pt->m);
+  memset(pt->running_avg_sq,0,sizeof(double)*(size_t)pt->m);
+
+  memset(pt->W,0,sizeof(double)*(size_t)pt->m*2*pt->lbfgs_m);
+  memset(pt->Y,0,sizeof(double)*(size_t)pt->m*pt->lbfgs_m);
+  memset(pt->S,0,sizeof(double)*(size_t)pt->m*pt->lbfgs_m);
+  memset(pt->M,0,sizeof(double)*(size_t)2*pt->lbfgs_m*2*pt->lbfgs_m);
+
+  pt->niter=0;
   return 0;
 }
 
@@ -793,7 +810,7 @@ lbfgsb_fit_fullbatch(
    double *p, double *p_low, double *p_high, int m, int itmax, int lbfgs_m, void *adata) {
 
   /* create own persistent data struct for memory allocation */
-  persistent_lbfgsb_data_t pt;
+  persistent_data_t pt;
   lbfgsb_persist_init(&pt,1,m,1,lbfgs_m,8);
   double theta=1.0;
   int n_iter=0;
@@ -1000,7 +1017,7 @@ static int
 lbfgsb_fit_minibatch(
    double (*cost_func)(double *p, int m, void *adata),
    void (*grad_func)(double *p, double *g, int m, void *adata),
-   double *p, double *p_low, double *p_high, int m, int itmax, int lbfgs_m, void *adata, persistent_lbfgsb_data_t *indata) {
+   double *p, double *p_low, double *p_high, int m, int itmax, int lbfgs_m, void *adata, persistent_data_t *indata) {
 
   /* sanity check persistent data */
   if (indata->m!=m ||  indata->lbfgs_m!=lbfgs_m) {
@@ -1252,7 +1269,7 @@ int
 lbfgsb_fit(
    double (*cost_func)(double *p, int m, void *adata),
    void (*grad_func)(double *p, double *g, int m, void *adata),
-   double *p, double *p_low, double *p_high, int m, int itmax, int lbfgs_m, void *adata, persistent_lbfgsb_data_t *indata) {
+   double *p, double *p_low, double *p_high, int m, int itmax, int lbfgs_m, void *adata, persistent_data_t *indata) {
 
   int retval=0;
   if (!indata) {

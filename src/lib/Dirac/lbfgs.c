@@ -953,6 +953,9 @@ lbfgs_fit(
 int
 lbfgs_persist_init(persistent_data_t *pt, int Nminibatch, int m, int n, int lbfgs_m, int Nt) {
 
+  /* set unused memory to zero */
+  pt->W=pt->Y=pt->S=pt->M=0;
+
   if ((pt->offsets=(int*)calloc((size_t)Nminibatch,sizeof(int)))==0) {
      fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
      exit(1);
