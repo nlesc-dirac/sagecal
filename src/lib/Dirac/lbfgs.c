@@ -440,7 +440,7 @@ linesearch(
    alpha0: initial alpha
    adata:  additional data passed to the function
 */
-static double
+double
 linesearch_backtrack(
    double (*func)(double *p, int m, void *adata),
    double *xk, double *pk, double *gk, int m, double alpha0, void *adata) {
