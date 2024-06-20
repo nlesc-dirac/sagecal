@@ -14,11 +14,7 @@ typedef struct rosenbrok_data_t_ {
  double alpha;
  /* Unlike in the fullbatch mode, we need to keep a 
    link to a persistent data struct in minibatch mode */
-#ifdef LBFGSB
- persistent_lbfgsb_data_t *ptdata;
-#else
  persistent_data_t *ptdata;
-#endif
 } rosenbrok_data_t;
 
 /* user specified cost function */
@@ -36,11 +32,7 @@ rosenbrok(double *p, int m, void *adata) {
  double f=0.0;
  rosenbrok_data_t *t=(rosenbrok_data_t*)adata;
  /* get pointer to the persistent data struct */
-#ifdef LBFGSB
- persistent_lbfgsb_data_t *ptd=t->ptdata;
-#else
  persistent_data_t *ptd=t->ptdata;
-#endif
 
  double alpha=t->alpha;
  int ci;
@@ -65,11 +57,7 @@ rosenbrok_grad(double *p, double *g, int m, void *adata) {
  rosenbrok_data_t *t=(rosenbrok_data_t*)adata;
  double alpha=t->alpha;
  /* get pointer to the persistent data struct */
-#ifdef LBFGSB
- persistent_lbfgsb_data_t *ptd=t->ptdata;
-#else
  persistent_data_t *ptd=t->ptdata;
-#endif
 
  int ci;
  /* note that we find gradient over a minibatch of ci */
@@ -107,11 +95,7 @@ int main() {
  }
 
  /* persistent memory needed for minibatch mode */
-#ifdef LBFGSB
- persistent_lbfgsb_data_t ptdata;
-#else
  persistent_data_t ptdata;
-#endif
  int M=5; /* LBFGS memory size */
  int Nt=4; /* how many threads */
  /* how many minibatches */

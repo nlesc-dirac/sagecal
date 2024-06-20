@@ -101,6 +101,12 @@ typedef struct persistent_data_t_ {
   /* 2 vectors : size mx1, for on-line estimation of var(grad), m: no. of params */
   double *running_avg, *running_avg_sq;
   int niter; /* keep track of cumulative no. of iterations, needed for online variance */
+
+
+  /* following are for LBFGS-B */
+  double *W; /* m x 2*lbfgs_m */
+  double *Y,*S; /* m x 2*lbfgs_m curvature matrices */
+  double *M; /* 2*lbfgs_m x 2*lbfgs_m */
 } persistent_data_t;
 
 /* user routines for setting up and clearing persistent data structure
@@ -1773,28 +1779,8 @@ sagefit_visibilities_dual_pt_flt(double *u, double *v, double *w, double *x, int
 
 /****************************** lbfgsb.c ****************************/
 #ifndef HAVE_CUDA
-/* struct for passing info between batches in minibatch mode */
-typedef struct persistent_lbfgsb_data_t_ {
-  int lbfgs_m; /* LBFGS memory size */
-  int m; /* parameter size */
-
-  double *W; /* m x 2*lbfgs_m */
-  double *Y,*S; /* m x 2*lbfgs_m curvature matrices */
-  double *M; /* 2*lbfgs_m x 2*lbfgs_m */
-
-  /* 2 vectors : size mx1, for on-line estimation of var(grad), m: no. of params */
-  double *running_avg, *running_avg_sq;
-  int niter; /* keep track of cumulative no. of iterations, needed for online variance */
-  int Nt; /* no. of threads */
-
-  /* location and size of data to work in each minibatch
-   (changed  at each minibatch)  */
-  int offset; /* offset in data for this minibatch 0..n-1 ; n: total baselines */
-  int nlen; /* length (size of data) for this minibatch 1..n ; n: total baselines */
-  int *offsets; /* n_minibatchx1 offsets to minibathes */
-  int *lengths; /* n_minibatchx1 lengths of minibatches */
-
-} persistent_lbfgsb_data_t;
+/* Note: The struct for passing info between batches in minibatch mode is same as in
+ * LBFGS */
 
 /* user routines for setting up and clearing persistent data structure
    for using LBFGS-B (both fullbatch and minibatch versions) */
@@ -1811,11 +1797,17 @@ typedef struct persistent_lbfgsb_data_t_ {
    Nt: no. of threads
 */
 extern int 
-lbfgsb_persist_init(persistent_lbfgsb_data_t *pt, int n_minibatch, int m, int n, int lbfgs_m, int Nt);
+lbfgsb_persist_init(persistent_data_t *pt, int n_minibatch, int m, int n, int lbfgs_m, int Nt);
 
 /* clearing persistent struct after running stochastic LBFGS */
 extern int 
-lbfgsb_persist_clear(persistent_lbfgsb_data_t *pt);
+lbfgsb_persist_clear(persistent_data_t *pt);
+
+/* reset persistent struct (no memory allocation, but reset everyting to original state)
+   needed sometimes to recover from a bad solution */
+extern int 
+lbfgsb_persist_reset(persistent_data_t *pt);
+
 
 /* cost function : return a scalar cost, input : p (mx1) parameters, m: no. of params, adata: additional data
    grad function: return gradient (mx1): input : p (mx1) parameters, g (mx1) gradient vector, m: no. of params, adata: additional data
@@ -1827,14 +1819,14 @@ lbfgsb_persist_clear(persistent_lbfgsb_data_t *pt);
    itmax: max iterations
    lbfgs_m: memory size
    adata: additional user supplied data
-   indata: NULL if full batch mode, otherwise pass a persistent_lbfgsb_data_t for minibatch operation
+   indata: NULL if full batch mode, otherwise pass a persistent_data_t for minibatch operation
    see lbfgsb_persist_init() and lbfgsb_persist_clear() on how to set/clear this struct
 */
 extern int
 lbfgsb_fit(
    double (*cost_func)(double *p, int m, void *adata),
    void (*grad_func)(double *p, double *g, int m, void *adata),
-   double *p, double *p_low, double *p_high, int m, int itmax, int lbfgs_m, void *adata, persistent_lbfgsb_data_t *indata);
+   double *p, double *p_low, double *p_high, int m, int itmax, int lbfgs_m, void *adata, persistent_data_t *indata);
 #endif /* !HAVE_CUDA */
 
 #ifdef __cplusplus
