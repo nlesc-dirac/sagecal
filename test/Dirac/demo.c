@@ -4,6 +4,8 @@
 /* include Dirac header */
 #include <Dirac.h>
 
+/* uncomment this to use LBFGS-B instead of LBFGS */
+//#define LBFGSB
 
 /* data structure used by the user specified 
    cost/gradient functions */
@@ -71,10 +73,28 @@ int main() {
    p0[ci]=p[ci]=-1.0;
  }
 
-
+#ifdef LBFGSB
+ double *p_low,*p_high;
+ if ((p_low=(double*)calloc((size_t)m,sizeof(double)))==0) {
+     fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
+     exit(1);
+ }
+ if ((p_high=(double*)calloc((size_t)m,sizeof(double)))==0) {
+     fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
+     exit(1);
+ }
+ for (ci=0; ci<m; ci++) {
+   p_low[ci]=-2.0;
+   p_high[ci]=2.0;
+ }
+ lbfgsb_fit(rosenbrok,rosenbrok_grad,p,p_low,p_high,m,30,5,&rt,NULL);
+ free(p_low);
+ free(p_high);
+#else
  /* for full batch mode, last argument is NULL */
  lbfgs_fit(rosenbrok,rosenbrok_grad,p,m,30,5,&rt,NULL);
- 
+#endif
+
  printf("initial value and solution\n");
  for (ci=0; ci<m; ci++) {
   printf("%lf %lf\n",p0[ci],p[ci]);

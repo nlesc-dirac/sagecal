@@ -94,8 +94,8 @@ typedef struct persistent_data_t_ {
 
   /* location and size of data to work in each minibatch
    (changed  at each minibatch)  */
-  int offset; /* offset 0..n-1 ; n: total baselines */
-  int nlen; /* length 1..n ; n: total baselines */
+  int offset; /* offset in data for this minibatch 0..n-1 ; n: total baselines */
+  int nlen; /* length (size of data) for this minibatch 1..n ; n: total baselines */
   int *offsets; /* Nbatchx1 offsets to minibathes */
   int *lengths; /* Nbatchx1 lengths of minibatches */
   /* 2 vectors : size mx1, for on-line estimation of var(grad), m: no. of params */
@@ -1786,6 +1786,13 @@ typedef struct persistent_lbfgsb_data_t_ {
   double *running_avg, *running_avg_sq;
   int niter; /* keep track of cumulative no. of iterations, needed for online variance */
   int Nt; /* no. of threads */
+
+  /* location and size of data to work in each minibatch
+   (changed  at each minibatch)  */
+  int offset; /* offset in data for this minibatch 0..n-1 ; n: total baselines */
+  int nlen; /* length (size of data) for this minibatch 1..n ; n: total baselines */
+  int *offsets; /* n_minibatchx1 offsets to minibathes */
+  int *lengths; /* n_minibatchx1 lengths of minibatches */
 
 } persistent_lbfgsb_data_t;
 

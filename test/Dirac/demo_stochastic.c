@@ -5,6 +5,8 @@
 /* include Dirac header */
 #include <Dirac.h>
 
+/* uncomment this to use LBFGS-B instead of LBFGS */
+//#define LBFGSB
 
 /* data structure used by the user specified 
    cost/gradient functions */
@@ -12,7 +14,11 @@ typedef struct rosenbrok_data_t_ {
  double alpha;
  /* Unlike in the fullbatch mode, we need to keep a 
    link to a persistent data struct in minibatch mode */
+#ifdef LBFGSB
+ persistent_lbfgsb_data_t *ptdata;
+#else
  persistent_data_t *ptdata;
+#endif
 } rosenbrok_data_t;
 
 /* user specified cost function */
@@ -30,7 +36,11 @@ rosenbrok(double *p, int m, void *adata) {
  double f=0.0;
  rosenbrok_data_t *t=(rosenbrok_data_t*)adata;
  /* get pointer to the persistent data struct */
+#ifdef LBFGSB
+ persistent_lbfgsb_data_t *ptd=t->ptdata;
+#else
  persistent_data_t *ptd=t->ptdata;
+#endif
 
  double alpha=t->alpha;
  int ci;
@@ -55,7 +65,11 @@ rosenbrok_grad(double *p, double *g, int m, void *adata) {
  rosenbrok_data_t *t=(rosenbrok_data_t*)adata;
  double alpha=t->alpha;
  /* get pointer to the persistent data struct */
+#ifdef LBFGSB
+ persistent_lbfgsb_data_t *ptd=t->ptdata;
+#else
  persistent_data_t *ptd=t->ptdata;
+#endif
 
  int ci;
  /* note that we find gradient over a minibatch of ci */
@@ -93,13 +107,34 @@ int main() {
  }
 
  /* persistent memory needed for minibatch mode */
+#ifdef LBFGSB
+ persistent_lbfgsb_data_t ptdata;
+#else
  persistent_data_t ptdata;
+#endif
  int M=5; /* LBFGS memory size */
  int Nt=4; /* how many threads */
  /* how many minibatches */
  int Nminibatch=2;
  /* we split the m/2 summation terms in the cost function into minibatches */
+#ifdef LBFGSB
+ lbfgsb_persist_init(&ptdata,Nminibatch,m,m/2,M,Nt);
+ double *p_low,*p_high;
+ if ((p_low=(double*)calloc((size_t)m,sizeof(double)))==0) {
+     fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
+     exit(1);
+ }
+ if ((p_high=(double*)calloc((size_t)m,sizeof(double)))==0) {
+     fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
+     exit(1);
+ }
+ for (ci=0; ci<m; ci++) {
+   p_low[ci]=-2.0;
+   p_high[ci]=2.0;
+ }
+#else
  lbfgs_persist_init(&ptdata,Nminibatch,m,m/2,M,Nt);
+#endif
  /* attach persistent data struct to the user data struct */
  rt.ptdata=&ptdata;
 
@@ -114,7 +149,11 @@ int main() {
    ptdata.nlen=ptdata.lengths[nbatch];
    printf("mbatch %d off %d size %d\n",nbatch,ptdata.offset,ptdata.nlen);
    /* The number of iterations per minibatch is smaller */
+#ifdef LBFGSB
+   lbfgsb_fit(rosenbrok,rosenbrok_grad,p,p_low,p_high,m,50,M,&rt,&ptdata);
+#else
    lbfgs_fit(rosenbrok,rosenbrok_grad,p,m,50,M,&rt,&ptdata);
+#endif
   }
  }
  
@@ -126,6 +165,12 @@ int main() {
  free(p0);
  free(p);
  /* free persistent data */
+#ifdef LBFGSB
+ free(p_low);
+ free(p_high);
+ lbfgsb_persist_clear(&ptdata);
+#else
  lbfgs_persist_clear(&ptdata);
+#endif
  return 0;
 }

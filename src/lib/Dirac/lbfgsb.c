@@ -61,6 +61,31 @@ lbfgsb_persist_init(persistent_lbfgsb_data_t *pt, int n_minibatch,
      exit(1);
   }
 
+  /* minibatch info */
+  if ((pt->offsets=(int*)calloc((size_t)n_minibatch,sizeof(int)))==0) {
+     fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
+     exit(1);
+  }
+  if ((pt->lengths=(int*)calloc((size_t)n_minibatch,sizeof(int)))==0) {
+     fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
+     exit(1);
+  }
+
+  /* divide n data points into n_minibatch batches */
+  int batchsize=(n+n_minibatch-1)/n_minibatch;
+  int ck=0;
+  for (int ci=0; ci<n_minibatch; ci++) {
+    pt->offsets[ci]=ck;
+    if (pt->offsets[ci]+batchsize<=n) {
+      pt->lengths[ci]=batchsize;
+    } else {
+      pt->lengths[ci]=n-pt->offsets[ci];
+    }
+    ck+=pt->lengths[ci];
+  }
+  pt->offset=0; /* initial offset to data */
+  pt->nlen=n; /* initial data length: full length */
+
   return 0;
 }
 
@@ -74,6 +99,8 @@ lbfgsb_persist_clear(persistent_lbfgsb_data_t *pt) {
   free(pt->M);
   free(pt->running_avg);
   free(pt->running_avg_sq);
+  free(pt->offsets);
+  free(pt->lengths);
   return 0;
 }
 
