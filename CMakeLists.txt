@@ -122,6 +122,7 @@ find_package(PkgConfig REQUIRED)
 pkg_check_modules(GLIB_PKG glib-2.0)
 if (GLIB_PKG_FOUND)
     include_directories(${GLIB_PKG_INCLUDE_DIRS})
+    link_directories(${GLIB_PKG_LIBRARY_DIRS})
 endif()
 
 #CSPICE find if -DCSPICE_PREFIX=... given
