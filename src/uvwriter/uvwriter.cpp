@@ -39,12 +39,17 @@
 
 //#define DEBUG
 
+#ifndef DEFAULT_FRAME
+#define DEFAULT_FRAME "MOON_ME"
+#endif
+
 void
 print_help(void) {
    fprintf(stderr,"Calculate the UVW coordinates for the given MS based on lunar frame.\n");
    fprintf(stderr,"Usage:\n");
    fprintf(stderr,"uvwriter -d MS\n");
    fprintf(stderr,"-d : input MS (TIME and ANTENNA positions will be used to calculate the UVW coordinates)\n");
+   fprintf(stderr,"-f : FRAME (MOON_ME, MOON_PA, ...), default %s\n",DEFAULT_FRAME);
 }
 
 
@@ -59,7 +64,8 @@ main(int argc, char **argv) {
 
   int c;
   char *inms=0;
-  while ((c=getopt(argc,argv,"d:h"))!=-1) {
+  char *frm=0;
+  while ((c=getopt(argc,argv,"f:d:h"))!=-1) {
     switch(c) {
     case 'd':
       if (optarg) {
@@ -71,6 +77,16 @@ main(int argc, char **argv) {
         strcpy(inms,(char*)optarg);
       }
       break;
+    case 'f':
+      if (optarg) {
+        frm=(char*)calloc((size_t)strlen((char*)optarg)+1,sizeof(char));
+        if (frm== 0 ) {
+         fprintf(stderr,"%s: %d: no free memory",__FILE__,__LINE__);
+         exit(1);
+        }
+        strcpy(frm,(char*)optarg);
+      }
+      break;
     default:
       print_help();
       break;
@@ -79,6 +95,14 @@ main(int argc, char **argv) {
   if (!inms) {
     print_help();
     exit(0);
+  }
+  if (!frm) {
+        frm=(char*)calloc((size_t)strlen((char*)DEFAULT_FRAME)+1,sizeof(char));
+        if (frm== 0 ) {
+         fprintf(stderr,"%s: %d: no free memory",__FILE__,__LINE__);
+         exit(1);
+        }
+        strcpy(frm,(char*)DEFAULT_FRAME);
   }
 
   cspice_load_kernels();
@@ -104,7 +128,7 @@ main(int argc, char **argv) {
   double ra0=ph[0];
   double dec0=ph[1];
 
-  printf("Antennas %ld phase center %lf,%lf (rad)\n",N,ra0,dec0);
+  printf("Antennas %ld phase center %lf,%lf (rad) frame %s\n",N,ra0,dec0,frm);
 
   Block<int> sort(1);
   sort[0]=MS::TIME;
@@ -147,7 +171,7 @@ main(int argc, char **argv) {
         /* ra,dec to rectangular */
         radrec_c(1.0,ra0*rpd_c(),dec0*rpd_c(),v2000);
         /* precess ep_t0 on lunar frame ME: mean Earth/polar axis, PA: principle axis */
-        pxform_c("J2000","MOON_PA",ep_t0,mtrans);//MOON_PA,MOON_ME,IAU_EARTH,ITRF93
+        pxform_c("J2000",frm,ep_t0,mtrans);//MOON_PA,MOON_ME,IAU_EARTH,ITRF93
         /* rotate v2000 onto lunar frame */
         mxv_c(mtrans,v2000,srcrect);
 
@@ -194,5 +218,6 @@ main(int argc, char **argv) {
 
   delete [] xyz;
   if (inms) free(inms);
+  if (frm) free(frm);
   return 0;
 }
