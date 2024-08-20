@@ -50,6 +50,7 @@ print_help(void) {
    fprintf(stderr,"uvwriter -d MS\n");
    fprintf(stderr,"-d : input MS (TIME and ANTENNA positions will be used to calculate the UVW coordinates)\n");
    fprintf(stderr,"-f : FRAME (MOON_ME, MOON_PA, ...), default %s\n",DEFAULT_FRAME);
+   fprintf(stderr,"-v : if given, enable verbose output\n");
 }
 
 
@@ -63,9 +64,10 @@ int
 main(int argc, char **argv) {
 
   int c;
+  int verbose=0;
   char *inms=0;
   char *frm=0;
-  while ((c=getopt(argc,argv,"f:d:h"))!=-1) {
+  while ((c=getopt(argc,argv,"f:d:hv"))!=-1) {
     switch(c) {
     case 'd':
       if (optarg) {
@@ -86,6 +88,9 @@ main(int argc, char **argv) {
         }
         strcpy(frm,(char*)optarg);
       }
+      break;
+    case 'v':
+      verbose=1;
       break;
     default:
       print_help();
@@ -177,6 +182,9 @@ main(int argc, char **argv) {
 
         SpiceDouble s_radius,s_lon,s_lat;
         reclat_c( srcrect, &s_radius, &s_lon, &s_lat );
+        if (verbose) {
+          printf("EP %le LON/LAT %lf %lf\n",ep_t0,s_lon,s_lat);
+        }
         /* [u,v,w]^T=[sinH cosH 0; -sindel*cosH sindel*sinH cosdel; cosdel*cosH -cosdel*sinH sindel] [x y z]^T */
         double H=-s_lon;
         double del=s_lat;
