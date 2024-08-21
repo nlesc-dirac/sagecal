@@ -243,6 +243,16 @@ main(int argc, char **argv) {
     mi++;
   }
 
+  /* update phase center if zenith is used */
+  if (track_zenith) {
+    ArrayColumn<double> ref_dir_up(_field, MSField::columnName(MSFieldEnums::PHASE_DIR));
+    Array<double> dir_ = ref_dir_up(0);
+    double *radec=dir_.data();
+    radec[0]=ra0;
+    radec[1]=dec0;
+    ref_dir_up.put(0,dir_);
+  }
+
   delete [] xyz;
   if (inms) free(inms);
   if (frm) free(frm);
