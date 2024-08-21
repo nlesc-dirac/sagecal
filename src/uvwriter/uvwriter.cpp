@@ -50,6 +50,7 @@ print_help(void) {
    fprintf(stderr,"uvwriter -d MS\n");
    fprintf(stderr,"-d : input MS (TIME and ANTENNA positions will be used to calculate the UVW coordinates)\n");
    fprintf(stderr,"-f : FRAME (MOON_ME, MOON_PA, ...), default %s\n",DEFAULT_FRAME);
+   fprintf(stderr,"-z : if given, use zenith in the local frame as phase center, instead of tracking a J2000 sky coordinate\n");
    fprintf(stderr,"-v : if given, enable verbose output\n");
 }
 
@@ -65,9 +66,10 @@ main(int argc, char **argv) {
 
   int c;
   int verbose=0;
+  int track_zenith=0;
   char *inms=0;
   char *frm=0;
-  while ((c=getopt(argc,argv,"f:d:hv"))!=-1) {
+  while ((c=getopt(argc,argv,"f:d:hvz"))!=-1) {
     switch(c) {
     case 'd':
       if (optarg) {
@@ -91,6 +93,9 @@ main(int argc, char **argv) {
       break;
     case 'v':
       verbose=1;
+      break;
+    case 'z':
+      track_zenith=1;
       break;
     default:
       print_help();
@@ -120,7 +125,6 @@ main(int argc, char **argv) {
   for (size_t ci=0; ci<N; ci++) {
     Array<double> _pos=position(ci);
     double *pos_p=_pos.data();
-    //printf("Ant %ld %lf %lf %lf\n",ci,pos_p[0],pos_p[1],pos_p[2]);
     xyz[3*ci]=pos_p[0];
     xyz[3*ci+1]=pos_p[1];
     xyz[3*ci+2]=pos_p[2];
@@ -133,7 +137,11 @@ main(int argc, char **argv) {
   double ra0=ph[0];
   double dec0=ph[1];
 
-  printf("Antennas %ld phase center %lf,%lf (rad) frame %s\n",N,ra0,dec0,frm);
+  if (!track_zenith) {
+    printf("Antennas %ld phase center %lf,%lf (J2000 rad) frame %s\n",N,ra0,dec0,frm);
+  } else {
+    printf("Antennas %ld phase center zenith, frame %s\n",N,frm);
+  }
 
   Block<int> sort(1);
   sort[0]=MS::TIME;
@@ -160,7 +168,6 @@ main(int argc, char **argv) {
       size_t j=a2(row);
       Array<double> uvw=uvwCol(row);
       double *uvwp=uvw.data();
-//      printf("utc %lf ant %ld %ld uvw %lf %lf %lf\n",tut(row),i,j,uvwp[0],uvwp[1],uvwp[2]);
       double t0=tut(row);
       double rotmat[3][3];
       if (old_t0 != t0) {
@@ -169,18 +176,35 @@ main(int argc, char **argv) {
         double t0_d=t0/86400.0+2400000.5;
         /* ephemeris time from t0 (s) */
         double ep_t0=unitim_c(t0_d,"JED","ET");
-        //printf("UTC %le (s) ET %le (s)\n",t0,ep_t0);
         
         /* rectangular coords of phace center */
         SpiceDouble srcrect[3],mtrans[3][3],v2000[3];
-        /* ra,dec to rectangular */
-        radrec_c(1.0,ra0*rpd_c(),dec0*rpd_c(),v2000);
-        /* precess ep_t0 on lunar frame ME: mean Earth/polar axis, PA: principle axis */
-        pxform_c("J2000",frm,ep_t0,mtrans);//MOON_PA,MOON_ME,IAU_EARTH,ITRF93
-        /* rotate v2000 onto lunar frame */
-        mxv_c(mtrans,v2000,srcrect);
-
         SpiceDouble s_radius,s_lon,s_lat;
+        if (!track_zenith) {
+          /* ra,dec to rectangular */
+          radrec_c(1.0,ra0,dec0,v2000);
+          /* precess ep_t0 on lunar frame ME: mean Earth/polar axis, PA: principle axis */
+          pxform_c("J2000",frm,ep_t0,mtrans);//MOON_PA,MOON_ME,IAU_EARTH,ITRF93
+          /* rotate v2000 onto lunar frame */
+          mxv_c(mtrans,v2000,srcrect);
+        } else {
+          /* fill unit vector pointing to zenith */
+          v2000[0]=v2000[1]=0.0;
+          v2000[2]=1.0;
+          pxform_c(frm,"J2000",ep_t0,mtrans);
+          /* rotate local to J2000 frame */
+          mxv_c(mtrans,v2000,srcrect);
+          /* find ra,dec in J2000 */
+          SpiceDouble range;
+          recrad_c(srcrect,&range,&ra0,&dec0);
+          if (verbose) {
+           printf("Range,RA,DEC %lf %lf %lf\n",range,ra0,dec0);
+          }
+          /* now map to local */
+          pxform_c(frm,"MOON_ME",ep_t0,mtrans);
+          mxv_c(mtrans,v2000,srcrect);
+        }
+
         reclat_c( srcrect, &s_radius, &s_lon, &s_lat );
         if (verbose) {
           printf("EP %le LON/LAT %lf %lf\n",ep_t0,s_lon,s_lat);
@@ -192,9 +216,6 @@ main(int argc, char **argv) {
         rotmat[1][0]=-sin(del)*cos(H); rotmat[1][1]=sin(del)*sin(H); rotmat[1][2]=cos(del);
         rotmat[2][0]=cos(del)*cos(H); rotmat[2][1]=-cos(del)*sin(H); rotmat[2][2]=sin(del);
 
-
-        //printf("source J2000 %lf,%lf,%lf MOON %lf,%lf,%lf\n",v2000[0],v2000[1],v2000[2],
-        // srcrect[0],srcrect[1],srcrect[2]);
 
         old_t0=t0;
       }
@@ -210,8 +231,6 @@ main(int argc, char **argv) {
        /* dot product v.e */
        double vloc[3];
        mxv_c(rotmat,v,vloc);
-
-       //printf("old %lf %lf %lf new %lf %lf %lf\n",uvwp[0],uvwp[1],uvwp[2],vloc[0],vloc[1],vloc[2]);
 
        uvwp[0]=vloc[0];
        uvwp[1]=vloc[1];
