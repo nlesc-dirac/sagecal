@@ -147,7 +147,7 @@ cspice_element_beam_lunar(double ra, double dec, double f, double f0, int N, dou
   /* ra,dec to rectangular */
   radrec_c(1.0,ra*rpd_c(),dec*rpd_c(),v2000);
   /* precess ep_t0 on lunar frame ME: mean Earth/polar axis, PA: principle axis */
-  pxform_c("J2000","MOON_PA",ep_t0,mtrans);
+  pxform_c("J2000","MOON_ME",ep_t0,mtrans); // use MOON_ME instead of MOON_PA
   /* rotate v2000 onto lunar frame */
   mxv_c(mtrans,v2000,srcrect);
   /* rectangular to lat,long */
