@@ -49,8 +49,9 @@ print_help(void) {
    fprintf(stderr,"Usage:\n");
    fprintf(stderr,"uvwriter -d MS\n");
    fprintf(stderr,"-d : input MS (TIME and ANTENNA positions will be used to calculate the UVW coordinates)\n");
+   fprintf(stderr,"Extra options:\n");
    fprintf(stderr,"-f : FRAME (MOON_ME, MOON_PA, ...), default %s\n",DEFAULT_FRAME);
-   fprintf(stderr,"-z : if given, use zenith in the local frame as phase center, instead of tracking a J2000 sky coordinate\n");
+   fprintf(stderr,"-z : if given, use zenith in the local frame at antenna 0 as phase center, instead of tracking a J2000 sky coordinate\n");
    fprintf(stderr,"-v : if given, enable verbose output\n");
 }
 
@@ -130,6 +131,8 @@ main(int argc, char **argv) {
     xyz[3*ci+2]=pos_p[2];
   }
 
+  SpiceDouble z2000[3]={0.0,0.0,0.0};
+
   MSField _field = Table(ms.field());
   ArrayColumn<double> ref_dir(_field, MSField::columnName(MSFieldEnums::PHASE_DIR));
   Array<double> dir = ref_dir(0);
@@ -140,7 +143,13 @@ main(int argc, char **argv) {
   if (!track_zenith) {
     printf("Antennas %ld phase center %lf,%lf (J2000 rad) frame %s\n",N,ra0,dec0,frm);
   } else {
-    printf("Antennas %ld phase center zenith, frame %s\n",N,frm);
+    /* calculate unit vector at the antenna coordinates for station 0,
+     * needed for zenith pointing vector */
+    double x=xyz[0]; double y=xyz[1]; double z=xyz[2];
+    double r=sqrt(x*x+y*y+z*z);
+    if (r==0.0) { r=1.0; }
+    z2000[0]=x/r; z2000[1]=y/r; z2000[2]=z/r;
+    printf("Antennas %ld phase center zenith, (%lf %lf %lf) unit vector, frame %s\n",N,z2000[0],z2000[1],z2000[2],frm);
   }
 
   Block<int> sort(1);
@@ -188,9 +197,10 @@ main(int argc, char **argv) {
           /* rotate v2000 onto lunar frame */
           mxv_c(mtrans,v2000,srcrect);
         } else {
-          /* fill unit vector pointing to zenith */
-          v2000[0]=v2000[1]=0.0;
-          v2000[2]=1.0;
+          /* fill unit vector pointing to zenith,
+           * calculated at the antenna coordinates for station 0 */
+          v2000[0]=z2000[0]; v2000[1]=z2000[1];
+          v2000[2]=z2000[2];
           pxform_c(frm,"J2000",ep_t0,mtrans);
           /* rotate local to J2000 frame */
           mxv_c(mtrans,v2000,srcrect);
