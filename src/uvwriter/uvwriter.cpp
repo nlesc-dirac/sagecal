@@ -51,7 +51,7 @@ print_help(void) {
    fprintf(stderr,"-d : input MS (TIME and ANTENNA positions will be used to calculate the UVW coordinates)\n");
    fprintf(stderr,"Extra options:\n");
    fprintf(stderr,"-f : FRAME (MOON_ME, MOON_PA, ...), default %s\n",DEFAULT_FRAME);
-   fprintf(stderr,"-z : if given, use zenith in the local frame at antenna 0 as phase center, instead of tracking a J2000 sky coordinate\n");
+   fprintf(stderr,"-z : if given, use zenith in the local frame at antenna 0 as phase center, instead of tracking a J2000 sky coordinate. The MS phase center will be updated with mean RA,Dec of zenith.\n");
    fprintf(stderr,"-v : if given, enable verbose output\n");
 }
 
@@ -152,6 +152,10 @@ main(int argc, char **argv) {
     printf("Antennas %ld phase center zenith, (%lf %lf %lf) unit vector, frame %s\n",N,z2000[0],z2000[1],z2000[2],frm);
   }
 
+  /* following for calculating mean ra,dec for zenith tracking */
+  double m_ra=0.0,m_dec=0.0;
+  int m_t=0;
+
   Block<int> sort(1);
   sort[0]=MS::TIME;
   MSIter mi(ms,sort,100.0);
@@ -210,6 +214,11 @@ main(int argc, char **argv) {
           if (verbose) {
            printf("Range,RA,DEC %lf %lf %lf\n",range,ra0,dec0);
           }
+          /* add to calculate mean ra,dec */
+          m_ra+=ra0;
+          m_dec+=dec0;
+          m_t++;
+
           /* now map to local */
           pxform_c(frm,"MOON_ME",ep_t0,mtrans);
           mxv_c(mtrans,v2000,srcrect);
@@ -258,8 +267,8 @@ main(int argc, char **argv) {
     ArrayColumn<double> ref_dir_up(_field, MSField::columnName(MSFieldEnums::PHASE_DIR));
     Array<double> dir_ = ref_dir_up(0);
     double *radec=dir_.data();
-    radec[0]=ra0;
-    radec[1]=dec0;
+    radec[0]=m_ra/(double)m_t;
+    radec[1]=m_dec/(double)m_t;
     ref_dir_up.put(0,dir_);
   }
 
