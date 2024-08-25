@@ -51,7 +51,7 @@ print_help(void) {
    fprintf(stderr,"-d : input MS (TIME and ANTENNA positions will be used to calculate the UVW coordinates)\n");
    fprintf(stderr,"Extra options:\n");
    fprintf(stderr,"-f : FRAME (MOON_ME, MOON_PA, ...), default %s\n",DEFAULT_FRAME);
-   fprintf(stderr,"-z : if given, use zenith in the local frame at antenna 0 as phase center, instead of tracking a J2000 sky coordinate\n");
+   fprintf(stderr,"-z : if given, use zenith in the local frame at antenna 0 as phase center, instead of tracking a J2000 sky coordinate. The MS phase center will be updated with mean RA,Dec of zenith.\n");
    fprintf(stderr,"-v : if given, enable verbose output\n");
 }
 
@@ -152,7 +152,7 @@ main(int argc, char **argv) {
     printf("Antennas %ld phase center zenith, (%lf %lf %lf) unit vector, frame %s\n",N,z2000[0],z2000[1],z2000[2],frm);
   }
 
-  /* following for calculating mean ra,dec for zenth tracking */
+  /* following for calculating mean ra,dec for zenith tracking */
   double m_ra=0.0,m_dec=0.0;
   int m_t=0;
 
