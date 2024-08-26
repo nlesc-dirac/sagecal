@@ -153,8 +153,8 @@ main(int argc, char **argv) {
   }
 
   /* following for calculating mean ra,dec for zenith tracking */
-  double m_ra=0.0,m_dec=0.0;
-  int m_t=0;
+  double m_ra_s,m_ra_c,m_dec_s,m_dec_c;
+  m_ra_s=m_ra_c=m_dec_s=m_dec_c=0.0;
 
   Block<int> sort(1);
   sort[0]=MS::TIME;
@@ -215,9 +215,10 @@ main(int argc, char **argv) {
            printf("Range,RA,DEC %lf %lf %lf\n",range,ra0,dec0);
           }
           /* add to calculate mean ra,dec */
-          m_ra+=ra0;
-          m_dec+=dec0;
-          m_t++;
+          m_ra_s+=sin(ra0);
+          m_ra_c+=cos(ra0);
+          m_dec_s+=sin(dec0);
+          m_dec_c+=cos(dec0);
 
           /* now map to local */
           pxform_c(frm,"MOON_ME",ep_t0,mtrans);
@@ -267,8 +268,8 @@ main(int argc, char **argv) {
     ArrayColumn<double> ref_dir_up(_field, MSField::columnName(MSFieldEnums::PHASE_DIR));
     Array<double> dir_ = ref_dir_up(0);
     double *radec=dir_.data();
-    radec[0]=m_ra/(double)m_t;
-    radec[1]=m_dec/(double)m_t;
+    radec[0]=atan2(m_ra_s,m_ra_c);
+    radec[1]=atan2(m_dec_s,m_dec_c);
     ref_dir_up.put(0,dir_);
   }
 
