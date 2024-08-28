@@ -51,7 +51,7 @@ print_help(void) {
    fprintf(stderr,"-d : input MS (TIME and ANTENNA positions will be used to calculate the UVW coordinates)\n");
    fprintf(stderr,"Extra options:\n");
    fprintf(stderr,"-f : FRAME (MOON_ME, MOON_PA, ...), default %s\n",DEFAULT_FRAME);
-   fprintf(stderr,"-z : if given, use zenith in the local frame at antenna 0 as phase center, instead of tracking a J2000 sky coordinate. The MS phase center will be updated with mean RA,Dec of zenith.\n");
+   fprintf(stderr,"-z : if given, use zenith in the local frame at antenna 0 as phase center, instead of tracking a J2000 sky coordinate. The MS phase center will be updated with mid time RA,Dec of zenith.\n");
    fprintf(stderr,"-v : if given, enable verbose output\n");
 }
 
@@ -140,9 +140,15 @@ main(int argc, char **argv) {
   double ra0=ph[0];
   double dec0=ph[1];
 
+  double t_mid=0.0; // time midpoint
   if (!track_zenith) {
     printf("Antennas %ld phase center %lf,%lf (J2000 rad) frame %s\n",N,ra0,dec0,frm);
   } else {
+    /* get time midpoint */
+    ScalarColumn<double> time_col(ms, MeasurementSet::columnName(MSMainEnums::TIME));
+    size_t n_times=time_col.nrow();
+    t_mid=time_col(n_times/2);
+
     /* calculate unit vector at the antenna coordinates for station 0,
      * needed for zenith pointing vector */
     double x=xyz[0]; double y=xyz[1]; double z=xyz[2];
@@ -151,10 +157,6 @@ main(int argc, char **argv) {
     z2000[0]=x/r; z2000[1]=y/r; z2000[2]=z/r;
     printf("Antennas %ld phase center zenith, (%lf %lf %lf) unit vector, frame %s\n",N,z2000[0],z2000[1],z2000[2],frm);
   }
-
-  /* following for calculating mean ra,dec for zenith tracking */
-  double m_ra_s,m_ra_c,m_dec_s,m_dec_c;
-  m_ra_s=m_ra_c=m_dec_s=m_dec_c=0.0;
 
   Block<int> sort(1);
   sort[0]=MS::TIME;
@@ -214,11 +216,6 @@ main(int argc, char **argv) {
           if (verbose) {
            printf("Range,RA,DEC %lf %lf %lf\n",range,ra0,dec0);
           }
-          /* add to calculate mean ra,dec */
-          m_ra_s+=sin(ra0);
-          m_ra_c+=cos(ra0);
-          m_dec_s+=sin(dec0);
-          m_dec_c+=cos(dec0);
 
           /* now map to local */
           pxform_c(frm,"MOON_ME",ep_t0,mtrans);
@@ -268,8 +265,23 @@ main(int argc, char **argv) {
     ArrayColumn<double> ref_dir_up(_field, MSField::columnName(MSFieldEnums::PHASE_DIR));
     Array<double> dir_ = ref_dir_up(0);
     double *radec=dir_.data();
-    radec[0]=atan2(m_ra_s,m_ra_c);
-    radec[1]=atan2(m_dec_s,m_dec_c);
+    double t0_d=t_mid/86400.0+2400000.5;
+    double ep_t0=unitim_c(t0_d,"JED","ET");
+ 
+    SpiceDouble srcrect[3],mtrans[3][3],v2000[3];
+    v2000[0]=z2000[0]; v2000[1]=z2000[1];
+    v2000[2]=z2000[2];
+    pxform_c(frm,"J2000",ep_t0,mtrans);
+    /* rotate local to J2000 frame */
+    mxv_c(mtrans,v2000,srcrect);
+    /* find ra,dec in J2000 */
+    SpiceDouble range;
+    recrad_c(srcrect,&range,&ra0,&dec0);
+    if (verbose) {
+           printf("Update phase center to RA,DEC %lf %lf\n",ra0,dec0);
+    }
+    radec[0]=ra0;
+    radec[1]=dec0;
     ref_dir_up.put(0,dir_);
   }
 
