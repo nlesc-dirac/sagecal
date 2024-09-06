@@ -925,7 +925,7 @@ lbfgsb_fit_fullbatch(
     my_dcopy(m,gk,1,y,1);
     my_daxpy(m,gold,-1.0,y);
 
-    double curv=fabs(my_ddot(m,s,y));
+    double curv=(my_ddot(m,s,y));
     if (curv < CLM_STOP_THRESH) {
 #ifdef DEBUG
       printf("negative curvature %le detected, skipping\n",curv);
@@ -1176,7 +1176,7 @@ lbfgsb_fit_minibatch(
     my_dcopy(m,gk,1,y,1);
     my_daxpy(m,gold,-1.0,y);
 
-    double curv=fabs(my_ddot(m,s,y));
+    double curv=(my_ddot(m,s,y));
     if (curv < CLM_STOP_THRESH) {
 #ifdef DEBUG
       printf("negative curvature %le detected, skipping\n",curv);
