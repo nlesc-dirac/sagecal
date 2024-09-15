@@ -543,7 +543,6 @@ recalculate_diffuse_coherencies(double *u, double *v, double *w, complex double 
           pthread_join(th_array[nth1],NULL);
         }
 #else /* HAVE_CUDA */
-        use_cuda=0;
         if (!use_cuda) {
          for (int nth1=0; nth1<nth; nth1++) {
           /* set the source id */

@@ -1394,6 +1394,10 @@ predict_visibilities_multifreq_withbeam(double *u,double *v,double *w,double *x,
 
  pthread_attr_destroy(&attr);
 
+#ifdef HAVE_CSPICE
+  pthread_mutex_destroy(&cspice_mutex);
+#endif
+
  free(th_array);
  free(threaddata);
  free(beamdata);
