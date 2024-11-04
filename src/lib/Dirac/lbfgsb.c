@@ -541,9 +541,9 @@ subspace_min(double *x, double *g, double *x_low, double *x_high, double *xc, do
      exit(1);
   }
   status=my_dgels('N',2*lbfgs_m,2*lbfgs_m,1,N,2*lbfgs_m,v,2*lbfgs_m,WORK,lwork);
+  /* for singluar mat, just print a warning and continue */
   if (status) {
-     fprintf(stderr,"%s: %d: singular matrix\n",__FILE__,__LINE__);
-     exit(1);
+     fprintf(stderr,"%s: %d: singular matrix %d\n",__FILE__,__LINE__,status);
   }
   free(WORK);
   free(N);
