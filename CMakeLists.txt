@@ -92,13 +92,16 @@ endif()
 
 
 # BLAS: use -DBLA_VENDOR=OpenBLAS for OpenBLAS
+# -DBLA_VENDOR=Intel10_64lp for Intel MKL
 find_package(BLAS REQUIRED)
 include_directories(${BLAS_INCLUDE_DIR})
 
 if ("${BLA_VENDOR}" STREQUAL "OpenBLAS")
-  message(STATUS "Using ${BLA_VENDOR}")
+  message(STATUS "Using BLAS: ${BLA_VENDOR}")
   # add preprocessor def
   add_definitions(-DHAVE_OPENBLAS)
+elseif ("${BLA_VENDOR}" STRGREATER "")
+  message(STATUS "Using BLAS: ${BLA_VENDOR}")
 else()
   message(STATUS "Using generic BLAS")
 endif()
@@ -153,7 +156,7 @@ endif()
 
 
 #--------------------------------------- build parameters for all targets
-set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -g -O3")
+set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -O3")
 set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -g -pg -Wall -DNDEBUG -Wextra -Wcast-align -Wpointer-arith -Woverloaded-virtual -Wwrite-strings -Wcast-qual -Wctor-dtor-privacy -Wno-long-long-Wdisabled-optimization -Wformat=2 -Winit-self -Wlogical-op -Wmissing-declarations -Wmissing-include-dirs -Wnoexcept -Wold-style-cast -Woverloaded-virtual -Wredundant-decls -Wshadow -Wsign-conversion -Wsign-promo -Wstrict-null-sentinel -Wstrict-overflow=5 -Wswitch-default -Wundef -Werror -Wno-unused")
 
 # set (CMAKE_CXX_STANDARD 14)
