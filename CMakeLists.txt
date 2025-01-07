@@ -92,13 +92,16 @@ endif()
 
 
 # BLAS: use -DBLA_VENDOR=OpenBLAS for OpenBLAS
+# -DBLA_VENDOR=Intel10_64lp for Intel MKL
 find_package(BLAS REQUIRED)
 include_directories(${BLAS_INCLUDE_DIR})
 
 if ("${BLA_VENDOR}" STREQUAL "OpenBLAS")
-  message(STATUS "Using ${BLA_VENDOR}")
+  message(STATUS "Using BLAS: ${BLA_VENDOR}")
   # add preprocessor def
   add_definitions(-DHAVE_OPENBLAS)
+elseif ("${BLA_VENDOR}" STRGREATER "")
+  message(STATUS "Using BLAS: ${BLA_VENDOR}")
 else()
   message(STATUS "Using generic BLAS")
 endif()
