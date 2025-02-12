@@ -1100,7 +1100,7 @@ lbfgsb_fit_minibatch(
   
   while (n_iter<itmax && isnormal(gradnrm) && optimality>CLM_STOP_THRESH) {
 #ifdef DEBUG
-    printf("iter %d optim %lf |grad| %lf cost %lf\n",n_iter,optimality,gradnrm,cost_func(xk,m,adata));
+    printf("iter %d optim %lf |grad| %lf cost %lf\n",indata->niter,optimality,gradnrm,cost_func(xk,m,adata));
 #endif
 
     /* increment global iteration count */
@@ -1138,7 +1138,7 @@ lbfgsb_fit_minibatch(
         Note: for badly initialized cases, might need to increase initial value of alphabar
         because of gradnrm is too large, alphabar becomes too small */
       alphabar=10.0/(1.0+my_dasum(m,indata->running_avg_sq)/((double)(indata->niter-1)*gradnrm));
-#ifdef DEBUG
+#ifdef DEBUG1
       printf("iter=%d running_avg %lf gradnrm %lf alpha=%lf\n",indata->niter,my_dasum(m,indata->running_avg_sq),gradnrm,alphabar);
 #endif
       free(g_min_rold);
