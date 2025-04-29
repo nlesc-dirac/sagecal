@@ -229,7 +229,7 @@ accel_proj_grad(
   const double beta=0.5;
   double theta=1.0;
   
-  const double eps=CLM_EPSILON;
+  const double eps=1e3*CLM_EPSILON;
   double *dx,*dg,*gold,*g,*xold,*x,*yold,*y;
   if ((dx=(double*)calloc((size_t)m,sizeof(double)))==0) {
       fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
@@ -275,7 +275,7 @@ accel_proj_grad(
   }
   /* determine initial step size */
   double tau=10.0;
-  for (int iter=0; iter<5; iter++) {
+  for (int iter=0; iter<3; iter++) {
     /* dx <= dx/tau */
     my_dscal(m, 1.0/tau, dx);
     /* xold <= x + dx */
@@ -287,11 +287,10 @@ accel_proj_grad(
     int grad_ok=0;
     for (int ci=0; ci<m; ci++) {
       if (isnan(gold[ci])) {
+        grad_ok=1;
         break;
       }
-      grad_ok=1;
     }
-
     if (grad_ok) {
       break;
     }
@@ -305,8 +304,9 @@ accel_proj_grad(
   my_daxpy(m,gold,-1.0,dg); 
   /* t <= ||x-xold||/||g-gold|| */
   double t=my_dnrm2(m,dx)/(my_dnrm2(m,dg)+eps);
-  /* make sure step size is not too small */
+  /* make sure step size is not too small, or too big */
   if (t < eps) {t=eps;}
+  if (t > 0.1) {t=0.1;}
 
   for (int k=0; k<itmax; k++) {
      /* xold <= x */
