@@ -215,3 +215,149 @@ update_spatialreg_fista_with_diffconstraint(complex double *Z, complex double *Z
   free(Y);
   return 0;
 }
+
+
+int
+accel_proj_grad(
+   double (*cost_func)(double *p, int m, void *adata),
+   void (*grad_func)(double *p, double *g, int m, void *adata),
+   double *p, int m, int itmax, void *adata) {
+
+  int retval=0;
+
+  const double alpha=1.01;
+  const double beta=0.5;
+  double theta=1.0;
+  
+  const double eps=CLM_EPSILON;
+  double *dx,*dg,*gold,*g,*xold,*x,*yold,*y;
+  if ((dx=(double*)calloc((size_t)m,sizeof(double)))==0) {
+      fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
+      exit(1);
+  }
+  if ((dg=(double*)calloc((size_t)m,sizeof(double)))==0) {
+      fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
+      exit(1);
+  }
+  if ((gold=(double*)calloc((size_t)m,sizeof(double)))==0) {
+      fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
+      exit(1);
+  }
+  if ((g=(double*)calloc((size_t)m,sizeof(double)))==0) {
+      fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
+      exit(1);
+  }
+  if ((xold=(double*)calloc((size_t)m,sizeof(double)))==0) {
+      fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
+      exit(1);
+  }
+  if ((x=(double*)calloc((size_t)m,sizeof(double)))==0) {
+      fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
+      exit(1);
+  }
+  if ((yold=(double*)calloc((size_t)m,sizeof(double)))==0) {
+      fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
+      exit(1);
+  }
+  if ((y=(double*)calloc((size_t)m,sizeof(double)))==0) {
+      fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
+      exit(1);
+  }
+
+  /* x <= p */
+  my_dcopy(m,p,1,x,1);
+  /* y <= x */
+  my_dcopy(m,x,1,y,1);
+  grad_func(x,g,m,adata);
+
+  for (int ci=0; ci<m; ci++) {
+    dx[ci]=1.0;
+  }
+  /* determine initial step size */
+  double tau=10.0;
+  for (int iter=0; iter<5; iter++) {
+    /* dx <= dx/tau */
+    my_dscal(m, 1.0/tau, dx);
+    /* xold <= x + dx */
+    my_dcopy(m,x,1,xold,1);
+    my_daxpy(m,dx,1.0,xold); 
+    /* gold <= grad() */
+    grad_func(xold,gold,m,adata);
+    /* check if none of grad is NaN, then break loop */
+    int grad_ok=0;
+    for (int ci=0; ci<m; ci++) {
+      if (isnan(gold[ci])) {
+        break;
+      }
+      grad_ok=1;
+    }
+
+    if (grad_ok) {
+      break;
+    }
+  }
+
+  /* dx <= x - xold*/
+  my_dcopy(m,x,1,dx,1);
+  my_daxpy(m,xold,-1.0,dx); 
+  /* dg <= g - gold */
+  my_dcopy(m,g,1,dg,1);
+  my_daxpy(m,gold,-1.0,dg); 
+  /* t <= ||x-xold||/||g-gold|| */
+  double t=my_dnrm2(m,dx)/(my_dnrm2(m,dg)+eps);
+  /* make sure step size is not too small */
+  if (t < eps) {t=eps;}
+
+  for (int k=0; k<itmax; k++) {
+     /* xold <= x */
+     my_dcopy(m,x,1,xold,1);
+     /* yold <= y */
+     my_dcopy(m,y,1,yold,1);
+
+     /* x <= y - t*g */
+     my_dcopy(m,y,1,x,1);
+     my_daxpy(m,g,-t,x); 
+     
+     /* err <= ||y-x||/MAX(1,||x||), ||y-x||=t||g|| */
+     double err1=t*my_dnrm2(m,g)/MAX(1.0,my_dnrm2(m,x));
+     if (err1<eps) {
+       break;
+     }
+
+     theta=2.0/(1.0+sqrt(1+4.0/(theta*theta)));
+     /* y <= x+ (1-theta)(x-xold) = (2-theta)*x - (1-theta)*xold */
+     my_dcopy(m,x,1,dx,1);
+     my_daxpy(m,xold,-1.0,dx); 
+     my_dscal(m, -(1.0-theta), dx);
+     my_dcopy(m,x,1,y,1);
+     my_daxpy(m,dx,1.0,y); 
+
+     my_dcopy(m,g,1,gold,1);
+     grad_func(y,g,m,adata);
+
+     /* TFOCS stepsize adaptation */
+     /* dx <= y - yold*/
+     my_dcopy(m,y,1,dx,1);
+     my_daxpy(m,yold,-1.0,dx); 
+     /* dg <= g - gold */
+     my_dcopy(m,g,1,dg,1);
+     my_daxpy(m,gold,-1.0,dg); 
+     double y2=my_dnrm2(m,dx);
+     double t_hat=0.5*y2*y2/fabs(my_ddot(m,dx,dg)+eps);
+     t=MIN(alpha*t,MAX(beta*t,t_hat));
+  }
+
+  /* p <- x */
+  my_dcopy(m,x,1,p,1);
+
+  free(dx);
+  free(dg);
+  free(gold);
+  free(g);
+  free(xold);
+  free(x);
+  free(yold);
+  free(y);
+
+  return retval;
+}
