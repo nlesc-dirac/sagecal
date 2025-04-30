@@ -273,9 +273,9 @@ accel_proj_grad(
   for (int ci=0; ci<m; ci++) {
     dx[ci]=1.0;
   }
-  /* determine initial step size */
+  /* determine initial step size by finding ~ 1/L (L:Lipschitz const) */
   double tau=10.0;
-  for (int iter=0; iter<3; iter++) {
+  for (int iter=0; iter<3; iter++) { /* iterate over 3 orders of magnitude */
     /* dx <= dx/tau */
     my_dscal(m, 1.0/tau, dx);
     /* xold <= x + dx */
