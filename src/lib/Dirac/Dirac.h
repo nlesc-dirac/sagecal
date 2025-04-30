@@ -1573,6 +1573,23 @@ extern int
 update_spatialreg_fista_with_diffconstraint(complex double *Z, complex double *Zbar, complex double *Phikk,
     complex double *Phi, complex double *Z_diff, complex double *Psi,
     int N, int M, int Npoly, int G, double mu, double gamma, int maxiter);
+
+/*
+ * Accelerated projected gradient, based on
+ * (Nesterov 2007, Beck and Teboulle 2009, Becker, Candes and Grant 2010)
+   MATLAB code by @bodonoghue
+   cost function : return a scalar cost, input : p (mx1) parameters, m: no. of params, adata: additional data
+   grad function: return gradient (mx1): input : p (mx1) parameters, g (mx1) gradient vector, m: no. of params, adata: additional data
+   p: parameters m x 1 (used as initial value, output final value)
+   itmax: max iterations
+   adata: additional user supplied data
+*/
+extern int
+accel_proj_grad(
+   double (*cost_func)(double *p, int m, void *adata),
+   void (*grad_func)(double *p, double *g, int m, void *adata),
+   double *p, int m, int itmax, void *adata);
+
 /****************************** pngoutput.c ****************************/
 extern int
 convert_tensor_to_image(double *W, const char *filename, int N, int M, int normalize);
