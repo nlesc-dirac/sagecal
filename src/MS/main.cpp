@@ -86,7 +86,7 @@ print_help(void) {
 #ifdef HAVE_CUDA
    cout << "-S GPU heap size (MB): default "<<Data::heapsize<< endl;
 #endif
-   cout << "-D 0,1,2 : if >0, enable diagnostics (Jacobian Leverage) 1 replace Jacobian Leverage as output, 2 only fractional noise/leverage is printed: default " <<Data::DoDiag<< endl;
+   cout << "-i 0,1 : if >0, enable diagnostics (Influence function) 1 replace residual data with influence function : default " <<Data::DoDiag<< endl;
    cout << "-q solutions.txt: if given, initialize solutions by reading this file (need to have the same format as a solution file, only solutions for 1 timeslot needed)"<< endl;
 
    cout<<endl<<"Stochastic mode:"<<endl;
@@ -115,7 +115,7 @@ ParseCmdLine(int ac, char **av) {
         print_help();
         exit(0);
     }
-    while((c=getopt(ac, av, ":a:b:c:d:e:f:g:j:k:l:m:n:o:p:q:r:s:t:w:x:y:z:A:B:D:E:F:H:I:J:L:M:N:O:P:Q:R:S:U:W:E:h"))!= -1)
+    while((c=getopt(ac, av, ":a:b:c:d:e:f:g:i:j:k:l:m:n:o:p:q:r:s:t:w:x:y:z:A:B:E:F:H:I:J:L:M:N:O:P:Q:R:S:U:W:E:h"))!= -1)
     {
         switch(c)
         {
@@ -246,9 +246,9 @@ ParseCmdLine(int ac, char **av) {
             case 'U':
                 Data::use_global_solution= atoi(optarg);
                 break;
-            case 'D':
-                DoDiag= atoi(optarg);
-                if (DoDiag<0) { DoDiag=0; }
+            case 'i':
+                Data::DoDiag= atoi(optarg);
+                if (Data::DoDiag<0) { Data::DoDiag=0; }
                 break;
             case 'h':
                 print_help();
