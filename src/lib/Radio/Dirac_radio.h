@@ -646,6 +646,17 @@ predict_visibilities_multifreq(double *u,double *v,double *w,double *x,int N,int
 extern int
 predict_visibilities_multifreq_withsol(double *u,double *v,double *w,double *p,double *x,int *ignorelist,int N,int Nbase,int tilesz,baseline_t *barr, clus_source_t *carr, int M,double *freqs,int Nchan, double fdelta,double tdelta,double dec0,int Nt,int add_to_data, int ccid, double rho,int phase_only);
 
+/****************************** diagnostics.c ****************************/
+/* Instead of calculating the residuals, calculate influence function
+ * and replace the residuals with the influence function,
+ * the input arguments are similar to calculate_residuals_multifreq_withbeam_gpu()
+ * or calculate_residuals_multifreq_withbeam()
+ */
+extern int
+calculate_diagnostics_gpu(double *u,double *v,double *w,double *p,double *x,int N,int Nbase,int tilesz,baseline_t *barr, clus_source_t *carr, int M,double *freqs,int Nchan, double fdelta,double tdelta, double dec0,
+ int bf_type, double b_ra0, double b_dec0, double ph_ra0, double ph_dec0, double ph_freq0, double *longitude, double *latitude, double *time_utc,int *Nelem, double **xx, double **yy, double **zz, elementcoeff *ecoeff, int dobeam, int Nt);
+
+
 #ifdef __cplusplus
      } /* extern "C" */
 #endif

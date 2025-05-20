@@ -32,6 +32,7 @@ if(HAVE_CUDA)
 
     # objects only for gpu version
     set (extra_objects
+        diagnostics
     )
 
     set (extra_objects_cuda
