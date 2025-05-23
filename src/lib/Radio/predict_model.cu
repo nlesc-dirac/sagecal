@@ -1391,6 +1391,303 @@ const double *__restrict__ sQ0, const double *__restrict__ sU0, const double *__
 
 }
 
+/* kernel to calculate model (J C J^H) and coherencies (C) */
+__global__ void 
+kernel_coherencies_and_residuals(int B, int N, int T, int K, int F,
+  const double *__restrict__ u, const double *__restrict__ v, const double *__restrict__ w,
+  const double *__restrict__ p, int nchunk,
+  baseline_t *barr, const double *__restrict__ freqs, const float *__restrict__ beam, const float *__restrict__ element, const double *__restrict__ ll, const double *__restrict__ mm, const double *__restrict__ nn, 
+  const double *__restrict__ sI, const double *__restrict__ sQ, const double *__restrict__ sU, const double *__restrict__ sV,
+  const unsigned char *__restrict__ stype, const double *__restrict__ sI0, 
+const double *__restrict__ sQ0, const double *__restrict__ sU0, const double *__restrict__ sV0,
+  const double *__restrict__ f0, const double *__restrict__ spec_idx, const double *__restrict__ spec_idx1, const double *__restrict__ spec_idx2, int **exs, double deltaf, double deltat, double dec0, double *model, double *coh, int dobeam) {
+
+  /* global thread index */
+  unsigned int n=threadIdx.x+blockDim.x*blockIdx.x;
+
+  /* each thread will calculate for one baseline, over all sources */
+  if (n<B) {
+   int sta1=barr[n].sta1;
+   int sta2=barr[n].sta2;
+   /* find out which time slot this baseline is from */
+   int tslot=n/((N*(N-1)/2));
+   /* find out which chunk to select from p : 0,1..nchunk-1 */
+   int chunk=(n)/((B+nchunk-1)/nchunk);
+   /* create G1 and G2 Jones matrices from p */
+   cuDoubleComplex G1[4],G2[4];
+   G1[0].x=__ldg(&p[chunk*8*N+sta1*8]);
+   G1[0].y=__ldg(&p[chunk*8*N+sta1*8+1]);
+   G1[1].x=__ldg(&p[chunk*8*N+sta1*8+2]);
+   G1[1].y=__ldg(&p[chunk*8*N+sta1*8+3]);
+   G1[2].x=__ldg(&p[chunk*8*N+sta1*8+4]);
+   G1[2].y=__ldg(&p[chunk*8*N+sta1*8+5]);
+   G1[3].x=__ldg(&p[chunk*8*N+sta1*8+6]);
+   G1[3].y=__ldg(&p[chunk*8*N+sta1*8+7]);
+   G2[0].x=__ldg(&p[chunk*8*N+sta2*8]);
+   G2[0].y=__ldg(&p[chunk*8*N+sta2*8+1]);
+   G2[1].x=__ldg(&p[chunk*8*N+sta2*8+2]);
+   G2[1].y=__ldg(&p[chunk*8*N+sta2*8+3]);
+   G2[2].x=__ldg(&p[chunk*8*N+sta2*8+4]);
+   G2[2].y=__ldg(&p[chunk*8*N+sta2*8+5]);
+   G2[3].x=__ldg(&p[chunk*8*N+sta2*8+6]);
+   G2[3].y=__ldg(&p[chunk*8*N+sta2*8+7]);
+
+   double u_n=(u[n]);
+   double v_n=(v[n]);
+   double w_n=(w[n]);
+
+   double l_coh[MODEL_MAX_F][8];
+   double l_mod[MODEL_MAX_F][8];
+   if (F<=MODEL_MAX_F) {
+   for(int cf=0; cf<F; cf++) {
+        l_coh[cf][0]=0.0;
+        l_coh[cf][1]=0.0;
+        l_coh[cf][2]=0.0;
+        l_coh[cf][3]=0.0;
+        l_coh[cf][4]=0.0;
+        l_coh[cf][5]=0.0;
+        l_coh[cf][6]=0.0;
+        l_coh[cf][7]=0.0;
+        l_mod[cf][0]=0.0;
+        l_mod[cf][1]=0.0;
+        l_mod[cf][2]=0.0;
+        l_mod[cf][3]=0.0;
+        l_mod[cf][4]=0.0;
+        l_mod[cf][5]=0.0;
+        l_mod[cf][6]=0.0;
+        l_mod[cf][7]=0.0;
+   }
+
+
+   // split to two cases, F==1 and F>1
+   if (F==1) {
+     //use simply for-loop, if K is very large this may be slow and may need further parallelization
+     for (int k=0; k<K; k++) {
+        //source specific params
+        double sIf,sQf,sUf,sVf;
+        double phterm0 = (2.0*M_PI*(u_n*__ldg(&ll[k])+v_n*__ldg(&mm[k])+w_n*__ldg(&nn[k])));
+        sIf=__ldg(&sI[k]);
+        sQf=__ldg(&sQ[k]);
+        sUf=__ldg(&sU[k]);
+        sVf=__ldg(&sV[k]);
+
+        unsigned char stypeT=__ldg(&stype[k]);
+
+        double llcoh[8];
+        compute_prodterm(sta1, sta2, N, K, T, phterm0, sIf, sQf, sUf, sVf,
+               __ldg(&(freqs[0])), deltaf, dobeam, tslot, k, beam, element, exs, stypeT, u_n, v_n, w_n, llcoh);
+
+         l_coh[0][0] +=llcoh[0];
+         l_coh[0][1] +=llcoh[1];
+         l_coh[0][2] +=llcoh[2];
+         l_coh[0][3] +=llcoh[3];
+         l_coh[0][4] +=llcoh[4];
+         l_coh[0][5] +=llcoh[5];
+         l_coh[0][6] +=llcoh[6];
+         l_coh[0][7] +=llcoh[7];
+     }
+     cuDoubleComplex L1[4],L2[4];
+     L1[0].x=l_coh[0][0];
+     L1[0].y=l_coh[0][1];
+     L1[1].x=l_coh[0][2];
+     L1[1].y=l_coh[0][3];
+     L1[2].x=l_coh[0][4];
+     L1[2].y=l_coh[0][5];
+     L1[3].x=l_coh[0][6];
+     L1[3].y=l_coh[0][7];
+     /* L2=G1*L1 */
+     amb(G1,L1,L2);
+     /* L1=L2*G2^H */
+     ambt(L2,G2,L1);
+     l_mod[0][0]=L1[0].x;
+     l_mod[0][1]=L1[0].y;
+     l_mod[0][2]=L1[1].x;
+     l_mod[0][3]=L1[1].y;
+     l_mod[0][4]=L1[2].x;
+     l_mod[0][5]=L1[2].y;
+     l_mod[0][6]=L1[3].x;
+     l_mod[0][7]=L1[3].y;
+
+   } else {
+     //use simply for-loop, if K is very large this may be slow and may need further parallelization
+     for (int k=0; k<K; k++) {
+        //source specific params
+        double sI0f,sQ0f,sU0f,sV0f,spec_idxf,spec_idx1f,spec_idx2f,myf0;
+        double phterm0 = (2.0*M_PI*(u_n*__ldg(&ll[k])+v_n*__ldg(&mm[k])+w_n*__ldg(&nn[k])));
+        sI0f=__ldg(&sI0[k]);
+        sQ0f=__ldg(&sQ0[k]);
+        sU0f=__ldg(&sU0[k]);
+        sV0f=__ldg(&sV0[k]);
+        spec_idxf=__ldg(&spec_idx[k]);
+        spec_idx1f=__ldg(&spec_idx1[k]);
+        spec_idx2f=__ldg(&spec_idx2[k]);
+        myf0=__ldg(&f0[k]);
+
+        unsigned char stypeT=__ldg(&stype[k]);
+
+        for(int cf=0; cf<F; cf++) {
+            double llcoh[8];
+            compute_prodterm_multifreq(sta1, sta2, N, K, T, F, phterm0, sI0f, sQ0f, sU0f, sV0f, spec_idxf, spec_idx1f, spec_idx2f, 
+               myf0, __ldg(&(freqs[cf])), deltaf, dobeam, tslot, k, cf, beam, element, exs, stypeT, u_n, v_n, w_n,llcoh);
+         l_coh[cf][0] +=llcoh[0];
+         l_coh[cf][1] +=llcoh[1];
+         l_coh[cf][2] +=llcoh[2];
+         l_coh[cf][3] +=llcoh[3];
+         l_coh[cf][4] +=llcoh[4];
+         l_coh[cf][5] +=llcoh[5];
+         l_coh[cf][6] +=llcoh[6];
+         l_coh[cf][7] +=llcoh[7];
+        }
+
+     }
+
+     cuDoubleComplex L1[4],L2[4];
+     for(int cf=0; cf<F; cf++) {
+       L1[0].x=l_coh[cf][0];
+       L1[0].y=l_coh[cf][1];
+       L1[1].x=l_coh[cf][2];
+       L1[1].y=l_coh[cf][3];
+       L1[2].x=l_coh[cf][4];
+       L1[2].y=l_coh[cf][5];
+       L1[3].x=l_coh[cf][6];
+       L1[3].y=l_coh[cf][7];
+       /* L2=G1*L1 */
+       amb(G1,L1,L2);
+       /* L1=L2*G2^H */
+       ambt(L2,G2,L1);
+       l_mod[cf][0]=L1[0].x;
+       l_mod[cf][1]=L1[0].y;
+       l_mod[cf][2]=L1[1].x;
+       l_mod[cf][3]=L1[1].y;
+       l_mod[cf][4]=L1[2].x;
+       l_mod[cf][5]=L1[2].y;
+       l_mod[cf][6]=L1[3].x;
+       l_mod[cf][7]=L1[3].y;
+     }
+
+
+     }
+
+     //write output with right multi frequency offset
+    double *coh1 = &coh[8*n];
+    double *mod1 = &model[8*n];
+    for(int cf=0; cf<F; cf++) {
+        coh1[cf*8*B+0] = l_coh[cf][0];
+        coh1[cf*8*B+1] = l_coh[cf][1];
+        coh1[cf*8*B+2] = l_coh[cf][2];
+        coh1[cf*8*B+3] = l_coh[cf][3];
+        coh1[cf*8*B+4] = l_coh[cf][4];
+        coh1[cf*8*B+5] = l_coh[cf][5];
+        coh1[cf*8*B+6] = l_coh[cf][6];
+        coh1[cf*8*B+7] = l_coh[cf][7];
+        mod1[cf*8*B+0] = l_mod[cf][0];
+        mod1[cf*8*B+1] = l_mod[cf][1];
+        mod1[cf*8*B+2] = l_mod[cf][2];
+        mod1[cf*8*B+3] = l_mod[cf][3];
+        mod1[cf*8*B+4] = l_mod[cf][4];
+        mod1[cf*8*B+5] = l_mod[cf][5];
+        mod1[cf*8*B+6] = l_mod[cf][6];
+        mod1[cf*8*B+7] = l_mod[cf][7];
+    }
+   } else {
+    /* F> MODEL_MAX_F, need to calculate/write multiple times */
+      /* how many calculate/write cycles */
+      int fcycle=(F+MODEL_MAX_F-1)/MODEL_MAX_F;
+      for (int cff=0; cff<fcycle; cff++) {
+     for(int cf=0; cf<MODEL_MAX_F; cf++) {
+        l_coh[cf][0]=0.0;
+        l_coh[cf][1]=0.0;
+        l_coh[cf][2]=0.0;
+        l_coh[cf][3]=0.0;
+        l_coh[cf][4]=0.0;
+        l_coh[cf][5]=0.0;
+        l_coh[cf][6]=0.0;
+        l_coh[cf][7]=0.0;
+     }
+
+     for (int k=0; k<K; k++) {
+        //source specific params
+        double sI0f,sQ0f,sU0f,sV0f,spec_idxf,spec_idx1f,spec_idx2f,myf0;
+        double phterm0 = (2.0*M_PI*(u_n*__ldg(&ll[k])+v_n*__ldg(&mm[k])+w_n*__ldg(&nn[k])));
+        sI0f=__ldg(&sI0[k]);
+        sQ0f=__ldg(&sQ0[k]);
+        sU0f=__ldg(&sU0[k]);
+        sV0f=__ldg(&sV0[k]);
+        spec_idxf=__ldg(&spec_idx[k]);
+        spec_idx1f=__ldg(&spec_idx1[k]);
+        spec_idx2f=__ldg(&spec_idx2[k]);
+        myf0=__ldg(&f0[k]);
+
+        unsigned char stypeT=__ldg(&stype[k]);
+
+        for(int cf=0; cf<MODEL_MAX_F && cf+cff*MODEL_MAX_F<F; cf++) {
+            double llcoh[8];
+            compute_prodterm_multifreq(sta1, sta2, N, K, T, F, phterm0, sI0f, sQ0f, sU0f, sV0f, spec_idxf, spec_idx1f, spec_idx2f, 
+               myf0, __ldg(&(freqs[cf+cff*MODEL_MAX_F])), deltaf, dobeam, tslot, k, cf+cff*MODEL_MAX_F, beam, element, exs, stypeT, u_n, v_n, w_n,llcoh);
+         l_coh[cf][0] +=llcoh[0];
+         l_coh[cf][1] +=llcoh[1];
+         l_coh[cf][2] +=llcoh[2];
+         l_coh[cf][3] +=llcoh[3];
+         l_coh[cf][4] +=llcoh[4];
+         l_coh[cf][5] +=llcoh[5];
+         l_coh[cf][6] +=llcoh[6];
+         l_coh[cf][7] +=llcoh[7];
+        }
+
+     }
+
+     cuDoubleComplex L1[4],L2[4];
+     for(int cf=0; cf<MODEL_MAX_F; cf++) {
+       L1[0].x=l_coh[cf][0];
+       L1[0].y=l_coh[cf][1];
+       L1[1].x=l_coh[cf][2];
+       L1[1].y=l_coh[cf][3];
+       L1[2].x=l_coh[cf][4];
+       L1[2].y=l_coh[cf][5];
+       L1[3].x=l_coh[cf][6];
+       L1[3].y=l_coh[cf][7];
+       /* L2=G1*L1 */
+       amb(G1,L1,L2);
+       /* L1=L2*G2^H */
+       ambt(L2,G2,L1);
+       l_mod[cf][0]=L1[0].x;
+       l_mod[cf][1]=L1[0].y;
+       l_mod[cf][2]=L1[1].x;
+       l_mod[cf][3]=L1[1].y;
+       l_mod[cf][4]=L1[2].x;
+       l_mod[cf][5]=L1[2].y;
+       l_mod[cf][6]=L1[3].x;
+       l_mod[cf][7]=L1[3].y;
+     }
+
+   
+    double *coh1 = &coh[8*n];
+    double *mod1 = &model[8*n];
+    for(int cf=0; cf<MODEL_MAX_F && cf+cff*MODEL_MAX_F<F; cf++) {
+        coh1[(cf+cff*MODEL_MAX_F)*8*B+0] = l_coh[cf][0];
+        coh1[(cf+cff*MODEL_MAX_F)*8*B+1] = l_coh[cf][1];
+        coh1[(cf+cff*MODEL_MAX_F)*8*B+2] = l_coh[cf][2];
+        coh1[(cf+cff*MODEL_MAX_F)*8*B+3] = l_coh[cf][3];
+        coh1[(cf+cff*MODEL_MAX_F)*8*B+4] = l_coh[cf][4];
+        coh1[(cf+cff*MODEL_MAX_F)*8*B+5] = l_coh[cf][5];
+        coh1[(cf+cff*MODEL_MAX_F)*8*B+6] = l_coh[cf][6];
+        coh1[(cf+cff*MODEL_MAX_F)*8*B+7] = l_coh[cf][7];
+        mod1[(cf+cff*MODEL_MAX_F)*8*B+0] = l_mod[cf][0];
+        mod1[(cf+cff*MODEL_MAX_F)*8*B+1] = l_mod[cf][1];
+        mod1[(cf+cff*MODEL_MAX_F)*8*B+2] = l_mod[cf][2];
+        mod1[(cf+cff*MODEL_MAX_F)*8*B+3] = l_mod[cf][3];
+        mod1[(cf+cff*MODEL_MAX_F)*8*B+4] = l_mod[cf][4];
+        mod1[(cf+cff*MODEL_MAX_F)*8*B+5] = l_mod[cf][5];
+        mod1[(cf+cff*MODEL_MAX_F)*8*B+6] = l_mod[cf][6];
+        mod1[(cf+cff*MODEL_MAX_F)*8*B+7] = l_mod[cf][7];
+    }
+
+   }
+   }
+  }
+}
+
+
 
 /* kernel to correct residuals */
 __global__ void
@@ -1837,6 +2134,38 @@ cudakernel_residuals(int B, int N, int T, int K, int F, double *u, double *v, do
 #endif
 }
 
+
+/* similar to cudakernel_residuals(), where J_p \sum_sources (C_pq) J_q^H calculated,
+   but also copy the coherencies, so both \sum_sources(C_pq) 
+   and J_p \sum_sources(C_pq) C_q^H are calculated
+   mod: coherency Bx8 values, all K sources are added together
+   coh: (J coherency J^H), Bx8 values
+ */
+void
+cudakernel_coherencies_and_residuals(int B, int N, int T, int K, int F, double *u, double *v, double *w, double *p, int nchunk, baseline_t *barr, double *freqs, float *beam, float *element, double *ll, double *mm, double *nn, double *sI, double *sQ, double *sU, double *sV,
+  unsigned char *stype, double *sI0, double *sQ0, double *sU0, double *sV0, double *f0, double *spec_idx, double *spec_idx1, double *spec_idx2, int **exs, double deltaf, double deltat, double dec0, double *mod, double *coh, int dobeam) {
+#ifdef CUDA_DBG
+  cudaError_t error;
+  error = cudaGetLastError();
+#endif
+
+  /* spawn threads to handle baselines, these threads will loop over sources */
+  int ThreadsPerBlock=DEFAULT_TH_PER_BK;
+  /* note: make sure we do not exceed max no of blocks available, 
+   otherwise (too many baselines, loop over source id) */
+  int BlocksPerGrid=(B+ThreadsPerBlock-1)/ThreadsPerBlock;
+  kernel_coherencies_and_residuals<<<BlocksPerGrid,ThreadsPerBlock>>>(B, N, T, K, F,u,v,w,p,nchunk,barr,freqs, beam, element, ll, mm, nn, sI, sQ, sU, sV,
+    stype, sI0, sQ0, sU0, sV0, f0, spec_idx, spec_idx1, spec_idx2, exs, deltaf, deltat, dec0, mod, coh, dobeam);
+  cudaDeviceSynchronize();
+#ifdef CUDA_DBG
+  error = cudaGetLastError();
+  if(error != cudaSuccess) {
+    // print the CUDA error message and exit
+    fprintf(stderr,"CUDA error: %s :%s: %d\n", cudaGetErrorString(error),__FILE__,__LINE__);
+    exit(-1);
+  }
+#endif
+}
 
 void
 cudakernel_correct_residuals(int B, int N, int Nb, int boff, int F, int nchunk, double *x, double *p, baseline_t *barr) {

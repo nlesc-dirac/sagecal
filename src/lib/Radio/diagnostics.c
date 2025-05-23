@@ -97,6 +97,7 @@ residual_threadfn(void *data) {
 
   double *ud,*vd,*wd;
   double *cohd;
+  double *modeld;
   baseline_t *barrd;
   double *freqsd;
   float *longd=0,*latd=0; double *timed;
@@ -106,7 +107,9 @@ residual_threadfn(void *data) {
   /* storage for element beam coefficients */
   float *pattern_phid=0, *pattern_thetad=0, *preambled=0;
   /* allocate memory in GPU */
-  err=cudaMalloc((void**) &cohd, t->Nbase*8*t->Nf*sizeof(double)); /* coherencies only for 1 cluster, Nf freq, used to store sum of clusters*/
+  err=cudaMalloc((void**) &cohd, t->Nbase*8*t->Nf*sizeof(double)); /* C coherencies only for 1 cluster, Nf freq, used to store sum of clusters*/
+  checkCudaError(err,__FILE__,__LINE__);
+  err=cudaMalloc((void**) &modeld, t->Nbase*8*t->Nf*sizeof(double)); /* J C J^H model only for 1 cluster, Nf freq, used to store sum of clusters*/
   checkCudaError(err,__FILE__,__LINE__);
   err=cudaMalloc((void**) &barrd, t->Nbase*sizeof(baseline_t));
   checkCudaError(err,__FILE__,__LINE__);
@@ -428,8 +431,8 @@ residual_threadfn(void *data) {
 
 
      /* calculate coherencies for all sources in this cluster, add them up */
-     cudakernel_residuals(t->Nbase,t->N,t->tilesz,t->carr[ncl].N,t->Nf,ud,vd,wd,pd,t->carr[ncl].nchunk,barrd,freqsd,beamd, elementd,
-     lld,mmd,nnd,sId,sQd,sUd,sVd,styped,sI0d,sQ0d,sU0d,sV0d,f0d,spec_idxd,spec_idx1d,spec_idx2d,dev_p,t->fdelta,t->tdelta,t->dec0,cohd,t->dobeam);
+     cudakernel_coherencies_and_residuals(t->Nbase,t->N,t->tilesz,t->carr[ncl].N,t->Nf,ud,vd,wd,pd,t->carr[ncl].nchunk,barrd,freqsd,beamd, elementd,
+     lld,mmd,nnd,sId,sQd,sUd,sVd,styped,sI0d,sQ0d,sU0d,sV0d,f0d,spec_idxd,spec_idx1d,spec_idx2d,dev_p,t->fdelta,t->tdelta,t->dec0,modeld,cohd,t->dobeam);
     
      /* copy back coherencies to host, 
         coherencies on host have 8M stride, on device have 8 stride */
@@ -535,6 +538,8 @@ residual_threadfn(void *data) {
   err=cudaFree(wd);
   checkCudaError(err,__FILE__,__LINE__);
   err=cudaFree(cohd);
+  checkCudaError(err,__FILE__,__LINE__);
+  err=cudaFree(modeld);
   checkCudaError(err,__FILE__,__LINE__);
   err=cudaFree(barrd);
   checkCudaError(err,__FILE__,__LINE__);
