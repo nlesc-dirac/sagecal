@@ -1603,6 +1603,14 @@ const double *__restrict__ sQ0, const double *__restrict__ sU0, const double *__
         l_coh[cf][5]=0.0;
         l_coh[cf][6]=0.0;
         l_coh[cf][7]=0.0;
+        l_mod[cf][0]=0.0;
+        l_mod[cf][1]=0.0;
+        l_mod[cf][2]=0.0;
+        l_mod[cf][3]=0.0;
+        l_mod[cf][4]=0.0;
+        l_mod[cf][5]=0.0;
+        l_mod[cf][6]=0.0;
+        l_mod[cf][7]=0.0;
      }
 
      for (int k=0; k<K; k++) {

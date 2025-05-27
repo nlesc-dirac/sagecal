@@ -78,7 +78,7 @@ typedef struct thread_data_pred_t_ {
 } thread_data_pred_t;
 
 static void *
-residual_threadfn(void *data) {
+model_residual_threadfn(void *data) {
   thread_data_pred_t *t=(thread_data_pred_t*)data;
   /* first, select a GPU, if total clusters < MAX_GPU_ID
     use random selection, elese use this thread id */
@@ -221,12 +221,16 @@ residual_threadfn(void *data) {
   err=cudaMallocHost((void**)&xlocal,sizeof(double)*(size_t)t->Nbase*8*t->Nf);
   checkCudaError(err,__FILE__,__LINE__);
 
+  double *cohlocal;
+  err=cudaMallocHost((void**)&cohlocal,sizeof(double)*(size_t)t->Nbase*8*t->Nf);
+  checkCudaError(err,__FILE__,__LINE__);
+
   double *pd; /* parameter array per cluster */
 
 /******************* begin loop over clusters **************************/
   for (ncl=t->soff; ncl<t->soff+t->Ns; ncl++) {
-     /* check if cluster id >=0 to do a subtraction */
-     if (t->carr[ncl].id>=0) {
+     /* we doe not check if cluster id >=0 to do a subtraction,
+      * because we use the residual for influence calculation only */
      /* allocate memory for this clusters beam */
      if (t->dobeam==DOBEAM_ARRAY || t->dobeam==DOBEAM_FULL
          ||t->dobeam==DOBEAM_ARRAY_WB ||t->dobeam==DOBEAM_FULL_WB) {
@@ -434,11 +438,15 @@ residual_threadfn(void *data) {
      cudakernel_coherencies_and_residuals(t->Nbase,t->N,t->tilesz,t->carr[ncl].N,t->Nf,ud,vd,wd,pd,t->carr[ncl].nchunk,barrd,freqsd,beamd, elementd,
      lld,mmd,nnd,sId,sQd,sUd,sVd,styped,sI0d,sQ0d,sU0d,sV0d,f0d,spec_idxd,spec_idx1d,spec_idx2d,dev_p,t->fdelta,t->tdelta,t->dec0,modeld,cohd,t->dobeam);
     
-     /* copy back coherencies to host, 
-        coherencies on host have 8M stride, on device have 8 stride */
-     err=cudaMemcpy(xlocal, cohd, sizeof(double)*t->Nbase*8*t->Nf, cudaMemcpyDeviceToHost);
+     /* copy back coherencies to host, for the specific cluster 
+      * also copy back model to calculate residual
+        both on host have 8M stride, on device have 8 stride */
+     err=cudaMemcpy(xlocal, modeld, sizeof(double)*t->Nbase*8*t->Nf, cudaMemcpyDeviceToHost);
      checkCudaError(err,__FILE__,__LINE__);
      my_daxpy(t->Nbase*8*t->Nf,xlocal,1.0,t->x);
+     err=cudaMemcpy(cohlocal, cohd, sizeof(double)*t->Nbase*8*t->Nf, cudaMemcpyDeviceToHost);
+     checkCudaError(err,__FILE__,__LINE__);
+     my_dcopy(t->Nbase*8*t->Nf,cohlocal,1,(double*)&t->coh[ncl*t->Nbase*4*t->Nf],1);
 
      for (cj=0; cj<t->carr[ncl].N; cj++) {
         if (t->carr[ncl].stype[cj]==STYPE_POINT) {
@@ -523,11 +531,12 @@ residual_threadfn(void *data) {
      err=cudaFree(sV0d);
      checkCudaError(err,__FILE__,__LINE__);
      }
-   }
   }
 /******************* end loop over clusters **************************/
 
   /* free memory */
+  err=cudaFreeHost(cohlocal);
+  checkCudaError(err,__FILE__,__LINE__);
   err=cudaFreeHost(xlocal);
   checkCudaError(err,__FILE__,__LINE__);
 
@@ -640,6 +649,12 @@ calculate_diagnostics_gpu(double *u,double *v,double *w,double *p,double *x,int 
     exit(1);
   }
 
+  complex double *coh;
+  printf("Coherencies baselines=%d tilesize=%d chan=%d GPU=%d clus=%d\n",Nbase,tilesz,Nchan,Ngpu,M);
+  if ((coh=(complex double*)calloc((size_t)Nbase*4*tilesz*Nchan*M,sizeof(complex double)))==0) {
+    fprintf(stderr,"%s: %d: No free memory\n",__FILE__,__LINE__);
+    exit(1);
+  }
 
   /* set common parameters, and split clusters to threads */
   ci=0;
@@ -656,7 +671,9 @@ calculate_diagnostics_gpu(double *u,double *v,double *w,double *p,double *x,int 
      threaddata[nth].u=u; 
      threaddata[nth].v=v;
      threaddata[nth].w=w;
-     threaddata[nth].coh=0;
+     // Note: pass coherencies without any offset, as the offset
+     // will be determined by the cluster x (Nbase*8*tilesz*Nchan)
+     threaddata[nth].coh=coh;
      threaddata[nth].x=&xlocal[nth*Nbase*8*tilesz*Nchan]; /* distinct arrays to get back the result */
 
      threaddata[nth].N=N;
@@ -694,12 +711,12 @@ calculate_diagnostics_gpu(double *u,double *v,double *w,double *p,double *x,int 
 
      threaddata[nth].ecoeff=ecoeff;
 
-     pthread_create(&th_array[nth],&attr,residual_threadfn,(void*)(&threaddata[nth]));
+     pthread_create(&th_array[nth],&attr,model_residual_threadfn,(void*)(&threaddata[nth]));
      /* next source set */
      ci=ci+Nthb;
   }
 
-     
+  printf("Coh %lf %lf\n",creal(coh[0]),cimag(coh[0]));
 
   /* now wait for threads to finish */
   for(ci=0; ci<nth; ci++) {
@@ -709,10 +726,9 @@ calculate_diagnostics_gpu(double *u,double *v,double *w,double *p,double *x,int 
   }
 
 
-
+  free(coh);
   free(xlocal);
   free(threaddata);
-
 
   free(th_array);
   pthread_attr_destroy(&attr);
