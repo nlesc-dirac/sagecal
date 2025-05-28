@@ -439,8 +439,7 @@ model_residual_threadfn(void *data) {
      lld,mmd,nnd,sId,sQd,sUd,sVd,styped,sI0d,sQ0d,sU0d,sV0d,f0d,spec_idxd,spec_idx1d,spec_idx2d,dev_p,t->fdelta,t->tdelta,t->dec0,modeld,cohd,t->dobeam);
     
      /* copy back coherencies to host, for the specific cluster 
-      * also copy back model to calculate residual
-        both on host have 8M stride, on device have 8 stride */
+      * also copy back model to calculate residual */
      err=cudaMemcpy(xlocal, modeld, sizeof(double)*t->Nbase*8*t->Nf, cudaMemcpyDeviceToHost);
      checkCudaError(err,__FILE__,__LINE__);
      my_daxpy(t->Nbase*8*t->Nf,xlocal,1.0,t->x);
@@ -716,15 +715,12 @@ calculate_diagnostics_gpu(double *u,double *v,double *w,double *p,double *x,int 
      ci=ci+Nthb;
   }
 
-  printf("Coh %lf %lf\n",creal(coh[0]),cimag(coh[0]));
-
   /* now wait for threads to finish */
   for(ci=0; ci<nth; ci++) {
     pthread_join(th_array[ci],NULL);
     /* subtract to find residual */
     my_daxpy(Nbase*8*tilesz*Nchan,threaddata[ci].x,-1.0,x);
   }
-
 
   free(coh);
   free(xlocal);
