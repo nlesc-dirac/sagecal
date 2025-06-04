@@ -607,6 +607,80 @@ model_residual_threadfn(void *data) {
 
 }
 
+static void *
+hessian_threadfn(void *data) {
+  thread_data_pred_t *t=(thread_data_pred_t*)data;
+
+  /* first, select a GPU, if total clusters < MAX_GPU_ID
+    use random selection, elese use this thread id */
+  int card;
+  if (t->M<=MAX_GPU_ID) {
+   card=select_work_gpu(MAX_GPU_ID,t->hst);
+  } else {
+   card=t->tid;/* note that max. no. of threads is still <= no. of GPUs */
+  }
+  cudaError_t err;
+  int ncl;
+
+
+  err=cudaSetDevice(card);
+  checkCudaError(err,__FILE__,__LINE__);
+
+  float *resd=0;
+  float *hessd;
+  baseline_t *barrd;
+
+  dtofcopy(t->Nbase*8*t->Nf,&resd,t->x);
+
+  /* Hessian for one cluster, 4N x 4N complex matrix */
+  err=cudaMalloc((void**) &hessd, t->N*4*t->N*4*2*sizeof(float)); /* Hessian for one cluster */
+  checkCudaError(err,__FILE__,__LINE__);
+  err=cudaMalloc((void**) &barrd, t->Nbase*sizeof(baseline_t));
+  checkCudaError(err,__FILE__,__LINE__);
+
+  float *hess;
+  err=cudaMallocHost((void**)&hess,sizeof(float)*(size_t)t->N*4*t->N*4*2);
+  checkCudaError(err,__FILE__,__LINE__);
+  /* copy data */
+  err=cudaMemcpy(barrd, t->barr, t->Nbase*sizeof(baseline_t), cudaMemcpyHostToDevice);
+  checkCudaError(err,__FILE__,__LINE__);
+
+/******************* begin loop over clusters **************************/
+  for (ncl=t->soff; ncl<t->soff+t->Ns; ncl++) {
+    printf("clus %d freq=%d\n",ncl,t->Nf);
+    float *cohd=0;
+    /* note dtofcopy() will allocate cohd */
+    dtofcopy(t->Nbase*8*t->Nf,&cohd,(double*)&t->coh[ncl*t->Nbase*4*t->Nf]);
+
+    /* initialize hessian to 0 */
+    err=cudaMemset(hessd, 0, t->N*4*t->N*4*2*sizeof(float));
+    checkCudaError(err,__FILE__,__LINE__);
+    /* run kernel, which will calculate hessian for this cluster */
+
+    err=cudaFree(cohd);
+    checkCudaError(err,__FILE__,__LINE__);
+    /* copy result back */
+    err=cudaMemcpy(hess,hessd,sizeof(float)*(size_t)t->N*4*t->N*4*2,cudaMemcpyDeviceToHost);
+    checkCudaError(err,__FILE__,__LINE__);
+  }
+/******************* end loop over clusters **************************/
+
+
+  err=cudaFree(resd);
+  checkCudaError(err,__FILE__,__LINE__);
+  err=cudaFree(hessd);
+  checkCudaError(err,__FILE__,__LINE__);
+  err=cudaFree(barrd);
+  checkCudaError(err,__FILE__,__LINE__);
+  err=cudaFreeHost(hess);
+  checkCudaError(err,__FILE__,__LINE__);
+
+  cudaDeviceSynchronize();
+  /* reset error state */
+  err=cudaGetLastError(); 
+  return NULL;
+}
+
 /* p: 8NMx1 parameter array, but M is 'effective' clusters, need to use carr to find the right offset
 */
 int
@@ -720,6 +794,17 @@ calculate_diagnostics_gpu(double *u,double *v,double *w,double *p,double *x,int 
     pthread_join(th_array[ci],NULL);
     /* subtract to find residual */
     my_daxpy(Nbase*8*tilesz*Nchan,threaddata[ci].x,-1.0,x);
+  }
+
+  /* loop over clusters */
+  for(ci=0; ci<nth; ci++) {
+     /* copy residual back to each thread */
+     my_dcopy(Nbase*8*tilesz*Nchan,x,1,threaddata[ci].x,1);
+     pthread_create(&th_array[ci],&attr,hessian_threadfn,(void*)(&threaddata[ci]));
+  }
+
+  for(ci=0; ci<nth; ci++) {
+    pthread_join(th_array[ci],NULL);
   }
 
   free(coh);

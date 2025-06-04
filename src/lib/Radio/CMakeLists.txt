@@ -32,12 +32,13 @@ if(HAVE_CUDA)
 
     # objects only for gpu version
     set (extra_objects
+        predict_withbeam_cuda
         diagnostics
     )
 
     set (extra_objects_cuda
         predict_model
-        predict_withbeam_cuda
+        influence_function
     )
 
     message (STATUS "Extra CUDA objects ... = ${extra_objects_cuda}")
