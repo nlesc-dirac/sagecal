@@ -48,6 +48,43 @@ __global__ void
 kernel_hessian(int B, int N, int T, int F, baseline_t *barr,
     const float *__restrict__ coh, const float *__restrict__ res, float *hess) {
 
+  /* only work with the first freq, so F==1 taken */
+  /* x: baseline */
+  unsigned int n=threadIdx.x+blockDim.x*blockIdx.x;
+  /* y: station, column block of Hessian, upper triangle */
+  unsigned int m=threadIdx.y+blockDim.y*blockIdx.y;
+
+  if (n<B) {
+    int sta1=barr[n].sta1;
+    int sta2=barr[n].sta2;
+    if ((sta1>0 && sta2>0) && (m==sta1 or m==sta2)) {
+
+    cuFloatComplex C[4],R[4];
+    C[0].x=(coh[8*n]);
+    C[0].y=(coh[8*n+1]);
+    C[1].x=(coh[8*n+2]);
+    C[1].y=(coh[8*n+3]);
+    C[2].x=(coh[8*n+4]);
+    C[2].y=(coh[8*n+5]);
+    C[3].x=(coh[8*n+6]);
+    C[3].y=(coh[8*n+7]);
+    R[0].x=(res[8*n]);
+    R[0].y=(res[8*n+1]);
+    R[1].x=(res[8*n+2]);
+    R[1].y=(res[8*n+3]);
+    R[2].x=(res[8*n+4]);
+    R[2].y=(res[8*n+5]);
+    R[3].x=(res[8*n+6]);
+    R[3].y=(res[8*n+7]);
+    }
+
+  }
+  __syncthreads();
+
+  /* copy upper triangle to lower triangle map column block m to
+   row block m */
+
+
 }
  
 
@@ -75,11 +112,11 @@ cudakernel_hessian(int B, int N, int T, int F, baseline_t *barr, float *coh, flo
 #endif
 
   /* spawn threads to handle baselines, these threads will loop over sources */
-  int ThreadsPerBlock=DEFAULT_TH_PER_BK;
-  /* note: make sure we do not exceed max no of blocks available, 
-   otherwise (too many baselines, loop over source id) */
-  int BlocksPerGrid=(B+ThreadsPerBlock-1)/ThreadsPerBlock;
-  kernel_hessian<<<BlocksPerGrid,ThreadsPerBlock>>>(B, N, T, F, barr,
+  /* thread x : baseline, thread y: station */
+  dim3 threadsPerBlock(16,8); 
+  dim3 numBlocks((B+threadsPerBlock.x-1)/threadsPerBlock.x,
+         (N+threadsPerBlock.y-1)/threadsPerBlock.y);
+  kernel_hessian<<<numBlocks,threadsPerBlock>>>(B, N, T, F, barr,
     coh, res, hess);
   cudaDeviceSynchronize();
 #ifdef CUDA_DBG
@@ -91,8 +128,5 @@ cudakernel_hessian(int B, int N, int T, int F, baseline_t *barr, float *coh, flo
   }
 #endif
 }
-
-
-
 
 } /* extern "C" */
