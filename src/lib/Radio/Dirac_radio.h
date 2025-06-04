@@ -660,6 +660,22 @@ extern int
 calculate_diagnostics_gpu(double *u,double *v,double *w,double *p,double *x,int N,int Nbase,int tilesz,baseline_t *barr, clus_source_t *carr, int M,double *freqs,int Nchan, double fdelta,double tdelta, double dec0,
  int bf_type, double b_ra0, double b_dec0, double ph_ra0, double ph_dec0, double ph_freq0, double *longitude, double *latitude, double *time_utc,int *Nelem, double **xx, double **yy, double **zz, elementcoeff *ecoeff, int dobeam, int Nt);
 
+/****************************** influence_function.cu ****************************/
+#ifdef HAVE_CUDA
+/* B: total baselines (baselines x tile size)
+   N: stations
+   T: tile size (not really needed)
+   F: frequencies
+   barr: baseline to station map, size B x 1
+   coh: coherencies Bx4 complex
+   res: residual Bx4 complex
+   hess: hessian (output) 4N x 4N complex, or 4N*4N*2 complex float
+*/
+extern void
+cudakernel_hessian(int B, int N, int T, int F, baseline_t *barr, float *coh, float *res, float *hess);
+
+
+#endif /* HAVE_CUDA */
 
 #ifdef __cplusplus
      } /* extern "C" */

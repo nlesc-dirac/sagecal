@@ -647,7 +647,7 @@ hessian_threadfn(void *data) {
 
 /******************* begin loop over clusters **************************/
   for (ncl=t->soff; ncl<t->soff+t->Ns; ncl++) {
-    printf("clus %d freq=%d\n",ncl,t->Nf);
+    printf("clus %d base=%d stat=%d tile=%d freq=%d\n",ncl,t->Nbase,t->N,t->tilesz,t->Nf);
     float *cohd=0;
     /* note dtofcopy() will allocate cohd */
     dtofcopy(t->Nbase*8*t->Nf,&cohd,(double*)&t->coh[ncl*t->Nbase*4*t->Nf]);
@@ -656,6 +656,7 @@ hessian_threadfn(void *data) {
     err=cudaMemset(hessd, 0, t->N*4*t->N*4*2*sizeof(float));
     checkCudaError(err,__FILE__,__LINE__);
     /* run kernel, which will calculate hessian for this cluster */
+    cudakernel_hessian(t->Nbase,t->N,t->tilesz,t->Nf,barrd,cohd,resd,hessd);
 
     err=cudaFree(cohd);
     checkCudaError(err,__FILE__,__LINE__);
