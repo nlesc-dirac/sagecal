@@ -44,6 +44,32 @@ ambt(const cuFloatComplex *__restrict__ a, const cuFloatComplex *__restrict__ b,
  c[3]=cuCaddf(cuCmulf(a[2],cuConjf(b[2])),cuCmulf(a[3],cuConjf(b[3])));
 }
 
+/* Kronecker product C = kron(A,B)
+   A,B :2x2 complex, A=[a0, a1; a2, a3], B=[b0, b1; b2, b3]
+   C: 4x4 complex,
+   C=[a_11 B, a_12 B;  = [a0 B, a1 B;
+      a_21 B, a_22 B]     a2 B, a3 B]
+   all matrices in row major order */
+static __device__ void
+kron_ab(const cuFloatComplex*__restrict__ a, const cuFloatComplex *__restrict__ b, cuFloatComplex *__restrict__ c) {
+  c[0]=cuCmulf(a[0],b[0]);
+  c[1]=cuCmulf(a[0],b[2]);
+  c[2]=cuCmulf(a[2],b[0]);
+  c[3]=cuCmulf(a[2],b[2]);
+  c[4]=cuCmulf(a[0],b[1]);
+  c[5]=cuCmulf(a[0],b[3]);
+  c[6]=cuCmulf(a[2],b[1]);
+  c[7]=cuCmulf(a[2],b[3]);
+  c[8]=cuCmulf(a[1],b[0]);
+  c[9]=cuCmulf(a[1],b[2]);
+  c[10]=cuCmulf(a[3],b[0]);
+  c[11]=cuCmulf(a[3],b[2]);
+  c[12]=cuCmulf(a[1],b[1]);
+  c[13]=cuCmulf(a[1],b[3]);
+  c[14]=cuCmulf(a[3],b[1]);
+  c[15]=cuCmulf(a[3],b[3]);
+}
+
 __global__ void
 kernel_hessian(int B, int N, int T, int F, baseline_t *barr,
     const float *__restrict__ coh, const float *__restrict__ res, float *hess) {
@@ -54,28 +80,86 @@ kernel_hessian(int B, int N, int T, int F, baseline_t *barr,
   /* y: station, column block of Hessian, upper triangle */
   unsigned int m=threadIdx.y+blockDim.y*blockIdx.y;
 
+  /* hessian: 4N x 4N complex float, column major order,
+    each column 4N complex float = 8N float, so, value at (row, col)
+   is hess[col*4*N*2+row*4*2]+1j*hess[col*4*N*2+row*4*2+1] */
+
   if (n<B) {
     int sta1=barr[n].sta1;
     int sta2=barr[n].sta2;
     if ((sta1>0 && sta2>0) && (m==sta1 or m==sta2)) {
+      /* this thread will work on column block m, 
+         sta1,sta2 will update row,col of hess 
+         (sta1,sta2), (sta2,sta1), (sta1,sta1), (sta2,sta2)
+         and depending on m, select which values to update */
+    cuFloatComplex C[4],R[4],H[16];
 
-    cuFloatComplex C[4],R[4];
-    C[0].x=(coh[8*n]);
-    C[0].y=(coh[8*n+1]);
-    C[1].x=(coh[8*n+2]);
-    C[1].y=(coh[8*n+3]);
-    C[2].x=(coh[8*n+4]);
-    C[2].y=(coh[8*n+5]);
-    C[3].x=(coh[8*n+6]);
-    C[3].y=(coh[8*n+7]);
-    R[0].x=(res[8*n]);
-    R[0].y=(res[8*n+1]);
-    R[1].x=(res[8*n+2]);
-    R[1].y=(res[8*n+3]);
-    R[2].x=(res[8*n+4]);
-    R[2].y=(res[8*n+5]);
-    R[3].x=(res[8*n+6]);
-    R[3].y=(res[8*n+7]);
+    C[0].x=__ldg(&coh[8*n]);
+    C[0].y=__ldg(&coh[8*n+1]);
+    C[1].x=__ldg(&coh[8*n+2]);
+    C[1].y=__ldg(&coh[8*n+3]);
+    C[2].x=__ldg(&coh[8*n+4]);
+    C[2].y=__ldg(&coh[8*n+5]);
+    C[3].x=__ldg(&coh[8*n+6]);
+    C[3].y=__ldg(&coh[8*n+7]);
+    R[0].x=__ldg(&res[8*n]);
+    R[0].y=__ldg(&res[8*n+1]);
+    R[1].x=__ldg(&res[8*n+2]);
+    R[1].y=__ldg(&res[8*n+3]);
+    R[2].x=__ldg(&res[8*n+4]);
+    R[2].y=__ldg(&res[8*n+5]);
+    R[3].x=__ldg(&res[8*n+6]);
+    R[3].y=__ldg(&res[8*n+7]);
+    if (m==sta1) {
+      /* update (sta2,sta1) and (sta1,sta1) */
+      kron_ab(C,R,H);
+      for (int off=0; off<4; off++) {
+      atomicAdd(&hess[(sta1+off)*4*N*2+sta2*4*2],H[0+off].x);
+      atomicAdd(&hess[(sta1+off)*4*N*2+sta2*4*2+1],H[0+off].y);
+      atomicAdd(&hess[(sta1+off)*4*N*2+sta2*4*2+2],H[4+off].x);
+      atomicAdd(&hess[(sta1+off)*4*N*2+sta2*4*2+3],H[4+off].y);
+      atomicAdd(&hess[(sta1+off)*4*N*2+sta2*4*2+4],H[8+off].x);
+      atomicAdd(&hess[(sta1+off)*4*N*2+sta2*4*2+5],H[8+off].y);
+      atomicAdd(&hess[(sta1+off)*4*N*2+sta2*4*2+6],H[12+off].x);
+      atomicAdd(&hess[(sta1+off)*4*N*2+sta2*4*2+7],H[12+off].y);
+      }
+
+      for (int off=0; off<4; off++) {
+      atomicAdd(&hess[(sta1+off)*4*N*2+sta1*4*2],H[0+off].x);
+      atomicAdd(&hess[(sta1+off)*4*N*2+sta1*4*2+1],H[0+off].y);
+      atomicAdd(&hess[(sta1+off)*4*N*2+sta1*4*2+2],H[4+off].x);
+      atomicAdd(&hess[(sta1+off)*4*N*2+sta1*4*2+3],H[4+off].y);
+      atomicAdd(&hess[(sta1+off)*4*N*2+sta1*4*2+4],H[8+off].x);
+      atomicAdd(&hess[(sta1+off)*4*N*2+sta1*4*2+5],H[8+off].y);
+      atomicAdd(&hess[(sta1+off)*4*N*2+sta1*4*2+6],H[12+off].x);
+      atomicAdd(&hess[(sta1+off)*4*N*2+sta1*4*2+7],H[12+off].y);
+      }
+
+    } else { /* m==sta2 */
+      kron_ab(C,R,H);
+      /* update (sta1,sta2) and (sta2,sta2) */
+      for (int off=0; off<4; off++) {
+      atomicAdd(&hess[(sta2+off)*4*N*2+sta1*4*2],H[0+off].x);
+      atomicAdd(&hess[(sta2+off)*4*N*2+sta1*4*2+1],H[0+off].y);
+      atomicAdd(&hess[(sta2+off)*4*N*2+sta1*4*2+2],H[4+off].x);
+      atomicAdd(&hess[(sta2+off)*4*N*2+sta1*4*2+3],H[4+off].y);
+      atomicAdd(&hess[(sta2+off)*4*N*2+sta1*4*2+4],H[8+off].x);
+      atomicAdd(&hess[(sta2+off)*4*N*2+sta1*4*2+5],H[8+off].y);
+      atomicAdd(&hess[(sta2+off)*4*N*2+sta1*4*2+6],H[12+off].x);
+      atomicAdd(&hess[(sta2+off)*4*N*2+sta1*4*2+7],H[12+off].y);
+      }
+
+      for (int off=0; off<4; off++) {
+      atomicAdd(&hess[(sta2+off)*4*N*2+sta2*4*2],H[0+off].x);
+      atomicAdd(&hess[(sta2+off)*4*N*2+sta2*4*2+1],H[0+off].y);
+      atomicAdd(&hess[(sta2+off)*4*N*2+sta2*4*2+2],H[4+off].x);
+      atomicAdd(&hess[(sta2+off)*4*N*2+sta2*4*2+3],H[4+off].y);
+      atomicAdd(&hess[(sta2+off)*4*N*2+sta2*4*2+4],H[8+off].x);
+      atomicAdd(&hess[(sta2+off)*4*N*2+sta2*4*2+5],H[8+off].y);
+      atomicAdd(&hess[(sta2+off)*4*N*2+sta2*4*2+6],H[12+off].x);
+      atomicAdd(&hess[(sta2+off)*4*N*2+sta2*4*2+7],H[12+off].y);
+      }
+    }
     }
 
   }
@@ -116,6 +200,7 @@ cudakernel_hessian(int B, int N, int T, int F, baseline_t *barr, float *coh, flo
   dim3 threadsPerBlock(16,8); 
   dim3 numBlocks((B+threadsPerBlock.x-1)/threadsPerBlock.x,
          (N+threadsPerBlock.y-1)/threadsPerBlock.y);
+  printf("threads %d x %d blocks %d x %d\n",threadsPerBlock.x,threadsPerBlock.y,numBlocks.x,numBlocks.y);
   kernel_hessian<<<numBlocks,threadsPerBlock>>>(B, N, T, F, barr,
     coh, res, hess);
   cudaDeviceSynchronize();
