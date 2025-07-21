@@ -161,7 +161,7 @@ extern \"C\" {
         self.out_fd_.write("//Frequency coordinate GHz"+"\n")
         self.out_fd_.write("const static double "+str(self.pream_)+"_beam_elem_freqs["+str(self.n_freq_)+"]={\n")
         for freq in range(self.n_freq_):
-            self.out_fd_.write(f" {self.freq_[freq]/1e9:10.9f}")
+            self.out_fd_.write(f" {self.freq_[freq]/1e9:10.9f},")
         self.out_fd_.write("};"+"\n")
         self.out_fd_.write("const static complex double "+str(self.pream_)+"_beam_elem_theta["+str(self.n_freq_)+"]["+str(self.nmodes_)+"]={\n")
         for freq in range(self.n_freq_):
