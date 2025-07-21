@@ -189,7 +189,7 @@ checkCudaError(cudaError_t err, const char *file, int line)
 
 
 void
-cudakernel_hessian(int B, int N, int T, int F, baseline_t *barr, float *coh, float *res, float *hess) {
+cudakernel_hessian(int B, int N, int T, int F, baseline_t *barr, double *p, float *coh, float *res, float *hess) {
 #ifdef CUDA_DBG
   cudaError_t error;
   error = cudaGetLastError();

@@ -667,12 +667,13 @@ calculate_diagnostics_gpu(double *u,double *v,double *w,double *p,double *x,int 
    T: tile size (not really needed)
    F: frequencies
    barr: baseline to station map, size B x 1
+   p: parameter arrays 8*N*M x1 double values (re,img) for each station/direction
    coh: coherencies Bx4 complex
    res: residual Bx4 complex
    hess: hessian (output) 4N x 4N complex, or 4N*4N*2 complex float
 */
 extern void
-cudakernel_hessian(int B, int N, int T, int F, baseline_t *barr, float *coh, float *res, float *hess);
+cudakernel_hessian(int B, int N, int T, int F, baseline_t *barr, double *p, float *coh, float *res, float *hess);
 
 
 #endif /* HAVE_CUDA */
