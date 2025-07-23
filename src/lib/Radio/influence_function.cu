@@ -71,7 +71,7 @@ kron_ab(const cuFloatComplex*__restrict__ a, const cuFloatComplex *__restrict__ 
 }
 
 __global__ void
-kernel_hessian(int B, int N, int T, int F, baseline_t *barr,
+kernel_hessian(int B, int N, int T, int F, const double *__restrict__ p, baseline_t *barr,
     const float *__restrict__ coh, const float *__restrict__ res, float *hess) {
 
   /* only work with the first freq, so F==1 taken */
@@ -201,7 +201,7 @@ cudakernel_hessian(int B, int N, int T, int F, baseline_t *barr, double *p, floa
   dim3 numBlocks((B+threadsPerBlock.x-1)/threadsPerBlock.x,
          (N+threadsPerBlock.y-1)/threadsPerBlock.y);
   printf("threads %d x %d blocks %d x %d\n",threadsPerBlock.x,threadsPerBlock.y,numBlocks.x,numBlocks.y);
-  kernel_hessian<<<numBlocks,threadsPerBlock>>>(B, N, T, F, barr,
+  kernel_hessian<<<numBlocks,threadsPerBlock>>>(B, N, T, F, p, barr,
     coh, res, hess);
   cudaDeviceSynchronize();
 #ifdef CUDA_DBG

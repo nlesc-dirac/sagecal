@@ -645,6 +645,7 @@ hessian_threadfn(void *data) {
   err=cudaMemcpy(barrd, t->barr, t->Nbase*sizeof(baseline_t), cudaMemcpyHostToDevice);
   checkCudaError(err,__FILE__,__LINE__);
 
+  double *pd; /* parameter array per cluster */
 /******************* begin loop over clusters **************************/
   for (ncl=t->soff; ncl<t->soff+t->Ns; ncl++) {
     printf("clus %d base=%d stat=%d tile=%d freq=%d\n",ncl,t->Nbase,t->N,t->tilesz,t->Nf);
@@ -655,11 +656,22 @@ hessian_threadfn(void *data) {
     /* initialize hessian to 0 */
     err=cudaMemset(hessd, 0, t->N*4*t->N*4*2*sizeof(float));
     checkCudaError(err,__FILE__,__LINE__);
+
+    /* parameter vector size may change depending on hybrid parameter */
+    err=cudaMalloc((void**) &pd, t->N*8*t->carr[ncl].nchunk*sizeof(double));
+    checkCudaError(err,__FILE__,__LINE__);
+    err=cudaMemcpy(pd, &(t->p[t->carr[ncl].p[0]]), t->N*8*t->carr[ncl].nchunk*sizeof(double), cudaMemcpyHostToDevice);
+    checkCudaError(err,__FILE__,__LINE__);
+
+
     /* run kernel, which will calculate hessian for this cluster */
     cudakernel_hessian(t->Nbase,t->N,t->tilesz,t->Nf,barrd,pd,cohd,resd,hessd);
 
     err=cudaFree(cohd);
     checkCudaError(err,__FILE__,__LINE__);
+    err=cudaFree(pd);
+    checkCudaError(err,__FILE__,__LINE__);
+
     /* copy result back */
     err=cudaMemcpy(hess,hessd,sizeof(float)*(size_t)t->N*4*t->N*4*2,cudaMemcpyDeviceToHost);
     checkCudaError(err,__FILE__,__LINE__);
