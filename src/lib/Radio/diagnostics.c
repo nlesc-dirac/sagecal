@@ -665,7 +665,7 @@ hessian_threadfn(void *data) {
 
 
     /* run kernel, which will calculate hessian for this cluster */
-    cudakernel_hessian(t->Nbase,t->N,t->tilesz,t->Nf,barrd,pd,cohd,resd,hessd);
+    cudakernel_hessian(t->Nbase,t->N,t->tilesz,t->Nf,barrd,pd,t->carr[ncl].nchunk,cohd,resd,hessd);
 
     err=cudaFree(cohd);
     checkCudaError(err,__FILE__,__LINE__);

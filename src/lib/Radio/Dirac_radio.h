@@ -559,7 +559,7 @@ cudakernel_coherencies_and_residuals(int B, int N, int T, int K, int F, double *
    Nb: baselines worked by this kernel 
    boff: baseline offset 0..B-1
    F: frequencies
-   nchunk: how many solutions
+   nchunk: how many solutions (hybrid mode)
    x: residual to be corrected: size Nb*8*F
    p: solutions (inverted) size N*8*nchunk
    barr: baseline array to get station indices: size Nb
@@ -668,12 +668,13 @@ calculate_diagnostics_gpu(double *u,double *v,double *w,double *p,double *x,int 
    F: frequencies
    barr: baseline to station map, size B x 1
    p: parameter arrays 8*N*M x1 double values (re,img) for each station/direction
+   nchunk: how many solutions (hybrid mode)
    coh: coherencies Bx4 complex
    res: residual Bx4 complex
    hess: hessian (output) 4N x 4N complex, or 4N*4N*2 complex float
 */
 extern void
-cudakernel_hessian(int B, int N, int T, int F, baseline_t *barr, double *p, float *coh, float *res, float *hess);
+cudakernel_hessian(int B, int N, int T, int F, baseline_t *barr, double *p, int nchunk, float *coh, float *res, float *hess);
 
 
 #endif /* HAVE_CUDA */

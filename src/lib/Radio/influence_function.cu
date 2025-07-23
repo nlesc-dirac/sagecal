@@ -71,7 +71,7 @@ kron_ab(const cuFloatComplex*__restrict__ a, const cuFloatComplex *__restrict__ 
 }
 
 __global__ void
-kernel_hessian(int B, int N, int T, int F, const double *__restrict__ p, baseline_t *barr,
+kernel_hessian(int B, int N, int T, int F, const double *__restrict__ p, int nchunk, baseline_t *barr,
     const float *__restrict__ coh, const float *__restrict__ res, float *hess) {
 
   /* only work with the first freq, so F==1 taken */
@@ -93,6 +93,15 @@ kernel_hessian(int B, int N, int T, int F, const double *__restrict__ p, baselin
          (sta1,sta2), (sta2,sta1), (sta1,sta1), (sta2,sta2)
          and depending on m, select which values to update */
     cuFloatComplex C[4],R[4],H[16];
+    cuFloatComplex I2[4];
+    I2[0].x=1.0f;
+    I2[0].y=0.0f;
+    I2[1].x=0.0f;
+    I2[1].y=0.0f;
+    I2[2].x=0.0f;
+    I2[2].y=0.0f;
+    I2[3].x=1.0f;
+    I2[3].y=0.0f;
 
     C[0].x=__ldg(&coh[8*n]);
     C[0].y=__ldg(&coh[8*n+1]);
@@ -110,9 +119,48 @@ kernel_hessian(int B, int N, int T, int F, const double *__restrict__ p, baselin
     R[2].y=__ldg(&res[8*n+5]);
     R[3].x=__ldg(&res[8*n+6]);
     R[3].y=__ldg(&res[8*n+7]);
+
+    /* find out which chunk to select from p : 0,1..nchunk-1 */
+    int chunk=(n)/((B+nchunk-1)/nchunk);
+
     if (m==sta1) {
       /* update (sta2,sta1) and (sta1,sta1) */
-      kron_ab(C,R,H);
+      /* need kron(-C^T, res^H ) -> q,p and 
+         kron(res1, I_2), res1=C J_q^H J_q C^H =(C J_q^H) (C J_q^H)^H -> p,p */
+
+    /* create G2 Jones matrices from p */
+    cuFloatComplex G2[4];
+    G2[0].x=(float)__ldg(&p[chunk*8*N+sta2*8]);
+    G2[0].y=(float)__ldg(&p[chunk*8*N+sta2*8+1]);
+    G2[1].x=(float)__ldg(&p[chunk*8*N+sta2*8+2]);
+    G2[1].y=(float)__ldg(&p[chunk*8*N+sta2*8+3]);
+    G2[2].x=(float)__ldg(&p[chunk*8*N+sta2*8+4]);
+    G2[2].y=(float)__ldg(&p[chunk*8*N+sta2*8+5]);
+    G2[3].x=(float)__ldg(&p[chunk*8*N+sta2*8+6]);
+    G2[3].y=(float)__ldg(&p[chunk*8*N+sta2*8+7]);
+
+    /* terms in the product */
+    cuFloatComplex A[4],B[4];
+    /* A=-C^T */
+    A[0].x=-C[0].x;
+    A[0].y=-C[0].y;
+    A[1].x=-C[2].x;
+    A[1].y=-C[2].y;
+    A[2].x=-C[1].x;
+    A[2].y=-C[1].y;
+    A[3].x=-C[3].x;
+    A[3].y=-C[3].y;
+    /* B=res^H */
+    B[0].x=R[0].x;
+    B[0].y=-R[0].y;
+    B[1].x=R[2].x;
+    B[1].y=-R[2].y;
+    B[2].x=R[1].x;
+    B[2].y=-R[1].y;
+    B[3].x=R[3].x;
+    B[3].y=-R[3].y;
+ 
+      kron_ab(A,B,H);
       for (int off=0; off<4; off++) {
       atomicAdd(&hess[(sta1+off)*4*N*2+sta2*4*2],H[0+off].x);
       atomicAdd(&hess[(sta1+off)*4*N*2+sta2*4*2+1],H[0+off].y);
@@ -124,6 +172,19 @@ kernel_hessian(int B, int N, int T, int F, const double *__restrict__ p, baselin
       atomicAdd(&hess[(sta1+off)*4*N*2+sta2*4*2+7],H[12+off].y);
       }
 
+     ambt(C,G2,A); /* A = C J_q^H */
+     B[0].x=A[0].x;
+     B[0].y=A[0].y;
+     B[1].x=A[1].x;
+     B[1].y=A[1].y;
+     B[2].x=A[2].x;
+     B[2].y=A[2].y;
+     B[3].x=A[3].x;
+     B[3].y=A[3].y;
+
+     cuFloatComplex D[4];
+     ambt(A,B,D); /* D = A A^H */
+      kron_ab(D,I2,H);
       for (int off=0; off<4; off++) {
       atomicAdd(&hess[(sta1+off)*4*N*2+sta1*4*2],H[0+off].x);
       atomicAdd(&hess[(sta1+off)*4*N*2+sta1*4*2+1],H[0+off].y);
@@ -136,8 +197,32 @@ kernel_hessian(int B, int N, int T, int F, const double *__restrict__ p, baselin
       }
 
     } else { /* m==sta2 */
-      kron_ab(C,R,H);
       /* update (sta1,sta2) and (sta2,sta2) */
+      /* need kron(-conj(C), res) and
+         kron(res1^T, I_2), res1=C^H J_p^H J_p C =(J_p C)^H (J_p C) */
+    /* create G1 Jones matrices from p */
+    cuFloatComplex G1[4];
+    G1[0].x=(float)__ldg(&p[chunk*8*N+sta1*8]);
+    G1[0].y=(float)__ldg(&p[chunk*8*N+sta1*8+1]);
+    G1[1].x=(float)__ldg(&p[chunk*8*N+sta1*8+2]);
+    G1[1].y=(float)__ldg(&p[chunk*8*N+sta1*8+3]);
+    G1[2].x=(float)__ldg(&p[chunk*8*N+sta1*8+4]);
+    G1[2].y=(float)__ldg(&p[chunk*8*N+sta1*8+5]);
+    G1[3].x=(float)__ldg(&p[chunk*8*N+sta1*8+6]);
+    G1[3].y=(float)__ldg(&p[chunk*8*N+sta1*8+7]);
+
+    cuFloatComplex A[4],B[4];
+    /* A=-conj(C) */
+    A[0].x=-C[0].x;
+    A[0].y=C[0].y;
+    A[1].x=-C[1].x;
+    A[1].y=C[1].y;
+    A[2].x=-C[2].x;
+    A[2].y=C[2].y;
+    A[3].x=-C[3].x;
+    A[3].y=C[3].y;
+ 
+      kron_ab(A,R,H);
       for (int off=0; off<4; off++) {
       atomicAdd(&hess[(sta2+off)*4*N*2+sta1*4*2],H[0+off].x);
       atomicAdd(&hess[(sta2+off)*4*N*2+sta1*4*2+1],H[0+off].y);
@@ -149,6 +234,20 @@ kernel_hessian(int B, int N, int T, int F, const double *__restrict__ p, baselin
       atomicAdd(&hess[(sta2+off)*4*N*2+sta1*4*2+7],H[12+off].y);
       }
 
+     amb(G1,C,B); /* B = J_p C */
+     /* A = B^H */
+     A[0].x=B[0].x;
+     A[0].y=-B[0].y;
+     A[1].x=B[2].x;
+     A[1].y=-B[2].y;
+     A[2].x=B[1].x;
+     A[2].y=-B[1].y;
+     A[3].x=B[3].x;
+     A[3].y=-B[3].y;
+ 
+     cuFloatComplex D[4];
+     amb(A,B,D); /* D = B^H B */
+      kron_ab(D,I2,H);
       for (int off=0; off<4; off++) {
       atomicAdd(&hess[(sta2+off)*4*N*2+sta2*4*2],H[0+off].x);
       atomicAdd(&hess[(sta2+off)*4*N*2+sta2*4*2+1],H[0+off].y);
@@ -189,7 +288,7 @@ checkCudaError(cudaError_t err, const char *file, int line)
 
 
 void
-cudakernel_hessian(int B, int N, int T, int F, baseline_t *barr, double *p, float *coh, float *res, float *hess) {
+cudakernel_hessian(int B, int N, int T, int F, baseline_t *barr, double *p, int nchunk, float *coh, float *res, float *hess) {
 #ifdef CUDA_DBG
   cudaError_t error;
   error = cudaGetLastError();
@@ -201,8 +300,8 @@ cudakernel_hessian(int B, int N, int T, int F, baseline_t *barr, double *p, floa
   dim3 numBlocks((B+threadsPerBlock.x-1)/threadsPerBlock.x,
          (N+threadsPerBlock.y-1)/threadsPerBlock.y);
   printf("threads %d x %d blocks %d x %d\n",threadsPerBlock.x,threadsPerBlock.y,numBlocks.x,numBlocks.y);
-  kernel_hessian<<<numBlocks,threadsPerBlock>>>(B, N, T, F, p, barr,
-    coh, res, hess);
+  kernel_hessian<<<numBlocks,threadsPerBlock>>>(B, N, T, F, p, nchunk, 
+      barr, coh, res, hess);
   cudaDeviceSynchronize();
 #ifdef CUDA_DBG
   error = cudaGetLastError();
