@@ -10,7 +10,7 @@ ax1=fig.add_subplot(211,projection='3d')
 ax2=fig.add_subplot(212,projection='3d')
 
 class BeamGenerator:
-    def __init__(self,n0=7,beta=0.5, outfile=None, preamble=''):
+    def __init__(self,n0=7,beta=0.5, outfile=None, preamble='', verbose=False):
         # file names for .npy models
         self.theta_file_='theta.npy'
         self.phi_file_='phi.npy'
@@ -21,6 +21,8 @@ class BeamGenerator:
         self.out_file_=outfile
         self.out_fd_=None
         self.pream_=preamble
+
+        self.verbose=verbose
 
         # decomposition parameters
         self.beta_=beta
@@ -116,16 +118,18 @@ class BeamGenerator:
                      idx=idx+1
          
         # create pseudo inverse
-        A=self.basis_.reshape(self.nmodes_,-1).T
-        self.B_=np.linalg.pinv(A)
+        self.A_=self.basis_.reshape(self.nmodes_,-1).T
+        self.B_=np.linalg.pinv(self.A_)
 
     def show_basis(self):
         X,Y=np.meshgrid(self.theta_[:self.horizon_idx],self.phi_)
         for ci in range(self.nmodes_):
           ax1.clear()
           ax1.plot_surface(X*np.cos(Y),X*np.sin(Y),np.real(self.basis_[ci].T),cmap=plt.cm.YlGnBu_r)
+          ax1.title.set_text('Real')
           ax2.clear()
           ax2.plot_surface(X*np.cos(Y),X*np.sin(Y),np.imag(self.basis_[ci].T),cmap=plt.cm.YlGnBu_r)
+          ax2.title.set_text('Imag')
           plt.savefig('basis_'+str(ci)+'.png')
 
 
@@ -137,12 +141,14 @@ class BeamGenerator:
            e_theta=self.etheta_[freq,:self.horizon_idx,:]/self.totalpow[freq]
            b_etheta=e_theta.reshape(-1)
            x=np.matmul(self.B_,b_etheta)
+           err=np.linalg.norm(np.matmul(self.A_,x)-b_etheta)/np.linalg.norm(b_etheta)
         else:
            e_phi=self.ephi_[freq,:self.horizon_idx,:]/self.totalpow[freq]
            b_ephi=e_phi.reshape(-1)
            x=np.matmul(self.B_,b_ephi)
+           err=np.linalg.norm(np.matmul(self.A_,x)-b_ephi)/np.linalg.norm(b_ephi)
 
-        return x
+        return x,err
 
 
     def decompose_write_header(self):
@@ -165,20 +171,24 @@ extern \"C\" {
         self.out_fd_.write("};"+"\n")
         self.out_fd_.write("const static complex double "+str(self.pream_)+"_beam_elem_theta["+str(self.n_freq_)+"]["+str(self.nmodes_)+"]={\n")
         for freq in range(self.n_freq_):
-            x=self.decompose_model_freq(freq,'theta')
+            x,err=self.decompose_model_freq(freq,'theta')
             self.out_fd_.write("{"+"\n")
             for nm in range(self.nmodes_):
                self.out_fd_.write(f" {np.real(x[nm]):e}+_Complex_I*({np.imag(x[nm]):e}),")
             self.out_fd_.write("},"+"\n")
+            if self.verbose:
+               print(f'Freq {freq} theta error {err}')
 
         self.out_fd_.write("};"+"\n")
         self.out_fd_.write("const static complex double "+str(self.pream_)+"_beam_elem_phi["+str(self.n_freq_)+"]["+str(self.nmodes_)+"]={\n")
         for freq in range(self.n_freq_):
-            x=self.decompose_model_freq(freq,'phi')
+            x,err=self.decompose_model_freq(freq,'phi')
             self.out_fd_.write("{"+"\n")
             for nm in range(self.nmodes_):
                self.out_fd_.write(f" {np.real(x[nm]):e}+_Complex_I*({np.imag(x[nm]):e}),")
             self.out_fd_.write("},"+"\n")
+            if self.verbose:
+               print(f'Freq {freq} phi error {err}')
 
         self.out_fd_.write("};"+"\n")
 
@@ -193,9 +203,11 @@ extern \"C\" {
             self.out_fd_.close()
 
 def main(args):
-    bg=BeamGenerator(n0=args.order, beta=args.scale, outfile=args.output, preamble=args.preamble)
+    bg=BeamGenerator(n0=args.order, beta=args.scale, outfile=args.output, preamble=args.preamble, verbose=args.verbose)
     bg.load_model()
     bg.setup_basis()
+    if args.show:
+       bg.show_basis()
     bg.decompose_write_header()
 
 
@@ -213,6 +225,10 @@ if __name__=='__main__':
         help='write output to this (C header) file')
     parser.add_argument('--preamble',type=str,default='alo',
         help='string to uniquely indetify this model')
+    parser.add_argument('--show', action='store_true', default=False,
+       help='show basis functions')
+    parser.add_argument('--verbose', action='store_true', default=False,
+       help='print reconstruction error')
  
     args=parser.parse_args()
     if args.output:
