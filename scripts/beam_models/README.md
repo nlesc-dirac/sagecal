@@ -26,9 +26,15 @@ Running with the default values like
 ```
 will create *output.h* as the output file.
 
+To see all options, run
+
+```
+./create_header.py --help
+```
+
 # Copy and compile
 Copy the newly created header (*output.h* for example) to *../../src/lib/Radio/elementcoeff_ALO.h*.
 
 Thereafter, rebuild sagecal (*make clean && make*).
 
-ma 21 jul 2025 14:23:31 CEST
+do 28 aug 2025 10:25:03 CEST
