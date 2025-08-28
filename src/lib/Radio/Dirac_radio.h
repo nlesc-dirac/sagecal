@@ -550,12 +550,16 @@ extern void
 cudakernel_residuals(int B, int N, int T, int K, int F, double *u, double *v, double *w, double *p, int nchunk, baseline_t *barr, double *freqs, float *beam, float *element, double *ll, double *mm, double *nn, double *sI, double *sQ, double *sU, double *sV,
   unsigned char *stype, double *sI0, double *sQ0, double *sU0, double *sV0, double *f0, double *spec_idx, double *spec_idx1, double *spec_idx2, int **exs, double deltaf, double deltat, double dec0, double *coh,int dobeam);
 
+void
+cudakernel_coherencies_and_residuals(int B, int N, int T, int K, int F, double *u, double *v, double *w, double *p, int nchunk, baseline_t *barr, double *freqs, float *beam, float *element, double *ll, double *mm, double *nn, double *sI, double *sQ, double *sU, double *sV,
+  unsigned char *stype, double *sI0, double *sQ0, double *sU0, double *sV0, double *f0, double *spec_idx, double *spec_idx1, double *spec_idx2, int **exs, double deltaf, double deltat, double dec0, double *mod, double *coh, int dobeam);
+
 /* B: total baselines
    N: stations
    Nb: baselines worked by this kernel 
    boff: baseline offset 0..B-1
    F: frequencies
-   nchunk: how many solutions
+   nchunk: how many solutions (hybrid mode)
    x: residual to be corrected: size Nb*8*F
    p: solutions (inverted) size N*8*nchunk
    barr: baseline array to get station indices: size Nb
@@ -645,6 +649,35 @@ predict_visibilities_multifreq(double *u,double *v,double *w,double *x,int N,int
 */
 extern int
 predict_visibilities_multifreq_withsol(double *u,double *v,double *w,double *p,double *x,int *ignorelist,int N,int Nbase,int tilesz,baseline_t *barr, clus_source_t *carr, int M,double *freqs,int Nchan, double fdelta,double tdelta,double dec0,int Nt,int add_to_data, int ccid, double rho,int phase_only);
+
+/****************************** diagnostics.c ****************************/
+/* Instead of calculating the residuals, calculate influence function
+ * and replace the residuals with the influence function,
+ * the input arguments are similar to calculate_residuals_multifreq_withbeam_gpu()
+ * or calculate_residuals_multifreq_withbeam()
+ */
+extern int
+calculate_diagnostics_gpu(double *u,double *v,double *w,double *p,double *x,int N,int Nbase,int tilesz,baseline_t *barr, clus_source_t *carr, int M,double *freqs,int Nchan, double fdelta,double tdelta, double dec0,
+ int bf_type, double b_ra0, double b_dec0, double ph_ra0, double ph_dec0, double ph_freq0, double *longitude, double *latitude, double *time_utc,int *Nelem, double **xx, double **yy, double **zz, elementcoeff *ecoeff, int dobeam, int Nt);
+
+/****************************** influence_function.cu ****************************/
+#ifdef HAVE_CUDA
+/* B: total baselines (baselines x tile size)
+   N: stations
+   T: tile size (not really needed)
+   F: frequencies
+   barr: baseline to station map, size B x 1
+   p: parameter arrays 8*N*M x1 double values (re,img) for each station/direction
+   nchunk: how many solutions (hybrid mode)
+   coh: coherencies Bx4 complex
+   res: residual Bx4 complex
+   hess: hessian (output) 4N x 4N complex, or 4N*4N*2 complex float
+*/
+extern void
+cudakernel_hessian(int B, int N, int T, int F, baseline_t *barr, double *p, int nchunk, float *coh, float *res, float *hess);
+
+
+#endif /* HAVE_CUDA */
 
 #ifdef __cplusplus
      } /* extern "C" */

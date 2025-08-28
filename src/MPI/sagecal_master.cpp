@@ -54,7 +54,6 @@ sagecal_master(int argc, char **argv) {
     MPIData iodata;
     MPI_Status status;
     iodata.tilesz=Data::TileSize;
-    vector<string> msnames;
     int ntasks;
     MPI_Comm_size(MPI_COMM_WORLD, &ntasks);
     int nslaves=ntasks-1;

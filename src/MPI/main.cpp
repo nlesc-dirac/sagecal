@@ -84,6 +84,7 @@ print_help(void) {
 #ifdef HAVE_CUDA
    cout << "-S GPU heap size (MB): default "<<Data::heapsize<< endl;
 #endif
+   cout << "-i 0,1 : if >0, enable diagnostics (Influence function) 1 replace residual data with influence function : default " <<Data::DoDiag<< endl;
    cout << "-T stop after this number of solutions (0 means no limit): default "<<Data::Nmaxtime<< endl;
    cout << "-K skip this number of solutions before starting calibration: default "<<Data::Nskip<< endl;
    cout << "Note: if -K a -T b, then calibration will start at 'a' and end at 'b', so b > a always."<<endl;
@@ -107,7 +108,7 @@ print_help(void) {
 void 
 ParseCmdLine(int ac, char **av) {
     int c;
-    while((c=getopt(ac, av, ":c:e:f:g:j:k:l:m:n:o:p:q:r:s:t:u:w:x:y:A:B:C:D:E:F:G:H:I:J:K:L:M:N:O:P:Q:R:S:T:U:W:X:MVh"))!= -1)
+    while((c=getopt(ac, av, ":c:e:f:g:i:j:k:l:m:n:o:p:q:r:s:t:u:w:x:y:A:B:C:D:E:F:G:H:I:J:K:L:M:N:O:P:Q:R:S:T:U:W:X:MVh"))!= -1)
     {
         switch(c)
         {
@@ -242,6 +243,10 @@ ParseCmdLine(int ac, char **av) {
                 break;
             case 'U':
                 Data::use_global_solution= atoi(optarg);
+                break;
+            case 'i':
+                Data::DoDiag= atoi(optarg);
+                if (Data::DoDiag<0) { Data::DoDiag=0; }
                 break;
             case 'X': //lambda,mu,n0,fista_maxiter,admm_cadence: 5 parameters
                 {
