@@ -54,8 +54,9 @@
 #ifndef TAG_SPATIAL
 #define TAG_SPATIAL 110
 #endif
-
-
+#ifndef TAG_DIAG
+#define TAG_DIAG 111
+#endif
 
 /* control flags */
 #ifndef CTRL_START

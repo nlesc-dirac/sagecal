@@ -70,6 +70,17 @@ kron_ab(const cuFloatComplex*__restrict__ a, const cuFloatComplex *__restrict__ 
   c[15]=cuCmulf(a[3],b[3]);
 }
 
+/* transpose 4x4 matrix */
+static __device__ void
+transpose_4x4(const cuFloatComplex*__restrict__ a, cuFloatComplex *__restrict__ c) {
+  for (uint ci=0; ci<4; ci++) {
+   c[0+4*ci]=a[0+ci];
+   c[1+4*ci]=a[4+ci];
+   c[2+4*ci]=a[8+ci];
+   c[3+4*ci]=a[12+ci];
+  }
+}
+
 __global__ void
 kernel_hessian(int B, int N, int T, int F, const double *__restrict__ p, int nchunk, baseline_t *barr,
     const float *__restrict__ coh, const float *__restrict__ res, float *hess) {
@@ -77,7 +88,7 @@ kernel_hessian(int B, int N, int T, int F, const double *__restrict__ p, int nch
   /* only work with the first freq, so F==1 taken */
   /* x: baseline */
   unsigned int n=threadIdx.x+blockDim.x*blockIdx.x;
-  /* y: station, column block of Hessian, upper triangle */
+  /* y: station, column block of Hessian */
   unsigned int m=threadIdx.y+blockDim.y*blockIdx.y;
 
   /* hessian: 4N x 4N complex float, column major order,
@@ -124,9 +135,9 @@ kernel_hessian(int B, int N, int T, int F, const double *__restrict__ p, int nch
     int chunk=(n)/((B+nchunk-1)/nchunk);
 
     if (m==sta1) {
-      /* update (sta2,sta1) and (sta1,sta1) */
+      /* update (sta2,sta1)=(q,p) and (sta1,sta1)=(p,p) */
       /* need kron(-C^T, res^H ) -> q,p and 
-         kron(res1, I_2), res1=C J_q^H J_q C^H =(C J_q^H) (C J_q^H)^H -> p,p */
+         kron(res1^T, I_2), res1=C J_q^H J_q C^H =(C J_q^H) (C J_q^H)^H -> p,p */
 
     /* create G2 Jones matrices from p */
     cuFloatComplex G2[4];
@@ -160,6 +171,7 @@ kernel_hessian(int B, int N, int T, int F, const double *__restrict__ p, int nch
     B[3].x=R[3].x;
     B[3].y=-R[3].y;
  
+      /* -C^T \kron R^H */
       kron_ab(A,B,H);
       for (int off=0; off<4; off++) {
       atomicAdd(&hess[(sta1+off)*4*N*2+sta2*4*2],H[0+off].x);
@@ -183,8 +195,12 @@ kernel_hessian(int B, int N, int T, int F, const double *__restrict__ p, int nch
      B[3].y=A[3].y;
 
      cuFloatComplex D[4];
-     ambt(A,B,D); /* D = A A^H */
-      kron_ab(D,I2,H);
+     ambt(A,B,D); /* D = A A^H = (C J_q^H) (C J_q^H)^H */
+     cuFloatComplex E[4];
+     /* E= D^T */
+     transpose_4x4(D,E);
+     /* D^T \kron I_2, D= C J_q^H J_q C^H */
+      kron_ab(E,I2,H);
       for (int off=0; off<4; off++) {
       atomicAdd(&hess[(sta1+off)*4*N*2+sta1*4*2],H[0+off].x);
       atomicAdd(&hess[(sta1+off)*4*N*2+sta1*4*2+1],H[0+off].y);
@@ -197,7 +213,7 @@ kernel_hessian(int B, int N, int T, int F, const double *__restrict__ p, int nch
       }
 
     } else { /* m==sta2 */
-      /* update (sta1,sta2) and (sta2,sta2) */
+      /* update (sta1,sta2)=(p,q) and (sta2,sta2)=(q,q) */
       /* need kron(-conj(C), res) and
          kron(res1^T, I_2), res1=C^H J_p^H J_p C =(J_p C)^H (J_p C) */
     /* create G1 Jones matrices from p */
@@ -222,6 +238,7 @@ kernel_hessian(int B, int N, int T, int F, const double *__restrict__ p, int nch
     A[3].x=-C[3].x;
     A[3].y=C[3].y;
  
+      /* -C^* \kron R */
       kron_ab(A,R,H);
       for (int off=0; off<4; off++) {
       atomicAdd(&hess[(sta2+off)*4*N*2+sta1*4*2],H[0+off].x);
@@ -246,8 +263,12 @@ kernel_hessian(int B, int N, int T, int F, const double *__restrict__ p, int nch
      A[3].y=-B[3].y;
  
      cuFloatComplex D[4];
-     amb(A,B,D); /* D = B^H B */
-      kron_ab(D,I2,H);
+     amb(A,B,D); /* D = B^H B = (J_p C)^H (J_p C) */
+     cuFloatComplex E[4];
+     /* E= D^T */
+     transpose_4x4(D,E);
+     /* D^T \kron I_2, D= (J_p C)^H J_p C */
+      kron_ab(E,I2,H);
       for (int off=0; off<4; off++) {
       atomicAdd(&hess[(sta2+off)*4*N*2+sta2*4*2],H[0+off].x);
       atomicAdd(&hess[(sta2+off)*4*N*2+sta2*4*2+1],H[0+off].y);
@@ -262,12 +283,6 @@ kernel_hessian(int B, int N, int T, int F, const double *__restrict__ p, int nch
     }
 
   }
-  __syncthreads();
-
-  /* copy upper triangle to lower triangle map column block m to
-   row block m */
-
-
 }
  
 
@@ -294,7 +309,7 @@ cudakernel_hessian(int B, int N, int T, int F, baseline_t *barr, double *p, int 
   error = cudaGetLastError();
 #endif
 
-  /* spawn threads to handle baselines, these threads will loop over sources */
+  /* spawn threads to handle baselines, stations */
   /* thread x : baseline, thread y: station */
   dim3 threadsPerBlock(16,8); 
   dim3 numBlocks((B+threadsPerBlock.x-1)/threadsPerBlock.x,

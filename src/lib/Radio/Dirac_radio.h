@@ -658,7 +658,7 @@ predict_visibilities_multifreq_withsol(double *u,double *v,double *w,double *p,d
  */
 extern int
 calculate_diagnostics_gpu(double *u,double *v,double *w,double *p,double *x,int N,int Nbase,int tilesz,baseline_t *barr, clus_source_t *carr, int M,double *freqs,int Nchan, double fdelta,double tdelta, double dec0,
- int bf_type, double b_ra0, double b_dec0, double ph_ra0, double ph_dec0, double ph_freq0, double *longitude, double *latitude, double *time_utc,int *Nelem, double **xx, double **yy, double **zz, elementcoeff *ecoeff, int dobeam, int Nt);
+ int bf_type, double b_ra0, double b_dec0, double ph_ra0, double ph_dec0, double ph_freq0, double *longitude, double *latitude, double *time_utc,int *Nelem, double **xx, double **yy, double **zz, elementcoeff *ecoeff, int dobeam, double *rho, double *Bpoly, double *Bi, int Mt, int Npoly, int Nf, int Nt);
 
 /****************************** influence_function.cu ****************************/
 #ifdef HAVE_CUDA

@@ -46,7 +46,7 @@ typedef struct thread_data_pred_t_ {
   baseline_t *barr; /* baseline info */
   clus_source_t *carr;  /* Mx1 cluster data */
   int M; /* no of clusters */
-  int Nf; /* of of freqs */
+  int Nf; /* no of freqs in one MS */
   double *freqs; /*  Nfx1 freqs  for prediction */
   double fdelta; /* bandwidth */
   double tdelta; /* integration time */
@@ -74,6 +74,14 @@ typedef struct thread_data_pred_t_ {
 
   /* following only used to ignore some clusters while predicting */
   int *ignlist;
+
+  /* following needed for consensus polynomial related stuff */
+  double *Bpoly;
+  double *Binv;
+  double *rho;
+  int Mt;
+  int Npoly;
+  int Nms; /* = all MS subbands != Nf */
 
 } thread_data_pred_t;
 
@@ -646,6 +654,15 @@ hessian_threadfn(void *data) {
   checkCudaError(err,__FILE__,__LINE__);
 
   double *pd; /* parameter array per cluster */
+
+  /* calculate Hessian addition (common part), based only on the polynomial basis*/
+  float *hess_add=0;
+  int hess_add_flag=(t->rho && t->Bpoly && t->Binv ? 1: 0);
+  if (hess_add_flag) {
+   err=cudaMallocHost((void**)&hess_add,sizeof(float)*(size_t)t->N*4*t->N*4*2);
+   checkCudaError(err,__FILE__,__LINE__);
+  }
+  
 /******************* begin loop over clusters **************************/
   for (ncl=t->soff; ncl<t->soff+t->Ns; ncl++) {
     printf("clus %d base=%d stat=%d tile=%d freq=%d\n",ncl,t->Nbase,t->N,t->tilesz,t->Nf);
@@ -675,6 +692,11 @@ hessian_threadfn(void *data) {
     /* copy result back */
     err=cudaMemcpy(hess,hessd,sizeof(float)*(size_t)t->N*4*t->N*4*2,cudaMemcpyDeviceToHost);
     checkCudaError(err,__FILE__,__LINE__);
+
+    /* also add component based on spectral basis to the Hessian */
+    /* this part done on the CPU */
+    if (hess_add_flag) {
+    }
   }
 /******************* end loop over clusters **************************/
 
@@ -687,6 +709,10 @@ hessian_threadfn(void *data) {
   checkCudaError(err,__FILE__,__LINE__);
   err=cudaFreeHost(hess);
   checkCudaError(err,__FILE__,__LINE__);
+  if (hess_add_flag) {
+    err=cudaFreeHost(hess_add);
+    checkCudaError(err,__FILE__,__LINE__);
+  }
 
   cudaDeviceSynchronize();
   /* reset error state */
@@ -694,11 +720,15 @@ hessian_threadfn(void *data) {
   return NULL;
 }
 
-/* p: 8NMx1 parameter array, but M is 'effective' clusters, need to use carr to find the right offset
+/* p: 8NMtx1 parameter array, but Mt is 'effective' clusters, need to use carr to find the right offset, note M<= Mt
+ * rho: Mx1 regularization values =NULL for calibration without consensus
+ * Bpoly: Npoly x Nf basis functions =NULL for calibration without consensus
+ * Bi: Mt x Npoly x Npoly inverse basis =NULL for calibration without consensus
+ * Nf != Nchan, Nf: total freqs, Nchan: channels for one MS
 */
 int
 calculate_diagnostics_gpu(double *u,double *v,double *w,double *p,double *x,int N,int Nbase,int tilesz,baseline_t *barr, clus_source_t *carr, int M,double *freqs,int Nchan, double fdelta,double tdelta, double dec0,
- int bf_type, double b_ra0, double b_dec0, double ph_ra0, double ph_dec0, double ph_freq0, double *longitude, double *latitude, double *time_utc, int *Nelem, double **xx, double **yy, double **zz, elementcoeff *ecoeff, int dobeam, int Nt) {
+ int bf_type, double b_ra0, double b_dec0, double ph_ra0, double ph_dec0, double ph_freq0, double *longitude, double *latitude, double *time_utc, int *Nelem, double **xx, double **yy, double **zz, elementcoeff *ecoeff, int dobeam, double *rho, double *Bpoly, double *Bi, int Mt, int Npoly, int Nf, int Nt) {
 
   int nth,ci;
 
@@ -796,6 +826,13 @@ calculate_diagnostics_gpu(double *u,double *v,double *w,double *p,double *x,int 
      threaddata[nth].soff=ci;
 
      threaddata[nth].ecoeff=ecoeff;
+
+     threaddata[nth].rho=rho;
+     threaddata[nth].Bpoly=Bpoly;
+     threaddata[nth].Binv=Bi;
+     threaddata[nth].Mt=Mt;
+     threaddata[nth].Npoly=Npoly;
+     threaddata[nth].Nms=Nf;
 
      pthread_create(&th_array[nth],&attr,model_residual_threadfn,(void*)(&threaddata[nth]));
      /* next source set */
