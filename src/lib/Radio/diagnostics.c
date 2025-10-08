@@ -76,9 +76,9 @@ typedef struct thread_data_pred_t_ {
   int *ignlist;
 
   /* following needed for consensus polynomial related stuff */
-  double *Bpoly;
-  double *Binv;
-  double *rho;
+  double *Bpoly; /* Npoly x 1 basis functions */
+  double *Binv; /* Mt x Npoly x Npoly inverse basis */
+  double *rho; /* Mx1 regularization values */
   int Mt;
   int Npoly;
   int Nms; /* = all MS subbands != Nf */
@@ -722,7 +722,7 @@ hessian_threadfn(void *data) {
 
 /* p: 8NMtx1 parameter array, but Mt is 'effective' clusters, need to use carr to find the right offset, note M<= Mt
  * rho: Mx1 regularization values =NULL for calibration without consensus
- * Bpoly: Npoly x Nf basis functions =NULL for calibration without consensus
+ * Bpoly: Npoly x 1 basis functions (to match the frequency) =NULL for calibration without consensus
  * Bi: Mt x Npoly x Npoly inverse basis =NULL for calibration without consensus
  * Nf != Nchan, Nf: total freqs, Nchan: channels for one MS
 */

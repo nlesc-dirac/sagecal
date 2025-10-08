@@ -967,7 +967,7 @@ cout<<myrank<<" : "<<cm<<": downweight ratio ("<<iodata_vec[cm].fratio<<") based
        /* instead of residual, calculate diagnostics */
        calculate_diagnostics_gpu(iodata_vec[cm].u,iodata_vec[cm].v,iodata_vec[cm].w,p_vec[cm],iodata_vec[cm].xo,iodata_vec[cm].N,iodata_vec[cm].Nbase,iodata_vec[cm].tilesz,barr_vec[cm],carr_vec[cm],M,iodata_vec[cm].freqs,iodata_vec[cm].Nchan,iodata_vec[cm].deltaf,iodata_vec[cm].deltat,iodata_vec[cm].dec0,
        beam_vec[cm].bfType,beam_vec[cm].b_ra0,beam_vec[cm].b_dec0,beam_vec[cm].p_ra0,beam_vec[cm].p_dec0,iodata_vec[cm].freq0,beam_vec[cm].sx,
-       beam_vec[cm].sy,beam_vec[cm].time_utc,beam_vec[cm].Nelem,beam_vec[cm].xx,beam_vec[cm].yy,beam_vec[cm].zz,&elem_vec[cm],doBeam,arho_vec[cm],Bpoly,Bii,Mt,Npoly,Nms,Data::Nt);
+       beam_vec[cm].sy,beam_vec[cm].time_utc,beam_vec[cm].Nelem,beam_vec[cm].xx,beam_vec[cm].yy,beam_vec[cm].zz,&elem_vec[cm],doBeam,arho_vec[cm],&Bpoly[myids[cm]*Npoly],Bii,Mt,Npoly,Nms,Data::Nt);
      } else {
      if (GPUpredict) {
        calculate_residuals_multifreq_withbeam_gpu(iodata_vec[cm].u,iodata_vec[cm].v,iodata_vec[cm].w,p_vec[cm],iodata_vec[cm].xo,iodata_vec[cm].N,iodata_vec[cm].Nbase,iodata_vec[cm].tilesz,barr_vec[cm],carr_vec[cm],M,iodata_vec[cm].freqs,iodata_vec[cm].Nchan,iodata_vec[cm].deltaf,iodata_vec[cm].deltat,iodata_vec[cm].dec0,
