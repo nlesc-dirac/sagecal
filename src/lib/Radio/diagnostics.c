@@ -696,6 +696,7 @@ hessian_threadfn(void *data) {
     /* also add component based on spectral basis to the Hessian */
     /* this part done on the CPU */
     if (hess_add_flag) {
+      /* code at analysis_uvwdir.m ln 170-180 */
     }
   }
 /******************* end loop over clusters **************************/
