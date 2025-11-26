@@ -3,7 +3,6 @@ message (STATUS "Configuring lib/Radio")
 
 # Common objects
 set (objects
-    readsky
     predict
     residual
     transforms
@@ -14,6 +13,11 @@ set (objects
     diffuse_predict
 )
 
+# only build readsky if glib.h is found
+if(GLIB_PKG_FOUND)
+    set(objects ${objects} readsky)
+endif()
+
 if(CSPICE_FOUND)
     set(extra_objects cspice_utils)
     set(objects ${objects} ${extra_objects})
@@ -21,14 +25,18 @@ endif()
 
 include_directories(${CMAKE_CURRENT_SOURCE_DIR})
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/../Dirac)
-include_directories(${GLIB_PKG_INCLUDE_DIRS})
+if(GLIB_PKG_FOUND)
+    include_directories(${GLIB_PKG_INCLUDE_DIRS})
+endif()
 
 if(HAVE_CUDA)
     message (STATUS "Compiling lib/Radio with CUDA support.")
 
     CUDA_INCLUDE_DIRECTORIES(${CMAKE_CURRENT_SOURCE_DIR})
     CUDA_INCLUDE_DIRECTORIES(${CMAKE_CURRENT_SOURCE_DIR}/../Dirac)
-    CUDA_INCLUDE_DIRECTORIES(${GLIB_PKG_INCLUDE_DIRS})
+    if(GLIB_PKG_FOUND)
+        CUDA_INCLUDE_DIRECTORIES(${GLIB_PKG_INCLUDE_DIRS})
+    endif()
 
     # objects only for gpu version
     set (extra_objects

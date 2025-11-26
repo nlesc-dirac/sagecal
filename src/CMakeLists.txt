@@ -1,8 +1,6 @@
 add_subdirectory(lib/Dirac)
-
-if (GLIB_PKG_FOUND)
- add_subdirectory(lib/Radio)
-endif ()
+# conditionally build lib/Radio GLIB_PKG_FOUND
+add_subdirectory(lib/Radio)
 
 if(NOT LIB_ONLY)
  add_subdirectory(MS)
