@@ -662,26 +662,6 @@ hessian_influence_threadfn(void *data) {
    err=cudaMallocHost((void**)&hess_add,sizeof(float)*(size_t)t->N*4*t->N*4*2);
    checkCudaError(err,__FILE__,__LINE__);
 
-   /* Bpoly: 1 x Npoly, row vector
-    * Bf = kron(Bpoly, I_2N) : 2N x 2N*Npoly */
-   /* P = kron(Binv, I_2N) x Bf^T : (2N*Npoly x 2N*Npoly) (2N*Npoly x 2N): 2N*Npoly x 2*N */
-   /* BfP= Bf x P : 2N x 2N,
-    * BfP=kron(Bpoly,I_2N) x kron(Binv, I_2N) x kron(Bpoly,I_2N)^T
-    * =kron(BpolyxBinvxBpoly^T,I_2N) : 2N x 2N
-    * F = I_2N - BfP : 2N x 2N, note that rho does not appear (cancel out) */
-   /* so we only need to calculate Bpoly x Binv x Bpoly^T in full matrix operations */
-   double *Bibf;
-   if ((Bibf=(double*)calloc((size_t)t->Npoly,sizeof(double)))==0) {
-    fprintf(stderr,"%s: %d: No free memory\n",__FILE__,__LINE__);
-    exit(1);
-   }
-   /* Binv x Bpoly^T */
-   my_dgemv('N',t->Npoly,t->Npoly,1.0,t->Binv,t->Npoly,t->Bpoly,1,0.0,Bibf,1);
-   /* Bpoly x (Binv x Bpoly) */
-   double bfBibf=my_ddot(t->Npoly,t->Bpoly,Bibf);
-
-
-   free(Bibf);
   }
   
 /******************* begin loop over clusters **************************/
@@ -718,6 +698,35 @@ hessian_influence_threadfn(void *data) {
     /* this part done on the CPU */
     if (hess_add_flag) {
       /* code at analysis_uvwdir.m ln 170-180 */
+     /* Bpoly: 1 x Npoly, row vector
+      * Bf = kron(Bpoly, I_2N) : 2N x 2N*Npoly 
+     * P = kron(Binv, I_2N) x Bf^T : (2N*Npoly x 2N*Npoly) (2N*Npoly x 2N): 2N*Npoly x 2*N 
+     * BfP= Bf x P : 2N x 2N,
+    * BfP=kron(Bpoly,I_2N) x kron(Binv, I_2N) x kron(Bpoly,I_2N)^T
+    * =kron(BpolyxBinvxBpoly^T,I_2N) : 2N x 2N
+    * F = I_2N - BfP : 2N x 2N, note that rho does not appear (cancel out) 
+    so we only need to calculate Bpoly x Binv x Bpoly^T in full matrix operations */
+     double *Bibf;
+     if ((Bibf=(double*)calloc((size_t)t->Npoly,sizeof(double)))==0) {
+      fprintf(stderr,"%s: %d: No free memory\n",__FILE__,__LINE__);
+      exit(1);
+     }
+     /* Binv x Bpoly^T : at ncl offset, might differ if M!=Mt */
+     my_dgemv('N',t->Npoly,t->Npoly,1.0,&t->Binv[ncl*t->Npoly*t->Npoly],t->Npoly,t->Bpoly,1,0.0,Bibf,1);
+     /* Bpoly x (Binv x Bpoly) */
+     double bfBibf=my_ddot(t->Npoly,t->Bpoly,Bibf);
+     /* diagonal value of F=I_2N-BfP */
+     double Fd=1.0-bfBibf;
+     /* diagonal of F^H F */
+     double Fdd = Fd*Fd;
+     /* F'*F*(I_2N + pinv(I_2N-F'*F)*F'*F) */
+     double Fd1=Fdd*(1+Fdd/(1-Fdd));
+     /* hessian addition = 0.5*rho*kron(I_2,diag(Fd1)) */
+     /* = 2x2N diagonal terms =0.5*rho*Fd1 */
+
+     printf("Fdd %lf Hadd %lf\n",Fd1,0.5*t->rho[ncl]*Fd1);
+
+     free(Bibf);
     }
 
 
