@@ -655,6 +655,7 @@ predict_visibilities_multifreq_withsol(double *u,double *v,double *w,double *p,d
  * and replace the residuals with the influence function,
  * the input arguments are similar to calculate_residuals_multifreq_withbeam_gpu()
  * or calculate_residuals_multifreq_withbeam()
+ * x: will have influence function instead of the residual
  */
 extern int
 calculate_diagnostics_gpu(double *u,double *v,double *w,double *p,double *x,int N,int Nbase,int tilesz,baseline_t *barr, clus_source_t *carr, int M,double *freqs,int Nchan, double fdelta,double tdelta, double dec0,

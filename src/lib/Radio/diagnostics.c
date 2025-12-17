@@ -616,7 +616,7 @@ model_residual_threadfn(void *data) {
 }
 
 static void *
-hessian_threadfn(void *data) {
+hessian_influence_threadfn(void *data) {
   thread_data_pred_t *t=(thread_data_pred_t*)data;
 
   /* first, select a GPU, if total clusters < MAX_GPU_ID
@@ -661,6 +661,27 @@ hessian_threadfn(void *data) {
   if (hess_add_flag) {
    err=cudaMallocHost((void**)&hess_add,sizeof(float)*(size_t)t->N*4*t->N*4*2);
    checkCudaError(err,__FILE__,__LINE__);
+
+   /* Bpoly: 1 x Npoly, row vector
+    * Bf = kron(Bpoly, I_2N) : 2N x 2N*Npoly */
+   /* P = kron(Binv, I_2N) x Bf^T : (2N*Npoly x 2N*Npoly) (2N*Npoly x 2N): 2N*Npoly x 2*N */
+   /* BfP= Bf x P : 2N x 2N,
+    * BfP=kron(Bpoly,I_2N) x kron(Binv, I_2N) x kron(Bpoly,I_2N)^T
+    * =kron(BpolyxBinvxBpoly^T,I_2N) : 2N x 2N
+    * F = I_2N - BfP : 2N x 2N, note that rho does not appear (cancel out) */
+   /* so we only need to calculate Bpoly x Binv x Bpoly^T in full matrix operations */
+   double *Bibf;
+   if ((Bibf=(double*)calloc((size_t)t->Npoly,sizeof(double)))==0) {
+    fprintf(stderr,"%s: %d: No free memory\n",__FILE__,__LINE__);
+    exit(1);
+   }
+   /* Binv x Bpoly^T */
+   my_dgemv('N',t->Npoly,t->Npoly,1.0,t->Binv,t->Npoly,t->Bpoly,1,0.0,Bibf,1);
+   /* Bpoly x (Binv x Bpoly) */
+   double bfBibf=my_ddot(t->Npoly,t->Bpoly,Bibf);
+
+
+   free(Bibf);
   }
   
 /******************* begin loop over clusters **************************/
@@ -698,6 +719,12 @@ hessian_threadfn(void *data) {
     if (hess_add_flag) {
       /* code at analysis_uvwdir.m ln 170-180 */
     }
+
+
+  /* per cluster, Dsolutions_uvw(), using Hessian as input */
+
+  /* accumulate Dresidual_uvw() for this cluster in t->x of size t->Nbase*8*t->Nf */
+
   }
 /******************* end loop over clusters **************************/
 
@@ -851,11 +878,16 @@ calculate_diagnostics_gpu(double *u,double *v,double *w,double *p,double *x,int 
   for(ci=0; ci<nth; ci++) {
      /* copy residual back to each thread */
      my_dcopy(Nbase*8*tilesz*Nchan,x,1,threaddata[ci].x,1);
-     pthread_create(&th_array[ci],&attr,hessian_threadfn,(void*)(&threaddata[ci]));
+     pthread_create(&th_array[ci],&attr,hessian_influence_threadfn,(void*)(&threaddata[ci]));
   }
+
+  /* reset x to zero */
+  memset(x,0,sizeof(double)*Nbase*8*tilesz*Nchan);
 
   for(ci=0; ci<nth; ci++) {
     pthread_join(th_array[ci],NULL);
+    /* accumulate result of each thread back to residual column */
+    my_daxpy(Nbase*8*tilesz*Nchan,threaddata[ci].x,1.0,x);
   }
 
   free(coh);
