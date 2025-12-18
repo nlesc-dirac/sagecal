@@ -656,17 +656,16 @@ hessian_influence_threadfn(void *data) {
   double *pd; /* parameter array per cluster */
 
   /* calculate Hessian addition (common part), based only on the polynomial basis*/
-  float *hess_add=0;
   int hess_add_flag=(t->rho && t->Bpoly && t->Binv ? 1: 0);
-  if (hess_add_flag) {
-   err=cudaMallocHost((void**)&hess_add,sizeof(float)*(size_t)t->N*4*t->N*4*2);
-   checkCudaError(err,__FILE__,__LINE__);
 
-  }
-  
+  /* storage to calculate (Jq C^H)^T -> p-th block, 4NxNbase x 2 (re,im) x 8 (for 8 values of 
+   * 2x2 complex matrix) */
+  float *AdVd=0;
+  err=cudaMalloc((void**) &AdVd, t->N*4*t->Nbase*2*8*sizeof(float)); /* Hessian for one cluster */
+  checkCudaError(err,__FILE__,__LINE__);
+ 
 /******************* begin loop over clusters **************************/
   for (ncl=t->soff; ncl<t->soff+t->Ns; ncl++) {
-    printf("clus %d base=%d stat=%d tile=%d freq=%d\n",ncl,t->Nbase,t->N,t->tilesz,t->Nf);
     float *cohd=0;
     /* note dtofcopy() will allocate cohd */
     dtofcopy(t->Nbase*8*t->Nf,&cohd,(double*)&t->coh[ncl*t->Nbase*4*t->Nf]);
@@ -711,26 +710,34 @@ hessian_influence_threadfn(void *data) {
       fprintf(stderr,"%s: %d: No free memory\n",__FILE__,__LINE__);
       exit(1);
      }
-     /* Binv x Bpoly^T : at ncl offset, might differ if M!=Mt */
+     /* Binv x Bpoly^T : at ncl offset, might differ if M!=Mt, but since same basis is used for all directions, ok */
      my_dgemv('N',t->Npoly,t->Npoly,1.0,&t->Binv[ncl*t->Npoly*t->Npoly],t->Npoly,t->Bpoly,1,0.0,Bibf,1);
      /* Bpoly x (Binv x Bpoly) */
      double bfBibf=my_ddot(t->Npoly,t->Bpoly,Bibf);
      /* diagonal value of F=I_2N-BfP */
      double Fd=1.0-bfBibf;
-     /* diagonal of F^H F */
+     /* diagonal of F^H F (2N values)*/
      double Fdd = Fd*Fd;
-     /* F'*F*(I_2N + pinv(I_2N-F'*F)*F'*F) */
+     /* F'*F*(I_2N + pinv(I_2N-F'*F)*F'*F) (2N values) */
      double Fd1=Fdd*(1+Fdd/(1-Fdd));
-     /* hessian addition = 0.5*rho*kron(I_2,diag(Fd1)) */
+     /* hessian addition = 0.5*rho*kron(I_2,diag(Fd1)) (4N x 4N) */
      /* = 2x2N diagonal terms =0.5*rho*Fd1 */
 
-     printf("Fdd %lf Hadd %lf\n",Fd1,0.5*t->rho[ncl]*Fd1);
-
+     float hfactor=(float)0.5*t->rho[ncl]*Fd1;
+     printf("clus %d base=%d stat=%d tile=%d freq=%d Fdd %lf Hadd %f\n",ncl,t->Nbase,t->N,t->tilesz,t->Nf,Fd1,hfactor);
      free(Bibf);
+
+     /* add to diagonal of hessian (real part) */
+     for (int ci=0; ci<4*t->N; ci++) {
+       hess[ci*2*4*t->N+ci*2]+=hfactor;
+     }
     }
 
 
-  /* per cluster, Dsolutions_uvw(), using Hessian as input */
+  /* per cluster, Dsolutions_uvw(), fill matrix AdV (4N x B),
+   * by adding (J_q C^H)^T at p-th column block for baseline p-q */
+  cudakernel_d_solutions(t->Nbase,t->N,t->tilesz,t->Nf,barrd,pd,t->carr[ncl].nchunk,cohd,AdVd);
+  /* my_cgels() to find inv(Hessian) (AdV) */
 
   /* accumulate Dresidual_uvw() for this cluster in t->x of size t->Nbase*8*t->Nf */
 
@@ -746,10 +753,8 @@ hessian_influence_threadfn(void *data) {
   checkCudaError(err,__FILE__,__LINE__);
   err=cudaFreeHost(hess);
   checkCudaError(err,__FILE__,__LINE__);
-  if (hess_add_flag) {
-    err=cudaFreeHost(hess_add);
-    checkCudaError(err,__FILE__,__LINE__);
-  }
+  err=cudaFree(AdVd);
+  checkCudaError(err,__FILE__,__LINE__);
 
   cudaDeviceSynchronize();
   /* reset error state */
@@ -803,7 +808,7 @@ calculate_diagnostics_gpu(double *u,double *v,double *w,double *p,double *x,int 
   }
 
   complex double *coh;
-  printf("Coherencies baselines=%d tilesize=%d chan=%d GPU=%d clus=%d\n",Nbase,tilesz,Nchan,Ngpu,M);
+  printf("Coherencies baselines=%d tilesize=%d chan=%d GPU=%d clus=%d trueclus=%d\n",Nbase,tilesz,Nchan,Ngpu,M,Mt);
   if ((coh=(complex double*)calloc((size_t)Nbase*4*tilesz*Nchan*M,sizeof(complex double)))==0) {
     fprintf(stderr,"%s: %d: No free memory\n",__FILE__,__LINE__);
     exit(1);

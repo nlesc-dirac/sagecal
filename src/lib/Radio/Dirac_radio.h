@@ -677,6 +677,12 @@ calculate_diagnostics_gpu(double *u,double *v,double *w,double *p,double *x,int 
 extern void
 cudakernel_hessian(int B, int N, int T, int F, baseline_t *barr, double *p, int nchunk, float *coh, float *res, float *hess);
 
+/* AdV: 4N x B/tilesize x 2 x 8 storage, each 4NxB complex block
+ * represents the accumulated values of (J_q C_pq^H)^T -> p-th column block
+ * summed up over all time slots, hence B/tilesize = N(N-1)/2, 
+ * 8: due to taking delta of eacl re,im part of 2x2 matrix */
+extern void
+cudakernel_d_solutions(int B, int N, int T, int F, baseline_t *barr, double *p, int nchunk, float *coh, float *AdV);
 
 #endif /* HAVE_CUDA */
 

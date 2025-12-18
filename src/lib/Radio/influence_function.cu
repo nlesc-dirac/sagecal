@@ -286,6 +286,28 @@ kernel_hessian(int B, int N, int T, int F, const double *__restrict__ p, int nch
 }
  
 
+__global__ void
+kernel_d_solutions(int B, int N, int T, int F, const double *__restrict__ p, int nchunk, baseline_t *barr,
+    const float *__restrict__ coh, float *AdV) {
+
+  /* only work with the first freq, so F==1 taken */
+  /* x: baseline = N(N-1)/2 x T */
+  unsigned int n=threadIdx.x+blockDim.x*blockIdx.x;
+  /* y: station, row block of AdV */
+  unsigned int m=threadIdx.y+blockDim.y*blockIdx.y;
+  /* AdV : 2*4NxB x 8 blocks, B=B/T=N(N-1)/2 */
+  /* AdV : 4N x B complex float x 8 blocks, column major order,
+    each column 4N complex float = 8N float, so, value at (row, col) 
+    of first of the 8 blocks is
+   AdV[col*4*N*2+row*4*2]+1j*AdV[col*4*N*2+row*4*2+1] */
+
+
+
+ 
+}
+
+
+
 /* only use extern if calling code is C */
 extern "C"
 {
@@ -314,7 +336,6 @@ cudakernel_hessian(int B, int N, int T, int F, baseline_t *barr, double *p, int 
   dim3 threadsPerBlock(16,8); 
   dim3 numBlocks((B+threadsPerBlock.x-1)/threadsPerBlock.x,
          (N+threadsPerBlock.y-1)/threadsPerBlock.y);
-  printf("threads %d x %d blocks %d x %d\n",threadsPerBlock.x,threadsPerBlock.y,numBlocks.x,numBlocks.y);
   kernel_hessian<<<numBlocks,threadsPerBlock>>>(B, N, T, F, p, nchunk, 
       barr, coh, res, hess);
   cudaDeviceSynchronize();
@@ -327,5 +348,33 @@ cudakernel_hessian(int B, int N, int T, int F, baseline_t *barr, double *p, int 
   }
 #endif
 }
+
+void
+cudakernel_d_solutions(int B, int N, int T, int F, baseline_t *barr, double *p, int nchunk, float *coh, float *AdV) {
+#ifdef CUDA_DBG
+  cudaError_t error;
+  error = cudaGetLastError();
+#endif
+
+  /* AdV: 2*4Nx(B/T) x 8 values, baselines=B/T here */
+  /* spawn threads to handle baselines, stations */
+  /* thread x : baseline, thread y: station */
+  dim3 threadsPerBlock(16,8); 
+  dim3 numBlocks((B+threadsPerBlock.x-1)/threadsPerBlock.x,
+         (N+threadsPerBlock.y-1)/threadsPerBlock.y);
+  kernel_d_solutions<<<numBlocks,threadsPerBlock>>>(B, N, T, F, p, nchunk, 
+      barr, coh, AdV);
+  cudaDeviceSynchronize();
+#ifdef CUDA_DBG
+  error = cudaGetLastError();
+  if(error != cudaSuccess) {
+    // print the CUDA error message and exit
+    fprintf(stderr,"CUDA error: %s :%s: %d\n", cudaGetErrorString(error),__FILE__,__LINE__);
+    exit(-1);
+  }
+#endif
+
+}
+
 
 } /* extern "C" */
