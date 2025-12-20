@@ -139,7 +139,7 @@ kernel_hessian(int B, int N, int T, int F, const double *__restrict__ p, int nch
       /* need kron(-C^T, res^H ) -> q,p and 
          kron(res1^T, I_2), res1=C J_q^H J_q C^H =(C J_q^H) (C J_q^H)^H -> p,p */
 
-    /* create G2 Jones matrices from p */
+    /* create G2 Jones matrices from q */
     cuFloatComplex G2[4];
     G2[0].x=(float)__ldg(&p[chunk*8*N+sta2*8]);
     G2[0].y=(float)__ldg(&p[chunk*8*N+sta2*8+1]);
@@ -295,15 +295,76 @@ kernel_d_solutions(int B, int N, int T, int F, const double *__restrict__ p, int
   unsigned int n=threadIdx.x+blockDim.x*blockIdx.x;
   /* y: station, row block of AdV */
   unsigned int m=threadIdx.y+blockDim.y*blockIdx.y;
-  /* AdV : 2*4NxB x 8 blocks, B=B/T=N(N-1)/2 */
-  /* AdV : 4N x B complex float x 8 blocks, column major order,
+  /* AdV : 2*4NxBt x 8 blocks, Bt=B/T=N(N-1)/2 */
+  /* AdV : 4N x Bt complex float x 8 blocks, column major order,
     each column 4N complex float = 8N float, so, value at (row, col) 
     of first of the 8 blocks is
-   AdV[col*4*N*2+row*4*2]+1j*AdV[col*4*N*2+row*4*2+1] */
+   AdV[col*4*N*2+row*4*2]+1j*AdV[col*4*N*2+row*4*2+1] 
+   i-th block offset i*4*N*B*2 */
 
+  cuFloatComplex A[4],G2[4],C[4],H[16],I2[4];
+  I2[0].x=1.0f;
+  I2[0].y=0.0f;
+  I2[1].x=0.0f;
+  I2[1].y=0.0f;
+  I2[2].x=0.0f;
+  I2[2].y=0.0f;
+  I2[3].x=1.0f;
+  I2[3].y=0.0f;
 
+  int Bt=((N*(N-1)/2));
 
- 
+  /* left hand side (J_q C^H)^T, right hand side I_2
+     kron(lhs,I_2) stored at row block p */
+  if (n<B) {
+    int sta1=barr[n].sta1; //station p
+    int sta2=barr[n].sta2; //station q
+    // fill column block bl, and 8 offsets
+    int bl=n % Bt; // baseline index
+    if ((sta1>0 && sta2>0) && (m==sta2)) {
+
+      /* C^\star */
+      C[0].x=__ldg(&coh[8*n]);
+      C[0].y=-__ldg(&coh[8*n+1]);
+      C[1].x=__ldg(&coh[8*n+2]);
+      C[1].y=-__ldg(&coh[8*n+3]);
+      C[2].x=__ldg(&coh[8*n+4]);
+      C[2].y=-__ldg(&coh[8*n+5]);
+      C[3].x=__ldg(&coh[8*n+6]);
+      C[3].y=-__ldg(&coh[8*n+7]);
+
+    /* find out which chunk to select from p : 0,1..nchunk-1 */
+    int chunk=(n)/((B+nchunk-1)/nchunk);
+
+        /* G2 Jones matrices from q, J_q^T*/
+    G2[0].x=(float)__ldg(&p[chunk*8*N+sta2*8]);
+    G2[0].y=(float)__ldg(&p[chunk*8*N+sta2*8+1]);
+    G2[2].x=(float)__ldg(&p[chunk*8*N+sta2*8+2]);
+    G2[2].y=(float)__ldg(&p[chunk*8*N+sta2*8+3]);
+    G2[1].x=(float)__ldg(&p[chunk*8*N+sta2*8+4]);
+    G2[1].y=(float)__ldg(&p[chunk*8*N+sta2*8+5]);
+    G2[3].x=(float)__ldg(&p[chunk*8*N+sta2*8+6]);
+    G2[3].y=(float)__ldg(&p[chunk*8*N+sta2*8+7]);
+
+    /* (J_q C^H)^T = C^\star J_q^T */
+    amb(C,G2,A); /* A = C^\star J_q^T */
+    /* (C^star J_q^T) \kron I_2 */
+      kron_ab(A,I2,H);
+
+      /* row block p(=sta1), column block bl */
+      int off=0;
+      for (int off=0; off<4; off++) {
+      atomicAdd(&AdV[off*Bt*4*N*2+bl*4*N*2+sta1*4*2],H[0+off].x);
+      atomicAdd(&AdV[off*Bt*4*N*2+bl*4*N*2+sta1*4*2+1],H[0+off].y);
+      atomicAdd(&AdV[off*Bt*4*N*2+bl*4*N*2+sta1*4*2+2],H[4+off].x);
+      atomicAdd(&AdV[off*Bt*4*N*2+bl*4*N*2+sta1*4*2+3],H[4+off].y);
+      atomicAdd(&AdV[off*Bt*4*N*2+bl*4*N*2+sta1*4*2+4],H[8+off].x);
+      atomicAdd(&AdV[off*Bt*4*N*2+bl*4*N*2+sta1*4*2+5],H[8+off].y);
+      atomicAdd(&AdV[off*Bt*4*N*2+bl*4*N*2+sta1*4*2+6],H[12+off].x);
+      atomicAdd(&AdV[off*Bt*4*N*2+bl*4*N*2+sta1*4*2+7],H[12+off].y);
+      }
+    }
+  }
 }
 
 
@@ -362,6 +423,7 @@ cudakernel_d_solutions(int B, int N, int T, int F, baseline_t *barr, double *p, 
   dim3 threadsPerBlock(16,8); 
   dim3 numBlocks((B+threadsPerBlock.x-1)/threadsPerBlock.x,
          (N+threadsPerBlock.y-1)/threadsPerBlock.y);
+  cudaMemset(AdV,0,2*4*N*(B/T)*8*sizeof(float));
   kernel_d_solutions<<<numBlocks,threadsPerBlock>>>(B, N, T, F, p, nchunk, 
       barr, coh, AdV);
   cudaDeviceSynchronize();

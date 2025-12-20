@@ -684,11 +684,6 @@ hessian_influence_threadfn(void *data) {
     /* run kernel, which will calculate hessian for this cluster */
     cudakernel_hessian(t->Nbase,t->N,t->tilesz,t->Nf,barrd,pd,t->carr[ncl].nchunk,cohd,resd,hessd);
 
-    err=cudaFree(cohd);
-    checkCudaError(err,__FILE__,__LINE__);
-    err=cudaFree(pd);
-    checkCudaError(err,__FILE__,__LINE__);
-
     /* copy result back */
     err=cudaMemcpy(hess,hessd,sizeof(float)*(size_t)t->N*4*t->N*4*2,cudaMemcpyDeviceToHost);
     checkCudaError(err,__FILE__,__LINE__);
@@ -734,13 +729,17 @@ hessian_influence_threadfn(void *data) {
     }
 
 
-  /* per cluster, Dsolutions_uvw(), fill matrix AdV (4N x B),
-   * by adding (J_q C^H)^T at p-th column block for baseline p-q */
-  cudakernel_d_solutions(t->Nbase,t->N,t->tilesz,t->Nf,barrd,pd,t->carr[ncl].nchunk,cohd,AdVd);
+    /* per cluster, Dsolutions_uvw(), fill matrix AdV (4N x B),
+     * by adding (J_q C^H)^T at p-th column block for baseline p-q */
+     cudakernel_d_solutions(t->Nbase,t->N,t->tilesz,t->Nf,barrd,pd,t->carr[ncl].nchunk,cohd,AdVd);
   /* my_cgels() to find inv(Hessian) (AdV) */
 
   /* accumulate Dresidual_uvw() for this cluster in t->x of size t->Nbase*8*t->Nf */
 
+    err=cudaFree(cohd);
+    checkCudaError(err,__FILE__,__LINE__);
+    err=cudaFree(pd);
+    checkCudaError(err,__FILE__,__LINE__);
   }
 /******************* end loop over clusters **************************/
 
