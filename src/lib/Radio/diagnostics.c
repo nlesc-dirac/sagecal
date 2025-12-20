@@ -660,9 +660,12 @@ hessian_influence_threadfn(void *data) {
 
   /* storage to calculate (Jq C^H)^T -> p-th block, 4NxNbase x 2 (re,im) x 8 (for 8 values of 
    * 2x2 complex matrix) */
-  float *AdVd=0;
+  float *AdVd=0,*AdV;
   err=cudaMalloc((void**) &AdVd, t->N*4*t->Nbase*2*8*sizeof(float)); /* Hessian for one cluster */
   checkCudaError(err,__FILE__,__LINE__);
+  err=cudaMallocHost((void**)&AdV,sizeof(float)*(size_t)t->N*4*t->Nbase*2*8);
+  checkCudaError(err,__FILE__,__LINE__);
+
  
 /******************* begin loop over clusters **************************/
   for (ncl=t->soff; ncl<t->soff+t->Ns; ncl++) {
@@ -731,15 +734,34 @@ hessian_influence_threadfn(void *data) {
 
     /* per cluster, Dsolutions_uvw(), fill matrix AdV (4N x B),
      * by adding (J_q C^H)^T at p-th column block for baseline p-q */
-     cudakernel_d_solutions(t->Nbase,t->N,t->tilesz,t->Nf,barrd,pd,t->carr[ncl].nchunk,cohd,AdVd);
-  /* my_cgels() to find inv(Hessian) (AdV) */
+      cudakernel_d_solutions(t->Nbase,t->N,t->tilesz,t->Nf,barrd,pd,t->carr[ncl].nchunk,cohd,AdVd);
+      err=cudaMemcpy(AdV,AdVd,sizeof(float)*(size_t)t->N*4*t->Nbase*2*8,cudaMemcpyDeviceToHost);
+      checkCudaError(err,__FILE__,__LINE__);
 
-  /* accumulate Dresidual_uvw() for this cluster in t->x of size t->Nbase*8*t->Nf */
+      /* my_cgels() to find inv(Hessian) (AdV) */
+      /* solve A u = b to find u, A=hess, b=AdV */
+      complex float w,*WORK;
+      /* workspace query */
+      int status=my_cgels('N',4,4,1,(complex float*)hess,4,(complex float*)AdV,4,&w,-1);
+      int lwork=(int)w;
+      if ((WORK=(complex float*)calloc((size_t)lwork,sizeof(complex float)))==0) {
+        fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
+        exit(1);
+      }
+      status=my_cgels('N',4,4,1,(complex float*)hess,4,(complex float*)AdV,4,WORK,lwork);
+      if (status) {
+        fprintf(stderr,"%s: %d: LAPACK error %d\n",__FILE__,__LINE__,status);
+      }
 
-    err=cudaFree(cohd);
-    checkCudaError(err,__FILE__,__LINE__);
-    err=cudaFree(pd);
-    checkCudaError(err,__FILE__,__LINE__);
+      free(WORK);
+ 
+
+     /* accumulate Dresidual_uvw() for this cluster in t->x of size t->Nbase*8*t->Nf */
+
+     err=cudaFree(cohd);
+     checkCudaError(err,__FILE__,__LINE__);
+     err=cudaFree(pd);
+     checkCudaError(err,__FILE__,__LINE__);
   }
 /******************* end loop over clusters **************************/
 
@@ -753,6 +775,8 @@ hessian_influence_threadfn(void *data) {
   err=cudaFreeHost(hess);
   checkCudaError(err,__FILE__,__LINE__);
   err=cudaFree(AdVd);
+  checkCudaError(err,__FILE__,__LINE__);
+  err=cudaFreeHost(AdV);
   checkCudaError(err,__FILE__,__LINE__);
 
   cudaDeviceSynchronize();
