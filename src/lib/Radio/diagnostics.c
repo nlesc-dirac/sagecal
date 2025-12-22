@@ -658,12 +658,13 @@ hessian_influence_threadfn(void *data) {
   /* calculate Hessian addition (common part), based only on the polynomial basis*/
   int hess_add_flag=(t->rho && t->Bpoly && t->Binv ? 1: 0);
 
-  /* storage to calculate (Jq C^H)^T -> p-th block, 4NxNbase x 2 (re,im) x 8 (for 8 values of 
-   * 2x2 complex matrix) */
+  /* storage to calculate (Jq C^H)^T -> p-th block, 4NxNbase x 2 (re,im) 
+   * sum_r (\partial V_pq / \partial x_pqr) =[1+j, 1+j; 1+j, 1+j]
+   * (for 8 values of 2x2 complex matrix) */
   float *AdVd=0,*AdV;
-  err=cudaMalloc((void**) &AdVd, t->N*4*t->Nbase*2*8*sizeof(float)); /* Hessian for one cluster */
+  err=cudaMalloc((void**) &AdVd, t->N*4*t->Nbase*2*sizeof(float)); /* Hessian for one cluster */
   checkCudaError(err,__FILE__,__LINE__);
-  err=cudaMallocHost((void**)&AdV,sizeof(float)*(size_t)t->N*4*t->Nbase*2*8);
+  err=cudaMallocHost((void**)&AdV,sizeof(float)*(size_t)t->N*4*t->Nbase*2);
   checkCudaError(err,__FILE__,__LINE__);
 
  
@@ -735,20 +736,21 @@ hessian_influence_threadfn(void *data) {
     /* per cluster, Dsolutions_uvw(), fill matrix AdV (4N x B),
      * by adding (J_q C^H)^T at p-th column block for baseline p-q */
       cudakernel_d_solutions(t->Nbase,t->N,t->tilesz,t->Nf,barrd,pd,t->carr[ncl].nchunk,cohd,AdVd);
-      err=cudaMemcpy(AdV,AdVd,sizeof(float)*(size_t)t->N*4*t->Nbase*2*8,cudaMemcpyDeviceToHost);
+      err=cudaMemcpy(AdV,AdVd,sizeof(float)*(size_t)t->N*4*t->Nbase*2,cudaMemcpyDeviceToHost);
       checkCudaError(err,__FILE__,__LINE__);
 
       /* my_cgels() to find inv(Hessian) (AdV) */
-      /* solve A u = b to find u, A=hess, b=AdV */
+      /* solve A u = b to find u, A=hess, b=AdV
+       * A: 4N x 4N, b: 4N x Nbase (complex) */
       complex float w,*WORK;
       /* workspace query */
-      int status=my_cgels('N',4,4,1,(complex float*)hess,4,(complex float*)AdV,4,&w,-1);
+      int status=my_cgels('N',4*t->N,4*t->N,t->Nbase,(complex float*)hess,4*t->N,(complex float*)AdV,4*t->N,&w,-1);
       int lwork=(int)w;
       if ((WORK=(complex float*)calloc((size_t)lwork,sizeof(complex float)))==0) {
         fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
         exit(1);
       }
-      status=my_cgels('N',4,4,1,(complex float*)hess,4,(complex float*)AdV,4,WORK,lwork);
+      status=my_cgels('N',4*t->N,4*t->N,t->Nbase,(complex float*)hess,4*t->N,(complex float*)AdV,4*t->N,WORK,lwork);
       if (status) {
         fprintf(stderr,"%s: %d: LAPACK error %d\n",__FILE__,__LINE__,status);
       }

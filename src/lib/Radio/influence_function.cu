@@ -295,13 +295,13 @@ kernel_d_solutions(int B, int N, int T, int F, const double *__restrict__ p, int
   unsigned int n=threadIdx.x+blockDim.x*blockIdx.x;
   /* y: station, row block of AdV */
   unsigned int m=threadIdx.y+blockDim.y*blockIdx.y;
-  /* AdV : 2*4NxBt x 8 blocks, Bt=B/T=N(N-1)/2 */
-  /* AdV : 4N x Bt complex float x 8 blocks, column major order,
+  /* AdV : 2*4NxBt blocks, Bt=B/T=N(N-1)/2 */
+  /* AdV : 4N x Bt complex float column major order,
     each column 4N complex float = 8N float, so, value at (row, col) 
-    of first of the 8 blocks is
    AdV[col*4*N*2+row*4*2]+1j*AdV[col*4*N*2+row*4*2+1] 
-   i-th block offset i*4*N*B*2 */
-
+   ...
+   AdV[col*4*N*2+row*4*2+6]+1j*AdV[col*4*N*2+row*4*2+7] 
+  */
   cuFloatComplex A[4],G2[4],C[4],H[16],I2[4];
   I2[0].x=1.0f;
   I2[0].y=0.0f;
@@ -319,7 +319,7 @@ kernel_d_solutions(int B, int N, int T, int F, const double *__restrict__ p, int
   if (n<B) {
     int sta1=barr[n].sta1; //station p
     int sta2=barr[n].sta2; //station q
-    // fill column block bl, and 8 offsets
+    // fill column block bl
     int bl=n % Bt; // baseline index
     if ((sta1>0 && sta2>0) && (m==sta2)) {
 
@@ -351,17 +351,18 @@ kernel_d_solutions(int B, int N, int T, int F, const double *__restrict__ p, int
     /* (C^star J_q^T) \kron I_2 */
       kron_ab(A,I2,H);
 
-      /* row block p(=sta1), column block bl */
-      int off=0;
-      for (int off=0; off<4; off++) {
-      atomicAdd(&AdV[off*Bt*4*N*2+bl*4*N*2+sta1*4*2],H[0+off].x);
-      atomicAdd(&AdV[off*Bt*4*N*2+bl*4*N*2+sta1*4*2+1],H[0+off].y);
-      atomicAdd(&AdV[off*Bt*4*N*2+bl*4*N*2+sta1*4*2+2],H[4+off].x);
-      atomicAdd(&AdV[off*Bt*4*N*2+bl*4*N*2+sta1*4*2+3],H[4+off].y);
-      atomicAdd(&AdV[off*Bt*4*N*2+bl*4*N*2+sta1*4*2+4],H[8+off].x);
-      atomicAdd(&AdV[off*Bt*4*N*2+bl*4*N*2+sta1*4*2+5],H[8+off].y);
-      atomicAdd(&AdV[off*Bt*4*N*2+bl*4*N*2+sta1*4*2+6],H[12+off].x);
-      atomicAdd(&AdV[off*Bt*4*N*2+bl*4*N*2+sta1*4*2+7],H[12+off].y);
+      /* row block p(=sta1), column bl */
+      /* find product H [1+j; 1+j; 1+j; 1+j] */
+      /* row major H */
+      for (int row=0; row<4; row++) {
+        float product_r=0.0f;
+        float product_i=0.0f;
+        for (int col=0; col<4; col++) {
+         product_r+=H[4*row+col].x-H[4*row+col].y;
+         product_i+=H[4*row+col].x+H[4*row+col].y;
+        }
+        atomicAdd(&AdV[bl*4*N*2+sta1*4*2+2*row],product_r);
+        atomicAdd(&AdV[bl*4*N*2+sta1*4*2+2*row+1],product_i);
       }
     }
   }
@@ -417,13 +418,13 @@ cudakernel_d_solutions(int B, int N, int T, int F, baseline_t *barr, double *p, 
   error = cudaGetLastError();
 #endif
 
-  /* AdV: 2*4Nx(B/T) x 8 values, baselines=B/T here */
+  /* AdV: 2*4Nx(B/T) values, baselines=B/T here */
   /* spawn threads to handle baselines, stations */
   /* thread x : baseline, thread y: station */
   dim3 threadsPerBlock(16,8); 
   dim3 numBlocks((B+threadsPerBlock.x-1)/threadsPerBlock.x,
          (N+threadsPerBlock.y-1)/threadsPerBlock.y);
-  cudaMemset(AdV,0,2*4*N*(B/T)*8*sizeof(float));
+  cudaMemset(AdV,0,2*4*N*(B/T)*sizeof(float));
   kernel_d_solutions<<<numBlocks,threadsPerBlock>>>(B, N, T, F, p, nchunk, 
       barr, coh, AdV);
   cudaDeviceSynchronize();
