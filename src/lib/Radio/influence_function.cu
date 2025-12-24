@@ -70,17 +70,6 @@ kron_ab(const cuFloatComplex*__restrict__ a, const cuFloatComplex *__restrict__ 
   c[15]=cuCmulf(a[3],b[3]);
 }
 
-/* transpose 4x4 matrix */
-static __device__ void
-transpose_4x4(const cuFloatComplex*__restrict__ a, cuFloatComplex *__restrict__ c) {
-  for (uint ci=0; ci<4; ci++) {
-   c[0+4*ci]=a[0+ci];
-   c[1+4*ci]=a[4+ci];
-   c[2+4*ci]=a[8+ci];
-   c[3+4*ci]=a[12+ci];
-  }
-}
-
 __global__ void
 kernel_hessian(int B, int N, int T, int F, const double *__restrict__ p, int nchunk, baseline_t *barr,
     const float *__restrict__ coh, const float *__restrict__ res, float *hess) {
@@ -98,7 +87,7 @@ kernel_hessian(int B, int N, int T, int F, const double *__restrict__ p, int nch
   if (n<B) {
     int sta1=barr[n].sta1;
     int sta2=barr[n].sta2;
-    if ((sta1>0 && sta2>0) && (m==sta1 or m==sta2)) {
+    if (m<N  && (m==sta1 or m==sta2)) {
       /* this thread will work on column block m, 
          sta1,sta2 will update row,col of hess 
          (sta1,sta2), (sta2,sta1), (sta1,sta1), (sta2,sta2)
@@ -198,7 +187,7 @@ kernel_hessian(int B, int N, int T, int F, const double *__restrict__ p, int nch
      ambt(A,B,D); /* D = A A^H = (C J_q^H) (C J_q^H)^H */
      cuFloatComplex E[4];
      /* E= D^T */
-     transpose_4x4(D,E);
+     E[0]=D[0]; E[1]=D[2]; E[2]=D[1]; E[3]=D[3];
      /* D^T \kron I_2, D= C J_q^H J_q C^H */
       kron_ab(E,I2,H);
       for (int off=0; off<4; off++) {
@@ -211,7 +200,6 @@ kernel_hessian(int B, int N, int T, int F, const double *__restrict__ p, int nch
       atomicAdd(&hess[(sta1+off)*4*N*2+sta1*4*2+6],H[12+off].x);
       atomicAdd(&hess[(sta1+off)*4*N*2+sta1*4*2+7],H[12+off].y);
       }
-
     } else { /* m==sta2 */
       /* update (sta1,sta2)=(p,q) and (sta2,sta2)=(q,q) */
       /* need kron(-conj(C), res) and
@@ -266,7 +254,7 @@ kernel_hessian(int B, int N, int T, int F, const double *__restrict__ p, int nch
      amb(A,B,D); /* D = B^H B = (J_p C)^H (J_p C) */
      cuFloatComplex E[4];
      /* E= D^T */
-     transpose_4x4(D,E);
+     E[0]=D[0]; E[1]=D[2]; E[2]=D[1]; E[3]=D[3];
      /* D^T \kron I_2, D= (J_p C)^H J_p C */
       kron_ab(E,I2,H);
       for (int off=0; off<4; off++) {
@@ -281,7 +269,6 @@ kernel_hessian(int B, int N, int T, int F, const double *__restrict__ p, int nch
       }
     }
     }
-
   }
 }
  
@@ -301,6 +288,9 @@ kernel_d_solutions(int B, int N, int T, int F, const double *__restrict__ p, int
    AdV[col*4*N*2+row*4*2]+1j*AdV[col*4*N*2+row*4*2+1] 
    ...
    AdV[col*4*N*2+row*4*2+6]+1j*AdV[col*4*N*2+row*4*2+7] 
+
+   station p maps to two row blocks in each column of size 4N
+   p*2:p*2+1 and 2*N+p*2:2*N+p*2+1
   */
   cuFloatComplex A[4],G2[4],C[4],H[16],I2[4];
   I2[0].x=1.0f;
@@ -321,7 +311,7 @@ kernel_d_solutions(int B, int N, int T, int F, const double *__restrict__ p, int
     int sta2=barr[n].sta2; //station q
     // fill column block bl
     int bl=n % Bt; // baseline index
-    if ((sta1>0 && sta2>0) && (m==sta2)) {
+    if (m<N && (m==sta2)) {
 
       /* C^\star */
       C[0].x=__ldg(&coh[8*n]);
@@ -336,7 +326,7 @@ kernel_d_solutions(int B, int N, int T, int F, const double *__restrict__ p, int
     /* find out which chunk to select from p : 0,1..nchunk-1 */
     int chunk=(n)/((B+nchunk-1)/nchunk);
 
-        /* G2 Jones matrices from q, J_q^T*/
+    /* G2 Jones matrices from q, J_q^T*/
     G2[0].x=(float)__ldg(&p[chunk*8*N+sta2*8]);
     G2[0].y=(float)__ldg(&p[chunk*8*N+sta2*8+1]);
     G2[2].x=(float)__ldg(&p[chunk*8*N+sta2*8+2]);
@@ -354,21 +344,120 @@ kernel_d_solutions(int B, int N, int T, int F, const double *__restrict__ p, int
       /* row block p(=sta1), column bl */
       /* find product H [1+j; 1+j; 1+j; 1+j] */
       /* row major H */
-      for (int row=0; row<4; row++) {
+      for (int row=0; row<2; row++) {
         float product_r=0.0f;
         float product_i=0.0f;
         for (int col=0; col<4; col++) {
          product_r+=H[4*row+col].x-H[4*row+col].y;
          product_i+=H[4*row+col].x+H[4*row+col].y;
         }
-        atomicAdd(&AdV[bl*4*N*2+sta1*4*2+2*row],product_r);
-        atomicAdd(&AdV[bl*4*N*2+sta1*4*2+2*row+1],product_i);
+        atomicAdd(&AdV[bl*4*N*2+sta1*2*2+2*row],product_r);
+        atomicAdd(&AdV[bl*4*N*2+sta1*2*2+2*row+1],product_i);
+      }
+      for (int row=0; row<2; row++) {
+        float product_r=0.0f;
+        float product_i=0.0f;
+        for (int col=0; col<4; col++) {
+         product_r+=H[4*(row+2)+col].x-H[4*(row+2)+col].y;
+         product_i+=H[4*(row+2)+col].x+H[4*(row+2)+col].y;
+        }
+        atomicAdd(&AdV[bl*4*N*2+N*2*2+sta1*2*2+2*row],product_r);
+        atomicAdd(&AdV[bl*4*N*2+N*2*2+sta1*2*2+2*row+1],product_i);
       }
     }
   }
 }
 
 
+__global__ void
+kernel_d_residuals(int B, int N, int T, int F, const double *__restrict__ p, int nchunk, baseline_t *barr,
+    const float *__restrict__ coh, const float *__restrict__ dJ, float *dR) {
+
+  /* only work with the first freq, so F==1 taken */
+  /* x: baseline = N(N-1)/2 x T */
+  unsigned int n=threadIdx.x+blockDim.x*blockIdx.x;
+  /* dJ : 2*4N x 1 (summed over all columns Bt=B/T=N(N-1)/2) */
+  /* dR : 2*4Bt x 1, Bt=B/T=N(N-1)/2 */
+  /* in dJ
+   station p maps to two row blocks in each column of size 4N
+   p*2:p*2+1 and 2*N+p*2:2*N+p*2+1
+  */
+  cuFloatComplex A[4],G2[4],C[4],H[16],I2[4];
+  I2[0].x=1.0f;
+  I2[0].y=0.0f;
+  I2[1].x=0.0f;
+  I2[1].y=0.0f;
+  I2[2].x=0.0f;
+  I2[2].y=0.0f;
+  I2[3].x=1.0f;
+  I2[3].y=0.0f;
+
+  int Bt=((N*(N-1)/2));
+
+  /* left hand side -(C J_q^H)^T, right hand side I_2
+     left hand side =  J_q^star (-C^T)
+     kron(lhs,I_2) x (row block p of dJ) */
+  if (n<B) {
+    int sta1=barr[n].sta1; //station p
+    int sta2=barr[n].sta2; //station q
+    // fill column block bl of dR
+    int bl=n % Bt; // baseline index
+    if (sta1>=0 && sta2>=0) {
+      /* -C^T */
+      C[0].x=__ldg(&coh[8*n]);
+      C[0].y=__ldg(&coh[8*n+1]);
+      C[2].x=__ldg(&coh[8*n+2]);
+      C[2].y=__ldg(&coh[8*n+3]);
+      C[1].x=__ldg(&coh[8*n+4]);
+      C[1].y=__ldg(&coh[8*n+5]);
+      C[3].x=__ldg(&coh[8*n+6]);
+      C[3].y=__ldg(&coh[8*n+7]);
+
+    /* find out which chunk to select from p : 0,1..nchunk-1 */
+    int chunk=(n)/((B+nchunk-1)/nchunk);
+
+    /* G2 Jones matrices from q, J_q^star*/
+    G2[0].x=(float)__ldg(&p[chunk*8*N+sta2*8]);
+    G2[0].y=-(float)__ldg(&p[chunk*8*N+sta2*8+1]);
+    G2[1].x=(float)__ldg(&p[chunk*8*N+sta2*8+2]);
+    G2[1].y=-(float)__ldg(&p[chunk*8*N+sta2*8+3]);
+    G2[2].x=(float)__ldg(&p[chunk*8*N+sta2*8+4]);
+    G2[2].y=-(float)__ldg(&p[chunk*8*N+sta2*8+5]);
+    G2[3].x=(float)__ldg(&p[chunk*8*N+sta2*8+6]);
+    G2[3].y=-(float)__ldg(&p[chunk*8*N+sta2*8+7]);
+
+    /* -(C J_q^H)^T = J_q^\star (-C)^T */
+    amb(G2,C,A); /* A = -J_q^\star C^T */
+    /* -(J_q^star C^T) \kron I_2 */
+      kron_ab(A,I2,H);
+
+    /* row block p(=sta1), column bl */
+    /* find product H [1+j; 1+j; 1+j; 1+j] */
+    /* row major H */
+    for (int row=0; row<2; row++) {
+     float prod=dJ[bl*4*N*2+sta1*2*2+2*row]+dJ[bl*4*N*2+sta1*2*2+2*row+1]
+      +dJ[bl*4*N*2+N*2*2+sta1*2*2+2*row]+dJ[bl*4*N*2+N*2*2+sta1*2*2+2*row+1];
+    }
+    }
+  }
+}
+
+__global__ void
+kernel_sum_col(int M, int N, float *A) {
+  extern __shared__ float block_sum[]; /* 1xthreads for block sum storage */
+  unsigned int m=threadIdx.x+blockDim.x*blockIdx.x;
+  int tid=threadIdx.x;
+  if (m<M) {
+    block_sum[tid]=0.0f;
+    for (int n=0; n<N; n++) {
+      block_sum[tid]+=A[M*n+m];
+    }
+  }
+  __syncthreads();
+  if (m<M) {
+    A[m]=block_sum[tid];
+  }
+}
 
 /* only use extern if calling code is C */
 extern "C"
@@ -439,5 +528,60 @@ cudakernel_d_solutions(int B, int N, int T, int F, baseline_t *barr, double *p, 
 
 }
 
+
+void 
+cudakernel_sum_col(int M, int N, float *A) {
+#ifdef CUDA_DBG
+  cudaError_t error;
+  error = cudaGetLastError();
+#endif
+ 
+  /* A: M x N matrix, add all columns to first column */
+  /* spawn M threads to handle each row */
+  int ThreadsPerBlock=DEFAULT_TH_PER_BK;
+  int BlocksPerGrid=(M+ThreadsPerBlock-1)/ThreadsPerBlock;
+  kernel_sum_col<<<BlocksPerGrid,ThreadsPerBlock,sizeof(float)*ThreadsPerBlock>>>(M,N,A);
+
+#ifdef CUDA_DBG
+  error = cudaGetLastError();
+  if(error != cudaSuccess) {
+    // print the CUDA error message and exit
+    fprintf(stderr,"CUDA error: %s :%s: %d\n", cudaGetErrorString(error),__FILE__,__LINE__);
+    exit(-1);
+  }
+#endif
+}
+
+void
+cudakernel_d_residuals(int B, int N, int T, int F, baseline_t *barr, double *p, int nchunk, float *coh, float *dJ, float *dR) {
+#ifdef CUDA_DBG
+  cudaError_t error;
+  error = cudaGetLastError();
+#endif
+  
+  int Bt=B/T;
+
+  /* dJ: 2*4Nx(B/T) values, baselines=B/T here, but all cols are summed 
+   into first column, so size is 2*4N x 1 */
+  /* dR: (B/T)*4*2 values, sum over full matrix dR (4*Nbase*2)xNbase */
+
+  cudaMemset(dR,0,2*4*Bt*sizeof(float));
+  /* spawn threads to handle baselines */
+  /* thread x : baseline(all times) */
+  int ThreadsPerBlock=DEFAULT_TH_PER_BK;
+  int BlocksPerGrid=(B+ThreadsPerBlock-1)/ThreadsPerBlock;
+  kernel_d_residuals<<<BlocksPerGrid,ThreadsPerBlock>>>(B, N, T, F, p, nchunk, 
+      barr, coh, dJ, dR);
+  cudaDeviceSynchronize();
+#ifdef CUDA_DBG
+  error = cudaGetLastError();
+  if(error != cudaSuccess) {
+    // print the CUDA error message and exit
+    fprintf(stderr,"CUDA error: %s :%s: %d\n", cudaGetErrorString(error),__FILE__,__LINE__);
+    exit(-1);
+  }
+#endif
+
+}
 
 } /* extern "C" */
