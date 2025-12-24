@@ -44,6 +44,15 @@ ambt(const cuFloatComplex *__restrict__ a, const cuFloatComplex *__restrict__ b,
  c[3]=cuCaddf(cuCmulf(a[2],cuConjf(b[2])),cuCmulf(a[3],cuConjf(b[3])));
 }
 
+/* C=A x B, A: 4x4 matrix (row major), B: 4x1 vector, C: 4x1 vector */
+static __device__ void
+mat_vec(const cuFloatComplex *__restrict__ a, const cuFloatComplex *__restrict__ b, cuFloatComplex *__restrict__ c) {
+    c[0]=cuCaddf(cuCaddf(cuCmulf(a[0],b[0]),cuCmulf(a[1],b[1])),cuCaddf(cuCmulf(a[2],b[2]),cuCmulf(a[3],b[3])));
+    c[1]=cuCaddf(cuCaddf(cuCmulf(a[4],b[0]),cuCmulf(a[5],b[1])),cuCaddf(cuCmulf(a[6],b[2]),cuCmulf(a[7],b[3])));
+    c[2]=cuCaddf(cuCaddf(cuCmulf(a[8],b[0]),cuCmulf(a[9],b[1])),cuCaddf(cuCmulf(a[10],b[2]),cuCmulf(a[11],b[3])));
+    c[3]=cuCaddf(cuCaddf(cuCmulf(a[12],b[0]),cuCmulf(a[13],b[1])),cuCaddf(cuCmulf(a[14],b[2]),cuCmulf(a[15],b[3])));
+}
+
 /* Kronecker product C = kron(A,B)
    A,B :2x2 complex, A=[a0, a1; a2, a3], B=[b0, b1; b2, b3]
    C: 4x4 complex,
@@ -376,13 +385,14 @@ kernel_d_residuals(int B, int N, int T, int F, const double *__restrict__ p, int
   /* only work with the first freq, so F==1 taken */
   /* x: baseline = N(N-1)/2 x T */
   unsigned int n=threadIdx.x+blockDim.x*blockIdx.x;
-  /* dJ : 2*4N x 1 (summed over all columns Bt=B/T=N(N-1)/2) */
+  /* dJ : 2*4N x 1 (summed over all columns Bt=B/T=N(N-1)/2), only use 
+   the first column */
   /* dR : 2*4Bt x 1, Bt=B/T=N(N-1)/2 */
   /* in dJ
    station p maps to two row blocks in each column of size 4N
    p*2:p*2+1 and 2*N+p*2:2*N+p*2+1
   */
-  cuFloatComplex A[4],G2[4],C[4],H[16],I2[4];
+  cuFloatComplex A[4],J[4],G2[4],C[4],H[16],I2[4];
   I2[0].x=1.0f;
   I2[0].y=0.0f;
   I2[1].x=0.0f;
@@ -429,15 +439,29 @@ kernel_d_residuals(int B, int N, int T, int F, const double *__restrict__ p, int
     /* -(C J_q^H)^T = J_q^\star (-C)^T */
     amb(G2,C,A); /* A = -J_q^\star C^T */
     /* -(J_q^star C^T) \kron I_2 */
-      kron_ab(A,I2,H);
+    kron_ab(A,I2,H);
 
-    /* row block p(=sta1), column bl */
-    /* find product H [1+j; 1+j; 1+j; 1+j] */
+    /* dJ row block p(=sta1), column 0 : because averaged to this column */
     /* row major H */
-    for (int row=0; row<2; row++) {
-     float prod=dJ[bl*4*N*2+sta1*2*2+2*row]+dJ[bl*4*N*2+sta1*2*2+2*row+1]
-      +dJ[bl*4*N*2+N*2*2+sta1*2*2+2*row]+dJ[bl*4*N*2+N*2*2+sta1*2*2+2*row+1];
-    }
+    /* find product H dJ[p*2:p*2+1 and 2*N+p*2:2*N+p*2+1] */
+    J[0].x=dJ[sta1*2*2];
+    J[0].y=dJ[sta1*2*2+1];
+    J[1].x=dJ[sta1*2*2+2];
+    J[1].y=dJ[sta1*2*2+3];
+    J[2].x=dJ[N*2*2+sta1*2*2];
+    J[2].y=dJ[N*2*2+sta1*2*2+1];
+    J[3].x=dJ[N*2*2+sta1*2*2+3];
+    J[3].y=dJ[N*2*2+sta1*2*2+4];
+    mat_vec(H,J,A);
+    /* fill to dR[bl*8:bl*8+7] */
+    atomicAdd(&dR[bl*8],A[0].x);
+    atomicAdd(&dR[bl*8+1],A[0].y);
+    atomicAdd(&dR[bl*8+2],A[1].x);
+    atomicAdd(&dR[bl*8+3],A[1].y);
+    atomicAdd(&dR[bl*8+4],A[2].x);
+    atomicAdd(&dR[bl*8+5],A[2].y);
+    atomicAdd(&dR[bl*8+6],A[3].x);
+    atomicAdd(&dR[bl*8+7],A[3].y);
     }
   }
 }
@@ -489,7 +513,6 @@ cudakernel_hessian(int B, int N, int T, int F, baseline_t *barr, double *p, int 
          (N+threadsPerBlock.y-1)/threadsPerBlock.y);
   kernel_hessian<<<numBlocks,threadsPerBlock>>>(B, N, T, F, p, nchunk, 
       barr, coh, res, hess);
-  cudaDeviceSynchronize();
 #ifdef CUDA_DBG
   error = cudaGetLastError();
   if(error != cudaSuccess) {
@@ -516,7 +539,6 @@ cudakernel_d_solutions(int B, int N, int T, int F, baseline_t *barr, double *p, 
   cudaMemset(AdV,0,2*4*N*(B/T)*sizeof(float));
   kernel_d_solutions<<<numBlocks,threadsPerBlock>>>(B, N, T, F, p, nchunk, 
       barr, coh, AdV);
-  cudaDeviceSynchronize();
 #ifdef CUDA_DBG
   error = cudaGetLastError();
   if(error != cudaSuccess) {
@@ -572,7 +594,6 @@ cudakernel_d_residuals(int B, int N, int T, int F, baseline_t *barr, double *p, 
   int BlocksPerGrid=(B+ThreadsPerBlock-1)/ThreadsPerBlock;
   kernel_d_residuals<<<BlocksPerGrid,ThreadsPerBlock>>>(B, N, T, F, p, nchunk, 
       barr, coh, dJ, dR);
-  cudaDeviceSynchronize();
 #ifdef CUDA_DBG
   error = cudaGetLastError();
   if(error != cudaSuccess) {

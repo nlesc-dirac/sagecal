@@ -498,8 +498,6 @@ run_fullbatch_calibration(void) {
       free(pfreq);
       free(xfreq);
     } else {
-     /* since residual is calculated not using x (instead using xo), no need to unwhiten data
-        in case x was whitened */
 #ifndef HAVE_CUDA
      if (!doBeam) {
       calculate_residuals_multifreq(iodata.u,iodata.v,iodata.w,p,iodata.xo,iodata.N,iodata.Nbase,iodata.tilesz,barr,carr,M,iodata.freqs,iodata.Nchan,iodata.deltaf,iodata.deltat,iodata.dec0,Data::Nt,Data::ccid,Data::rho,Data::phaseOnly);

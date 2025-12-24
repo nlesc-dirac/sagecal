@@ -19,6 +19,7 @@
 
 
 
+#include "Dirac.h"
 #include "Dirac_radio.h"
 #include "Dirac_GPUtune.h"
 
@@ -670,13 +671,16 @@ hessian_influence_threadfn(void *data) {
 
   /* storage to calcualte Dresiduals 4*Nbase x Nbase x 2 (re,im) */
   /* but we sum over all columns, so only allocage 4*Nbase*2 (re,im) */
-  float *dRd=0,*dR;
+  float *dRd=0,*dR,*dRsum;
   err=cudaMalloc((void**) &dRd, 4*Nbase*2*sizeof(float)); /* memory for sum over all columns (Nbase) */
   checkCudaError(err,__FILE__,__LINE__);
   /* host only store average value 4*t->Nbase*2 */
   err=cudaMallocHost((void**)&dR,sizeof(float)*(size_t)4*Nbase*2);
   checkCudaError(err,__FILE__,__LINE__);
-
+  err=cudaMallocHost((void**)&dRsum,sizeof(float)*(size_t)4*Nbase*2);
+  checkCudaError(err,__FILE__,__LINE__);
+  err=cudaMemset(dRsum, 0, 4*Nbase*2*sizeof(float));
+  checkCudaError(err,__FILE__,__LINE__);
  
 /******************* begin loop over clusters **************************/
   for (ncl=t->soff; ncl<t->soff+t->Ns; ncl++) {
@@ -776,9 +780,14 @@ hessian_influence_threadfn(void *data) {
 
      /* sum all columns of AdV into first column */
      cudakernel_sum_col(2*4*t->N,Nbase,AdVd);
+     err=cudaMemset(dRd, 0, 4*Nbase*2*sizeof(float));
+     checkCudaError(err,__FILE__,__LINE__);
      cudakernel_d_residuals(t->Nbase,t->N,t->tilesz,t->Nf,barrd,pd,t->carr[ncl].nchunk,cohd,AdVd,dRd);
      err=cudaMemcpy(dR,dRd,sizeof(float)*(size_t)4*Nbase*2,cudaMemcpyDeviceToHost);
      checkCudaError(err,__FILE__,__LINE__);
+     
+     /* accumulate dR over all clusters */
+     my_saxpy(4*Nbase*2,dR,1.0f,dRsum);
 
      err=cudaFree(cohd);
      checkCudaError(err,__FILE__,__LINE__);
@@ -787,6 +796,12 @@ hessian_influence_threadfn(void *data) {
   }
 /******************* end loop over clusters **************************/
 
+  /* copy dRsum to t->x */
+  float_to_double(t->x,dRsum,4*Nbase*2,2);
+  /* replicate to fill t->x (size t->Nbase*8*t->Nf) by dRsum (size 8*Nbase) (tilesize) times */
+  for (int ci=0; ci<t->tilesz; ci++) {
+    my_dcopy(4*Nbase*2,&(t->x[0]),1,&(t->x[ci*4*Nbase*2]),1);
+  }
 
   err=cudaFree(resd);
   checkCudaError(err,__FILE__,__LINE__);
@@ -803,6 +818,8 @@ hessian_influence_threadfn(void *data) {
   err=cudaFree(dRd);
   checkCudaError(err,__FILE__,__LINE__);
   err=cudaFreeHost(dR);
+  checkCudaError(err,__FILE__,__LINE__);
+  err=cudaFreeHost(dRsum);
   checkCudaError(err,__FILE__,__LINE__);
 
   cudaDeviceSynchronize();
@@ -857,7 +874,6 @@ calculate_diagnostics_gpu(double *u,double *v,double *w,double *p,double *x,int 
   }
 
   complex double *coh;
-  printf("Coherencies baselines=%d tilesize=%d chan=%d GPU=%d clus=%d trueclus=%d\n",Nbase,tilesz,Nchan,Ngpu,M,Mt);
   if ((coh=(complex double*)calloc((size_t)Nbase*4*tilesz*Nchan*M,sizeof(complex double)))==0) {
     fprintf(stderr,"%s: %d: No free memory\n",__FILE__,__LINE__);
     exit(1);
@@ -952,6 +968,9 @@ calculate_diagnostics_gpu(double *u,double *v,double *w,double *p,double *x,int 
     /* accumulate result of each thread back to residual column */
     my_daxpy(Nbase*8*tilesz*Nchan,threaddata[ci].x,1.0,x);
   }
+
+  /* scale down x */
+  my_dscal(Nbase*8*tilesz*Nchan,1.0/(double)Nbase*tilesz*Nchan,x);
 
   free(coh);
   free(xlocal);
