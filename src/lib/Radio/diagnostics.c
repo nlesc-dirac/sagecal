@@ -735,7 +735,6 @@ hessian_influence_threadfn(void *data) {
      /* = 2x2N diagonal terms =0.5*rho*Fd1 */
 
      float hfactor=(float)0.5*t->rho[ncl]*Fd1;
-     printf("clus %d base=%d stat=%d tile=%d freq=%d Fdd %lf Hadd %f\n",ncl,t->Nbase,t->N,t->tilesz,t->Nf,Fd1,hfactor);
      free(Bibf);
 
      /* add to diagonal of hessian (real part) */
