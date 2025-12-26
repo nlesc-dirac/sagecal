@@ -91,12 +91,13 @@ kernel_hessian(int B, int N, int T, int F, const double *__restrict__ p, int nch
 
   /* hessian: 4N x 4N complex float, column major order,
     each column 4N complex float = 8N float, so, value at (row, col)
-   is hess[col*4*N*2+row*4*2]+1j*hess[col*4*N*2+row*4*2+1] */
+   is hess[col*4*N*2+row*4*2]+1j*hess[col*4*N*2+row*4*2+1],
+   see code below for exact offset calculation */
 
   if (n<B) {
     int sta1=barr[n].sta1;
     int sta2=barr[n].sta2;
-    if (m<N  && (m==sta1 or m==sta2)) {
+    if (m==sta1 or m==sta2) {
       /* this thread will work on column block m, 
          sta1,sta2 will update row,col of hess 
          (sta1,sta2), (sta2,sta1), (sta1,sta1), (sta2,sta2)
@@ -172,14 +173,14 @@ kernel_hessian(int B, int N, int T, int F, const double *__restrict__ p, int nch
       /* -C^T \kron R^H */
       kron_ab(A,B,H);
       for (int off=0; off<4; off++) {
-      atomicAdd(&hess[(sta1+off)*4*N*2+sta2*4*2],H[0+off].x);
-      atomicAdd(&hess[(sta1+off)*4*N*2+sta2*4*2+1],H[0+off].y);
-      atomicAdd(&hess[(sta1+off)*4*N*2+sta2*4*2+2],H[4+off].x);
-      atomicAdd(&hess[(sta1+off)*4*N*2+sta2*4*2+3],H[4+off].y);
-      atomicAdd(&hess[(sta1+off)*4*N*2+sta2*4*2+4],H[8+off].x);
-      atomicAdd(&hess[(sta1+off)*4*N*2+sta2*4*2+5],H[8+off].y);
-      atomicAdd(&hess[(sta1+off)*4*N*2+sta2*4*2+6],H[12+off].x);
-      atomicAdd(&hess[(sta1+off)*4*N*2+sta2*4*2+7],H[12+off].y);
+      atomicAdd(&hess[sta1*4*4*N*2+off*4*N*2+sta2*4*2],H[0+off].x);
+      atomicAdd(&hess[sta1*4*4*N*2+off*4*N*2+sta2*4*2+1],H[0+off].y);
+      atomicAdd(&hess[sta1*4*4*N*2+off*4*N*2+sta2*4*2+2],H[4+off].x);
+      atomicAdd(&hess[sta1*4*4*N*2+off*4*N*2+sta2*4*2+3],H[4+off].y);
+      atomicAdd(&hess[sta1*4*4*N*2+off*4*N*2+sta2*4*2+4],H[8+off].x);
+      atomicAdd(&hess[sta1*4*4*N*2+off*4*N*2+sta2*4*2+5],H[8+off].y);
+      atomicAdd(&hess[sta1*4*4*N*2+off*4*N*2+sta2*4*2+6],H[12+off].x);
+      atomicAdd(&hess[sta1*4*4*N*2+off*4*N*2+sta2*4*2+7],H[12+off].y);
       }
 
      ambt(C,G2,A); /* A = C J_q^H */
@@ -200,14 +201,14 @@ kernel_hessian(int B, int N, int T, int F, const double *__restrict__ p, int nch
      /* D^T \kron I_2, D= C J_q^H J_q C^H */
       kron_ab(E,I2,H);
       for (int off=0; off<4; off++) {
-      atomicAdd(&hess[(sta1+off)*4*N*2+sta1*4*2],H[0+off].x);
-      atomicAdd(&hess[(sta1+off)*4*N*2+sta1*4*2+1],H[0+off].y);
-      atomicAdd(&hess[(sta1+off)*4*N*2+sta1*4*2+2],H[4+off].x);
-      atomicAdd(&hess[(sta1+off)*4*N*2+sta1*4*2+3],H[4+off].y);
-      atomicAdd(&hess[(sta1+off)*4*N*2+sta1*4*2+4],H[8+off].x);
-      atomicAdd(&hess[(sta1+off)*4*N*2+sta1*4*2+5],H[8+off].y);
-      atomicAdd(&hess[(sta1+off)*4*N*2+sta1*4*2+6],H[12+off].x);
-      atomicAdd(&hess[(sta1+off)*4*N*2+sta1*4*2+7],H[12+off].y);
+      atomicAdd(&hess[sta1*4*4*N*2+off*4*N*2+sta1*4*2],H[0+off].x);
+      atomicAdd(&hess[sta1*4*4*N*2+off*4*N*2+sta1*4*2+1],H[0+off].y);
+      atomicAdd(&hess[sta1*4*4*N*2+off*4*N*2+sta1*4*2+2],H[4+off].x);
+      atomicAdd(&hess[sta1*4*4*N*2+off*4*N*2+sta1*4*2+3],H[4+off].y);
+      atomicAdd(&hess[sta1*4*4*N*2+off*4*N*2+sta1*4*2+4],H[8+off].x);
+      atomicAdd(&hess[sta1*4*4*N*2+off*4*N*2+sta1*4*2+5],H[8+off].y);
+      atomicAdd(&hess[sta1*4*4*N*2+off*4*N*2+sta1*4*2+6],H[12+off].x);
+      atomicAdd(&hess[sta1*4*4*N*2+off*4*N*2+sta1*4*2+7],H[12+off].y);
       }
     } else { /* m==sta2 */
       /* update (sta1,sta2)=(p,q) and (sta2,sta2)=(q,q) */
@@ -238,14 +239,14 @@ kernel_hessian(int B, int N, int T, int F, const double *__restrict__ p, int nch
       /* -C^* \kron R */
       kron_ab(A,R,H);
       for (int off=0; off<4; off++) {
-      atomicAdd(&hess[(sta2+off)*4*N*2+sta1*4*2],H[0+off].x);
-      atomicAdd(&hess[(sta2+off)*4*N*2+sta1*4*2+1],H[0+off].y);
-      atomicAdd(&hess[(sta2+off)*4*N*2+sta1*4*2+2],H[4+off].x);
-      atomicAdd(&hess[(sta2+off)*4*N*2+sta1*4*2+3],H[4+off].y);
-      atomicAdd(&hess[(sta2+off)*4*N*2+sta1*4*2+4],H[8+off].x);
-      atomicAdd(&hess[(sta2+off)*4*N*2+sta1*4*2+5],H[8+off].y);
-      atomicAdd(&hess[(sta2+off)*4*N*2+sta1*4*2+6],H[12+off].x);
-      atomicAdd(&hess[(sta2+off)*4*N*2+sta1*4*2+7],H[12+off].y);
+      atomicAdd(&hess[sta2*4*4*N*2+off*4*N*2+sta1*4*2],H[0+off].x);
+      atomicAdd(&hess[sta2*4*4*N*2+off*4*N*2+sta1*4*2+1],H[0+off].y);
+      atomicAdd(&hess[sta2*4*4*N*2+off*4*N*2+sta1*4*2+2],H[4+off].x);
+      atomicAdd(&hess[sta2*4*4*N*2+off*4*N*2+sta1*4*2+3],H[4+off].y);
+      atomicAdd(&hess[sta2*4*4*N*2+off*4*N*2+sta1*4*2+4],H[8+off].x);
+      atomicAdd(&hess[sta2*4*4*N*2+off*4*N*2+sta1*4*2+5],H[8+off].y);
+      atomicAdd(&hess[sta2*4*4*N*2+off*4*N*2+sta1*4*2+6],H[12+off].x);
+      atomicAdd(&hess[sta2*4*4*N*2+off*4*N*2+sta1*4*2+7],H[12+off].y);
       }
 
      amb(G1,C,B); /* B = J_p C */
@@ -267,14 +268,14 @@ kernel_hessian(int B, int N, int T, int F, const double *__restrict__ p, int nch
      /* D^T \kron I_2, D= (J_p C)^H J_p C */
       kron_ab(E,I2,H);
       for (int off=0; off<4; off++) {
-      atomicAdd(&hess[(sta2+off)*4*N*2+sta2*4*2],H[0+off].x);
-      atomicAdd(&hess[(sta2+off)*4*N*2+sta2*4*2+1],H[0+off].y);
-      atomicAdd(&hess[(sta2+off)*4*N*2+sta2*4*2+2],H[4+off].x);
-      atomicAdd(&hess[(sta2+off)*4*N*2+sta2*4*2+3],H[4+off].y);
-      atomicAdd(&hess[(sta2+off)*4*N*2+sta2*4*2+4],H[8+off].x);
-      atomicAdd(&hess[(sta2+off)*4*N*2+sta2*4*2+5],H[8+off].y);
-      atomicAdd(&hess[(sta2+off)*4*N*2+sta2*4*2+6],H[12+off].x);
-      atomicAdd(&hess[(sta2+off)*4*N*2+sta2*4*2+7],H[12+off].y);
+      atomicAdd(&hess[sta2*4*4*N*2+off*4*N*2+sta2*4*2],H[0+off].x);
+      atomicAdd(&hess[sta2*4*4*N*2+off*4*N*2+sta2*4*2+1],H[0+off].y);
+      atomicAdd(&hess[sta2*4*4*N*2+off*4*N*2+sta2*4*2+2],H[4+off].x);
+      atomicAdd(&hess[sta2*4*4*N*2+off*4*N*2+sta2*4*2+3],H[4+off].y);
+      atomicAdd(&hess[sta2*4*4*N*2+off*4*N*2+sta2*4*2+4],H[8+off].x);
+      atomicAdd(&hess[sta2*4*4*N*2+off*4*N*2+sta2*4*2+5],H[8+off].y);
+      atomicAdd(&hess[sta2*4*4*N*2+off*4*N*2+sta2*4*2+6],H[12+off].x);
+      atomicAdd(&hess[sta2*4*4*N*2+off*4*N*2+sta2*4*2+7],H[12+off].y);
       }
     }
     }
@@ -468,18 +469,13 @@ kernel_d_residuals(int B, int N, int T, int F, const double *__restrict__ p, int
 
 __global__ void
 kernel_sum_col(int M, int N, float *A) {
-  extern __shared__ float block_sum[]; /* 1xthreads for block sum storage */
   unsigned int m=threadIdx.x+blockDim.x*blockIdx.x;
-  int tid=threadIdx.x;
   if (m<M) {
-    block_sum[tid]=0.0f;
+    float block_sum=0.0f;
     for (int n=0; n<N; n++) {
-      block_sum[tid]+=A[M*n+m];
+      block_sum+=A[M*n+m];
     }
-  }
-  __syncthreads();
-  if (m<M) {
-    A[m]=block_sum[tid];
+    A[m]=block_sum;
   }
 }
 
@@ -562,7 +558,7 @@ cudakernel_sum_col(int M, int N, float *A) {
   /* spawn M threads to handle each row */
   int ThreadsPerBlock=DEFAULT_TH_PER_BK;
   int BlocksPerGrid=(M+ThreadsPerBlock-1)/ThreadsPerBlock;
-  kernel_sum_col<<<BlocksPerGrid,ThreadsPerBlock,sizeof(float)*ThreadsPerBlock>>>(M,N,A);
+  kernel_sum_col<<<BlocksPerGrid,ThreadsPerBlock>>>(M,N,A);
 
 #ifdef CUDA_DBG
   error = cudaGetLastError();
