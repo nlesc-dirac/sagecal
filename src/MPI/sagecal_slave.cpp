@@ -407,7 +407,7 @@ cerr<<"Error: Worker "<<myrank<<": Recheck your allocation or reduce number of w
   /**********************************************************/
     /* Spatial regularization, used if diffuse sky model is enabled */
     int G=0,sh_n0=0;
-    int Nms;
+    int Nms=0;
     double sh_beta; /* shapelet basis spatial scale */
     complex double *Zspat=0; /* storage for spatial model, 2 Npoly N x 2 G */
     double *B=0; /* polynomials in frequency Npoly x Nms */
@@ -520,6 +520,19 @@ cerr<<"Error: Worker "<<myrank<<": Recheck your allocation or reduce number of w
     }
 #endif
 
+    /* polynomial info storage */
+    double *Bpoly=0, *Bii=0;
+    if (Data::DoDiag) {
+       MPI_Recv(&Nms, 1, MPI_INT, 0,TAG_DIAG, MPI_COMM_WORLD, &status);
+       if ((Bpoly=(double*)calloc((size_t)Npoly*Nms,sizeof(double)))==0) {
+          fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
+          exit(1);
+       }
+       if ((Bii=(double*)calloc((size_t)Mt*Npoly*Npoly,sizeof(double)))==0) {
+          fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
+          exit(1);
+       }
+    }
 
     if (Data::spatialreg && sp_diffuse_id>=0) {
          MPI_Recv(&sh_n0, 1, MPI_INT, 0,TAG_SPATIAL, MPI_COMM_WORLD, &status);
@@ -932,6 +945,13 @@ cout<<myrank<<" : "<<cm<<": downweight ratio ("<<iodata_vec[cm].fratio<<") based
        }
 
      }
+
+     if (Data::DoDiag) {
+       /* get polynomial info from fusion center (instead of calculating) */
+       MPI_Recv(Bpoly, Npoly*Nms, MPI_DOUBLE, 0,TAG_DIAG, MPI_COMM_WORLD, &status);
+       MPI_Recv(Bii, Mt*Npoly*Npoly, MPI_DOUBLE, 0,TAG_DIAG, MPI_COMM_WORLD, &status);
+     }
+
      /* write residuals to output */
      for(int cm=0; cm<mymscount; cm++) {
 #ifndef HAVE_CUDA
@@ -943,6 +963,12 @@ cout<<myrank<<" : "<<cm<<": downweight ratio ("<<iodata_vec[cm].fratio<<") based
       }
 #endif
 #ifdef HAVE_CUDA
+     if (Data::DoDiag) {
+       /* instead of residual, calculate diagnostics */
+       calculate_diagnostics_gpu(iodata_vec[cm].u,iodata_vec[cm].v,iodata_vec[cm].w,p_vec[cm],iodata_vec[cm].xo,iodata_vec[cm].N,iodata_vec[cm].Nbase,iodata_vec[cm].tilesz,barr_vec[cm],carr_vec[cm],M,iodata_vec[cm].freqs,iodata_vec[cm].Nchan,iodata_vec[cm].deltaf,iodata_vec[cm].deltat,iodata_vec[cm].dec0,
+       beam_vec[cm].bfType,beam_vec[cm].b_ra0,beam_vec[cm].b_dec0,beam_vec[cm].p_ra0,beam_vec[cm].p_dec0,iodata_vec[cm].freq0,beam_vec[cm].sx,
+       beam_vec[cm].sy,beam_vec[cm].time_utc,beam_vec[cm].Nelem,beam_vec[cm].xx,beam_vec[cm].yy,beam_vec[cm].zz,&elem_vec[cm],doBeam,arho_vec[cm],&Bpoly[myids[cm]*Npoly],Bii,Mt,Npoly,Nms,Data::Nt);
+     } else {
      if (GPUpredict) {
        calculate_residuals_multifreq_withbeam_gpu(iodata_vec[cm].u,iodata_vec[cm].v,iodata_vec[cm].w,p_vec[cm],iodata_vec[cm].xo,iodata_vec[cm].N,iodata_vec[cm].Nbase,iodata_vec[cm].tilesz,barr_vec[cm],carr_vec[cm],M,iodata_vec[cm].freqs,iodata_vec[cm].Nchan,iodata_vec[cm].deltaf,iodata_vec[cm].deltat,iodata_vec[cm].dec0,
           beam_vec[cm].bfType,beam_vec[cm].b_ra0,beam_vec[cm].b_dec0,beam_vec[cm].p_ra0,beam_vec[cm].p_dec0,iodata_vec[cm].freq0,beam_vec[cm].sx,beam_vec[cm].sy,beam_vec[cm].time_utc,beam_vec[cm].Nelem,beam_vec[cm].xx,beam_vec[cm].yy,beam_vec[cm].zz,&elem_vec[cm],doBeam,Data::Nt,Data::ccid,Data::rho,Data::phaseOnly);
@@ -953,6 +979,7 @@ cout<<myrank<<" : "<<cm<<": downweight ratio ("<<iodata_vec[cm].fratio<<") based
        calculate_residuals_multifreq_withbeam(iodata_vec[cm].u,iodata_vec[cm].v,iodata_vec[cm].w,p_vec[cm],iodata_vec[cm].xo,iodata_vec[cm].N,iodata_vec[cm].Nbase,iodata_vec[cm].tilesz,barr_vec[cm],carr_vec[cm],M,iodata_vec[cm].freqs,iodata_vec[cm].Nchan,iodata_vec[cm].deltaf,iodata_vec[cm].deltat,iodata_vec[cm].dec0,
        beam_vec[cm].bfType,beam_vec[cm].b_ra0,beam_vec[cm].b_dec0,beam_vec[cm].p_ra0,beam_vec[cm].p_dec0,iodata_vec[cm].freq0,beam_vec[cm].sx,beam_vec[cm].sy,beam_vec[cm].time_utc,beam_vec[cm].Nelem,beam_vec[cm].xx,beam_vec[cm].yy,beam_vec[cm].zz,&elem_vec[cm],doBeam,Data::Nt,Data::ccid,Data::rho,Data::phaseOnly);
       }
+     }
      }
 #endif
      }
@@ -1136,6 +1163,10 @@ cout<<myrank<<" : "<<cm<<": downweight ratio ("<<iodata_vec[cm].fratio<<") based
   free(pres);
   if (myrank==1) {
     free(chunkvec);
+  }
+  if (Data::DoDiag) {
+    free(Bpoly);
+    free(Bii);
   }
   if (Data::spatialreg && sp_diffuse_id>=0) {
       free(Zspat);

@@ -246,8 +246,8 @@ sagecal_master(int argc, char **argv) {
     cout<<"Worker "<<cm+1<<" MS="<<thismsid<<" N="<<bufint[1]<<" M="<<bufint[2]<<"/"<<bufint[3]<<" tilesz="<<bufint[4]<<" totaltime="<<bufint[5]<<endl;
          if (cm==0 && ct==0) { /* update metadata */
           iodata.N=bufint[1];
-          Mo=bufint[2];
-          iodata.M=bufint[3];
+          Mo=bufint[2]; // M in worker
+          iodata.M=bufint[3]; // Mt in worker
           iodata.tilesz=bufint[4];
           iodata.totalt=bufint[5];
 
@@ -636,6 +636,12 @@ sagecal_master(int argc, char **argv) {
 
     /* each Npoly blocks is bases evaluated at one freq, catch if Npoly=1 */
     setup_polynomials(B, Npoly, iodata.Nms, iodata.freqs, iodata.freq0,(Npoly==1?1:PolyType));
+
+    if (Data::DoDiag) {
+       for (int cm=0; cm<nslaves; cm++) {
+         MPI_Send(&iodata.Nms, 1, MPI_INT, cm+1,TAG_DIAG, MPI_COMM_WORLD);
+       }
+    }
 
     if (Data::spatialreg && sp_diffuse_id>=0) {
        /* Initialize spatial model used in diffuse sky to a nominal value,
@@ -1137,6 +1143,14 @@ sagecal_master(int argc, char **argv) {
              }
            }
 
+      }
+
+      if (Data::DoDiag) {
+        /* send polynomial info to all workers */
+        for(int cm=0; cm<nslaves; cm++) {
+           MPI_Send(B, Npoly*iodata.Nms, MPI_DOUBLE, cm+1,TAG_DIAG, MPI_COMM_WORLD);
+           MPI_Send(Bii, iodata.M*Npoly*Npoly, MPI_DOUBLE, cm+1,TAG_DIAG, MPI_COMM_WORLD);
+        }
       }
 
       /* wait till all slaves are done writing data */

@@ -655,28 +655,43 @@ predict_visibilities_multifreq_withsol(double *u,double *v,double *w,double *p,d
  * and replace the residuals with the influence function,
  * the input arguments are similar to calculate_residuals_multifreq_withbeam_gpu()
  * or calculate_residuals_multifreq_withbeam()
+ * x: will have influence function instead of the residual
  */
 extern int
 calculate_diagnostics_gpu(double *u,double *v,double *w,double *p,double *x,int N,int Nbase,int tilesz,baseline_t *barr, clus_source_t *carr, int M,double *freqs,int Nchan, double fdelta,double tdelta, double dec0,
- int bf_type, double b_ra0, double b_dec0, double ph_ra0, double ph_dec0, double ph_freq0, double *longitude, double *latitude, double *time_utc,int *Nelem, double **xx, double **yy, double **zz, elementcoeff *ecoeff, int dobeam, int Nt);
+ int bf_type, double b_ra0, double b_dec0, double ph_ra0, double ph_dec0, double ph_freq0, double *longitude, double *latitude, double *time_utc,int *Nelem, double **xx, double **yy, double **zz, elementcoeff *ecoeff, int dobeam, double *rho, double *Bpoly, double *Bi, int Mt, int Npoly, int Nf, int Nt);
 
 /****************************** influence_function.cu ****************************/
 #ifdef HAVE_CUDA
 /* B: total baselines (baselines x tile size)
    N: stations
-   T: tile size (not really needed)
+   T: tile size (not really needed, but necessary as B is multiplied by this)
    F: frequencies
    barr: baseline to station map, size B x 1
    p: parameter arrays 8*N*M x1 double values (re,img) for each station/direction
    nchunk: how many solutions (hybrid mode)
    coh: coherencies Bx4 complex
    res: residual Bx4 complex
-   hess: hessian (output) 4N x 4N complex, or 4N*4N*2 complex float
+   hess: hessian (output) 4N x 4N complex, or 4N*4N*2 float
 */
 extern void
 cudakernel_hessian(int B, int N, int T, int F, baseline_t *barr, double *p, int nchunk, float *coh, float *res, float *hess);
 
+/* AdV: 4N x2 x B/tilesize (4N x Bt complex float)
+ * represents the accumulated values of (J_q C_pq^H)^T -> p-th column block
+ * summed up over all time slots, hence B/tilesize = N(N-1)/2, 
+ * also summed up over 8 possible r for dV_pq/d x_pqr: due to taking delta of eacl re,im part of 2x2 matrix */
+extern void
+cudakernel_d_solutions(int B, int N, int T, int F, baseline_t *barr, double *p, int nchunk, float *coh, float *AdV);
 
+/* dJ: 4N x2 x B/tilesize  (4Nx Bt complex float)
+ * dR: B/tilesize 4x2 values averaged over all baselines (4Bt complex float) */
+extern void
+cudakernel_d_residuals(int B, int N, int T, int F, baseline_t *barr, double *p, int nchunk, float *coh, float *dJ, float *dR);
+
+/* A: M x N matrix, add all columns to first column */
+extern void 
+cudakernel_sum_col(int M, int N, float *A); 
 #endif /* HAVE_CUDA */
 
 #ifdef __cplusplus

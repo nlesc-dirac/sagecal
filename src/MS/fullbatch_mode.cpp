@@ -498,8 +498,6 @@ run_fullbatch_calibration(void) {
       free(pfreq);
       free(xfreq);
     } else {
-     /* since residual is calculated not using x (instead using xo), no need to unwhiten data
-        in case x was whitened */
 #ifndef HAVE_CUDA
      if (!doBeam) {
       calculate_residuals_multifreq(iodata.u,iodata.v,iodata.w,p,iodata.xo,iodata.N,iodata.Nbase,iodata.tilesz,barr,carr,M,iodata.freqs,iodata.Nchan,iodata.deltaf,iodata.deltat,iodata.dec0,Data::Nt,Data::ccid,Data::rho,Data::phaseOnly);
@@ -528,7 +526,7 @@ run_fullbatch_calibration(void) {
     if (Data::DoDiag) {
 #ifdef HAVE_CUDA
      calculate_diagnostics_gpu(iodata.u,iodata.v,iodata.w,p,iodata.xo,iodata.N,iodata.Nbase,iodata.tilesz,barr,carr,M,iodata.freqs,iodata.Nchan,iodata.deltaf,iodata.deltat,iodata.dec0,
-       beam.bfType,beam.b_ra0,beam.b_dec0,beam.p_ra0,beam.p_dec0,iodata.freq0,beam.sx,beam.sy,beam.time_utc,beam.Nelem,beam.xx,beam.yy,beam.zz,&ecoeff,doBeam,Data::Nt);
+       beam.bfType,beam.b_ra0,beam.b_dec0,beam.p_ra0,beam.p_dec0,iodata.freq0,beam.sx,beam.sy,beam.time_utc,beam.Nelem,beam.xx,beam.yy,beam.zz,&ecoeff,doBeam,NULL,NULL,NULL,0,0,0,Data::Nt);
 #endif /* HAVE_CUDA */
 #ifndef HAVE_CUDA
      fprintf(stderr,"Diagnostics are not calculated in CPU only mode\n");
