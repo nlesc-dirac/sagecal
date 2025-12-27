@@ -24,7 +24,7 @@
 #include "Dirac_radio.h"
 
 /* enable this for checking for kernel failure */
-#define CUDA_DBG
+//#define CUDA_DBG
 
 /* matrix multiplications */
 /* C=A*B */
