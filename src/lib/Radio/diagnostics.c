@@ -986,8 +986,8 @@ calculate_diagnostics_gpu(double *u,double *v,double *w,double *p,double *x,int 
     my_daxpy(Nbase*8*tilesz*Nchan,threaddata[ci].x,1.0,x);
   }
 
-  /* scale down x */
-  my_dscal(Nbase*8*tilesz*Nchan,1.0/(double)Nbase*tilesz*Nchan,x);
+  /* scale down x - average over baselines, tiles, channels and clusters */
+  my_dscal(Nbase*8*tilesz*Nchan,1.0/(double)Nbase*tilesz*Nchan*M,x);
 
   free(coh);
   free(xlocal);
