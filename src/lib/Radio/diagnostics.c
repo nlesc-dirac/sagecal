@@ -794,8 +794,6 @@ hessian_influence_threadfn(void *data) {
      err=cudaMemcpy(AdVd,AdV,sizeof(float)*(size_t)t->N*4*Nbase*2,cudaMemcpyHostToDevice);
      checkCudaError(err,__FILE__,__LINE__);
 
-     /* sum all columns of AdV into first column */
-     cudakernel_sum_col(2*4*t->N,Nbase,AdVd);
      err=cudaMemset(dRd, 0, 4*Nbase*2*sizeof(float));
      checkCudaError(err,__FILE__,__LINE__);
      /* accumulate Dresidual_uvw() for this cluster in t->x of size t->Nbase*8*t->Nf */

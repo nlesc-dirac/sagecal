@@ -171,8 +171,8 @@ kernel_hessian(int B, int N, int T, int F, const double *__restrict__ p, int nch
     B[3].y=-R[3].y;
  
       /* -C^T \kron R^H */
-      kron_ab(A,B,H);
-      for (int off=0; off<4; off++) {
+    kron_ab(A,B,H);
+    for (int off=0; off<4; off++) {
       atomicAdd(&hess[sta1*4*4*N*2+off*4*N*2+sta2*4*2],H[0+off].x);
       atomicAdd(&hess[sta1*4*4*N*2+off*4*N*2+sta2*4*2+1],H[0+off].y);
       atomicAdd(&hess[sta1*4*4*N*2+off*4*N*2+sta2*4*2+2],H[4+off].x);
@@ -181,7 +181,7 @@ kernel_hessian(int B, int N, int T, int F, const double *__restrict__ p, int nch
       atomicAdd(&hess[sta1*4*4*N*2+off*4*N*2+sta2*4*2+5],H[8+off].y);
       atomicAdd(&hess[sta1*4*4*N*2+off*4*N*2+sta2*4*2+6],H[12+off].x);
       atomicAdd(&hess[sta1*4*4*N*2+off*4*N*2+sta2*4*2+7],H[12+off].y);
-      }
+    }
 
      ambt(C,G2,A); /* A = C J_q^H */
      B[0].x=A[0].x;
@@ -199,8 +199,8 @@ kernel_hessian(int B, int N, int T, int F, const double *__restrict__ p, int nch
      /* E= D^T */
      E[0]=D[0]; E[1]=D[2]; E[2]=D[1]; E[3]=D[3];
      /* D^T \kron I_2, D= C J_q^H J_q C^H */
-      kron_ab(E,I2,H);
-      for (int off=0; off<4; off++) {
+     kron_ab(E,I2,H);
+     for (int off=0; off<4; off++) {
       atomicAdd(&hess[sta1*4*4*N*2+off*4*N*2+sta1*4*2],H[0+off].x);
       atomicAdd(&hess[sta1*4*4*N*2+off*4*N*2+sta1*4*2+1],H[0+off].y);
       atomicAdd(&hess[sta1*4*4*N*2+off*4*N*2+sta1*4*2+2],H[4+off].x);
@@ -209,7 +209,7 @@ kernel_hessian(int B, int N, int T, int F, const double *__restrict__ p, int nch
       atomicAdd(&hess[sta1*4*4*N*2+off*4*N*2+sta1*4*2+5],H[8+off].y);
       atomicAdd(&hess[sta1*4*4*N*2+off*4*N*2+sta1*4*2+6],H[12+off].x);
       atomicAdd(&hess[sta1*4*4*N*2+off*4*N*2+sta1*4*2+7],H[12+off].y);
-      }
+     }
     } else { /* m==sta2 */
       /* update (sta1,sta2)=(p,q) and (sta2,sta2)=(q,q) */
       /* need kron(-conj(C), res) and
@@ -237,8 +237,8 @@ kernel_hessian(int B, int N, int T, int F, const double *__restrict__ p, int nch
     A[3].y=C[3].y;
  
       /* -C^* \kron R */
-      kron_ab(A,R,H);
-      for (int off=0; off<4; off++) {
+    kron_ab(A,R,H);
+    for (int off=0; off<4; off++) {
       atomicAdd(&hess[sta2*4*4*N*2+off*4*N*2+sta1*4*2],H[0+off].x);
       atomicAdd(&hess[sta2*4*4*N*2+off*4*N*2+sta1*4*2+1],H[0+off].y);
       atomicAdd(&hess[sta2*4*4*N*2+off*4*N*2+sta1*4*2+2],H[4+off].x);
@@ -247,7 +247,7 @@ kernel_hessian(int B, int N, int T, int F, const double *__restrict__ p, int nch
       atomicAdd(&hess[sta2*4*4*N*2+off*4*N*2+sta1*4*2+5],H[8+off].y);
       atomicAdd(&hess[sta2*4*4*N*2+off*4*N*2+sta1*4*2+6],H[12+off].x);
       atomicAdd(&hess[sta2*4*4*N*2+off*4*N*2+sta1*4*2+7],H[12+off].y);
-      }
+    }
 
      amb(G1,C,B); /* B = J_p C */
      /* A = B^H */
@@ -266,8 +266,8 @@ kernel_hessian(int B, int N, int T, int F, const double *__restrict__ p, int nch
      /* E= D^T */
      E[0]=D[0]; E[1]=D[2]; E[2]=D[1]; E[3]=D[3];
      /* D^T \kron I_2, D= (J_p C)^H J_p C */
-      kron_ab(E,I2,H);
-      for (int off=0; off<4; off++) {
+     kron_ab(E,I2,H);
+     for (int off=0; off<4; off++) {
       atomicAdd(&hess[sta2*4*4*N*2+off*4*N*2+sta2*4*2],H[0+off].x);
       atomicAdd(&hess[sta2*4*4*N*2+off*4*N*2+sta2*4*2+1],H[0+off].y);
       atomicAdd(&hess[sta2*4*4*N*2+off*4*N*2+sta2*4*2+2],H[4+off].x);
@@ -276,7 +276,7 @@ kernel_hessian(int B, int N, int T, int F, const double *__restrict__ p, int nch
       atomicAdd(&hess[sta2*4*4*N*2+off*4*N*2+sta2*4*2+5],H[8+off].y);
       atomicAdd(&hess[sta2*4*4*N*2+off*4*N*2+sta2*4*2+6],H[12+off].x);
       atomicAdd(&hess[sta2*4*4*N*2+off*4*N*2+sta2*4*2+7],H[12+off].y);
-      }
+     }
     }
     }
   }
@@ -386,8 +386,8 @@ kernel_d_residuals(int B, int N, int T, int F, const double *__restrict__ p, int
   /* only work with the first freq, so F==1 taken */
   /* x: baseline = N(N-1)/2 x T */
   unsigned int n=threadIdx.x+blockDim.x*blockIdx.x;
-  /* dJ : 2*4N x 1 (summed over all columns Bt=B/T=N(N-1)/2), only use 
-   the first column */
+  /* dJ : 2*4N x Bt(columns Bt=B/T=N(N-1)/2), only use 
+   the column corresponding to the baseline (i.e. diagonal terms) */
   /* dR : 2*4Bt x 1, Bt=B/T=N(N-1)/2 */
   /* in dJ
    station p maps to two row blocks in each column of size 4N
@@ -442,17 +442,17 @@ kernel_d_residuals(int B, int N, int T, int F, const double *__restrict__ p, int
     /* -(J_q^star C^T) \kron I_2 */
     kron_ab(A,I2,H);
 
-    /* dJ row block p(=sta1), column 0 : because averaged to this column */
+    /* dJ row block p(=sta1), column : bl (diagonal term) */
     /* row major H */
     /* find product H dJ[p*2:p*2+1 and 2*N+p*2:2*N+p*2+1] */
-    J[0].x=dJ[sta1*2*2];
-    J[0].y=dJ[sta1*2*2+1];
-    J[1].x=dJ[sta1*2*2+2];
-    J[1].y=dJ[sta1*2*2+3];
-    J[2].x=dJ[N*2*2+sta1*2*2];
-    J[2].y=dJ[N*2*2+sta1*2*2+1];
-    J[3].x=dJ[N*2*2+sta1*2*2+3];
-    J[3].y=dJ[N*2*2+sta1*2*2+4];
+    J[0].x=dJ[bl*N*8+sta1*2*2];
+    J[0].y=dJ[bl*N*8+sta1*2*2+1];
+    J[1].x=dJ[bl*N*8+sta1*2*2+2];
+    J[1].y=dJ[bl*N*8+sta1*2*2+3];
+    J[2].x=dJ[bl*N*8+N*2*2+sta1*2*2];
+    J[2].y=dJ[bl*N*8+N*2*2+sta1*2*2+1];
+    J[3].x=dJ[bl*N*8+N*2*2+sta1*2*2+2];
+    J[3].y=dJ[bl*N*8+N*2*2+sta1*2*2+3];
     mat_vec(H,J,A);
     /* fill to dR[bl*8:bl*8+7] */
     atomicAdd(&dR[bl*8],A[0].x);
@@ -579,9 +579,9 @@ cudakernel_d_residuals(int B, int N, int T, int F, baseline_t *barr, double *p, 
   
   int Bt=B/T;
 
-  /* dJ: 2*4Nx(B/T) values, baselines=B/T here, but all cols are summed 
-   into first column, so size is 2*4N x 1 */
-  /* dR: (B/T)*4*2 values, sum over full matrix dR (4*Nbase*2)xNbase */
+  /* dJ: 2*4Nx(B/T) values, baselines=B/T here (averaged over T) */
+  /* dR: (B/T)*4*2 values, select diagonal block of full matrix dJ , hence
+     full dR of size (4*Nbase*2)xNbase reduces to just on column */
 
   cudaMemset(dR,0,2*4*Bt*sizeof(float));
   /* spawn threads to handle baselines */
