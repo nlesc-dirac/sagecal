@@ -97,7 +97,7 @@ kernel_hessian(int B, int N, int T, int F, const double *__restrict__ p, int nch
   if (n<B) {
     int sta1=barr[n].sta1;
     int sta2=barr[n].sta2;
-    if (m==sta1 or m==sta2) {
+    if (!barr[n].flag && (m==sta1 || m==sta2)) {
       /* this thread will work on column block m, 
          sta1,sta2 will update row,col of hess 
          (sta1,sta2), (sta2,sta1), (sta1,sta1), (sta2,sta2)
@@ -321,7 +321,7 @@ kernel_d_solutions(int B, int N, int T, int F, const double *__restrict__ p, int
     int sta2=barr[n].sta2; //station q
     // fill column block bl
     int bl=n % Bt; // baseline index
-    if (m<N && (m==sta2)) {
+    if (!barr[n].flag && m<N && (m==sta2)) {
 
       /* C^\star */
       C[0].x=__ldg(&coh[8*n]);
@@ -388,7 +388,7 @@ kernel_d_residuals(int B, int N, int T, int F, const double *__restrict__ p, int
   unsigned int n=threadIdx.x+blockDim.x*blockIdx.x;
   /* dJ : 2*4N x Bt(columns Bt=B/T=N(N-1)/2), only use 
    the column corresponding to the baseline (i.e. diagonal terms) */
-  /* dR : 2*4Bt x 1, Bt=B/T=N(N-1)/2 */
+  /* dR : 2*4B x 1, B=BtxT, Bt=B/T=N(N-1)/2 */
   /* in dJ
    station p maps to two row blocks in each column of size 4N
    p*2:p*2+1 and 2*N+p*2:2*N+p*2+1
@@ -411,7 +411,7 @@ kernel_d_residuals(int B, int N, int T, int F, const double *__restrict__ p, int
   if (n<B) {
     int sta1=barr[n].sta1; //station p
     int sta2=barr[n].sta2; //station q
-    // fill column block bl of dR
+    // fill column block n of dR
     int bl=n % Bt; // baseline index
     if (sta1>=0 && sta2>=0) {
       /* -C^T */
@@ -445,24 +445,25 @@ kernel_d_residuals(int B, int N, int T, int F, const double *__restrict__ p, int
     /* dJ row block p(=sta1), column : bl (diagonal term) */
     /* row major H */
     /* find product H dJ[p*2:p*2+1 and 2*N+p*2:2*N+p*2+1] */
-    J[0].x=dJ[bl*N*8+sta1*2*2];
-    J[0].y=dJ[bl*N*8+sta1*2*2+1];
-    J[1].x=dJ[bl*N*8+sta1*2*2+2];
-    J[1].y=dJ[bl*N*8+sta1*2*2+3];
-    J[2].x=dJ[bl*N*8+N*2*2+sta1*2*2];
-    J[2].y=dJ[bl*N*8+N*2*2+sta1*2*2+1];
-    J[3].x=dJ[bl*N*8+N*2*2+sta1*2*2+2];
-    J[3].y=dJ[bl*N*8+N*2*2+sta1*2*2+3];
+    J[0].x=__ldg(&dJ[bl*N*8+sta1*2*2]);
+    J[0].y=__ldg(&dJ[bl*N*8+sta1*2*2+1]);
+    J[1].x=__ldg(&dJ[bl*N*8+sta1*2*2+2]);
+    J[1].y=__ldg(&dJ[bl*N*8+sta1*2*2+3]);
+    J[2].x=__ldg(&dJ[bl*N*8+N*2*2+sta1*2*2]);
+    J[2].y=__ldg(&dJ[bl*N*8+N*2*2+sta1*2*2+1]);
+    J[3].x=__ldg(&dJ[bl*N*8+N*2*2+sta1*2*2+2]);
+    J[3].y=__ldg(&dJ[bl*N*8+N*2*2+sta1*2*2+3]);
     mat_vec(H,J,A);
-    /* fill to dR[bl*8:bl*8+7] */
-    atomicAdd(&dR[bl*8],A[0].x);
-    atomicAdd(&dR[bl*8+1],A[0].y);
-    atomicAdd(&dR[bl*8+2],A[1].x);
-    atomicAdd(&dR[bl*8+3],A[1].y);
-    atomicAdd(&dR[bl*8+4],A[2].x);
-    atomicAdd(&dR[bl*8+5],A[2].y);
-    atomicAdd(&dR[bl*8+6],A[3].x);
-    atomicAdd(&dR[bl*8+7],A[3].y);
+    /* fill to dR[n*8:n*8+7], no need to use atomicAdd as
+     n is unique */
+    dR[n*8]+=A[0].x;
+    dR[n*8+1]+=A[0].y;
+    dR[n*8+2]+=A[1].x;
+    dR[n*8+3]+=A[1].y;
+    dR[n*8+4]+=A[2].x;
+    dR[n*8+5]+=A[2].y;
+    dR[n*8+6]+=A[3].x;
+    dR[n*8+7]+=A[3].y;
     }
   }
 }
@@ -577,13 +578,11 @@ cudakernel_d_residuals(int B, int N, int T, int F, baseline_t *barr, double *p, 
   error = cudaGetLastError();
 #endif
   
-  int Bt=B/T;
-
   /* dJ: 2*4Nx(B/T) values, baselines=B/T here (averaged over T) */
-  /* dR: (B/T)*4*2 values, select diagonal block of full matrix dJ , hence
-     full dR of size (4*Nbase*2)xNbase reduces to just on column */
+  /* dR: B*4*2 values, select diagonal block of full matrix dJ (correponding to baseline), hence
+     full dR of size (4*(T*Nbase)*2)xNbase reduces to just on column */
 
-  cudaMemset(dR,0,2*4*Bt*sizeof(float));
+  cudaMemset(dR,0,2*4*B*sizeof(float));
   /* spawn threads to handle baselines */
   /* thread x : baseline(all times) */
   int ThreadsPerBlock=DEFAULT_TH_PER_BK;
