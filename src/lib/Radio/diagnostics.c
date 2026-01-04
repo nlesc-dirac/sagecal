@@ -672,14 +672,14 @@ hessian_influence_threadfn(void *data) {
   /* storage to calcualte Dresiduals 4*Nbase x Nbase x 2 (re,im) */
   /* but we sum over all columns, so only allocage 4*Nbase*2 (re,im) */
   float *dRd=0,*dR,*dRsum;
-  err=cudaMalloc((void**) &dRd, 4*Nbase*2*sizeof(float)); /* memory for sum over all columns (Nbase) */
+  err=cudaMalloc((void**) &dRd, 4*t->Nbase*2*sizeof(float)); /* memory for all baselines (t->Nbase) */
   checkCudaError(err,__FILE__,__LINE__);
   /* host only store average value 4*t->Nbase*2 */
-  err=cudaMallocHost((void**)&dR,sizeof(float)*(size_t)4*Nbase*2);
+  err=cudaMallocHost((void**)&dR,sizeof(float)*(size_t)4*t->Nbase*2);
   checkCudaError(err,__FILE__,__LINE__);
-  err=cudaMallocHost((void**)&dRsum,sizeof(float)*(size_t)4*Nbase*2);
+  err=cudaMallocHost((void**)&dRsum,sizeof(float)*(size_t)4*t->Nbase*2);
   checkCudaError(err,__FILE__,__LINE__);
-  err=cudaMemset(dRsum, 0, 4*Nbase*2*sizeof(float));
+  err=cudaMemset(dRsum, 0, 4*t->Nbase*2*sizeof(float));
   checkCudaError(err,__FILE__,__LINE__);
  
 /******************* begin loop over clusters **************************/
@@ -750,6 +750,7 @@ hessian_influence_threadfn(void *data) {
 
     /* per cluster, Dsolutions_uvw(), fill matrix AdV (4N x B),
      * by adding (J_q C^H)^T at p-th column block for baseline p-q */
+    /* setting AdVd=0 done by kernel */
       cudakernel_d_solutions(t->Nbase,t->N,t->tilesz,t->Nf,barrd,pd,t->carr[ncl].nchunk,cohd,AdVd);
       err=cudaMemcpy(AdV,AdVd,sizeof(float)*(size_t)t->N*4*Nbase*2,cudaMemcpyDeviceToHost);
       checkCudaError(err,__FILE__,__LINE__);
@@ -794,15 +795,14 @@ hessian_influence_threadfn(void *data) {
      err=cudaMemcpy(AdVd,AdV,sizeof(float)*(size_t)t->N*4*Nbase*2,cudaMemcpyHostToDevice);
      checkCudaError(err,__FILE__,__LINE__);
 
-     err=cudaMemset(dRd, 0, 4*Nbase*2*sizeof(float));
-     checkCudaError(err,__FILE__,__LINE__);
      /* accumulate Dresidual_uvw() for this cluster in t->x of size t->Nbase*8*t->Nf */
+     /* setting dRd=0 done by kernel */
      cudakernel_d_residuals(t->Nbase,t->N,t->tilesz,t->Nf,barrd,pd,t->carr[ncl].nchunk,cohd,AdVd,dRd);
-     err=cudaMemcpy(dR,dRd,sizeof(float)*(size_t)4*Nbase*2,cudaMemcpyDeviceToHost);
+     err=cudaMemcpy(dR,dRd,sizeof(float)*(size_t)4*t->Nbase*2,cudaMemcpyDeviceToHost);
      checkCudaError(err,__FILE__,__LINE__);
      
      /* accumulate dR over all clusters */
-     my_saxpy(4*Nbase*2,dR,1.0f,dRsum);
+     my_saxpy(4*t->Nbase*2,dR,1.0f,dRsum);
 
      err=cudaFree(cohd);
      checkCudaError(err,__FILE__,__LINE__);
@@ -812,11 +812,7 @@ hessian_influence_threadfn(void *data) {
 /******************* end loop over clusters **************************/
 
   /* copy dRsum to t->x */
-  float_to_double(t->x,dRsum,4*Nbase*2,2);
-  /* replicate to fill t->x (size t->Nbase*8*t->Nf) by dRsum (size 8*Nbase) (tilesize) times */
-  for (int ci=0; ci<t->tilesz; ci++) {
-    my_dcopy(4*Nbase*2,&(t->x[0]),1,&(t->x[ci*4*Nbase*2]),1);
-  }
+  float_to_double(t->x,dRsum,4*t->Nbase*2,1);
 
   err=cudaFree(resd);
   checkCudaError(err,__FILE__,__LINE__);
