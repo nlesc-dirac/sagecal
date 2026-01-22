@@ -52,6 +52,14 @@ run_fullbatch_calibration(void) {
     if (Data::MSlist) {
      Data::readMSlist(Data::MSlist,&msnames);
     }
+    if (doBeam==DOBEAM_ALO || doBeam==DOBEAM_ALO_WB) {
+#ifdef HAVE_CSPICE
+      cspice_load_kernels();
+#else
+      std::cout<<"Error: Lunar beam calculation requested by -B option, but CSPICE is not found"<<std::endl;
+      exit(1);
+#endif
+    }
     if (Data::TableName) {
      if (!doBeam) {
       Data::readAuxData(Data::TableName,&iodata);
@@ -71,14 +79,6 @@ run_fullbatch_calibration(void) {
      set_elementcoeffs(beam.elType, iodata.freq0, &ecoeff);
     } else if (doBeam==DOBEAM_FULL_WB||doBeam==DOBEAM_ELEMENT_WB||doBeam==DOBEAM_ALO_WB) {
      set_elementcoeffs_wb(beam.elType, iodata.freqs, iodata.Nchan, &ecoeff);
-    }
-    if (doBeam==DOBEAM_ALO || doBeam==DOBEAM_ALO_WB) {
-#ifdef HAVE_CSPICE
-      cspice_load_kernels();
-#else
-      std::cout<<"Error: Lunar beam calculation requested by -B option, but CSPICE is not found"<<std::endl;
-      exit(1);
-#endif
     }
 
 #ifdef HAVE_OPENBLAS
