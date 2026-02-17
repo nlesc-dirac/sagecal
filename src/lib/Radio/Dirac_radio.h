@@ -389,6 +389,17 @@ cspice_xyz_to_latlon(double x,double y, double z,double *lon, double *lat, doubl
  */
 extern int
 cspice_element_beam_lunar(double ra, double dec, double f, double f0, int N, double *longitude, double *latitude, double time_jd, elementcoeff *ecoeff, double *elementgain, int wideband, int findex, pthread_mutex_t *mutex);
+
+/* calculate longitude, latitude of each source position ra,dec,
+ * at time_jd
+ * ra,dec: Nx1 ra,dec arrays (rad)
+ * time_jd: Tx1 JD time values
+ * longitude, latitude: T*Nx1 output (all times, all sources)
+ * mutex: CSPICE mutex
+ */
+extern int
+cspice_longitude_latitude(int N, double *ra, double *dec, int T, double *time_jd, double *longitude, double *latitude, pthread_mutex_t *mutex);
+
 #endif /* HAVE_CSPICE */
 
 /****************************** shapelet.c ****************************/
@@ -541,6 +552,10 @@ cudakernel_tile_array_beam(int N, int T, int K, int F, double *freqs, float *lon
 extern void
 cudakernel_element_beam(int N, int T, int K, int F, double *freqs, float *longitude, float *latitude,
  double *time_utc, float *ra, float *dec, int Nmodes, int M, float beta, float *pattern_phi, float *pattern_theta, float *pattern_preamble, float *elementbeam, int wideband);
+
+extern void
+cudakernel_element_beam_lunar(int N, int T, int K, int F, double *freqs, float *longitude, float *latitude,
+ double *src_longitude, double *src_latitude, int Nmodes, int M, float beta, float *pattern_phi, float *pattern_theta, float *pattern_preamble, float *beam, int wideband);
 
 extern void
 cudakernel_coherencies(int B, int N, int T, int K, int F, double *u, double *v, double *w,baseline_t *barr, double *freqs, float *beam, float *element, double *ll, double *mm, double *nn, double *sI, double *sQ, double *sU, double *sV,

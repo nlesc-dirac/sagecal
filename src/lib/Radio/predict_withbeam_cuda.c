@@ -114,6 +114,10 @@ typedef struct thread_data_pred_t_ {
   /* following only used to ignore some clusters while predicting */
   int *ignlist;
 
+#ifdef HAVE_CSPICE
+  pthread_mutex_t *cspice_mutex; /* mutex for CSPICE routines */
+#endif
+
 } thread_data_pred_t;
 
 /* struct for passing data to threads for correcting data */
@@ -924,7 +928,14 @@ predictvis_threadfn(void *data) {
   checkCudaError(err,__FILE__,__LINE__);
   /* convert time jd to GMST angle */
   cudakernel_convert_time(t->tilesz,timed);
+#ifdef HAVE_CSPICE
+  } else if (t->dobeam==DOBEAM_ALO || t->dobeam==DOBEAM_ALO_WB) {
+    /* time is not copied */
+    dtofcopy(t->N,&longd,t->longitude);
+    dtofcopy(t->N,&latd,t->latitude);
+#endif
   }
+
   if (t->dobeam==DOBEAM_ARRAY || t->dobeam==DOBEAM_FULL
       ||t->dobeam==DOBEAM_ARRAY_WB || t->dobeam==DOBEAM_FULL_WB) {
   err=cudaMalloc((void**) &Nelemd, t->N*sizeof(int));
@@ -981,7 +992,14 @@ predictvis_threadfn(void *data) {
   dtofcopy(2*t->ecoeff->Nmodes*t->ecoeff->Nf,&pattern_phid,(double*)t->ecoeff->pattern_phi);
   dtofcopy(2*t->ecoeff->Nmodes*t->ecoeff->Nf,&pattern_thetad,(double*)t->ecoeff->pattern_theta);
   dtofcopy(t->ecoeff->Nmodes,&preambled,t->ecoeff->preamble);
+#ifdef HAVE_CSPICE
+  } else if (t->dobeam==DOBEAM_ALO || t->dobeam==DOBEAM_ALO_WB) {
+  dtofcopy(2*t->ecoeff->Nmodes*t->ecoeff->Nf,&pattern_phid,(double*)t->ecoeff->pattern_phi);
+  dtofcopy(2*t->ecoeff->Nmodes*t->ecoeff->Nf,&pattern_thetad,(double*)t->ecoeff->pattern_theta);
+  dtofcopy(t->ecoeff->Nmodes,&preambled,t->ecoeff->preamble);
+#endif
   }
+
 
   float *beamd; /* array beam */
   float *elementd; /* element beam */
@@ -992,6 +1010,9 @@ predictvis_threadfn(void *data) {
   double *sI0d,*f0d,*spec_idxd,*spec_idx1d,*spec_idx2d;
   double *sQ0d,*sU0d,*sV0d;
   int **host_p,**dev_p;
+#ifdef HAVE_CSPICE
+  double *src_lond=0,*src_latd=0;
+#endif
 
   double *xlocal;
   err=cudaMallocHost((void**)&xlocal,sizeof(double)*(size_t)t->Nbase*8*t->Nf);
@@ -1012,6 +1033,11 @@ predictvis_threadfn(void *data) {
          ||t->dobeam==DOBEAM_ELEMENT_WB || t->dobeam==DOBEAM_FULL_WB) {
       err=cudaMalloc((void**)&elementd, t->N*8*t->tilesz*t->carr[ncl].N*t->Nf*sizeof(float));
       checkCudaError(err,__FILE__,__LINE__);
+#ifdef HAVE_CSPICE
+     } else if (t->dobeam==DOBEAM_ALO || t->dobeam==DOBEAM_ALO_WB) {
+      err=cudaMalloc((void**)&elementd, t->N*8*t->tilesz*t->carr[ncl].N*t->Nf*sizeof(float));
+      checkCudaError(err,__FILE__,__LINE__);
+#endif
      } else {
       elementd=0;
      }
@@ -1059,6 +1085,31 @@ predictvis_threadfn(void *data) {
          ||t->dobeam==DOBEAM_ARRAY_WB ||t->dobeam==DOBEAM_FULL_WB ||t->dobeam==DOBEAM_ELEMENT_WB) {
       dtofcopy(t->carr[ncl].N,&rad,t->carr[ncl].ra);
       dtofcopy(t->carr[ncl].N,&decd,t->carr[ncl].dec);
+#ifdef HAVE_CSPICE
+     } else if (t->dobeam==DOBEAM_ALO || t->dobeam==DOBEAM_ALO_WB) {
+       /* for each source, calculate source longitude, latitude on MOON,
+        * for tilesz time slots */
+       double *src_lat=0,*src_lon=0;
+       err=cudaMalloc((void**)&src_latd,sizeof(double)*(size_t)t->carr[ncl].N*t->tilesz);
+       checkCudaError(err,__FILE__,__LINE__);
+       err=cudaMalloc((void**)&src_lond,sizeof(double)*(size_t)t->carr[ncl].N*t->tilesz);
+       checkCudaError(err,__FILE__,__LINE__);
+       err=cudaMallocHost((void**)&src_lat,sizeof(double)*(size_t)t->carr[ncl].N*t->tilesz);
+       checkCudaError(err,__FILE__,__LINE__);
+       err=cudaMallocHost((void**)&src_lon,sizeof(double)*(size_t)t->carr[ncl].N*t->tilesz);
+       checkCudaError(err,__FILE__,__LINE__);
+
+       cspice_longitude_latitude(t->carr[ncl].N,t->carr[ncl].ra,t->carr[ncl].dec,t->tilesz,t->time_utc,src_lon,src_lat,t->cspice_mutex);
+       err=cudaMemcpy(src_lond, src_lon, sizeof(double)*(size_t)t->carr[ncl].N*t->tilesz, cudaMemcpyHostToDevice);
+       err=cudaMemcpy(src_latd, src_lat, sizeof(double)*(size_t)t->carr[ncl].N*t->tilesz, cudaMemcpyHostToDevice);
+       err=cudaFreeHost(src_lon);
+       checkCudaError(err,__FILE__,__LINE__);
+       err=cudaFreeHost(src_lat);
+       checkCudaError(err,__FILE__,__LINE__);
+
+       rad=0;
+       decd=0;
+#endif
      } else {
        rad=0;
        decd=0;
@@ -1104,7 +1155,6 @@ predictvis_threadfn(void *data) {
      checkCudaError(err,__FILE__,__LINE__);
 
      }
-
 
 
      /* extra info for source, if any */
@@ -1194,6 +1244,10 @@ predictvis_threadfn(void *data) {
        cudakernel_array_beam(t->N,t->tilesz,t->carr[ncl].N,t->Nf,freqsd,longd,latd,timed,Nelemd,xxd,yyd,zzd,rad,decd,(float)t->ph_ra0,(float)t->ph_dec0,(float)t->ph_freq0,beamd,1);
       }
       cudakernel_element_beam(t->N,t->tilesz,t->carr[ncl].N,t->Nf,freqsd,longd,latd,timed,rad,decd,t->ecoeff->Nmodes,t->ecoeff->M,t->ecoeff->beta,pattern_phid,pattern_thetad,preambled,elementd,1);
+#ifdef HAVE_CSPICE
+     } else if (t->dobeam==DOBEAM_ALO || t->dobeam==DOBEAM_ALO_WB) {
+       cudakernel_element_beam_lunar(t->N,t->tilesz,t->carr[ncl].N,t->Nf,freqsd,longd,latd,src_lond,src_latd,t->ecoeff->Nmodes,t->ecoeff->M,t->ecoeff->beta,pattern_phid,pattern_thetad,preambled,elementd,(t->dobeam==DOBEAM_ALO?0:1));
+#endif
      }
 
      /* calculate coherencies for all sources in this cluster, add them up */
@@ -1241,6 +1295,11 @@ predictvis_threadfn(void *data) {
          ||t->dobeam==DOBEAM_ELEMENT_WB || t->dobeam==DOBEAM_FULL_WB) {
       err=cudaFree(elementd);
       checkCudaError(err,__FILE__,__LINE__);
+#ifdef HAVE_CSPICE
+     } else if (t->dobeam==DOBEAM_ALO || t->dobeam==DOBEAM_ALO_WB) {
+      err=cudaFree(elementd);
+      checkCudaError(err,__FILE__,__LINE__);
+#endif
      }
      err=cudaFree(lld);
      checkCudaError(err,__FILE__,__LINE__);
@@ -1264,7 +1323,19 @@ predictvis_threadfn(void *data) {
       checkCudaError(err,__FILE__,__LINE__);
       err=cudaFree(decd);
       checkCudaError(err,__FILE__,__LINE__);
+#ifdef HAVE_CSPICE
+     } else if (t->dobeam==DOBEAM_ALO || t->dobeam==DOBEAM_ALO_WB) {
+       /* rad, decd not allocd */
+#endif
      }
+#ifdef HAVE_CSPICE
+     if (t->dobeam==DOBEAM_ALO || t->dobeam==DOBEAM_ALO_WB) {
+       err=cudaFree(src_lond);
+       checkCudaError(err,__FILE__,__LINE__);
+       err=cudaFree(src_latd);
+       checkCudaError(err,__FILE__,__LINE__);
+     }
+#endif
      err=cudaFree(styped);
      checkCudaError(err,__FILE__,__LINE__);
 
@@ -1315,7 +1386,14 @@ predictvis_threadfn(void *data) {
   checkCudaError(err,__FILE__,__LINE__);
   err=cudaFree(timed);
   checkCudaError(err,__FILE__,__LINE__);
-  }
+#ifdef HAVE_CSPICE
+     } else if (t->dobeam==DOBEAM_ALO || t->dobeam==DOBEAM_ALO_WB) {
+  err=cudaFree(longd);
+  checkCudaError(err,__FILE__,__LINE__);
+  err=cudaFree(latd);
+  checkCudaError(err,__FILE__,__LINE__);
+#endif
+    }
   if (t->dobeam==DOBEAM_ARRAY || t->dobeam==DOBEAM_FULL
       ||t->dobeam==DOBEAM_ARRAY_WB ||t->dobeam==DOBEAM_FULL_WB) {
   err=cudaFree(Nelemd);
@@ -1349,8 +1427,16 @@ predictvis_threadfn(void *data) {
    checkCudaError(err,__FILE__,__LINE__);
    err=cudaFree(preambled);
    checkCudaError(err,__FILE__,__LINE__);
+#ifdef HAVE_CSPICE
+     } else if (t->dobeam==DOBEAM_ALO || t->dobeam==DOBEAM_ALO_WB) {
+   err=cudaFree(pattern_phid);
+   checkCudaError(err,__FILE__,__LINE__);
+   err=cudaFree(pattern_thetad);
+   checkCudaError(err,__FILE__,__LINE__);
+   err=cudaFree(preambled);
+   checkCudaError(err,__FILE__,__LINE__);
+#endif
   }
-
 
   cudaDeviceSynchronize();
   /* reset error state */
@@ -1404,6 +1490,9 @@ predict_visibilities_multifreq_withbeam_gpu(double *u,double *v,double *w,double
   }
 
 
+#ifdef HAVE_CSPICE
+  pthread_mutex_t cspice_mutex=PTHREAD_MUTEX_INITIALIZER;
+#endif
 
   /* set common parameters, and split clusters to threads */
   ci=0;
@@ -1457,7 +1546,11 @@ predict_visibilities_multifreq_withbeam_gpu(double *u,double *v,double *w,double
      threaddata[nth].soff=ci;
 
      threaddata[nth].ecoeff=ecoeff;
-    
+
+#ifdef HAVE_CSPICE
+     threaddata[nth].cspice_mutex=&cspice_mutex;
+#endif
+
      pthread_create(&th_array[nth],&attr,predictvis_threadfn,(void*)(&threaddata[nth]));
      /* next source set */
      ci=ci+Nthb;
@@ -1483,6 +1576,10 @@ predict_visibilities_multifreq_withbeam_gpu(double *u,double *v,double *w,double
   destroy_task_hist(&thst);
   free(th_array);
   pthread_attr_destroy(&attr);
+
+#ifdef HAVE_CSPICE
+  pthread_mutex_destroy(&cspice_mutex);
+#endif
 
   return 0;
 }
