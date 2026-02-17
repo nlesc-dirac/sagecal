@@ -988,12 +988,18 @@ predictvis_threadfn(void *data) {
   }
 
   if (t->dobeam==DOBEAM_ELEMENT || t->dobeam==DOBEAM_FULL||
-      t->dobeam==DOBEAM_ELEMENT_WB ||t->dobeam==DOBEAM_FULL_WB
-      || t->dobeam==DOBEAM_ALO || t->dobeam==DOBEAM_ALO_WB) {
+      t->dobeam==DOBEAM_ELEMENT_WB ||t->dobeam==DOBEAM_FULL_WB) {
   dtofcopy(2*t->ecoeff->Nmodes*t->ecoeff->Nf,&pattern_phid,(double*)t->ecoeff->pattern_phi);
   dtofcopy(2*t->ecoeff->Nmodes*t->ecoeff->Nf,&pattern_thetad,(double*)t->ecoeff->pattern_theta);
   dtofcopy(t->ecoeff->Nmodes,&preambled,t->ecoeff->preamble);
+#ifdef HAVE_CSPICE
+  } else if (t->dobeam==DOBEAM_ALO || t->dobeam==DOBEAM_ALO_WB) {
+  dtofcopy(2*t->ecoeff->Nmodes*t->ecoeff->Nf,&pattern_phid,(double*)t->ecoeff->pattern_phi);
+  dtofcopy(2*t->ecoeff->Nmodes*t->ecoeff->Nf,&pattern_thetad,(double*)t->ecoeff->pattern_theta);
+  dtofcopy(t->ecoeff->Nmodes,&preambled,t->ecoeff->preamble);
+#endif
   }
+
 
   float *beamd; /* array beam */
   float *elementd; /* element beam */
@@ -1024,10 +1030,14 @@ predictvis_threadfn(void *data) {
      }
 
      if (t->dobeam==DOBEAM_ELEMENT || t->dobeam==DOBEAM_FULL
-         ||t->dobeam==DOBEAM_ELEMENT_WB || t->dobeam==DOBEAM_FULL_WB
-         || t->dobeam==DOBEAM_ALO || t->dobeam==DOBEAM_ALO_WB) {
+         ||t->dobeam==DOBEAM_ELEMENT_WB || t->dobeam==DOBEAM_FULL_WB) {
       err=cudaMalloc((void**)&elementd, t->N*8*t->tilesz*t->carr[ncl].N*t->Nf*sizeof(float));
       checkCudaError(err,__FILE__,__LINE__);
+#ifdef HAVE_CSPICE
+     } else if (t->dobeam==DOBEAM_ALO || t->dobeam==DOBEAM_ALO_WB) {
+      err=cudaMalloc((void**)&elementd, t->N*8*t->tilesz*t->carr[ncl].N*t->Nf*sizeof(float));
+      checkCudaError(err,__FILE__,__LINE__);
+#endif
      } else {
       elementd=0;
      }
@@ -1285,6 +1295,11 @@ predictvis_threadfn(void *data) {
          ||t->dobeam==DOBEAM_ELEMENT_WB || t->dobeam==DOBEAM_FULL_WB) {
       err=cudaFree(elementd);
       checkCudaError(err,__FILE__,__LINE__);
+#ifdef HAVE_CSPICE
+     } else if (t->dobeam==DOBEAM_ALO || t->dobeam==DOBEAM_ALO_WB) {
+      err=cudaFree(elementd);
+      checkCudaError(err,__FILE__,__LINE__);
+#endif
      }
      err=cudaFree(lld);
      checkCudaError(err,__FILE__,__LINE__);
@@ -1308,13 +1323,19 @@ predictvis_threadfn(void *data) {
       checkCudaError(err,__FILE__,__LINE__);
       err=cudaFree(decd);
       checkCudaError(err,__FILE__,__LINE__);
+#ifdef HAVE_CSPICE
+     } else if (t->dobeam==DOBEAM_ALO || t->dobeam==DOBEAM_ALO_WB) {
+       /* rad, decd not allocd */
+#endif
      }
+#ifdef HAVE_CSPICE
      if (t->dobeam==DOBEAM_ALO || t->dobeam==DOBEAM_ALO_WB) {
        err=cudaFree(src_lond);
        checkCudaError(err,__FILE__,__LINE__);
        err=cudaFree(src_latd);
        checkCudaError(err,__FILE__,__LINE__);
      }
+#endif
      err=cudaFree(styped);
      checkCudaError(err,__FILE__,__LINE__);
 
@@ -1365,7 +1386,14 @@ predictvis_threadfn(void *data) {
   checkCudaError(err,__FILE__,__LINE__);
   err=cudaFree(timed);
   checkCudaError(err,__FILE__,__LINE__);
-  }
+#ifdef HAVE_CSPICE
+     } else if (t->dobeam==DOBEAM_ALO || t->dobeam==DOBEAM_ALO_WB) {
+  err=cudaFree(longd);
+  checkCudaError(err,__FILE__,__LINE__);
+  err=cudaFree(latd);
+  checkCudaError(err,__FILE__,__LINE__);
+#endif
+    }
   if (t->dobeam==DOBEAM_ARRAY || t->dobeam==DOBEAM_FULL
       ||t->dobeam==DOBEAM_ARRAY_WB ||t->dobeam==DOBEAM_FULL_WB) {
   err=cudaFree(Nelemd);
@@ -1399,8 +1427,16 @@ predictvis_threadfn(void *data) {
    checkCudaError(err,__FILE__,__LINE__);
    err=cudaFree(preambled);
    checkCudaError(err,__FILE__,__LINE__);
+#ifdef HAVE_CSPICE
+     } else if (t->dobeam==DOBEAM_ALO || t->dobeam==DOBEAM_ALO_WB) {
+   err=cudaFree(pattern_phid);
+   checkCudaError(err,__FILE__,__LINE__);
+   err=cudaFree(pattern_thetad);
+   checkCudaError(err,__FILE__,__LINE__);
+   err=cudaFree(preambled);
+   checkCudaError(err,__FILE__,__LINE__);
+#endif
   }
-
 
   cudaDeviceSynchronize();
   /* reset error state */
