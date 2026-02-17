@@ -546,10 +546,6 @@ run_fullbatch_calibration(void) {
 #endif
 #ifdef HAVE_CUDA
      if (GPUpredict) {
-      if (beam.elType==ELEM_ALO) {
-        fprintf(stderr,"GPU predict is not supported for this telescope, try CPU only predict\n");
-        exit(1);
-      }
       predict_visibilities_multifreq_withbeam_gpu(iodata.u,iodata.v,iodata.w,iodata.xo,iodata.N,iodata.Nbase,iodata.tilesz,barr,carr,M,iodata.freqs,iodata.Nchan,iodata.deltaf,iodata.deltat,iodata.dec0,
   beam.bfType,beam.b_ra0,beam.b_dec0,beam.p_ra0,beam.p_dec0,iodata.freq0,beam.sx,beam.sy,beam.time_utc,beam.Nelem,beam.xx,beam.yy,beam.zz,&ecoeff,doBeam,Data::Nt,Data::DoSim);
      } else {
@@ -562,10 +558,6 @@ run_fullbatch_calibration(void) {
      }
 #endif
     } else {
-     if (beam.elType==ELEM_ALO) {
-        fprintf(stderr,"GPU predict is not supported for this telescope, try CPU only predict\n");
-        exit(1);
-     }
      /* if solution file is given, read in the solutions and predict */
      read_solutions(sfp,p,carr,iodata.N,M);
 

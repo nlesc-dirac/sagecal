@@ -242,3 +242,40 @@ cspice_element_beam_lunar(double ra, double dec, double f, double f0, int N, dou
 
   return 0;
 }
+
+
+
+extern int
+cspice_longitude_latitude(int N, double *ra, double *dec, int T, double *time_jd, double *longitude, double *latitude, pthread_mutex_t *mutex) {
+
+  pthread_mutex_lock(mutex);
+  /* rectangular coords */
+  SpiceDouble srcrect[3],mtrans[3][3],v2000[3];
+  SpiceDouble s_radius,s_lon,s_lat;
+
+  /* iterate over time x source */
+  for (int t=0; t<T; t++) {
+    /* iterate over source */
+    for (int n=0; n<N; n++) {
+    /* ephemeris time from time_jd (days) to (s) */
+    double ep_t0=unitim_c(time_jd[t],"JED","ET");
+    /* ra,dec to rectangular */
+    radrec_c(1.0,ra[n]*rpd_c(),dec[n]*rpd_c(),v2000);
+    /* precess ep_t0 on lunar frame ME: mean Earth/polar axis, PA: principle axis */
+    pxform_c("J2000","MOON_ME",ep_t0,mtrans); // use MOON_ME instead of MOON_PA
+    /* rotate v2000 onto lunar frame */
+    mxv_c(mtrans,v2000,srcrect);
+    /* rectangular to lat,long */
+    reclat_c(srcrect, &s_radius, &s_lon, &s_lat);
+    longitude[n+t*N]=s_lon;
+    latitude[n+t*N]=s_lat;
+#ifdef DEBUG
+    printf("UTC %le (d) ET %le (s) ra %le dec %le lon %le lat %le\n",time_jd[t],ep_t0,ra[n],dec[n],s_lon,s_lat);
+#endif
+    }
+  }
+  pthread_mutex_unlock(mutex);
+
+
+  return 0;
+}
