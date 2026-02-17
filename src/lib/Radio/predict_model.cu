@@ -883,7 +883,11 @@ double phterm0, double sI0f, double sQ0f, double sU0f, double sV0f, double spec_
     Vy=Vf*prodterm.y;
 
     if (dobeam==DOBEAM_ELEMENT || dobeam==DOBEAM_FULL
-        ||dobeam==DOBEAM_ELEMENT_WB ||dobeam==DOBEAM_FULL_WB) {
+        ||dobeam==DOBEAM_ELEMENT_WB ||dobeam==DOBEAM_FULL_WB
+#ifdef HAVE_CSPICE
+        ||dobeam==DOBEAM_ALO || dobeam==DOBEAM_ALO_WB
+#endif
+     ) {
      cuDoubleComplex E1[4], E2[4], C[4], T[4];
      C[0].x=Ix+Qx;
      C[0].y=Iy+Qy;
@@ -996,7 +1000,11 @@ compute_prodterm(int sta1, int sta2, int N, int K, int T,
     Vy=Vf*prodterm.y;
 
     if (dobeam==DOBEAM_ELEMENT || dobeam==DOBEAM_FULL
-        ||dobeam==DOBEAM_ELEMENT_WB ||dobeam==DOBEAM_FULL_WB) {
+        ||dobeam==DOBEAM_ELEMENT_WB ||dobeam==DOBEAM_FULL_WB
+#ifdef HAVE_CSPICE
+        ||dobeam==DOBEAM_ALO || dobeam==DOBEAM_ALO_WB
+#endif
+     ) {
      cuDoubleComplex E1[4], E2[4], C[4], T[4];
      C[0].x=Ix+Qx;
      C[0].y=Iy+Qy;
