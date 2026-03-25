@@ -975,6 +975,10 @@ Data::loadDataList(vector<MSIter*> msitr, Data::IOData iodata, double *fratio) {
     dataCols[cm] = new  ROArrayColumn<Complex>(*tt,Data::DataField);
     flagCols[cm] = new  ROArrayColumn<bool>(*tt,"FLAG");
   }
+
+    int n_corr=(*dataCols[0]).shape(0)[0];
+    assert(n_corr == 4);
+
     /* tapering */
     bool dotaper=false;
     double invtaper=1.0;
@@ -1144,6 +1148,9 @@ Data::loadDataMinibatch(Table ti, Data::IOData iodata, int minibatch, double *fr
     ROArrayColumn<double> uvwCol(t, "UVW"); 
     ROArrayColumn<bool> flagCol(t, "FLAG");
 
+    int n_corr=dataCol.shape(0)[0];
+    assert(n_corr == 4);
+
     /* check we get correct rows */
     int nrow=t.nrow();
     int row0=rowoffset; /* begin with right offset in iodata */
@@ -1270,6 +1277,9 @@ Data::loadDataMinibatch(Table ti, Data::IOData iodata, LBeam binfo, int minibatc
     ROArrayColumn<double> uvwCol(t, "UVW"); 
     ROArrayColumn<bool> flagCol(t, "FLAG");
     ROScalarColumn<double> tut(t,"TIME");
+
+    int n_corr=dataCol.shape(0)[0];
+    assert(n_corr == 4);
 
     /* check we get correct rows */
     int nrow=t.nrow();
