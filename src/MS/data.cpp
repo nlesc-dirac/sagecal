@@ -614,6 +614,8 @@ Data::loadData(Table ti, Data::IOData iodata, double *fratio) {
     ROArrayColumn<Complex> dataCol(t, Data::DataField);
     ROArrayColumn<double> uvwCol(t, "UVW"); 
     ROArrayColumn<bool> flagCol(t, "FLAG");
+    int n_corr=dataCol.shape(0)[0];
+    assert(n_corr==4 || n_corr==2);
 
     /* check we get correct rows */
     int nrow=t.nrow();
@@ -662,22 +664,33 @@ Data::loadData(Table ti, Data::IOData iodata, double *fratio) {
         for(int k = 0; k < iodata.Nchan; k++) {
            Complex *ptr = data[k].data();
            bool *flgptr=flag[k].data();
-           if (!flgptr[0] && !flgptr[1] && !flgptr[2] && !flgptr[3]){
+           bool flag_row=(n_corr==4?(!flgptr[0] && !flgptr[1] && !flgptr[2] && !flgptr[3])
+               :(!flgptr[0] && !flgptr[1]));
+           if (flag_row){
              cxx+=ptr[0];
-             cxy+=ptr[1];
-             cyx+=ptr[2];
-             cyy+=ptr[3];
+             if (n_corr==4) {
+               cxy+=ptr[1];
+               cyx+=ptr[2];
+               cyy+=ptr[3];
+             } else {
+               cyy+=ptr[1];
+             }
              nflag++; /* remeber unflagged datapoints */ 
-           } 
+           }
         
            iodata.xo[iodata.Nbase*iodata.tilesz*8*k+row0*8]=ptr[0].real();
            iodata.xo[iodata.Nbase*iodata.tilesz*8*k+row0*8+1]=ptr[0].imag();
-           iodata.xo[iodata.Nbase*iodata.tilesz*8*k+row0*8+2]=ptr[1].real();
-           iodata.xo[iodata.Nbase*iodata.tilesz*8*k+row0*8+3]=ptr[1].imag();
-           iodata.xo[iodata.Nbase*iodata.tilesz*8*k+row0*8+4]=ptr[2].real();
-           iodata.xo[iodata.Nbase*iodata.tilesz*8*k+row0*8+5]=ptr[2].imag();
-           iodata.xo[iodata.Nbase*iodata.tilesz*8*k+row0*8+6]=ptr[3].real();
-           iodata.xo[iodata.Nbase*iodata.tilesz*8*k+row0*8+7]=ptr[3].imag();
+           if (n_corr==4) {
+             iodata.xo[iodata.Nbase*iodata.tilesz*8*k+row0*8+2]=ptr[1].real();
+             iodata.xo[iodata.Nbase*iodata.tilesz*8*k+row0*8+3]=ptr[1].imag();
+             iodata.xo[iodata.Nbase*iodata.tilesz*8*k+row0*8+4]=ptr[2].real();
+             iodata.xo[iodata.Nbase*iodata.tilesz*8*k+row0*8+5]=ptr[2].imag();
+             iodata.xo[iodata.Nbase*iodata.tilesz*8*k+row0*8+6]=ptr[3].real();
+             iodata.xo[iodata.Nbase*iodata.tilesz*8*k+row0*8+7]=ptr[3].imag();
+           } else {
+             iodata.xo[iodata.Nbase*iodata.tilesz*8*k+row0*8+6]=ptr[1].real();
+             iodata.xo[iodata.Nbase*iodata.tilesz*8*k+row0*8+7]=ptr[1].imag();
+           }
         }
         if (nflag>iodata.Nchan/2) { /* at least half channels should have good data */
          double invnflag=1.0/(double)nflag;
@@ -769,6 +782,8 @@ Data::loadData(Table ti, Data::IOData iodata, LBeam binfo, double *fratio) {
     ROArrayColumn<double> uvwCol(t, "UVW"); 
     ROArrayColumn<bool> flagCol(t, "FLAG");
     ROScalarColumn<double> tut(t,"TIME");
+    int n_corr=dataCol.shape(0)[0];
+    assert(n_corr == 4 || n_corr ==2);
 
     /* check we get correct rows */
     int nrow=t.nrow();
@@ -826,22 +841,33 @@ Data::loadData(Table ti, Data::IOData iodata, LBeam binfo, double *fratio) {
         for(int k = 0; k < iodata.Nchan; k++) {
            Complex *ptr = data[k].data();
            bool *flgptr=flag[k].data();
-           if (!flgptr[0] && !flgptr[1] && !flgptr[2] && !flgptr[3]){
+           bool flag_row=(n_corr==4?(!flgptr[0] && !flgptr[1] && !flgptr[2] && !flgptr[3])
+               :(!flgptr[0] && !flgptr[1]));
+           if (flag_row){
              cxx+=ptr[0];
-             cxy+=ptr[1];
-             cyx+=ptr[2];
-             cyy+=ptr[3];
+             if (n_corr==4) {
+               cxy+=ptr[1];
+               cyx+=ptr[2];
+               cyy+=ptr[3];
+             } else {
+               cyy+=ptr[1];
+             }
              nflag++; /* remeber unflagged datapoints */ 
            } 
         
            iodata.xo[iodata.Nbase*iodata.tilesz*8*k+row0*8]=ptr[0].real();
            iodata.xo[iodata.Nbase*iodata.tilesz*8*k+row0*8+1]=ptr[0].imag();
-           iodata.xo[iodata.Nbase*iodata.tilesz*8*k+row0*8+2]=ptr[1].real();
-           iodata.xo[iodata.Nbase*iodata.tilesz*8*k+row0*8+3]=ptr[1].imag();
-           iodata.xo[iodata.Nbase*iodata.tilesz*8*k+row0*8+4]=ptr[2].real();
-           iodata.xo[iodata.Nbase*iodata.tilesz*8*k+row0*8+5]=ptr[2].imag();
-           iodata.xo[iodata.Nbase*iodata.tilesz*8*k+row0*8+6]=ptr[3].real();
-           iodata.xo[iodata.Nbase*iodata.tilesz*8*k+row0*8+7]=ptr[3].imag();
+           if (n_corr==4) {
+             iodata.xo[iodata.Nbase*iodata.tilesz*8*k+row0*8+2]=ptr[1].real();
+             iodata.xo[iodata.Nbase*iodata.tilesz*8*k+row0*8+3]=ptr[1].imag();
+             iodata.xo[iodata.Nbase*iodata.tilesz*8*k+row0*8+4]=ptr[2].real();
+             iodata.xo[iodata.Nbase*iodata.tilesz*8*k+row0*8+5]=ptr[2].imag();
+             iodata.xo[iodata.Nbase*iodata.tilesz*8*k+row0*8+6]=ptr[3].real();
+             iodata.xo[iodata.Nbase*iodata.tilesz*8*k+row0*8+7]=ptr[3].imag();
+           } else {
+             iodata.xo[iodata.Nbase*iodata.tilesz*8*k+row0*8+6]=ptr[1].real();
+             iodata.xo[iodata.Nbase*iodata.tilesz*8*k+row0*8+7]=ptr[1].imag();
+           }
         }
         if (nflag>iodata.Nchan/2) { /* at least half channels should have good data */
          double invnflag=1.0/(double)nflag;
@@ -1362,15 +1388,16 @@ Data::writeData(Table ti, Data::IOData iodata) {
     ROScalarColumn<int> a1(t, "ANTENNA1"), a2(t, "ANTENNA2");
     /* writable access for output */
     ArrayColumn<Complex> dataCol(t, Data::OutField);
+    int n_corr=dataCol.shape(0)[0];
+    assert(n_corr==4 || n_corr==2);
 
     /* check we get correct rows */
     int nrow=t.nrow();
     if(nrow-iodata.N*iodata.tilesz>iodata.tilesz*iodata.Nbase) {
       cout<<"Warning: Missing rows, got "<<nrow<<" expect "<<iodata.tilesz*iodata.Nbase<<" +- "<<iodata.tilesz*iodata.N<<". (probably the last time interval, so not a big issue)."<<endl;
     }
-    //cout<<"Table rows "<<nrow<<" Data rows "<<iodata.tilesz*iodata.Nbase+iodata.tilesz*iodata.N<<endl;
     int row0=0;
-    IPosition pos(2,4,iodata.Nchan);
+    IPosition pos(2,n_corr,iodata.Nchan);
     for(int row = 0; row < nrow; row++) {
         uInt i = a1(row); //antenna1 
         uInt j = a2(row); //antenna2
@@ -1380,12 +1407,17 @@ Data::writeData(Table ti, Data::IOData iodata) {
         for(int k = 0; k < iodata.Nchan; k++) {
            pos(0)=0;pos(1)=k;
            data(pos)=Complex(iodata.xo[iodata.Nbase*iodata.tilesz*8*k+row0*8],iodata.xo[iodata.Nbase*iodata.tilesz*8*k+row0*8+1]);
-           pos(0)=1;pos(1)=k;
-           data(pos)=Complex(iodata.xo[iodata.Nbase*iodata.tilesz*8*k+row0*8+2],iodata.xo[iodata.Nbase*iodata.tilesz*8*k+row0*8+3]);
-           pos(0)=2;pos(1)=k;
-           data(pos)=Complex(iodata.xo[iodata.Nbase*iodata.tilesz*8*k+row0*8+4],iodata.xo[iodata.Nbase*iodata.tilesz*8*k+row0*8+5]);
-           pos(0)=3;pos(1)=k;
-           data(pos)=Complex(iodata.xo[iodata.Nbase*iodata.tilesz*8*k+row0*8+6],iodata.xo[iodata.Nbase*iodata.tilesz*8*k+row0*8+7]);
+           if (n_corr==4) {
+             pos(0)=1;pos(1)=k;
+             data(pos)=Complex(iodata.xo[iodata.Nbase*iodata.tilesz*8*k+row0*8+2],iodata.xo[iodata.Nbase*iodata.tilesz*8*k+row0*8+3]);
+             pos(0)=2;pos(1)=k;
+             data(pos)=Complex(iodata.xo[iodata.Nbase*iodata.tilesz*8*k+row0*8+4],iodata.xo[iodata.Nbase*iodata.tilesz*8*k+row0*8+5]);
+             pos(0)=3;pos(1)=k;
+             data(pos)=Complex(iodata.xo[iodata.Nbase*iodata.tilesz*8*k+row0*8+6],iodata.xo[iodata.Nbase*iodata.tilesz*8*k+row0*8+7]);
+           } else {
+             pos(0)=1;pos(1)=k;
+             data(pos)=Complex(iodata.xo[iodata.Nbase*iodata.tilesz*8*k+row0*8+6],iodata.xo[iodata.Nbase*iodata.tilesz*8*k+row0*8+7]);
+           }
        }
 
        row0++;
@@ -1428,7 +1460,6 @@ Data::writeDataList(vector<MSIter*> msitr, Data::IOData iodata) {
   for (int cm=0; cm<iodata.Nms;cm++) {
         Array<Complex> data = (*(dataCols[cm]))(row);
         IPosition pos(2,4,iodata.NchanMS[cm]);
-        //Array<Complex> data = dataCol(row);
         for(int k = 0; k < iodata.NchanMS[cm]; k++) {
            pos(0)=0;pos(1)=k;
            data(pos)=Complex(iodata.xo[iodata.Nbase*iodata.tilesz*8*chanoff+row0*8],iodata.xo[iodata.Nbase*iodata.tilesz*8*chanoff+row0*8+1]);
@@ -1442,7 +1473,6 @@ Data::writeDataList(vector<MSIter*> msitr, Data::IOData iodata) {
        }
 
        (*(dataCols[cm])).put(row,data);
-       //dataCol.put(row,data); // copy to output
 
    }
        row0++;
@@ -1486,12 +1516,13 @@ Data::writeDataMinibatch(Table ti, Data::IOData iodata, int minibatch) {
     ROScalarColumn<int> a1(t, "ANTENNA1"), a2(t, "ANTENNA2");
     /* writable access for output */
     ArrayColumn<Complex> dataCol(t, Data::OutField);
+    int n_corr=dataCol.shape(0)[0];
+    assert(n_corr==4 || n_corr==2);
 
     /* check we get correct rows = baselines+stations */
     int nrow=t.nrow(); 
-    //cout<<"Table rows "<<nrow<<" Data rows "<<iodata.tilesz*iodata.Nbase+iodata.tilesz*iodata.N<<endl;
     int row0=rowoffset;
-    IPosition pos(2,4,iodata.Nchan);
+    IPosition pos(2,n_corr,iodata.Nchan);
     for(int row = 0; row < nrow; row++) {
         uInt i = a1(row); //antenna1 
         uInt j = a2(row); //antenna2
@@ -1501,12 +1532,17 @@ Data::writeDataMinibatch(Table ti, Data::IOData iodata, int minibatch) {
         for(int k = 0; k < iodata.Nchan; k++) {
            pos(0)=0;pos(1)=k;
            data(pos)=Complex(iodata.xo[iodata.Nbase*iodata.tilesz*8*k+row0*8],iodata.xo[iodata.Nbase*iodata.tilesz*8*k+row0*8+1]);
-           pos(0)=1;pos(1)=k;
-           data(pos)=Complex(iodata.xo[iodata.Nbase*iodata.tilesz*8*k+row0*8+2],iodata.xo[iodata.Nbase*iodata.tilesz*8*k+row0*8+3]);
-           pos(0)=2;pos(1)=k;
-           data(pos)=Complex(iodata.xo[iodata.Nbase*iodata.tilesz*8*k+row0*8+4],iodata.xo[iodata.Nbase*iodata.tilesz*8*k+row0*8+5]);
-           pos(0)=3;pos(1)=k;
-           data(pos)=Complex(iodata.xo[iodata.Nbase*iodata.tilesz*8*k+row0*8+6],iodata.xo[iodata.Nbase*iodata.tilesz*8*k+row0*8+7]);
+           if (n_corr==4) {
+             pos(0)=1;pos(1)=k;
+             data(pos)=Complex(iodata.xo[iodata.Nbase*iodata.tilesz*8*k+row0*8+2],iodata.xo[iodata.Nbase*iodata.tilesz*8*k+row0*8+3]);
+             pos(0)=2;pos(1)=k;
+             data(pos)=Complex(iodata.xo[iodata.Nbase*iodata.tilesz*8*k+row0*8+4],iodata.xo[iodata.Nbase*iodata.tilesz*8*k+row0*8+5]);
+             pos(0)=3;pos(1)=k;
+             data(pos)=Complex(iodata.xo[iodata.Nbase*iodata.tilesz*8*k+row0*8+6],iodata.xo[iodata.Nbase*iodata.tilesz*8*k+row0*8+7]);
+           } else {
+             pos(0)=1;pos(1)=k;
+             data(pos)=Complex(iodata.xo[iodata.Nbase*iodata.tilesz*8*k+row0*8+6],iodata.xo[iodata.Nbase*iodata.tilesz*8*k+row0*8+7]);
+           }
        }
 
        row0++;
@@ -1520,7 +1556,6 @@ Data::writeDataMinibatch(Table ti, Data::IOData iodata, int minibatch) {
     }
 
 }
-
 
 
 void Data::freeData(Data::IOData data)
