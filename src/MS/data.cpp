@@ -26,6 +26,7 @@
 #include <casacore/casa/Quanta/Quantum.h>
 #include <casacore/measures/Measures/Precession.h>
 #include <casacore/measures/Measures/Nutation.h>
+#include <cassert>
 
 /* speed of light */
 #ifndef CONST_C
