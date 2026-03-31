@@ -783,7 +783,7 @@ Data::loadData(Table ti, Data::IOData iodata, LBeam binfo, double *fratio) {
     ROArrayColumn<bool> flagCol(t, "FLAG");
     ROScalarColumn<double> tut(t,"TIME");
     int n_corr=dataCol.shape(0)[0];
-    assert(n_corr == 4 || n_corr ==2);
+    assert(n_corr==4 || n_corr==2);
 
     /* check we get correct rows */
     int nrow=t.nrow();
@@ -977,6 +977,7 @@ Data::loadDataList(vector<MSIter*> msitr, Data::IOData iodata, double *fratio) {
   }
 
     int n_corr=(*dataCols[0]).shape(0)[0];
+    // only support 4 correlations (TBD)
     assert(n_corr == 4);
 
     /* tapering */
@@ -1149,6 +1150,7 @@ Data::loadDataMinibatch(Table ti, Data::IOData iodata, int minibatch, double *fr
     ROArrayColumn<bool> flagCol(t, "FLAG");
 
     int n_corr=dataCol.shape(0)[0];
+    // only support 4 correlations (TBD)
     assert(n_corr == 4);
 
     /* check we get correct rows */
@@ -1279,6 +1281,7 @@ Data::loadDataMinibatch(Table ti, Data::IOData iodata, LBeam binfo, int minibatc
     ROScalarColumn<double> tut(t,"TIME");
 
     int n_corr=dataCol.shape(0)[0];
+    // only support 4 correlations (TBD)
     assert(n_corr == 4);
 
     /* check we get correct rows */
