@@ -1,4 +1,4 @@
-di 14 mei 2024 14:27:33 CEST
+vr  3 apr 2026  0:46:25 CEST
 # SAGECal Installation
 
 ## Cmake Build
@@ -7,7 +7,7 @@ di 14 mei 2024 14:27:33 CEST
  sudo apt-get install -y git cmake g++ pkg-config libcfitsio-bin libcfitsio-dev libopenblas-base libopenblas-dev wcslib-dev wcslib-tools libglib2.0-dev libcasa-casa4 casacore-dev casacore-data casacore-tools gfortran libopenmpi-dev libfftw3-dev
 
 ```
-Run cmake (with GPU support) for example like
+Run cmake (with GPU support, CUDA version => 12.8) for example like
 ```
  mkdir build && cd build
  cmake .. -DHAVE_CUDA=ON -DNUM_GPU=1 -DCMAKE_CXX_COMPILER=g++-8 -DCMAKE_C_COMPILER=gcc-8 -DCUDA_NVCC_FLAGS='-gencode arch=compute_75,code=sm_75' -DCMAKE_CUDA_ARCHITECTURES=75 -DBLA_VENDOR=OpenBLAS

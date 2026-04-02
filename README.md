@@ -127,7 +127,7 @@ E.g., If you need to ignore cluster ids '-1', '10', '999', create a text file :
 999
 ```
 
-and use it as the 'ignore_file'.
+and use it as the 'ignore_file'. Note ```-z``` option only works together with ```-p``` option.
 
 Bandpass correction using **stochastic** calibration with consensus:
 Use ```-N 1``` combined with options for ```-M```,```-w``` (see also section 4 below).
