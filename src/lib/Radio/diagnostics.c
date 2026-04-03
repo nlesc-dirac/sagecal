@@ -23,7 +23,7 @@
 #include "Dirac_radio.h"
 #include "Dirac_GPUtune.h"
 
-#define CUDA_DEBUG
+//#define CUDA_DEBUG
 static void
 checkCudaError(cudaError_t err, char *file, int line)
 {
@@ -814,7 +814,7 @@ hessian_influence_threadfn(void *data) {
   }
 /******************* end loop over clusters **************************/
 
-  /* copy dRsum to t->dR, (replicate if tilesize > 1) */
+  /* copy dRsum to t->dR */
   memcpy(t->dR,dRsum,sizeof(float)*(size_t)4*Nbase*2*Nbase);
 
   err=cudaFree(resd);
@@ -975,6 +975,13 @@ find_eigenvalues(int Nbase, int tilesz, float *dR, double *x, taskhist *hst) {
     float_to_double(Evd,Ev,2*Nbase*sizeof(float),1);
     my_dcopy(Nbase,&Evd[0],1,&x[2*corr],8);
     my_dcopy(Nbase,&Evd[Nbase],1,&x[2*corr+1],8);
+  }
+
+  //replicate first tile of x if tilesz>1
+  if (tilesz>1) {
+    for (int ntile=1; ntile<tilesz; tilesz++) {
+     memcpy(&x[Nbase*8*ntile],&x[0],sizeof(double)*Nbase*8);
+    }
   }
 
   err=cudaFree(d_work);
