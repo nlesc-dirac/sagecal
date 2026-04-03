@@ -84,6 +84,10 @@ typedef struct thread_data_pred_t_ {
   int Npoly;
   int Nms; /* = all MS subbands != Nf */
 
+  /* following only needed to copy back influence function
+   * full matrix */
+  float *dR;
+
 } thread_data_pred_t;
 
 static void *
@@ -669,17 +673,16 @@ hessian_influence_threadfn(void *data) {
   err=cudaMallocHost((void**)&AdV,sizeof(float)*(size_t)t->N*4*Nbase*2);
   checkCudaError(err,__FILE__,__LINE__);
 
-  /* storage to calcualte Dresiduals 4*Nbase x Nbase x 2 (re,im) */
-  /* but we sum over all columns, so only allocage 4*Nbase*2 (re,im) */
+  /* storage to calcualte Dresiduals: full matrix 4*Nbase*2 x Nbase (re,im) */
+  /* sum up all tiles into one, so Nbase/tilesz used here */
   float *dRd=0,*dR,*dRsum;
-  err=cudaMalloc((void**) &dRd, 4*t->Nbase*2*sizeof(float)); /* memory for all baselines (t->Nbase) */
+  err=cudaMalloc((void**) &dRd, 4*Nbase*2*Nbase*sizeof(float)); /* memory for all baselines (t->Nbase) */
   checkCudaError(err,__FILE__,__LINE__);
-  /* host only store average value 4*t->Nbase*2 */
-  err=cudaMallocHost((void**)&dR,sizeof(float)*(size_t)4*t->Nbase*2);
+  err=cudaMallocHost((void**)&dR,sizeof(float)*(size_t)4*Nbase*2*Nbase);
   checkCudaError(err,__FILE__,__LINE__);
-  err=cudaMallocHost((void**)&dRsum,sizeof(float)*(size_t)4*t->Nbase*2);
+  err=cudaMallocHost((void**)&dRsum,sizeof(float)*(size_t)4*Nbase*2*Nbase);
   checkCudaError(err,__FILE__,__LINE__);
-  err=cudaMemset(dRsum, 0, 4*t->Nbase*2*sizeof(float));
+  err=cudaMemset(dRsum, 0, 4*Nbase*2*Nbase*sizeof(float));
   checkCudaError(err,__FILE__,__LINE__);
  
 /******************* begin loop over clusters **************************/
@@ -798,11 +801,11 @@ hessian_influence_threadfn(void *data) {
      /* accumulate Dresidual_uvw() for this cluster in t->x of size t->Nbase*8*t->Nf */
      /* setting dRd=0 done by kernel */
      cudakernel_d_residuals(t->Nbase,t->N,t->tilesz,t->Nf,barrd,pd,t->carr[ncl].nchunk,cohd,AdVd,dRd);
-     err=cudaMemcpy(dR,dRd,sizeof(float)*(size_t)4*t->Nbase*2,cudaMemcpyDeviceToHost);
+     err=cudaMemcpy(dR,dRd,sizeof(float)*(size_t)4*Nbase*2*Nbase,cudaMemcpyDeviceToHost);
      checkCudaError(err,__FILE__,__LINE__);
      
      /* accumulate dR over all clusters */
-     my_saxpy(4*t->Nbase*2,dR,1.0f,dRsum);
+     my_saxpy(4*Nbase*2*Nbase,dR,1.0f,dRsum);
 
      err=cudaFree(cohd);
      checkCudaError(err,__FILE__,__LINE__);
@@ -811,8 +814,8 @@ hessian_influence_threadfn(void *data) {
   }
 /******************* end loop over clusters **************************/
 
-  /* copy dRsum to t->x */
-  float_to_double(t->x,dRsum,4*t->Nbase*2,1);
+  /* copy dRsum to t->dR */
+  memcpy(t->dR,dRsum,sizeof(float)*(size_t)4*Nbase*2*Nbase);
 
   err=cudaFree(resd);
   checkCudaError(err,__FILE__,__LINE__);
@@ -837,6 +840,174 @@ hessian_influence_threadfn(void *data) {
   /* reset error state */
   err=cudaGetLastError(); 
   return NULL;
+}
+
+
+static int
+find_eigenvalues(int Nbase, int tilesz, float *dR, double *x, taskhist *hst) {
+  /* find eigenvalues of dRsum: 4Nbase x Nbase (complex) matrix
+   * stride of 4, offset 0,1,...3 ,
+   * and copy back to x (replicate if tilesize > 1) */
+  /* dR: 4*Nbase*2 x Nbase
+   * x: 8*Nbase*tilesz*Nchan, Nchan==1 
+   */
+  /* reset x to zero */
+  memset(x,0,sizeof(double)*Nbase*8*tilesz);
+
+  cudaError_t err;
+  int card=select_work_gpu(MAX_GPU_ID,hst);
+  cublasHandle_t cbhandle=NULL;
+  cusolverDnHandle_t solver_handle=NULL;
+  cudaStream_t stream = NULL;
+  cusolverDnParams_t params = NULL;
+
+  /* temp contiguous memory to create a contiguous block of 2*Nbase x Nbase
+   * for each correlation, before copying to GPU */
+  float *dRcorr;
+  float *dRd;
+  err=cudaMallocHost((void**)&dRcorr,sizeof(float)*(size_t)Nbase*2*Nbase);
+  checkCudaError(err,__FILE__,__LINE__);
+  err=cudaMalloc((void**) &dRd, Nbase*2*Nbase*sizeof(float));
+  checkCudaError(err,__FILE__,__LINE__);
+
+  attach_gpu_to_thread(card,&cbhandle,&solver_handle);
+  err=cudaStreamCreateWithFlags(&stream, cudaStreamNonBlocking);
+  checkCudaError(err,__FILE__,__LINE__);
+  err=cusolverDnSetStream(solver_handle, stream);
+  checkCudaError(err,__FILE__,__LINE__);
+  err=cublasSetStream(cbhandle, stream);
+  checkCudaError(err,__FILE__,__LINE__);
+  err=cusolverDnCreateParams(&params);
+  checkCudaError(err,__FILE__,__LINE__);
+
+  /* common eig array on device */
+  float *dE=0;
+  err=cudaMalloc((void**)&dE, 2*Nbase*sizeof(float));
+  checkCudaError(err,__FILE__,__LINE__);
+  float *Ev=0;
+  err=cudaMallocHost((void**)&Ev, 2*Nbase*sizeof(float));
+  checkCudaError(err,__FILE__,__LINE__);
+  double *Evd=0;
+  err=cudaMallocHost((void**)&Evd, 2*Nbase*sizeof(double));
+  checkCudaError(err,__FILE__,__LINE__);
+
+  // no eigenvectors
+  float *dvL = 0; // Left eigenvectors
+  float *dvR = 0; // Right eigenvectors
+
+  cusolverEigMode_t jobvl = CUSOLVER_EIG_MODE_NOVECTOR;
+  cusolverEigMode_t jobvr = CUSOLVER_EIG_MODE_NOVECTOR;
+  const int64_t ldvl = 1; // >= 1 if CUSOLVER_EIG_MODE_NOVECTOR
+  const int64_t ldvr = 1; // 
+  // no device memory for eigenvectors 
+
+  // Query Workspace Size
+  size_t workspace_device_size = 0;
+  size_t workspace_host_size = 0;
+  int info=0;
+  void *d_info=0;
+  void *d_work=0;
+  void *h_work=0;
+
+  err=cusolverDnXgeev_bufferSize(
+        solver_handle,
+        params,
+        jobvl,
+        jobvr,
+        Nbase,
+        CUDA_C_32F,
+        dRd,
+        Nbase,
+        CUDA_C_32F,
+        dE,
+        CUDA_C_32F,
+        dvL,
+        ldvl,
+        CUDA_C_32F,
+        dvR,
+        ldvr,
+        CUDA_C_32F,
+        &workspace_device_size,
+        &workspace_host_size);
+  checkCudaError(err,__FILE__,__LINE__);
+  err=cudaMalloc((void**)&d_work, workspace_device_size);
+  checkCudaError(err,__FILE__,__LINE__);
+  err=cudaMalloc((void**)&d_info, sizeof(int));
+  checkCudaError(err,__FILE__,__LINE__);
+  err=cudaMallocHost((void**)&h_work, workspace_host_size);
+  checkCudaError(err,__FILE__,__LINE__);
+
+  for (int corr=0; corr<4; corr++) {
+    my_fcopy(Nbase*Nbase,&dR[2*corr+0],8,&dRcorr[0],2);
+    my_fcopy(Nbase*Nbase,&dR[2*corr+1],8,&dRcorr[1],2);
+
+    err=cudaMemcpy(dRd, dRcorr, Nbase*2*Nbase*sizeof(float), cudaMemcpyHostToDevice);
+    checkCudaError(err,__FILE__,__LINE__);
+
+    err=cusolverDnXgeev(
+        solver_handle,
+        params,
+        jobvl,
+        jobvr,
+        Nbase,
+        CUDA_C_32F,
+        dRd,
+        Nbase,
+        CUDA_C_32F,
+        dE,
+        CUDA_C_32F,
+        dvL,
+        ldvl,
+        CUDA_C_32F,
+        dvR,
+        ldvr,
+        CUDA_C_32F,
+        d_work,
+        workspace_device_size,
+        h_work,
+        workspace_host_size,
+        d_info);
+    checkCudaError(err,__FILE__,__LINE__);
+    err=cudaMemcpy(&info,d_info,sizeof(int),cudaMemcpyDeviceToHost);
+    checkCudaError(err,__FILE__,__LINE__);
+    err=cudaMemcpy(Ev,dE,2*Nbase*sizeof(float),cudaMemcpyDeviceToHost);
+    checkCudaError(err,__FILE__,__LINE__);
+    float_to_double(Evd,Ev,2*Nbase*sizeof(float),1);
+    my_dcopy(Nbase,&Evd[0],1,&x[2*corr],8);
+    my_dcopy(Nbase,&Evd[Nbase],1,&x[2*corr+1],8);
+  }
+
+  //replicate first tile of x if tilesz>1
+  if (tilesz>1) {
+    for (int ntile=1; ntile<tilesz; ntile++) {
+     memcpy(&x[Nbase*8*ntile],&x[0],sizeof(double)*Nbase*8);
+    }
+  }
+
+  err=cudaFree(d_work);
+  checkCudaError(err,__FILE__,__LINE__);
+  err=cudaFreeHost(h_work);
+  checkCudaError(err,__FILE__,__LINE__);
+  err=cudaFree(d_info);
+  checkCudaError(err,__FILE__,__LINE__);
+  err=cudaFree(dE);
+  checkCudaError(err,__FILE__,__LINE__);
+  err=cudaFreeHost(Ev);
+  checkCudaError(err,__FILE__,__LINE__);
+  err=cudaFreeHost(Evd);
+  checkCudaError(err,__FILE__,__LINE__);
+
+  err=cudaFreeHost(dRcorr);
+  checkCudaError(err,__FILE__,__LINE__);
+  err=cudaFree(dRd);
+  checkCudaError(err,__FILE__,__LINE__);
+  err=cusolverDnDestroyParams(params);
+  detach_gpu_from_thread(cbhandle,solver_handle);
+  checkCudaError(err,__FILE__,__LINE__);
+  err=cudaStreamDestroy(stream);
+  checkCudaError(err,__FILE__,__LINE__);
+  err=cudaGetLastError(); 
+  return 0;
 }
 
 /* p: 8NMtx1 parameter array, but Mt is 'effective' clusters, need to use carr to find the right offset, note M<= Mt
@@ -877,9 +1048,21 @@ calculate_diagnostics_gpu(double *u,double *v,double *w,double *p,double *x,int 
     exit(1);
   }
 
-  /* arrays to store result */
+  /* arrays to store result (model,residual): 4*Nbase*2 per tile(complex) */
   double *xlocal;
   if ((xlocal=(double*)calloc((size_t)Nbase*8*tilesz*Nchan*Ngpu,sizeof(double)))==0) {
+    fprintf(stderr,"%s: %d: No free memory\n",__FILE__,__LINE__);
+    exit(1);
+  }
+
+  /* accumulate influcence function, 4*Nbase*2 x Nbase matrices for 
+   * each thread (GPU) */
+  float *dR,*dRsum;
+  if ((dR=(float*)calloc((size_t)Nbase*8*Nbase*Nchan*Ngpu,sizeof(float)))==0) {
+    fprintf(stderr,"%s: %d: No free memory\n",__FILE__,__LINE__);
+    exit(1);
+  }
+  if ((dRsum=(float*)calloc((size_t)Nbase*8*Nbase*Nchan,sizeof(float)))==0) {
     fprintf(stderr,"%s: %d: No free memory\n",__FILE__,__LINE__);
     exit(1);
   }
@@ -908,8 +1091,9 @@ calculate_diagnostics_gpu(double *u,double *v,double *w,double *p,double *x,int 
      // Note: pass coherencies without any offset, as the offset
      // will be determined by the cluster x (Nbase*8*tilesz*Nchan)
      threaddata[nth].coh=coh;
-     threaddata[nth].x=&xlocal[nth*Nbase*8*tilesz*Nchan]; /* distinct arrays to get back the result */
+     threaddata[nth].x=&xlocal[nth*Nbase*8*tilesz*Nchan]; /* distinct arrays to pass and get back the result */
 
+     threaddata[nth].dR=&dR[nth*Nbase*8*Nbase*Nchan];
      threaddata[nth].N=N;
      threaddata[nth].Nbase=Nbase*tilesz; /* total baselines: actually Nbasextilesz */
      threaddata[nth].barr=barr;
@@ -971,24 +1155,26 @@ calculate_diagnostics_gpu(double *u,double *v,double *w,double *p,double *x,int 
      pthread_create(&th_array[ci],&attr,hessian_influence_threadfn,(void*)(&threaddata[ci]));
   }
 
-  /* reset x to zero */
-  memset(x,0,sizeof(double)*Nbase*8*tilesz*Nchan);
-
+  memset(dRsum,0,sizeof(float)*Nbase*8*Nbase*Nchan);
   for(ci=0; ci<nth; ci++) {
     pthread_join(th_array[ci],NULL);
-    /* accumulate result of each thread back to residual column */
-    my_daxpy(Nbase*8*tilesz*Nchan,threaddata[ci].x,1.0,x);
+    /* accumulate result dR 4Nbase x Nbase (complex) */ 
+    my_saxpy(Nbase*8*Nbase*Nchan,threaddata[ci].dR,1.0f,dRsum);
   }
-
-  /* scale down x - average over baselines, tiles, channels and clusters */
-  my_dscal(Nbase*8*tilesz*Nchan,1.0/(double)Nbase*tilesz*Nchan*M,x);
-
   free(coh);
   free(xlocal);
+  free(dR);
   free(threaddata);
-
   free(th_array);
   pthread_attr_destroy(&attr);
+
+  /* find eigenvalues of dRsum: 4Nbase x Nbase (complex) matrix
+   * stride of 4, offset 0,1,...3 ,
+   * and copy back to x (replicate if tilesize > 1) */
+  /* Nchan==1 */
+  find_eigenvalues(Nbase, tilesz, dRsum, x, &thst);
+
+  free(dRsum);
 
   destroy_task_hist(&thst);
 

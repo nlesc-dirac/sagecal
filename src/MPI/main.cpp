@@ -84,7 +84,7 @@ print_help(void) {
 #ifdef HAVE_CUDA
    cout << "-S GPU heap size (MB): default "<<Data::heapsize<< endl;
 #endif
-   cout << "-i 0,1 : if >0, enable diagnostics (Influence function) 1 replace residual data with influence function : default " <<Data::DoDiag<< endl;
+   cout << "-i 0,1 : if >0, enable diagnostics (Influence function), 1 replace output data with eigenvalues of the influence function : default " <<Data::DoDiag<< endl;
    cout << "-T stop after this number of solutions (0 means no limit): default "<<Data::Nmaxtime<< endl;
    cout << "-K skip this number of solutions before starting calibration: default "<<Data::Nskip<< endl;
    cout << "Note: if -K a -T b, then calibration will start at 'a' and end at 'b', so b > a always."<<endl;

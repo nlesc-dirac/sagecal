@@ -384,11 +384,11 @@ kernel_d_residuals(int B, int N, int T, int F, const double *__restrict__ p, int
     const float *__restrict__ coh, const float *__restrict__ dJ, float *dR) {
 
   /* only work with the first freq, so F==1 taken */
-  /* x: baseline = N(N-1)/2 x T */
+  /* x: baseline = N(N-1)/2 x T, 8 rows and 1 column */
   unsigned int n=threadIdx.x+blockDim.x*blockIdx.x;
   /* dJ : 2*4N x Bt(columns Bt=B/T=N(N-1)/2), only use 
    the column corresponding to the baseline (i.e. diagonal terms) */
-  /* dR : 2*4B x 1, B=BtxT, Bt=B/T=N(N-1)/2 */
+  /* dR : 2*4Bt x Bt, B=BtxT, Bt=B/T=N(N-1)/2 */
   /* in dJ
    station p maps to two row blocks in each column of size 4N
    p*2:p*2+1 and 2*N+p*2:2*N+p*2+1
@@ -404,6 +404,8 @@ kernel_d_residuals(int B, int N, int T, int F, const double *__restrict__ p, int
   I2[3].y=0.0f;
 
   int Bt=((N*(N-1)/2));
+  unsigned int row=n%Bt;
+  unsigned int col=n%Bt;
 
   /* left hand side -(C J_q^H)^T, right hand side I_2
      left hand side =  J_q^star (-C^T)
@@ -454,16 +456,17 @@ kernel_d_residuals(int B, int N, int T, int F, const double *__restrict__ p, int
     J[3].x=__ldg(&dJ[bl*N*8+N*2*2+sta1*2*2+2]);
     J[3].y=__ldg(&dJ[bl*N*8+N*2*2+sta1*2*2+3]);
     mat_vec(H,J,A);
-    /* fill to dR[n*8:n*8+7], no need to use atomicAdd as
-     n is unique */
-    dR[n*8]+=A[0].x;
-    dR[n*8+1]+=A[0].y;
-    dR[n*8+2]+=A[1].x;
-    dR[n*8+3]+=A[1].y;
-    dR[n*8+4]+=A[2].x;
-    dR[n*8+5]+=A[2].y;
-    dR[n*8+6]+=A[3].x;
-    dR[n*8+7]+=A[3].y;
+    /* fill to dR[n*8:n*8+7, 4*n:4*n], need to use atomicAdd as
+     n is not unique (also the column) 
+     */
+    atomicAdd(&dR[row*8 +col*8*Bt],A[0].x);
+    atomicAdd(&dR[row*8+1+col*8*Bt],A[0].y);
+    atomicAdd(&dR[row*8+2+col*8*Bt],A[1].x);
+    atomicAdd(&dR[row*8+3+col*8*Bt],A[1].y);
+    atomicAdd(&dR[row*8+4+col*8*Bt],A[2].x);
+    atomicAdd(&dR[row*8+5+col*8*Bt],A[2].y);
+    atomicAdd(&dR[row*8+6+col*8*Bt],A[3].x);
+    atomicAdd(&dR[row*8+7+col*8*Bt],A[3].y);
     }
   }
 }
@@ -579,10 +582,9 @@ cudakernel_d_residuals(int B, int N, int T, int F, baseline_t *barr, double *p, 
 #endif
   
   /* dJ: 2*4Nx(B/T) values, baselines=B/T here (averaged over T) */
-  /* dR: B*4*2 values, select diagonal block of full matrix dJ (correponding to baseline), hence
-     full dR of size (4*(T*Nbase)*2)xNbase reduces to just on column */
+  /* dR: (B/T)*4*2 x (B/T) values, full matrix */
 
-  cudaMemset(dR,0,2*4*B*sizeof(float));
+  cudaMemset(dR,0,2*4*(B/T)*(B/T)*sizeof(float));
   /* spawn threads to handle baselines */
   /* thread x : baseline(all times) */
   int ThreadsPerBlock=DEFAULT_TH_PER_BK;
