@@ -1048,9 +1048,9 @@ calculate_diagnostics_gpu(double *u,double *v,double *w,double *p,double *x,int 
     exit(1);
   }
 
-  /* arrays to store result: full influence matrix 4*Nbase*2 x Nbase (complex) */
+  /* arrays to store result (model,residual): 4*Nbase*2 per tile(complex) */
   double *xlocal;
-  if ((xlocal=(double*)calloc((size_t)Nbase*8*Nbase*tilesz*Nchan*Ngpu,sizeof(double)))==0) {
+  if ((xlocal=(double*)calloc((size_t)Nbase*8*tilesz*Nchan*Ngpu,sizeof(double)))==0) {
     fprintf(stderr,"%s: %d: No free memory\n",__FILE__,__LINE__);
     exit(1);
   }
@@ -1091,7 +1091,7 @@ calculate_diagnostics_gpu(double *u,double *v,double *w,double *p,double *x,int 
      // Note: pass coherencies without any offset, as the offset
      // will be determined by the cluster x (Nbase*8*tilesz*Nchan)
      threaddata[nth].coh=coh;
-     threaddata[nth].x=&xlocal[nth*Nbase*8*Nbase*tilesz*Nchan]; /* distinct arrays to pass and get back the result */
+     threaddata[nth].x=&xlocal[nth*Nbase*8*tilesz*Nchan]; /* distinct arrays to pass and get back the result */
 
      threaddata[nth].dR=&dR[nth*Nbase*8*Nbase*Nchan];
      threaddata[nth].N=N;
