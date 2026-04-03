@@ -979,7 +979,7 @@ find_eigenvalues(int Nbase, int tilesz, float *dR, double *x, taskhist *hst) {
 
   //replicate first tile of x if tilesz>1
   if (tilesz>1) {
-    for (int ntile=1; ntile<tilesz; tilesz++) {
+    for (int ntile=1; ntile<tilesz; ntile++) {
      memcpy(&x[Nbase*8*ntile],&x[0],sizeof(double)*Nbase*8);
     }
   }
