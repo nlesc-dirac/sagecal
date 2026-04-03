@@ -86,7 +86,7 @@ print_help(void) {
 #ifdef HAVE_CUDA
    cout << "-S GPU heap size (MB): default "<<Data::heapsize<< endl;
 #endif
-   cout << "-i 0,1 : if >0, enable diagnostics (Influence function) 1 replace residual data with influence function : default " <<Data::DoDiag<< endl;
+   cout << "-i 0,1 : if >0, enable diagnostics (Influence function), 1 replace output data with eigenvalues of the influence function : default " <<Data::DoDiag<< endl;
    cout << "-q solutions.txt: if given, initialize solutions by reading this file (need to have the same format as a solution file, only solutions for 1 timeslot needed)"<< endl;
 
    cout<<endl<<"Stochastic mode:"<<endl;
