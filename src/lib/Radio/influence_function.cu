@@ -384,8 +384,10 @@ kernel_d_residuals(int B, int N, int T, int F, const double *__restrict__ p, int
     const float *__restrict__ coh, const float *__restrict__ dJ, float *dR) {
 
   /* only work with the first freq, so F==1 taken */
-  /* x: baseline = N(N-1)/2 x T, 8 rows and 1 column */
+  /* x: baseline = N(N-1)/2 x T, 8 rows */
   unsigned int n=threadIdx.x+blockDim.x*blockIdx.x;
+  /* y: baseline N(N-1)/2, column */
+  unsigned int bl=threadIdx.y+blockDim.y*blockIdx.y;
   /* dJ : 2*4N x Bt(columns Bt=B/T=N(N-1)/2), only use 
    the column corresponding to the baseline (i.e. diagonal terms) */
   /* dR : 2*4Bt x Bt, B=BtxT, Bt=B/T=N(N-1)/2 */
@@ -405,16 +407,14 @@ kernel_d_residuals(int B, int N, int T, int F, const double *__restrict__ p, int
 
   int Bt=((N*(N-1)/2));
   unsigned int row=n%Bt;
-  unsigned int col=n%Bt;
 
   /* left hand side -(C J_q^H)^T, right hand side I_2
      left hand side =  J_q^star (-C^T)
      kron(lhs,I_2) x (row block p of dJ) */
-  if (n<B) {
+  if ((n<B) && (bl<Bt)) {
     int sta1=barr[n].sta1; //station p
     int sta2=barr[n].sta2; //station q
-    // fill column block n of dR
-    int bl=n % Bt; // baseline index
+    // fill all columns of dR for this station pair
     if (sta1>=0 && sta2>=0) {
       /* -C^T */
       C[0].x=__ldg(&coh[8*n]);
@@ -444,9 +444,10 @@ kernel_d_residuals(int B, int N, int T, int F, const double *__restrict__ p, int
     /* -(J_q^star C^T) \kron I_2 */
     kron_ab(A,I2,H);
 
-    /* dJ row block p(=sta1), column : bl (diagonal term) */
+    /* dJ row block p(=sta1), column : bl all columns 0...Bt-1 */
     /* row major H */
     /* find product H dJ[p*2:p*2+1 and 2*N+p*2:2*N+p*2+1] */
+    /* cf line 36 of Dresiduals_uvw.m */
     J[0].x=__ldg(&dJ[bl*N*8+sta1*2*2]);
     J[0].y=__ldg(&dJ[bl*N*8+sta1*2*2+1]);
     J[1].x=__ldg(&dJ[bl*N*8+sta1*2*2+2]);
@@ -457,16 +458,16 @@ kernel_d_residuals(int B, int N, int T, int F, const double *__restrict__ p, int
     J[3].y=__ldg(&dJ[bl*N*8+N*2*2+sta1*2*2+3]);
     mat_vec(H,J,A);
     /* fill to dR[n*8:n*8+7, 4*n:4*n], need to use atomicAdd as
-     n is not unique (also the column) 
-     */
-    atomicAdd(&dR[row*8 +col*8*Bt],A[0].x);
-    atomicAdd(&dR[row*8+1+col*8*Bt],A[0].y);
-    atomicAdd(&dR[row*8+2+col*8*Bt],A[1].x);
-    atomicAdd(&dR[row*8+3+col*8*Bt],A[1].y);
-    atomicAdd(&dR[row*8+4+col*8*Bt],A[2].x);
-    atomicAdd(&dR[row*8+5+col*8*Bt],A[2].y);
-    atomicAdd(&dR[row*8+6+col*8*Bt],A[3].x);
-    atomicAdd(&dR[row*8+7+col*8*Bt],A[3].y);
+        n is not unique (also the column) 
+    */
+    atomicAdd(&dR[row*8 +bl*8*Bt],A[0].x);
+    atomicAdd(&dR[row*8+1+bl*8*Bt],A[0].y);
+    atomicAdd(&dR[row*8+2+bl*8*Bt],A[1].x);
+    atomicAdd(&dR[row*8+3+bl*8*Bt],A[1].y);
+    atomicAdd(&dR[row*8+4+bl*8*Bt],A[2].x);
+    atomicAdd(&dR[row*8+5+bl*8*Bt],A[2].y);
+    atomicAdd(&dR[row*8+6+bl*8*Bt],A[3].x);
+    atomicAdd(&dR[row*8+7+bl*8*Bt],A[3].y);
     }
   }
 }
@@ -585,11 +586,12 @@ cudakernel_d_residuals(int B, int N, int T, int F, baseline_t *barr, double *p, 
   /* dR: (B/T)*4*2 x (B/T) values, full matrix */
 
   cudaMemset(dR,0,2*4*(B/T)*(B/T)*sizeof(float));
-  /* spawn threads to handle baselines */
-  /* thread x : baseline(all times) */
-  int ThreadsPerBlock=DEFAULT_TH_PER_BK;
-  int BlocksPerGrid=(B+ThreadsPerBlock-1)/ThreadsPerBlock;
-  kernel_d_residuals<<<BlocksPerGrid,ThreadsPerBlock>>>(B, N, T, F, p, nchunk, 
+  /* spawn threads to handle baselines x baselines/T */
+  /* thread x : baseline(all times) , thread y: baseline/T (columns) */
+  dim3 threadsPerBlock(16,8); 
+  dim3 numBlocks((B+threadsPerBlock.x-1)/threadsPerBlock.x,
+         (B/T+threadsPerBlock.y-1)/threadsPerBlock.y);
+  kernel_d_residuals<<<numBlocks,threadsPerBlock>>>(B, N, T, F, p, nchunk, 
       barr, coh, dJ, dR);
 #ifdef CUDA_DBG
   error = cudaGetLastError();
