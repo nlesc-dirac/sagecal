@@ -58,7 +58,8 @@ mat_vec(const cuFloatComplex *__restrict__ a, const cuFloatComplex *__restrict__
    C: 4x4 complex,
    C=[a_11 B, a_12 B;  = [a0 B, a1 B;
       a_21 B, a_22 B]     a2 B, a3 B]
-   all matrices in row major order */
+   matrices A, B in row major order,
+   C in column major order */
 static __device__ void
 kron_ab(const cuFloatComplex*__restrict__ a, const cuFloatComplex *__restrict__ b, cuFloatComplex *__restrict__ c) {
   c[0]=cuCmulf(a[0],b[0]);
@@ -472,6 +473,7 @@ kernel_d_residuals(int B, int N, int T, int F, const double *__restrict__ p, int
   }
 }
 
+/* sum m-th row of A to first column, m-th location */
 __global__ void
 kernel_sum_col(int M, int N, float *A) {
   unsigned int m=threadIdx.x+blockDim.x*blockIdx.x;

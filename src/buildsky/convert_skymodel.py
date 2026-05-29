@@ -484,8 +484,6 @@ def convert_sky_bbs_lsm(infilename,outfilename):
     # only write good sources
     if not bad_source:
       outfile.write(strline)
-    else:
-      pass
 
     continue
 

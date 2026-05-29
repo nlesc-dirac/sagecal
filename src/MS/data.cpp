@@ -676,7 +676,7 @@ Data::loadData(Table ti, Data::IOData iodata, double *fratio) {
              } else {
                cyy+=ptr[1];
              }
-             nflag++; /* remeber unflagged datapoints */ 
+             nflag++; /* remember unflagged datapoints */ 
            }
         
            iodata.xo[iodata.Nbase*iodata.tilesz*8*k+row0*8]=ptr[0].real();
@@ -853,7 +853,7 @@ Data::loadData(Table ti, Data::IOData iodata, LBeam binfo, double *fratio) {
              } else {
                cyy+=ptr[1];
              }
-             nflag++; /* remeber unflagged datapoints */ 
+             nflag++; /* remember unflagged datapoints */ 
            } 
         
            iodata.xo[iodata.Nbase*iodata.tilesz*8*k+row0*8]=ptr[0].real();
@@ -1033,7 +1033,7 @@ Data::loadDataList(vector<MSIter*> msitr, Data::IOData iodata, double *fratio) {
              cxy+=ptr[1];
              cyx+=ptr[2];
              cyy+=ptr[3];
-             nflag++; /* remeber unflagged datapoints */ 
+             nflag++; /* remember unflagged datapoints */ 
            } 
         
            iodata.xo[iodata.Nbase*iodata.tilesz*8*chanoff+row0*8]=ptr[0].real();
@@ -1178,7 +1178,7 @@ Data::loadDataMinibatch(Table ti, Data::IOData iodata, int minibatch, double *fr
            Complex *ptr = data[k].data();
            bool *flgptr=flag[k].data();
            if (!flgptr[0] && !flgptr[1] && !flgptr[2] && !flgptr[3]){
-             nflag++; /* remeber unflagged datapoints */ 
+             nflag++; /* remember unflagged datapoints */ 
            } 
         
            iodata.xo[iodata.Nbase*iodata.tilesz*8*k+row0*8]=ptr[0].real();
@@ -1319,7 +1319,7 @@ Data::loadDataMinibatch(Table ti, Data::IOData iodata, LBeam binfo, int minibatc
            Complex *ptr = data[k].data();
            bool *flgptr=flag[k].data();
            if (!flgptr[0] && !flgptr[1] && !flgptr[2] && !flgptr[3]){
-             nflag++; /* remeber unflagged datapoints */ 
+             nflag++; /* remember unflagged datapoints */ 
            } 
         
            iodata.xo[iodata.Nbase*iodata.tilesz*8*k+row0*8]=ptr[0].real();

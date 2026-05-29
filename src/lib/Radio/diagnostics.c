@@ -242,7 +242,7 @@ model_residual_threadfn(void *data) {
 
 /******************* begin loop over clusters **************************/
   for (ncl=t->soff; ncl<t->soff+t->Ns; ncl++) {
-     /* we doe not check if cluster id >=0 to do a subtraction,
+     /* we do not check if cluster id >=0 to do a subtraction,
       * because we use the residual for influence calculation only */
      /* allocate memory for this clusters beam */
      if (t->dobeam==DOBEAM_ARRAY || t->dobeam==DOBEAM_FULL

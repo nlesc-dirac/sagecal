@@ -358,7 +358,6 @@ def cluster_this(skymodel,Q,outfile,max_iterations=5,admm_rho_file=None):
 
 
 if __name__ == '__main__':
-  import sys
   parser=optparse.OptionParser()
   parser.add_option('-s', '--skymodel', help='Input sky model')
   parser.add_option('-c', '--clusters', type='int', help='Number of clusters. Absolute value if negative and the cluster ids will be negative.')

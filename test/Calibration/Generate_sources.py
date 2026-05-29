@@ -66,9 +66,9 @@ with warnings.catch_warnings():
     warnings.filterwarnings("ignore", message="using a non-integer number instead of an integer")
     # Maximum of 1e5 sources, so a 'P' + number_of_digits_for_sources digits,
     # that's why we have '...np.str_, number_of_digits_for_sources + 1'.
-    source_parms_dtype = ((np.str_, number_of_digits_for_sources + 1),
-                          int, int, float, int, int, float, float, int, int, int,
-                          float, float, int, int, int, int, float, float)
+    #source_parms_dtype = ((np.str_, number_of_digits_for_sources + 1),
+    #                      int, int, float, int, int, float, float, int, int, int,
+    #                      float, float, int, int, int, int, float, float)
     names = ('name', 'rah', 'ram', 'ras', 'dad', 'dam', 'das', 'I', 'Q', 'U', 'V',
              'sp0', 'sp1', 'sp2', 'RM', 'extX', 'extY',
              'pos_angle', 'freq0')
