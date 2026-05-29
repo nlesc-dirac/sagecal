@@ -18,7 +18,6 @@
 #
 
 import re
-import math
 import optparse
 from casacore.measures import measures
 from casacore.quanta import quantity
@@ -230,7 +229,6 @@ def annotate_lsm_sky(infilename,clusterfilename,outfilename,clid=None,color='yel
 
 
 if __name__ == '__main__':
-  import sys
   parser=optparse.OptionParser()
   parser.add_option('-s', '--skymodel', help='Input sky model')
   parser.add_option('-c', '--clusters', help='Input cluster file')
