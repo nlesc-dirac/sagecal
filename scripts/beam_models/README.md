@@ -38,9 +38,9 @@ Copy the newly created header (*output.h* for example) to *../../src/lib/Radio/e
 Thereafter, rebuild sagecal (*make clean && make*).
 
 # Creating per-station element beams
-When each receiver dipole has its own unique element beam pattern, it is possible to provide a unique model file for each receiver. Also, these models will be saved as pure ASCII text files, hence no need to re-compile sagecal whenever the models are updated. The drawback is that these model files need to be read evey time sagecal is run, but this is a minor penalty to pay. 
+When each receiver dipole has its own unique element beam pattern, it is possible to provide a unique model file for each receiver. Also, these models will be saved as pure ASCII text files, hence no need to re-compile sagecal whenever the models are updated. The drawback is that these model files need to be read every time sagecal is run, but this is a minor penalty to pay. 
 
-The format of each text file can be given as follows.
+The format of each text file can be given as follows:
 
 
 ```
@@ -60,5 +60,13 @@ real11 imag11
 ...
 # and so on...
 ```
+
+Several things to keep in mind:
+
+* Only stations with a single dipole can use unique beam models (no beamforming mode).
+* All models for the full array should have same model hyper-parameters, such as the model order, the scale and the frequencies.
+* All stations either should have a custom model or none, it is not possible for some stations to have a unique model while others to have a common model, in that case, copy the model file to all the station indexed directories.
+
+The text files created for each receiver model should be saved under a directory having the receiver number as the name. The file name could have anything, but should end with *.model* suffix.
 
 wo  3 jun 2026 12:06:58 CEST
