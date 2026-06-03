@@ -67,6 +67,6 @@ Several things to keep in mind:
 * All models for the full array should have same model hyper-parameters, such as the model order, the scale and the frequencies.
 * All stations either should have a custom model or none, it is not possible for some stations to have a unique model while others to have a common model, in that case, copy the model file to all the station indexed directories.
 
-The text files created for each receiver model should be saved under a directory having the receiver number as the name. The file name could have anything, but should end with *.model* suffix.
+The text files created for each receiver model should be saved under a directory having the receiver number as the name. The file name could be anything, but should end with *.model* suffix. Other files like the numpy files could also be saved under each directory.
 
 wo  3 jun 2026 12:06:58 CEST
