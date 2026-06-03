@@ -151,7 +151,7 @@ read_arho_fromfile(const char *admm_rho_file,int Mt,double *arho, int M, double 
  * n_modes = n_order * (n_order+1)/2
  * next line: n_freq frequency values (GHz, double)
  * next n_modes : coefficients for freq 1
- * next n_modes : coefficients for freq 1
+ * next n_modes : coefficients for freq 2
  * ....
  * ...
  */

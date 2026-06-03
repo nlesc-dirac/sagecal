@@ -1,5 +1,5 @@
 # Custom beam models in sagecal
-This document describes creating custom element beam models to be used by sagecal.
+This document describes creating custom element beam models to be used by sagecal. The model is common to all receivers. If you need to create unique element beam models for each receiver, go down to [this section below](#creating-per-station-element-beam-models). 
 
 # Model files
 In order to create a model, the following numpy files (**".npy"** extension) are needed.
@@ -36,5 +36,8 @@ To see all options, run
 Copy the newly created header (*output.h* for example) to *../../src/lib/Radio/elementcoeff_ALO.h*.
 
 Thereafter, rebuild sagecal (*make clean && make*).
+
+# Creating per-station element beam models
+When each receiver dipole has its own unique element beam pattern, it is possible to provide a unique model file for each receiver. 
 
 do 28 aug 2025 10:25:03 CEST
