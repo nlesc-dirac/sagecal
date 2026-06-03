@@ -733,7 +733,7 @@ printf("Nc=%d\n",Nc);
  /* if Nc>=0 and we have reached the EOF, something wrong with solution file
    so display warning */
  if (Nc>=0) {
-  fprintf(stderr,"Warning: solution file EOF reached, check your solution file\n");
+  fprintf(stderr,"Error: solution file EOF reached, check your solution file\n");
   exit(1);
  } 
 
