@@ -143,6 +143,20 @@ update_ignorelist(const char *ignfile, int *ignlist, int M, clus_source_t *carr)
 extern int
 read_arho_fromfile(const char *admm_rho_file,int Mt,double *arho, int M, double *arhoslave, int spatialreg, double *alpha);
 
+
+/* read element coefficients from the given text file */
+/* element coefficient file format: 
+ * comments begin with '#' 
+ * first line to parse: n_order (int) , beta (double), n_freqs (int)
+ * n_modes = n_order * (n_order+1)/2
+ * next line: n_freq frequency values (GHz, double)
+ * next n_modes : coefficients for freq 1
+ * next n_modes : coefficients for freq 1
+ * ....
+ * ...
+ */
+extern int
+read_element_coeffs(const char *coeff_file, int *M, double *beta);
 /****************************** predict.c ****************************/
 /************* extended source contributions ************/
 extern complex double

@@ -777,8 +777,6 @@ update_ignorelist(const char *ignfile, int *ignlist, int M, clus_source_t *carr)
 }
 
 
-
-
 int
 read_arho_fromfile(const char *admm_rho_file,int Mt,double *arho, int M, double *arhoslave, int spatialreg, double *alpha) {
 
@@ -845,4 +843,12 @@ read_arho_fromfile(const char *admm_rho_file,int Mt,double *arho, int M, double 
 
 
  return 0;
+}
+
+
+int
+read_element_coeffs(const char *coeff_file, int *M, double *beta) {
+
+
+  return 0;
 }
