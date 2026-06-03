@@ -154,9 +154,11 @@ typedef struct elementcoff_ {
   int M; /* model order 1,2,3.. */
   int Nmodes; /* total modes = (M)(M+1)/2 */
   int Nf; /* number of frequencies (for wideband beam, otherwise =1) */
+  int Ns; /* number of stations, ==1 for most cases,
+             but if > 1, each element will have a unique pattern */
   double beta; /* scale factor */
-  complex double *pattern_phi; /* Nmodes*Nf x 1 array */
-  complex double *pattern_theta; /* Nmodes*Nf x 1 array */
+  complex double *pattern_phi; /* Nmodes*Nf x 1 x Ns array */
+  complex double *pattern_theta; /* Nmodes*Nf x 1 x Ns array */
 
   double *preamble; /* Nmodes x1 array, to store preamble of mode basis */
 } elementcoeff;

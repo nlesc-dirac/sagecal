@@ -49,14 +49,15 @@ set_elementcoeffs(int element_type,  double frequency, elementcoeff *ecoeff) {
    fprintf(stderr,"%s: %d: undefined element beam type\n",__FILE__,__LINE__);
    exit(1);
   }
+  ecoeff->Ns=1; /* by default, only 1 pattern for all stations */
   ecoeff->Nmodes=ecoeff->M*(ecoeff->M+1)/2;
   ecoeff->Nf=1;
 
-  if ((ecoeff->pattern_phi=(complex double*)calloc((size_t)ecoeff->Nmodes,sizeof(complex double)))==0) {
+  if ((ecoeff->pattern_phi=(complex double*)calloc((size_t)ecoeff->Nmodes*ecoeff->Ns,sizeof(complex double)))==0) {
     fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
     exit(1);
   }
-  if ((ecoeff->pattern_theta=(complex double*)calloc((size_t)ecoeff->Nmodes,sizeof(complex double)))==0) {
+  if ((ecoeff->pattern_theta=(complex double*)calloc((size_t)ecoeff->Nmodes*ecoeff->Ns,sizeof(complex double)))==0) {
     fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
     exit(1);
   }
@@ -78,14 +79,12 @@ set_elementcoeffs(int element_type,  double frequency, elementcoeff *ecoeff) {
        phi=(complex double *)&lba_beam_elem_phi[0][0];
        theta=(complex double *)&lba_beam_elem_theta[0][0];
        freqs=(double *)lba_beam_elem_freqs;
-       //printf("ELEM LBA\n");
        break;
      case ELEM_HBA:
        Nfreq=HBA_FREQS;
        phi=(complex double *)&hba_beam_elem_phi[0][0];
        theta=(complex double *)&hba_beam_elem_theta[0][0];
        freqs=(double *)hba_beam_elem_freqs;
-       //printf("ELEM HBA\n");
        break;
      case ELEM_ALO:
        Nfreq=ALO_FREQS;
@@ -195,14 +194,15 @@ set_elementcoeffs_wb(int element_type,  double *frequencies, int Nf,  elementcoe
    fprintf(stderr,"%s: %d: undefined element beam type\n",__FILE__,__LINE__);
    exit(1);
   }
+  ecoeff->Ns=1; /* by default, only 1 pattern for all stations */
   ecoeff->Nmodes=ecoeff->M*(ecoeff->M+1)/2;
   ecoeff->Nf=Nf;
 
-  if ((ecoeff->pattern_phi=(complex double*)calloc((size_t)ecoeff->Nmodes*ecoeff->Nf,sizeof(complex double)))==0) {
+  if ((ecoeff->pattern_phi=(complex double*)calloc((size_t)ecoeff->Nmodes*ecoeff->Nf*ecoeff->Ns,sizeof(complex double)))==0) {
     fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
     exit(1);
   }
-  if ((ecoeff->pattern_theta=(complex double*)calloc((size_t)ecoeff->Nmodes*ecoeff->Nf,sizeof(complex double)))==0) {
+  if ((ecoeff->pattern_theta=(complex double*)calloc((size_t)ecoeff->Nmodes*ecoeff->Nf*ecoeff->Ns,sizeof(complex double)))==0) {
     fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
     exit(1);
   }
