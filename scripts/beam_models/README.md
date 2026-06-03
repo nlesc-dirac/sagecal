@@ -1,5 +1,5 @@
 # Custom beam models in sagecal
-This document describes creating custom element beam models to be used by sagecal. The model is common to all receivers. If you need to create unique element beam models for each receiver, go down to [this section below](#creating-per-station-element-beam-models). 
+This document describes creating custom element beam models to be used by sagecal. The model is common to all receivers. If you need to create unique element beam models for each receiver, go down to [creating per-station element beams](#creating-per-station-element-beams). 
 
 # Model files
 In order to create a model, the following numpy files (**".npy"** extension) are needed.
@@ -37,7 +37,28 @@ Copy the newly created header (*output.h* for example) to *../../src/lib/Radio/e
 
 Thereafter, rebuild sagecal (*make clean && make*).
 
-# Creating per-station element beam models
-When each receiver dipole has its own unique element beam pattern, it is possible to provide a unique model file for each receiver. 
+# Creating per-station element beams
+When each receiver dipole has its own unique element beam pattern, it is possible to provide a unique model file for each receiver. Also, these models will be saved as pure ASCII text files, hence no need to re-compile sagecal whenever the models are updated. The drawback is that these model files need to be read evey time sagecal is run, but this is a minor penalty to pay. 
 
-do 28 aug 2025 10:25:03 CEST
+The format of each text file can be given as follows.
+
+
+```
+# comments are ignored
+# first line: model_order (int) number of frequencies (int) scale beta (double) 
+n_order n_frequencies beta
+# frequency values (n_frequencies) in GHz
+freq1 freq2 freq3 ....
+# n_order x (n_order + 1) / 2 values for 1-st frequency 
+real00 imag00
+real01 imag01
+...
+# n_order x (n_order + 1) / 2 values for 2-nd frequency
+real10 imag10
+real11 imag11
+...
+...
+# and so on...
+```
+
+wo  3 jun 2026 12:06:58 CEST
