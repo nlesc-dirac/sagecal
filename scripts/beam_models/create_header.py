@@ -24,6 +24,7 @@ class BeamGenerator:
         freq_file="frequency.npy",
         ephi_file="ephi.npy",
         etheta_file="etheta.npy",
+        text_output=False,
     ):
         # file names for .npy models
         self.theta_file_ = theta_file
@@ -42,6 +43,8 @@ class BeamGenerator:
         self.beta_ = beta
         self.n0_ = n0
         self.nmodes_ = n0 * (n0 + 1) // 2
+
+        self.text_output_ = text_output
 
     def load_model(self):
         try:
@@ -185,7 +188,47 @@ class BeamGenerator:
 
         return x, err
 
+    def decompose_write(self):
+        # decompose and write either a header file (for compilation)
+        # or a text file (for runtime loading)
+        if self.text_output_ is True:
+            self.decompose_write_text()
+        else:
+            self.decompose_write_header()
+
+    def decompose_write_text(self):
+        # write to a text file
+        self.out_fd_ = open(self.out_file_, "w")
+        self.out_fd_.write("#SAGECal model text file (automatically generated)")
+        self.out_fd_.write("\n")
+        self.out_fd_.write("#Model_order num_frequencies scale")
+        self.out_fd_.write("\n")
+        self.out_fd_.write(
+            str(self.n0_) + " " + str(self.n_freq_) + " " + str(self.beta_)
+        )
+        self.out_fd_.write("\n")
+        self.out_fd_.write("#Frequencies GHz")
+        self.out_fd_.write("\n")
+        for freq in range(self.n_freq_):
+            self.out_fd_.write(f" {self.freq_[freq]/1e9:10.9f}")
+        self.out_fd_.write("\n")
+        for freq in range(self.n_freq_):
+            x, err = self.decompose_model_freq(freq, "theta")
+            self.out_fd_.write(f"#Etheta: freq {freq} error {err}\n")
+            for nm in range(self.nmodes_):
+                self.out_fd_.write(f"{np.real(x[nm]):e} {np.imag(x[nm]):e}\n")
+            if self.verbose:
+                print(f"Freq {freq} theta error {err}")
+        for freq in range(self.n_freq_):
+            x, err = self.decompose_model_freq(freq, "phi")
+            self.out_fd_.write(f"#Ephi: freq {freq} error {err}\n")
+            for nm in range(self.nmodes_):
+                self.out_fd_.write(f"{np.real(x[nm]):e} {np.imag(x[nm]):e}\n")
+            if self.verbose:
+                print(f"Freq {freq} theta error {err}")
+
     def decompose_write_header(self):
+        # write to a header file
         self.out_fd_ = open(self.out_file_, "w")
         self.out_fd_.write(
             """#ifndef ELEMENTCOEFF_ALO_H
@@ -282,7 +325,7 @@ def main(args):
     bg.setup_basis()
     if args.show:
         bg.show_basis()
-    bg.decompose_write_header()
+    bg.decompose_write()
 
 
 if __name__ == "__main__":

@@ -35,10 +35,11 @@ def main(args):
             freq_file=freq_file,
             etheta_file=etheta_file,
             ephi_file=ephi_file,
+            text_output=True,
         )
         bg.load_model()
         bg.setup_basis()
-        bg.decompose_write_header()
+        bg.decompose_write()
 
 
 if __name__ == "__main__":
