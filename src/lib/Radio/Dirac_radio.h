@@ -365,6 +365,11 @@ set_elementcoeffs(int element_type,  double frequency, elementcoeff *ecoeff);
 extern int
 set_elementcoeffs_wb(int element_type,  double *frequencies, int Nf,  elementcoeff *ecoeff);
 
+/* read files under the directory model_dir and initialize element coefficients */
+/* n_stat: number of stations (read from MS metadata) */
+extern int
+set_elementcoeffs_textfile(int element_type,  int n_stat, double frequency, const char *model_dir, elementcoeff *ecoeff);
+
 /* free storage */
 extern int
 free_elementcoeffs(elementcoeff ecoeff);

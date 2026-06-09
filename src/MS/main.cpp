@@ -35,7 +35,7 @@ using namespace Data;
 
 void
 print_copyright(void) {
-  cout<<"SAGECal 0.8.5 (C) 2011-2026 Sarod Yatawatta"<<endl;
+  cout<<"SAGECal 0.8.6 (C) 2011-2026 Sarod Yatawatta"<<endl;
 }
 
 
@@ -149,12 +149,36 @@ ParseCmdLine(int ac, char **av) {
                 if (doChan>1) { doChan=1; }
                 break;
             case 'B':
-                doBeam= atoi(optarg);
+                /* conditionally parse as -B can give an integer like -B 2
+                 * or a directory like -B ./BEAM
+                 * as input
+                 */
+                {
+                char *endptr;
+                long val = strtol(optarg,&endptr,10);
+                if (endptr==optarg || *endptr != '\0') {
+                  beam_model_dir = optarg;
 #ifdef HAVE_CSPICE
-                if (doBeam>8) { doBeam=DOBEAM_ARRAY; }
+                  doBeam=DOBEAM_ALO;
 #else
-                if (doBeam>6) { doBeam=DOBEAM_ARRAY; }
+                  doBeam=DOBEAM_ELEMENT;
 #endif
+                } else {
+                   doBeam= (int)val;
+                }
+#ifdef HAVE_CSPICE
+                if (doBeam>8) {
+                  cout<<"Warning: invalid option -B "<<doBeam<<" setting to "<<DOBEAM_ARRAY<<endl;
+
+                  doBeam=DOBEAM_ARRAY;
+                }
+#else
+                if (doBeam>6) {
+                  cout<<"Warning: invalid option -B "<<doBeam<<" setting to "<<DOBEAM_ARRAY<<endl;
+                  doBeam=DOBEAM_ARRAY;
+                }
+#endif
+                }
                 break;
             case 'E':
                 GPUpredict=atoi(optarg);

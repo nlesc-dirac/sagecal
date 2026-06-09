@@ -325,6 +325,24 @@ set_elementcoeffs_wb(int element_type,  double *frequencies, int Nf,  elementcoe
   return 0;
 }
 
+int
+set_elementcoeffs_textfile(int element_type,  int n_stat, double frequency, const char *model_dir, elementcoeff *ecoeff) {
+
+  /* only handle dipole only beam types, do a check if necessary */
+
+  /* parse directory and determine the model parameters */
+
+  /* check number of antennas = number of sub directories */
+  ecoeff->Ns=1; /* by default, only 1 pattern for all stations */
+  ecoeff->Nmodes=ecoeff->M*(ecoeff->M+1)/2;
+  ecoeff->Nf=1;
+
+
+  return 0;
+}
+
+
+
 
 int 
 free_elementcoeffs(elementcoeff ecoeff) {

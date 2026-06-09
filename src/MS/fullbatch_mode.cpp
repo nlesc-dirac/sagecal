@@ -75,14 +75,19 @@ run_fullbatch_calibration(void) {
     if (Data::randomize) {
      srand(time(0)); /* use different seed */
     }
-    if (doBeam==DOBEAM_FULL||doBeam==DOBEAM_ELEMENT||doBeam==DOBEAM_ALO) {
-     set_elementcoeffs(beam.elType, iodata.freq0, &ecoeff);
-    } else if (doBeam==DOBEAM_FULL_WB||doBeam==DOBEAM_ELEMENT_WB||doBeam==DOBEAM_ALO_WB) {
-     set_elementcoeffs_wb(beam.elType, iodata.freqs, iodata.Nchan, &ecoeff);
+    if (beam_model_dir && strlen(beam_model_dir) > 0) {
+      cout<<"Beam directory "<<beam_model_dir<<endl;
+      set_elementcoeffs_textfile(beam.elType, iodata.N, iodata.freq0, beam_model_dir, &ecoeff);
+    } else {
+     if (doBeam==DOBEAM_FULL||doBeam==DOBEAM_ELEMENT||doBeam==DOBEAM_ALO) {
+      set_elementcoeffs(beam.elType, iodata.freq0, &ecoeff);
+     } else if (doBeam==DOBEAM_FULL_WB||doBeam==DOBEAM_ELEMENT_WB||doBeam==DOBEAM_ALO_WB) {
+      set_elementcoeffs_wb(beam.elType, iodata.freqs, iodata.Nchan, &ecoeff);
+     }
     }
 
 #ifdef HAVE_OPENBLAS
-    openblas_set_num_threads(1);//Data::Nt;
+    openblas_set_num_threads(1);
 #endif
     /**********************************************************/
      int M,Mt,ci,cj,ck;
