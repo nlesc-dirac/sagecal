@@ -76,7 +76,7 @@ run_fullbatch_calibration(void) {
      srand(time(0)); /* use different seed */
     }
     if (beam_model_dir && strlen(beam_model_dir) > 0) {
-      cout<<"Beam directory "<<beam_model_dir<<endl;
+      cout<<"Using beam model directory "<<beam_model_dir<<endl;
       set_elementcoeffs_textfile(beam.elType, iodata.N, iodata.freq0, beam_model_dir, &ecoeff);
     } else {
      if (doBeam==DOBEAM_FULL||doBeam==DOBEAM_ELEMENT||doBeam==DOBEAM_ALO) {

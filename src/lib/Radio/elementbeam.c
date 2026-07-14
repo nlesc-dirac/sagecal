@@ -26,6 +26,8 @@
 #include <complex.h>
 #include <unistd.h>
 #include <string.h>
+#include <sys/stat.h>
+#include <dirent.h>
 
 #include "Dirac_radio.h"
 #include "elementcoeff.h"
@@ -327,21 +329,99 @@ set_elementcoeffs_wb(int element_type,  double *frequencies, int Nf,  elementcoe
 
 int
 set_elementcoeffs_textfile(int element_type,  int n_stat, double frequency, const char *model_dir, elementcoeff *ecoeff) {
+   /* check if directory exists */
+   struct stat statbuf;
+   if (!(!stat(model_dir,&statbuf) && S_ISDIR(statbuf.st_mode))) {
+     fprintf(stderr,"%s: %d: Invalid directory %s\n",__FILE__,__LINE__,model_dir);
+     exit(1);
+   }
 
-  /* only handle dipole only beam types, do a check if necessary */
+   /* parse directory and determine the model parameters */
+   /* only handle dipole only beam types, do a check if necessary */
+   DIR *dir=0;
+   struct dirent *entry;
+   if ((dir=opendir(model_dir)) == 0) {
+     fprintf(stderr,"%s: %d: Invalid directory %s\n",__FILE__,__LINE__,model_dir);
+     exit(1);
+   }
 
-  /* parse directory and determine the model parameters */
+   ecoeff->Ns=n_stat; /* by default, use n_stat as number of expected patterns */
+   ecoeff->Nf=1;
+   /* other data of ecoeff will be set while reading */
 
-  /* check number of antennas = number of sub directories */
-  ecoeff->Ns=1; /* by default, only 1 pattern for all stations */
-  ecoeff->Nmodes=ecoeff->M*(ecoeff->M+1)/2;
-  ecoeff->Nf=1;
+   const char *modfile="/beam.model\0";
+   int first_ant=0;
+   int n_ant=0;
+   /* open directory contents, parse the files as well */
+   while((entry = readdir(dir)) != NULL) {
+     if (entry->d_type == DT_DIR) {
+       if (strcmp(entry->d_name,".") && strcmp(entry->d_name,"..")) {
+         int ant;
+         int n=sscanf(entry->d_name,"%d",&ant);
+         /* only handle a valid station id */
+         if (n==1 && ant>=0 && ant<n_stat) {
+            n_ant++;
+            /* open ./beam.model in this directory */
+            char *fullname=(char*)calloc((size_t)strlen(model_dir)+1+strlen(entry->d_name)+strlen(modfile)+1,sizeof(char));
+            if (fullname==0) {
+               fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
+               exit(1);
+            }
+            strcpy(fullname,model_dir);
+            strcpy((char*)&(fullname[strlen(model_dir)]),"/");
+            strcpy((char*)&(fullname[strlen(model_dir)+1]),entry->d_name);
+            strcpy((char*)&(fullname[strlen(model_dir)+1+strlen(entry->d_name)]),modfile);
+            read_element_coeffs(fullname,ecoeff,frequency,ant,!first_ant);
+            first_ant=1;
+            free(fullname);
+         } else {
+            fprintf(stderr,"%s: %d: Invalid subdirectory %s\n",__FILE__,__LINE__,entry->d_name);
+         }
+       }
+     }
+   }
+   closedir(dir);
 
+   /* check number of antennas = number of sub directories */
+   if (n_ant < n_stat) {
+     fprintf(stderr,"%s: %d: Invalid number of antenna models: expected %d, got %d, copying the model of first antenna\n",__FILE__,__LINE__,n_stat,n_ant);
 
-  return 0;
+     for (int ant=n_ant; ant < n_stat; ant++) {
+       my_ccopy(ecoeff->Nmodes, &ecoeff->pattern_phi[0], 1, &ecoeff->pattern_phi[ant*ecoeff->Nmodes],1);
+       my_ccopy(ecoeff->Nmodes, &ecoeff->pattern_theta[0], 1, &ecoeff->pattern_theta[ant*ecoeff->Nmodes],1);
+     }
+   }
+
+   /* factorial array */
+   double *factorial;
+   if ((factorial=(double*)calloc((size_t)ecoeff->Nmodes,sizeof(double)))==0) {
+     fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
+     exit(1);
+   }
+   factorial[0]=1.0; /* 0! */
+   for (int i=1; i<ecoeff->Nmodes; i++) {
+     factorial[i]=factorial[i-1]*(double)i;
+   }
+
+   /* calculate preamble for basis calculation */
+   int idx=0;
+   for (int n=0; n<ecoeff->M; n++) {
+     for (int m=-n; m<=n; m+=2) {
+      int absm=m>=0?m:-m; /* |m| */
+      /* sqrt { ((n-|m|)/2)! / pi ((n+|m|)/2)! } */
+      ecoeff->preamble[idx]=sqrt(M_1_PI*factorial[(n-absm)/2]/factorial[(n+absm)/2]);
+      /* (-1)^(n-|m|)/2 */
+      if (((n-absm)/2)%2) {ecoeff->preamble[idx]=-ecoeff->preamble[idx];}
+      /* 1/beta^{1+|m|} */
+      ecoeff->preamble[idx] *=pow(ecoeff->beta,-1.0-absm);
+      idx++;
+     }
+   }
+
+   free(factorial);
+
+   return 0;
 }
-
-
 
 
 int 

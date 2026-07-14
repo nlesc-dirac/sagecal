@@ -150,13 +150,18 @@ read_arho_fromfile(const char *admm_rho_file,int Mt,double *arho, int M, double 
  * first line to parse: n_order (int) , beta (double), n_freqs (int)
  * n_modes = n_order * (n_order+1)/2
  * next line: n_freq frequency values (GHz, double)
- * next n_modes : coefficients for freq 1
- * next n_modes : coefficients for freq 2
+ * next n_modes : coefficients (Etheta,Ephi) real,imag for freq 1
+ * next n_modes : coefficients (Etheta,Ephi) real,imag for freq 2
  * ....
  * ...
+ *
+ * ecoff: element coefficient struct
+ * freq: GHz, which frequency to create the model
+ * stat: station id 0,1,... for which to create the model
+ * initialize: if 1, element coefficient metadata will be set, and memory allocated
  */
 extern int
-read_element_coeffs(const char *coeff_file, int *M, double *beta);
+read_element_coeffs(const char *coeff_file, elementcoeff *ecoeff, const double freq,  const int stat, const int initialize); 
 /****************************** predict.c ****************************/
 /************* extended source contributions ************/
 extern complex double

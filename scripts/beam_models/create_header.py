@@ -213,19 +213,13 @@ class BeamGenerator:
             self.out_fd_.write(f" {self.freq_[freq]/1e9:10.9f}")
         self.out_fd_.write("\n")
         for freq in range(self.n_freq_):
-            x, err = self.decompose_model_freq(freq, "theta")
-            self.out_fd_.write(f"#Etheta: freq {freq} error {err}\n")
+            x1, err1 = self.decompose_model_freq(freq, "theta")
+            x2, err2 = self.decompose_model_freq(freq, "phi")
+            self.out_fd_.write(f"#Freq {freq} Etheta error {err1}, Ephi error {err2}\n")
             for nm in range(self.nmodes_):
-                self.out_fd_.write(f"{np.real(x[nm]):e} {np.imag(x[nm]):e}\n")
+                self.out_fd_.write(f"{np.real(x1[nm]):e} {np.imag(x1[nm]):e} {np.real(x2[nm]):e} {np.imag(x2[nm]):e}\n")
             if self.verbose:
-                print(f"Freq {freq} theta error {err}")
-        for freq in range(self.n_freq_):
-            x, err = self.decompose_model_freq(freq, "phi")
-            self.out_fd_.write(f"#Ephi: freq {freq} error {err}\n")
-            for nm in range(self.nmodes_):
-                self.out_fd_.write(f"{np.real(x[nm]):e} {np.imag(x[nm]):e}\n")
-            if self.verbose:
-                print(f"Freq {freq} theta error {err}")
+                print(f"Freq {freq} theta error {err1} phi error {err2}")
 
     def decompose_write_header(self):
         # write to a header file

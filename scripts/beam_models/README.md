@@ -49,22 +49,15 @@ The format of each text file can be given as follows:
 n_order n_frequencies beta
 # frequency values (n_frequencies) in GHz
 freq1 freq2 freq3 ....
-# Ephi: n_order x (n_order + 1) / 2 values for 1-st frequency 
-real00 imag00
-real01 imag01
+# Etheta and Ephi: n_order x (n_order + 1) / 2 values for 1-st frequency 
+theta_real00 theta_imag00 phi_real00 phi_imag00 
+theta_real01 theta_imag01 phi_real01 phi_imag01
 ...
-# Ephi: n_order x (n_order + 1) / 2 values for 2-nd frequency
-real10 imag10
-real11 imag11
+# Etheta and Ephi: n_order x (n_order + 1) / 2 values for 2-nd frequency
+theta_real10 theta_imag10 phi_real10 phi_imag10
+theta_real11 theta_imag11 phi_real11 phi_imag11
 ...
 ...
-# Etheta: n_order x (n_order + 1) / 2 values for 1-st frequency 
-real00 imag00
-real01 imag01
-...
-# Etheta: n_order x (n_order + 1) / 2 values for 2-nd frequency
-real10 imag10
-real11 imag11
 ...
 ...
 # and so on...
@@ -73,9 +66,9 @@ real11 imag11
 Several things to keep in mind:
 
 * Only stations with a single dipole can use unique beam models (no beamforming mode).
-* All models for the full array should have same model hyper-parameters, such as the model order, the scale and the frequencies.
+* All models for the full array should have same model hyper-parameters, such as the model order and the scale (but the frequencies can differ).
 * All stations either should have a custom model or none, it is not possible for some stations to have a unique model while others to have a common model, in that case, copy (or link) the model file to all the station indexed directories.
 
 The text files created for each receiver model should be saved under a directory having the receiver number as the name. The file name could be anything, but should end with *.model* suffix. Other files like the numpy files could also be saved under each directory.
 
-ma  8 jun 2026 12:21:21 CEST
+di 14 jul 2026 10:57:58 CEST
