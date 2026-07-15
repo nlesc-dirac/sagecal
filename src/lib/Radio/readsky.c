@@ -21,6 +21,7 @@
 #include "Dirac_radio.h"
 #include <ctype.h>
 #include <glib.h>
+#include <errno.h>
 
 //#define DEBUG
 /* struct for a cluster GList item */
