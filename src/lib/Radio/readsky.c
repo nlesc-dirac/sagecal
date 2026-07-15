@@ -884,6 +884,12 @@ read_element_coeffs(const char *coeff_file, elementcoeff *ecoeff, const double f
         fprintf(stderr,"%s: %d: No free memory\n",__FILE__,__LINE__);
         exit(1);
      }
+  } else {
+    /* sanity check all models have same order */
+    if ((ecoeff->M != ord) || (ecoeff->beta != scale)) {
+        fprintf(stderr,"%s: %d: All element beam models should have order and scale\n",__FILE__,__LINE__);
+        exit(1);
+    }
   }
 
   c=skip_lines(cfp);

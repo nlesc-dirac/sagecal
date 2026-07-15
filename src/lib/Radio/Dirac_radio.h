@@ -380,8 +380,9 @@ extern int
 free_elementcoeffs(elementcoeff ecoeff);
 
 /* calculate elementbeam values for given r,theta coordinates */
+/* station: when > 0, and if available, use separate element beam models for each station, this will only work with -B 'beam_model_directory' option */
 extern elementval
-eval_elementcoeffs(double r, double theta, elementcoeff *ecoeff);
+eval_elementcoeffs(double r, double theta, elementcoeff *ecoeff, int station);
 
 /* with wideband model, use findex to offset coefficients to match the freq */
 extern elementval
