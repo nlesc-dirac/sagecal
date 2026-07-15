@@ -364,27 +364,30 @@ set_elementcoeffs_textfile(int element_type,  int n_stat, double frequency, cons
    while((entry = readdir(dir)) != NULL) {
      if (entry->d_type == DT_DIR) {
        if (strcmp(entry->d_name,".") && strcmp(entry->d_name,"..")) {
-         int ant;
-         int n=sscanf(entry->d_name,"%d",&ant);
-         /* only handle a valid station id */
-         if (n==1 && ant>=0 && ant<n_stat) {
-            n_ant++;
-            /* open ./beam.model in this directory */
-            char *fullname=(char*)calloc((size_t)strlen(model_dir)+1+strlen(entry->d_name)+strlen(modfile)+1,sizeof(char));
-            if (fullname==0) {
-               fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
-               exit(1);
-            }
-            strcpy(fullname,model_dir);
-            strcpy((char*)&(fullname[strlen(model_dir)]),"/");
-            strcpy((char*)&(fullname[strlen(model_dir)+1]),entry->d_name);
-            strcpy((char*)&(fullname[strlen(model_dir)+1+strlen(entry->d_name)]),modfile);
-            read_element_coeffs(fullname,ecoeff,frequency,ant,!first_ant);
-            first_ant=1;
-            free(fullname);
-         } else {
-            fprintf(stderr,"%s: %d: Invalid subdirectory %s\n",__FILE__,__LINE__,entry->d_name);
+         char *endptr;
+         long val = strtol(entry->d_name, &endptr, 10);
+         if (endptr == entry->d_name || *endptr != '\0') {
+               /* Not a valid integer */
+               fprintf(stderr,"Warning: Skipping non-numeric directory '%s'\n", entry->d_name);
+               continue;
          }
+         if (val < 0 || val >= n_stat) {
+               fprintf(stderr,"Warning: Skipping station %ld (out of range 0-%d)\n", val, n_stat-1);
+               continue;
+         }
+         int ant = (int)val;
+         /* only handle a valid station id */
+         /* open ./beam.model in this directory */
+         char fullname[PATH_MAX];
+         int n = snprintf(fullname, sizeof(fullname), "%s/%s%s",
+                  model_dir, entry->d_name, modfile);
+         if (n < 0 || n >= sizeof(fullname)) {
+               fprintf(stderr,"%s: %d: Path too long\n",__FILE__,__LINE__);
+               continue;  // Skip this station, don't crash
+         }
+         read_element_coeffs(fullname,ecoeff,frequency,ant,!first_ant);
+         n_ant++;
+         first_ant=1;
        }
      }
    }

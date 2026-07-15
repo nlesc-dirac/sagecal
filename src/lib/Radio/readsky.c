@@ -852,9 +852,17 @@ read_element_coeffs(const char *coeff_file, elementcoeff *ecoeff, const double f
   FILE *cfp;
   int c,buff_len;
   if ((cfp=fopen(coeff_file,"r"))==0) {
-      fprintf(stderr,"%s: %d: no file\n",__FILE__,__LINE__);
-      exit(1);
+    fprintf(stderr,"%s: %d: Cannot open file: %s (errno: %d)\n",__FILE__,__LINE__,coeff_file,errno);
+    exit(1);
   }
+  /* Check file is readable and not empty */
+  if (fseek(cfp, 0, SEEK_END) != 0 || ftell(cfp) == 0) {
+    fprintf(stderr,"%s: %d: File empty or unreadable: %s\n",__FILE__,__LINE__,coeff_file);
+    fclose(cfp);
+    exit(1);
+  }
+  rewind(cfp);
+
   char *buff;
   /* allocate memory for buffer */
   buff_len = 128;
@@ -903,9 +911,8 @@ read_element_coeffs(const char *coeff_file, elementcoeff *ecoeff, const double f
   double myfreq=freq/1e9; // GHz
   int nf=0;
   while (c!=1 && nf < n_freq) {
-    /* we have a new line */
+    /* we have a new value */
     memset(buff,0,buff_len);
-    /* first read cluster number */
     c=read_next_string(&buff,&buff_len,cfp);
     sscanf(buff,"%lf",&freqs[nf]);
     nf++;
