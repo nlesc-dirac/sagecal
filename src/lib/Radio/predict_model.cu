@@ -376,6 +376,7 @@ kernel_element_beam(int N, int T, int K, int F,
     /* y-dimension is station */
     int istat=blockIdx.y;
 
+    if (istat >= Ns) { return; }
     // find respective source,freq,time for this thread
     int n1 = x;
     int isrc=n1/(T*F);
@@ -486,6 +487,7 @@ kernel_element_beam_lunar(int N, int T, int K, int F,
     /* y-dimension is station */
     int istat=blockIdx.y;
 
+    if (istat >= Ns) { return; }
     // find respective source,freq,time for this thread
     int n1 = x;
     int isrc=n1/(T*F);
