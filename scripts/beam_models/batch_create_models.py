@@ -1,9 +1,7 @@
 #! /usr/bin/env python
 
-import math
 import os
 import argparse
-import numpy as np
 from create_header import BeamGenerator
 
 
@@ -18,12 +16,12 @@ def main(args):
         if args.verbose:
             print(f"{dirname}")
         # create file names
-        out_file = outfile = os.path.join(dirname, "beam.model")
-        theta_file = outfile = os.path.join(dirname, "theta.npy")
-        phi_file = outfile = os.path.join(dirname, "phi.npy")
-        freq_file = outfile = os.path.join(dirname, "frequency.npy")
-        etheta_file = outfile = os.path.join(dirname, "etheta.npy")
-        ephi_file = outfile = os.path.join(dirname, "ephi.npy")
+        out_file = os.path.join(dirname, "beam.model")
+        theta_file = os.path.join(dirname, "theta.npy")
+        phi_file = os.path.join(dirname, "phi.npy")
+        freq_file = os.path.join(dirname, "frequency.npy")
+        etheta_file =  os.path.join(dirname, "etheta.npy")
+        ephi_file =  os.path.join(dirname, "ephi.npy")
         bg = BeamGenerator(
             n0=args.order,
             beta=args.scale,
