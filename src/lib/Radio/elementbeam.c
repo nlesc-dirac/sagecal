@@ -454,7 +454,6 @@ free_elementcoeffs(elementcoeff ecoeff) {
 
 /* generalized Laguerre polynomial L_p^q(x) */
 /* for calculating L_{n-|m|/2}^|m| (x) */
-#ifndef _OPENMP
 static double
 L_g1(int p, int q, double x) {
   /* max p: (n-|m|)/2 = n/2 */
@@ -472,28 +471,6 @@ L_g1(int p, int q, double x) {
   }
   return L_p;
 }
-#endif /* !_OPENMP */
-
-#ifdef _OPENMP
-static double
-L_g1(int p, int q, double x) {
-  /* max p: (n-|m|)/2 = n/2 */
-  if(p==0) return 1.0;
-  if(p==1) return 1.0-x+q;
-  /* else, use two variables to store past values */
-  double L_p=0.0,L_p_1,L_p_2;
-  L_p_2=1.0;
-  L_p_1=1.0-x+q;
-  for (int i=2; i<=p; i++) {
-   double p_1=1.0/(double)i;
-   L_p=(2.0+p_1*(q-1.0-x))*L_p_1-(1.0+p_1*(q-1))*L_p_2;
-   L_p_2=L_p_1;
-   L_p_1=L_p;
-  }
-  return L_p;
-}
-#endif /* _OPENMP */
-
 
 elementval
 eval_elementcoeffs(double r, double theta, elementcoeff *ecoeff, int station) {
