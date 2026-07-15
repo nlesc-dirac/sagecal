@@ -38,10 +38,9 @@ Copy the newly created header (*output.h* for example) to *../../src/lib/Radio/e
 Thereafter, rebuild sagecal (*make clean && make*).
 
 # Creating per-station element beams
-When each receiver dipole has its own unique element beam pattern, it is possible to provide a unique model file for each receiver. Also, these models will be saved as pure ASCII text files (*.model* suffix), hence no need to re-compile sagecal whenever the models are updated. The drawback is that these model files need to be read every time sagecal is run, but this is a minor penalty to pay. 
+When each receiver dipole has its own unique element beam pattern, it is possible to provide a unique model file for each receiver. Also, these models should be saved as pure ASCII text files (*beam.model* filename), hence no need to re-compile sagecal whenever the models are updated. The drawback is that these model files need to be read every time sagecal is run, but this is a minor penalty to pay. Use *-B* option to point to the root directory where the beam models for all stations are stored. 
 
 The format of each text file can be given as follows:
-
 
 ```
 # comments are ignored
@@ -68,7 +67,14 @@ Several things to keep in mind:
 * Only stations with a single dipole can use unique beam models (no beamforming mode).
 * All models for the full array should have same model hyper-parameters, such as the model order and the scale (but the frequencies can differ).
 * All stations either should have a custom model or none, it is not possible for some stations to have a unique model while others to have a common model, in that case, copy (or link) the model file to all the station indexed directories.
+* No support for wideband models (yet).
 
-The text files created for each receiver model should be saved under a directory having the receiver number as the name. The file name could be anything, but should end with *.model* suffix. Other files like the numpy files could also be saved under each directory.
+The text files created for each receiver model should be saved under a directory having the receiver number as the name. The file name must be *beam.model* under every directory. For example, for station *10*, there relative path of the beam model file should be *10/beam.model*. Other files like the numpy files could also be saved under each directory. Use the script provided *batch_create_models.py* as
 
-di 14 jul 2026 10:57:58 CEST
+```
+batch_create_models.py --root_dir model_root_dir
+```
+
+where *model_root_dir* will have sub-directories for each station, having directory names like *0*,*1*, and so on. When running sagecal, pass the *-B model_root_dir* option to read the models under this directory.
+
+wo 15 jul 2026 18:16:57 CEST
