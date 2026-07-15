@@ -55,7 +55,7 @@ calculate_uv_mode_vectors_scalar(double u, double v, double beta, int n0, double
 	double xval;
 	int signval;
 
-  Ntot=2; /* u,v seperately */
+  Ntot=2; /* u,v separately */
 	/* set up factorial array */
   if ((fact=(double*)calloc((size_t)(n0),sizeof(double)))==0) {
 	  fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);

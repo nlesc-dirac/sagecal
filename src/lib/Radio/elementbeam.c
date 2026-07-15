@@ -54,6 +54,13 @@ set_elementcoeffs(int element_type,  double frequency, elementcoeff *ecoeff) {
   ecoeff->Ns=1; /* by default, only 1 pattern for all stations */
   ecoeff->Nmodes=ecoeff->M*(ecoeff->M+1)/2;
   ecoeff->Nf=1;
+#ifdef HAVE_CUDA
+  /* print warning (GPU mode) so shared memory is not exceeded */
+  if (ecoeff->Nmodes > ELEMENT_MAX_SIZE) {
+   fprintf(stderr,"%s: %d: Warning: requested element beam model order is too large for shared memory.\n Increase ELEMENT_MAX_SIZE (currently %d) and re-compile if GPU beam model prediction is done",__FILE__,__LINE__,ELEMENT_MAX_SIZE);
+   exit(1);
+  }
+#endif
 
   if ((ecoeff->pattern_phi=(complex double*)calloc((size_t)ecoeff->Nmodes*ecoeff->Ns,sizeof(complex double)))==0) {
     fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
@@ -199,6 +206,7 @@ set_elementcoeffs_wb(int element_type,  double *frequencies, int Nf,  elementcoe
   ecoeff->Ns=1; /* by default, only 1 pattern for all stations */
   ecoeff->Nmodes=ecoeff->M*(ecoeff->M+1)/2;
   ecoeff->Nf=Nf;
+  /* no need to check GPU shared memory here because we dont use it in wideband mode */
 
   if ((ecoeff->pattern_phi=(complex double*)calloc((size_t)ecoeff->Nmodes*ecoeff->Nf*ecoeff->Ns,sizeof(complex double)))==0) {
     fprintf(stderr,"%s: %d: no free memory\n",__FILE__,__LINE__);
@@ -381,6 +389,13 @@ set_elementcoeffs_textfile(int element_type,  int n_stat, double frequency, cons
      }
    }
    closedir(dir);
+
+#ifdef HAVE_CUDA
+  /* print warning (GPU mode) so shared memory is not exceeded */
+  if (ecoeff->Nmodes > ELEMENT_MAX_SIZE) {
+   fprintf(stderr,"%s: %d: Warning: requested element beam model order is too large for shared memory.\n Increase ELEMENT_MAX_SIZE (currently %d) and re-compile if GPU beam model prediction is done",__FILE__,__LINE__,ELEMENT_MAX_SIZE);
+  }
+#endif
 
    /* check number of antennas = number of sub directories */
    if (n_ant < n_stat) {

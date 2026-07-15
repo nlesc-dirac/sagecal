@@ -426,9 +426,10 @@ model_residual_threadfn(void *data) {
       }
      } else if (t->dobeam==DOBEAM_ELEMENT) {
       /* calculate element beam for all sources in this cluster */
-      cudakernel_element_beam(t->N,t->tilesz,t->carr[ncl].N,t->Nf,freqsd,longd,latd,timed,rad,decd,t->ecoeff->Nmodes,t->ecoeff->M,t->ecoeff->beta,pattern_phid,pattern_thetad,preambled,elementd,0);
+      cudakernel_element_beam(t->N,t->tilesz,t->carr[ncl].N,t->Nf,freqsd,longd,latd,timed,rad,decd,t->ecoeff->Nmodes,t->ecoeff->M,t->ecoeff->beta,t->ecoeff->Ns,pattern_phid,pattern_thetad,preambled,elementd,0);
      } else if (t->dobeam==DOBEAM_ELEMENT_WB) {
-      cudakernel_element_beam(t->N,t->tilesz,t->carr[ncl].N,t->Nf,freqsd,longd,latd,timed,rad,decd,t->ecoeff->Nmodes,t->ecoeff->M,t->ecoeff->beta,pattern_phid,pattern_thetad,preambled,elementd,1);
+      /* always pass 1 model for all stations in wideband mode */
+      cudakernel_element_beam(t->N,t->tilesz,t->carr[ncl].N,t->Nf,freqsd,longd,latd,timed,rad,decd,t->ecoeff->Nmodes,t->ecoeff->M,t->ecoeff->beta,1,pattern_phid,pattern_thetad,preambled,elementd,1);
      } else if (t->dobeam==DOBEAM_FULL) {
       /* calculate array+element beam for all sources in this cluster */
       if (t->bf_type==STAT_TILE) {
@@ -436,14 +437,14 @@ model_residual_threadfn(void *data) {
       } else {
         cudakernel_array_beam(t->N,t->tilesz,t->carr[ncl].N,t->Nf,freqsd,longd,latd,timed,Nelemd,xxd,yyd,zzd,rad,decd,(float)t->ph_ra0,(float)t->ph_dec0,(float)t->ph_freq0,beamd,0);
       }
-      cudakernel_element_beam(t->N,t->tilesz,t->carr[ncl].N,t->Nf,freqsd,longd,latd,timed,rad,decd,t->ecoeff->Nmodes,t->ecoeff->M,t->ecoeff->beta,pattern_phid,pattern_thetad,preambled,elementd,0);
+      cudakernel_element_beam(t->N,t->tilesz,t->carr[ncl].N,t->Nf,freqsd,longd,latd,timed,rad,decd,t->ecoeff->Nmodes,t->ecoeff->M,t->ecoeff->beta,t->ecoeff->Ns,pattern_phid,pattern_thetad,preambled,elementd,0);
      } else if (t->dobeam==DOBEAM_FULL_WB) {
       if (t->bf_type==STAT_TILE) {
         cudakernel_tile_array_beam(t->N,t->tilesz,t->carr[ncl].N,t->Nf,freqsd,longd,latd,timed,Nelemd,xxd,yyd,zzd,rad,decd,(float)t->b_ra0,(float)t->b_dec0,(float)t->ph_ra0,(float)t->ph_dec0,(float)t->ph_freq0,beamd,1);
       } else {
         cudakernel_array_beam(t->N,t->tilesz,t->carr[ncl].N,t->Nf,freqsd,longd,latd,timed,Nelemd,xxd,yyd,zzd,rad,decd,(float)t->ph_ra0,(float)t->ph_dec0,(float)t->ph_freq0,beamd,1);
       }
-      cudakernel_element_beam(t->N,t->tilesz,t->carr[ncl].N,t->Nf,freqsd,longd,latd,timed,rad,decd,t->ecoeff->Nmodes,t->ecoeff->M,t->ecoeff->beta,pattern_phid,pattern_thetad,preambled,elementd,1);
+      cudakernel_element_beam(t->N,t->tilesz,t->carr[ncl].N,t->Nf,freqsd,longd,latd,timed,rad,decd,t->ecoeff->Nmodes,t->ecoeff->M,t->ecoeff->beta,1,pattern_phid,pattern_thetad,preambled,elementd,1);
      }
 
 

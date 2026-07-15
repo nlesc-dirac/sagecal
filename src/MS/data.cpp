@@ -513,6 +513,17 @@ Data::readAuxData(const char *fname, Data::IOData *data, Data::LBeam *binfo) {
      }
    }
 
+#ifdef HAVE_CUDA
+   /* do a sanity check if array beam is requested and number of elements in
+    * a station is too large for shared memory */
+   if (!isDipole) {
+     for (int ci=0; ci<data->N; ci++) {
+       if (binfo->Nelem[ci]> ARRAY_MAX_ELEM) {
+         cout<<"Warning: The number of elements of station "<<ci<<"is too large to fit in GPU shared memory (if array beam is calculated). Recompile with increased ARRAY_MAX_ELEM (currently "<<ARRAY_MAX_ELEM<<")."<<endl;
+       }
+     }
+   }
+#endif
 }
 
 void 

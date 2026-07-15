@@ -576,11 +576,11 @@ cudakernel_tile_array_beam(int N, int T, int K, int F, double *freqs, float *lon
 
 extern void
 cudakernel_element_beam(int N, int T, int K, int F, double *freqs, float *longitude, float *latitude,
- double *time_utc, float *ra, float *dec, int Nmodes, int M, float beta, float *pattern_phi, float *pattern_theta, float *pattern_preamble, float *elementbeam, int wideband);
+ double *time_utc, float *ra, float *dec, int Nmodes, int M, float beta, int Ns, float *pattern_phi, float *pattern_theta, float *pattern_preamble, float *elementbeam, int wideband);
 
 extern void
 cudakernel_element_beam_lunar(int N, int T, int K, int F, double *freqs, float *longitude, float *latitude,
- double *src_longitude, double *src_latitude, int Nmodes, int M, float beta, float *pattern_phi, float *pattern_theta, float *pattern_preamble, float *beam, int wideband);
+ double *src_longitude, double *src_latitude, int Nmodes, int M, float beta, int Ns, float *pattern_phi, float *pattern_theta, float *pattern_preamble, float *beam, int wideband);
 
 extern void
 cudakernel_coherencies(int B, int N, int T, int K, int F, double *u, double *v, double *w,baseline_t *barr, double *freqs, float *beam, float *element, double *ll, double *mm, double *nn, double *sI, double *sQ, double *sU, double *sV,
