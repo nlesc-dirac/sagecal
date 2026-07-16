@@ -35,7 +35,7 @@ using namespace Data;
 
 void
 print_copyright(void) {
-  cout<<"SAGECal 0.8.5 (C) 2011-2026 Sarod Yatawatta"<<endl;
+  cout<<"SAGECal 0.8.6 (C) 2011-2026 Sarod Yatawatta"<<endl;
 }
 
 
@@ -66,6 +66,7 @@ print_help(void) {
    cout << "-z ignore_clusters: if only doing a simulation (with an input solution file using -p option), ignore the cluster ids listed in this file" << endl;
    cout << "-b 0,1 : if 1, solve for each channel: default " <<Data::doChan<< endl;
    cout << "-B 0,1,2,3,4,5,6 : predict "<<DOBEAM_ARRAY<<": array beam, "<<DOBEAM_FULL<<": array+element beam, "<<DOBEAM_ELEMENT<<": element beam, "<<DOBEAM_ARRAY_WB<<": array beam (per channel), "<<DOBEAM_FULL_WB<<": array+element (per channel) "<<DOBEAM_ELEMENT_WB<<": element beam (per channel) : default " <<Data::doBeam<< endl;
+   cout << " alternatively use -B beam_model_directory where \"beam_model_directory\" has element beam coefficient files, only element beam will be simulated" << endl;
 #ifdef HAVE_CSPICE
    cout << "  For builds with CSPICE (lunar): "<<DOBEAM_ALO<<": ALO element beam, "<<DOBEAM_ALO_WB<<": ALO wideband element beam"<<endl;
 #endif
@@ -149,12 +150,41 @@ ParseCmdLine(int ac, char **av) {
                 if (doChan>1) { doChan=1; }
                 break;
             case 'B':
-                doBeam= atoi(optarg);
+                /* conditionally parse as -B can give an integer like -B 2
+                 * or a directory like -B ./BEAM
+                 * as input
+                 */
+                {
+                char *endptr;
+                long val = strtol(optarg,&endptr,10);
+                if (endptr==optarg || *endptr != '\0') {
+                  beam_model_dir = optarg;
+                  if (strlen(beam_model_dir) > 0) {
 #ifdef HAVE_CSPICE
-                if (doBeam>8) { doBeam=DOBEAM_ARRAY; }
+                     doBeam=DOBEAM_ALO;
 #else
-                if (doBeam>6) { doBeam=DOBEAM_ARRAY; }
+                     doBeam=DOBEAM_ELEMENT;
 #endif
+                  } else {
+                     cout<<"Error: invalid directory given for -B" <<endl;
+                     exit(1);
+                  }
+                } else {
+                   doBeam= (int)val;
+                }
+#ifdef HAVE_CSPICE
+                if (doBeam>8) {
+                  cout<<"Warning: invalid option -B "<<doBeam<<" setting to "<<DOBEAM_ARRAY<<endl;
+
+                  doBeam=DOBEAM_ARRAY;
+                }
+#else
+                if (doBeam>6) {
+                  cout<<"Warning: invalid option -B "<<doBeam<<" setting to "<<DOBEAM_ARRAY<<endl;
+                  doBeam=DOBEAM_ARRAY;
+                }
+#endif
+                }
                 break;
             case 'E':
                 GPUpredict=atoi(optarg);

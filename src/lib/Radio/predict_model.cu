@@ -367,7 +367,7 @@ kernel_element_beam(int N, int T, int K, int F,
  const double *__restrict__ freqs, const float *__restrict__ longitude, const float *__restrict__ latitude,
  const double *__restrict__ time_utc,
  const float *__restrict__ ra, const float *__restrict__ dec, 
- int Nmodes, int M, float beta, const float *__restrict__ pattern_phi,
+ int Nmodes, int M, float beta, int Ns, const float *__restrict__ pattern_phi,
  const float *__restrict__ pattern_theta,const float *__restrict__ pattern_preamble,
  float *beam, const int wideband) {
 
@@ -376,6 +376,7 @@ kernel_element_beam(int N, int T, int K, int F,
     /* y-dimension is station */
     int istat=blockIdx.y;
 
+    if (istat >= N) { return; }
     // find respective source,freq,time for this thread
     int n1 = x;
     int isrc=n1/(T*F);
@@ -389,7 +390,7 @@ kernel_element_beam(int N, int T, int K, int F,
       __shared__ cuFloatComplex sh_phi[ELEMENT_MAX_SIZE];
       __shared__ cuFloatComplex sh_theta[ELEMENT_MAX_SIZE];
       __shared__ float sh_preamble[ELEMENT_MAX_SIZE];
-      if (!wideband) {
+      if (!wideband && Ns==1) {
        for (int i=threadIdx.x; i<Nmodes; i+=blockDim.x) {
         sh_phi[i].x = __ldg(&pattern_phi[2*i]);
         sh_phi[i].y =__ldg(&pattern_phi[2*i+1]);
@@ -398,7 +399,8 @@ kernel_element_beam(int N, int T, int K, int F,
         sh_preamble[i] = __ldg(&pattern_preamble[i]);
        }
       } else {
-       // in wideband mode, total is Nmodes*F (which can be too large)
+       // in wideband mode or when using separate models for each station,
+       // total is Nmodes*F or Nmodes*Nstations (which can be too large)
       }
       __syncthreads();
     #endif
@@ -418,7 +420,7 @@ kernel_element_beam(int N, int T, int K, int F,
 /*********************************************************************/
    if (el>=0.0f) {
       float4 evalX,evalY;
-      if (!wideband) {
+      if (!wideband && Ns==1) {
       #if (ARRAY_USE_SHMEM == 1)
       evalX=eval_elementcoeff(r, theta, M, beta, sh_theta,
                 sh_phi, sh_preamble);
@@ -430,17 +432,26 @@ kernel_element_beam(int N, int T, int K, int F,
       evalY=eval_elementcoeff(r, theta+M_PI_2f, M, beta, (float2*)pattern_theta,
                 (float2*)pattern_phi, pattern_preamble);
       #endif
-      } else {
+      } else if (wideband) {
        // in wideband mode, offset by 2*Nmodes*ifrq, not using shared memory
+       // regardless of value of Ns (separate models for stations)
       evalX=eval_elementcoeff(r, theta, M, beta, (float2*)&pattern_theta[2*Nmodes*ifrq],
                 (float2*)&pattern_phi[2*Nmodes*ifrq], pattern_preamble);
       evalY=eval_elementcoeff(r, theta+M_PI_2f, M, beta, (float2*)&pattern_theta[2*Nmodes*ifrq],
                 (float2*)&pattern_phi[2*Nmodes*ifrq], pattern_preamble);
 
+      } else { 
+       // separate models for each station
+       /* determine offset to read in the pattern for this station */
+       const int pattern_offset=(istat < Ns ? 2*istat*Nmodes : 0);
+       evalX=eval_elementcoeff(r, theta, M, beta, (float2*)&pattern_theta[pattern_offset],
+                (float2*)&pattern_phi[pattern_offset], pattern_preamble);
+       evalY=eval_elementcoeff(r, theta+M_PI_2f, M, beta, (float2*)&pattern_theta[pattern_offset],
+                (float2*)&pattern_phi[pattern_offset], pattern_preamble);
       }
 
    /* store output EJones 8 values */ 
-   int boffset=itm*N*K*F+isrc*N*F+ifrq*N+istat;
+   size_t boffset=itm*N*K*F+isrc*N*F+ifrq*N+istat;
    beam[8*boffset]=evalX.x;
    beam[8*boffset+1]=evalX.y;
    beam[8*boffset+2]=evalX.z;
@@ -450,7 +461,7 @@ kernel_element_beam(int N, int T, int K, int F,
    beam[8*boffset+6]=evalY.z;
    beam[8*boffset+7]=evalY.w;
    } else {
-   int boffset=itm*N*K*F+isrc*N*F+ifrq*N+istat;
+   size_t boffset=itm*N*K*F+isrc*N*F+ifrq*N+istat;
    beam[8*boffset]=0.0f;
    beam[8*boffset+1]=0.0f;
    beam[8*boffset+2]=0.0f;
@@ -468,7 +479,7 @@ __global__ void
 kernel_element_beam_lunar(int N, int T, int K, int F, 
  const double *__restrict__ freqs, const float *__restrict__ longitude, const float *__restrict__ latitude,
  const double *__restrict__ src_longitude, const double *__restrict__ src_latitude, 
- int Nmodes, int M, float beta, const float *__restrict__ pattern_phi,
+ int Nmodes, int M, float beta, int Ns, const float *__restrict__ pattern_phi,
  const float *__restrict__ pattern_theta,const float *__restrict__ pattern_preamble,
  float *beam, const int wideband) {
 
@@ -477,6 +488,7 @@ kernel_element_beam_lunar(int N, int T, int K, int F,
     /* y-dimension is station */
     int istat=blockIdx.y;
 
+    if (istat >= Ns) { return; }
     // find respective source,freq,time for this thread
     int n1 = x;
     int isrc=n1/(T*F);
@@ -490,7 +502,7 @@ kernel_element_beam_lunar(int N, int T, int K, int F,
       __shared__ cuFloatComplex sh_phi[ELEMENT_MAX_SIZE];
       __shared__ cuFloatComplex sh_theta[ELEMENT_MAX_SIZE];
       __shared__ float sh_preamble[ELEMENT_MAX_SIZE];
-      if (!wideband) {
+      if (!wideband && Ns==1) {
        for (int i=threadIdx.x; i<Nmodes; i+=blockDim.x) {
         sh_phi[i].x = __ldg(&pattern_phi[2*i]);
         sh_phi[i].y =__ldg(&pattern_phi[2*i+1]);
@@ -499,7 +511,8 @@ kernel_element_beam_lunar(int N, int T, int K, int F,
         sh_preamble[i] = __ldg(&pattern_preamble[i]);
        }
       } else {
-       // in wideband mode, total is Nmodes*F (which can be too large)
+       // in wideband mode or when using separate models for each station,
+       // total is Nmodes*F or Nmodes*Nstations (which can be too large)
       }
       __syncthreads();
     #endif
@@ -533,7 +546,7 @@ kernel_element_beam_lunar(int N, int T, int K, int F,
 /*********************************************************************/
    if (el>=0.0f) {
       float4 evalX,evalY;
-      if (!wideband) {
+      if (!wideband && Ns==1) {
       #if (ARRAY_USE_SHMEM == 1)
       evalX=eval_elementcoeff(r, az-M_PI_4f, M, beta, sh_theta,
                 sh_phi, sh_preamble);
@@ -545,13 +558,20 @@ kernel_element_beam_lunar(int N, int T, int K, int F,
       evalY=eval_elementcoeff(r, az-M_PI_4f+M_PI_2f, M, beta, (float2*)pattern_theta,
                 (float2*)pattern_phi, pattern_preamble);
       #endif
-      } else {
+      } else if (wideband) {
        // in wideband mode, offset by 2*Nmodes*ifrq, not using shared memory
-      evalX=eval_elementcoeff(r, az-M_PI_4f, M, beta, (float2*)&pattern_theta[2*Nmodes*ifrq],
+       evalX=eval_elementcoeff(r, az-M_PI_4f, M, beta, (float2*)&pattern_theta[2*Nmodes*ifrq],
                 (float2*)&pattern_phi[2*Nmodes*ifrq], pattern_preamble);
-      evalY=eval_elementcoeff(r, az-M_PI_4f+M_PI_2f, M, beta, (float2*)&pattern_theta[2*Nmodes*ifrq],
+       evalY=eval_elementcoeff(r, az-M_PI_4f+M_PI_2f, M, beta, (float2*)&pattern_theta[2*Nmodes*ifrq],
                 (float2*)&pattern_phi[2*Nmodes*ifrq], pattern_preamble);
-
+      } else {
+       // separate models for each station
+       /* determine offset to read in the pattern for this station */
+       const int pattern_offset=2*istat*Nmodes;
+       evalX=eval_elementcoeff(r, az-M_PI_4f, M, beta, (float2*)&pattern_theta[pattern_offset],
+                (float2*)&pattern_phi[pattern_offset], pattern_preamble);
+       evalY=eval_elementcoeff(r, az-M_PI_4f+M_PI_2f, M, beta, (float2*)&pattern_theta[pattern_offset],
+                (float2*)&pattern_phi[pattern_offset], pattern_preamble);
       }
 
    /* store output EJones 8 values */ 
@@ -707,9 +727,10 @@ calculate_uv_mode_vectors_scalar(float u, float v, float beta, int n0, float *Av
 
 __device__ cuDoubleComplex
 shapelet_contrib__(int *dd, float u, float v, float w) {
+
   exinfo_shapelet *dp=(exinfo_shapelet*)dd;
-  int *cplx;
-  float *Av;
+  int *cplx = 0;
+  float *Av = 0;
   int ci,M;
   float a,b,ut,vt,up,vp;
   float sinph,cosph;
@@ -749,8 +770,8 @@ shapelet_contrib__(int *dd, float u, float v, float w) {
   /* need max storage 2 x n0 */
   shpvl=(float*)malloc((size_t)(2*dp->n0)*sizeof(float));
 
-  if (!fact || !Av || !cplx || !shpvl) {
-   printf("Error: Device memory allocation failure!! increase heap size.\n");
+  if ((fact == NULL) || (Av == NULL) || (cplx == NULL) || (shpvl == NULL)) {
+   printf("Error: Device memory allocation failure!! increase heap size using -S option.\n");
   }
   fact[0]=1.0f;
   for (ci=1; ci<dp->n0; ci++) {
@@ -2147,21 +2168,22 @@ cudakernel_tile_array_beam(int N, int T, int K, int F, double *freqs, float *lon
  * Nmodes : M(M+1)/2
  * M: model order
  * beta: scale
- * pattern_phi, pattern_theta: Nmodes x 1 complex, 2Nmodes x 1 float arrays
+ * Ns: number of stations in beam model (=1 for using same model), otherwise = N (only for wideband = 0)
+ * pattern_phi, pattern_theta: Nmodes * Ns x 1 complex, 2Nmodes * Ns x 1 float arrays
  * pattern_preamble: Nmodes x 1 float array
   beam: output element beam values 8*NxTxKxF values
   wideband: 0: use freq0 for beamformer freq, 1: use each freqs[] for beamformer freq
  */
 void
 cudakernel_element_beam(int N, int T, int K, int F, double *freqs, float *longitude, float *latitude,
- double *time_utc, float *ra, float *dec, int Nmodes, int M, float beta, float *pattern_phi, float *pattern_theta, float *pattern_preamble, float *beam, int wideband) {
+ double *time_utc, float *ra, float *dec, int Nmodes, int M, float beta, int Ns, float *pattern_phi, float *pattern_theta, float *pattern_preamble, float *beam, int wideband) {
 #ifdef CUDA_DBG
   cudaError_t error;
   error = cudaGetLastError();
 #endif
   // Set a heap size of 128 megabytes. Note that this must
   // be done before any kernel is launched. 
-  //cudaDeviceSetLimit(cudaLimitMallocHeapSize, 128*1024*1024);
+  // e.g., call cudaDeviceSetLimit(cudaLimitMallocHeapSize, 128*1024*1024);
   // for an array of max 24*16 x 2  double, the default 8MB is ok
 
   int ThreadsPerBlock=DEFAULT_TH_PER_BK;
@@ -2172,7 +2194,7 @@ cudakernel_element_beam(int N, int T, int K, int F, double *freqs, float *longit
   grid.x = (int)ceilf((K*T*F) / (float)ThreadsPerBlock);
   grid.y = N;
 
-  kernel_element_beam<<<grid,ThreadsPerBlock>>>(N,T,K,F,freqs,longitude,latitude,time_utc,ra,dec,Nmodes,M,beta,pattern_phi,pattern_theta,pattern_preamble,beam,wideband);
+  kernel_element_beam<<<grid,ThreadsPerBlock>>>(N,T,K,F,freqs,longitude,latitude,time_utc,ra,dec,Nmodes,M,beta,Ns,pattern_phi,pattern_theta,pattern_preamble,beam,wideband);
   cudaDeviceSynchronize();
 
 #ifdef CUDA_DBG
@@ -2196,6 +2218,7 @@ cudakernel_element_beam(int N, int T, int K, int F, double *freqs, float *longit
  * Nmodes : M(M+1)/2
  * M: model order
  * beta: scale
+ * Ns: number of stations in beam model (=1 for using same model), otherwise = N (only for wideband = 0)
  * pattern_phi, pattern_theta: Nmodes x 1 complex, 2Nmodes x 1 float arrays
  * pattern_preamble: Nmodes x 1 float array
   beam: output element beam values 8*NxTxKxF values
@@ -2203,14 +2226,14 @@ cudakernel_element_beam(int N, int T, int K, int F, double *freqs, float *longit
  */
 void
 cudakernel_element_beam_lunar(int N, int T, int K, int F, double *freqs, float *longitude, float *latitude,
- double *src_longitude, double *src_latitude, int Nmodes, int M, float beta, float *pattern_phi, float *pattern_theta, float *pattern_preamble, float *beam, int wideband) {
+ double *src_longitude, double *src_latitude, int Nmodes, int M, float beta, int Ns, float *pattern_phi, float *pattern_theta, float *pattern_preamble, float *beam, int wideband) {
 #ifdef CUDA_DBG
   cudaError_t error;
   error = cudaGetLastError();
 #endif
   // Set a heap size of 128 megabytes. Note that this must
   // be done before any kernel is launched. 
-  //cudaDeviceSetLimit(cudaLimitMallocHeapSize, 128*1024*1024);
+  // e.g., cudaDeviceSetLimit(cudaLimitMallocHeapSize, 128*1024*1024);
   // for an array of max 24*16 x 2  double, the default 8MB is ok
 
   int ThreadsPerBlock=DEFAULT_TH_PER_BK;
@@ -2221,7 +2244,7 @@ cudakernel_element_beam_lunar(int N, int T, int K, int F, double *freqs, float *
   grid.x = (int)ceilf((K*T*F) / (float)ThreadsPerBlock);
   grid.y = N;
 
-  kernel_element_beam_lunar<<<grid,ThreadsPerBlock>>>(N,T,K,F,freqs,longitude,latitude,src_longitude,src_latitude,Nmodes,M,beta,pattern_phi,pattern_theta,pattern_preamble,beam,wideband);
+  kernel_element_beam_lunar<<<grid,ThreadsPerBlock>>>(N,T,K,F,freqs,longitude,latitude,src_longitude,src_latitude,Nmodes,M,beta,Ns,pattern_phi,pattern_theta,pattern_preamble,beam,wideband);
   cudaDeviceSynchronize();
 
 #ifdef CUDA_DBG
@@ -2263,10 +2286,11 @@ cudakernel_element_beam_lunar(int N, int T, int K, int F, double *freqs, float *
 void
 cudakernel_coherencies(int B, int N, int T, int K, int F, double *u, double *v, double *w,baseline_t *barr, double *freqs, float *beam, float *element, double *ll, double *mm, double *nn, double *sI, double *sQ, double *sU, double *sV,
   unsigned char *stype, double *sI0, double *sQ0, double *sU0, double *sV0, double *f0, double *spec_idx, double *spec_idx1, double *spec_idx2, int **exs, double deltaf, double deltat, double dec0, double *coh,int dobeam) {
-#ifdef CUDA_DBG
+
+  // always check error of this call because heap size being too small
+  // can pass undetected
   cudaError_t error;
   error = cudaGetLastError();
-#endif
 
   /* spawn threads to handle baselines, these threads will spawn threads for sources */
   int ThreadsPerBlock=DEFAULT_TH_PER_BK;
@@ -2276,14 +2300,12 @@ cudakernel_coherencies(int B, int N, int T, int K, int F, double *u, double *v, 
   kernel_coherencies<<<BlocksPerGrid,ThreadsPerBlock>>>(B, N, T, K, F,u,v,w,barr,freqs, beam, element, ll, mm, nn, sI, sQ, sU, sV,
     stype, sI0, sQ0, sU0, sV0, f0, spec_idx, spec_idx1, spec_idx2, exs, deltaf, deltat, dec0, coh, dobeam);
   cudaDeviceSynchronize();
-#ifdef CUDA_DBG
   error = cudaGetLastError();
   if(error != cudaSuccess) {
     // print the CUDA error message and exit
     fprintf(stderr,"CUDA error: %s :%s: %d\n", cudaGetErrorString(error),__FILE__,__LINE__);
     exit(-1);
   }
-#endif
 }
 
 
@@ -2324,10 +2346,11 @@ cudakernel_residuals(int B, int N, int T, int K, int F, double *u, double *v, do
 void
 cudakernel_coherencies_and_residuals(int B, int N, int T, int K, int F, double *u, double *v, double *w, double *p, int nchunk, baseline_t *barr, double *freqs, float *beam, float *element, double *ll, double *mm, double *nn, double *sI, double *sQ, double *sU, double *sV,
   unsigned char *stype, double *sI0, double *sQ0, double *sU0, double *sV0, double *f0, double *spec_idx, double *spec_idx1, double *spec_idx2, int **exs, double deltaf, double deltat, double dec0, double *mod, double *coh, int dobeam) {
-#ifdef CUDA_DBG
+
+  // always check error of this call because heap size being too small
+  // can pass undetected
   cudaError_t error;
   error = cudaGetLastError();
-#endif
 
   /* spawn threads to handle baselines, these threads will loop over sources */
   int ThreadsPerBlock=DEFAULT_TH_PER_BK;
@@ -2337,14 +2360,12 @@ cudakernel_coherencies_and_residuals(int B, int N, int T, int K, int F, double *
   kernel_coherencies_and_residuals<<<BlocksPerGrid,ThreadsPerBlock>>>(B, N, T, K, F,u,v,w,p,nchunk,barr,freqs, beam, element, ll, mm, nn, sI, sQ, sU, sV,
     stype, sI0, sQ0, sU0, sV0, f0, spec_idx, spec_idx1, spec_idx2, exs, deltaf, deltat, dec0, mod, coh, dobeam);
   cudaDeviceSynchronize();
-#ifdef CUDA_DBG
   error = cudaGetLastError();
   if(error != cudaSuccess) {
     // print the CUDA error message and exit
     fprintf(stderr,"CUDA error: %s :%s: %d\n", cudaGetErrorString(error),__FILE__,__LINE__);
     exit(-1);
   }
-#endif
 }
 
 void

@@ -34,7 +34,7 @@ using namespace Data;
 
 void
 print_copyright(void) {
-  cout<<"SAGECal-MPI 0.8.5 (C) 2011-2026 Sarod Yatawatta"<<endl;
+  cout<<"SAGECal-MPI 0.8.6 (C) 2011-2026 Sarod Yatawatta"<<endl;
 }
 
 
@@ -144,7 +144,10 @@ ParseCmdLine(int ac, char **av) {
                 break;
             case 'B':
                 doBeam= atoi(optarg);
-                if (doBeam>3) { doBeam=1; }
+                if (doBeam>3) {
+                  cout<<"Warning: invalid option -B "<<doBeam<<" setting to "<<DOBEAM_ARRAY<<endl;
+                  doBeam=DOBEAM_ARRAY;
+                }
                 break;
             case 'e':
                 max_emiter= atoi(optarg);

@@ -143,6 +143,25 @@ update_ignorelist(const char *ignfile, int *ignlist, int M, clus_source_t *carr)
 extern int
 read_arho_fromfile(const char *admm_rho_file,int Mt,double *arho, int M, double *arhoslave, int spatialreg, double *alpha);
 
+
+/* read element coefficients from the given text file */
+/* element coefficient file format: 
+ * comments begin with '#' 
+ * first line to parse: n_order (int) , beta (double), n_freqs (int)
+ * n_modes = n_order * (n_order+1)/2
+ * next line: n_freq frequency values (GHz, double)
+ * next n_modes : coefficients (Etheta,Ephi) real,imag for freq 1
+ * next n_modes : coefficients (Etheta,Ephi) real,imag for freq 2
+ * ....
+ * ...
+ *
+ * ecoff: element coefficient struct
+ * freq: GHz, which frequency to create the model
+ * stat: station id 0,1,... for which to create the model
+ * initialize: if 1, element coefficient metadata will be set, and memory allocated
+ */
+extern int
+read_element_coeffs(const char *coeff_file, elementcoeff *ecoeff, const double freq,  const int stat, const int initialize); 
 /****************************** predict.c ****************************/
 /************* extended source contributions ************/
 extern complex double
@@ -351,13 +370,19 @@ set_elementcoeffs(int element_type,  double frequency, elementcoeff *ecoeff);
 extern int
 set_elementcoeffs_wb(int element_type,  double *frequencies, int Nf,  elementcoeff *ecoeff);
 
+/* read files under the directory model_dir and initialize element coefficients */
+/* n_stat: number of stations (read from MS metadata) */
+extern int
+set_elementcoeffs_textfile(int element_type,  int n_stat, double frequency, const char *model_dir, elementcoeff *ecoeff);
+
 /* free storage */
 extern int
 free_elementcoeffs(elementcoeff ecoeff);
 
 /* calculate elementbeam values for given r,theta coordinates */
+/* station: when > 0, and if available, use separate element beam models for each station, this will only work with -B 'beam_model_directory' option */
 extern elementval
-eval_elementcoeffs(double r, double theta, elementcoeff *ecoeff);
+eval_elementcoeffs(double r, double theta, elementcoeff *ecoeff, int station);
 
 /* with wideband model, use findex to offset coefficients to match the freq */
 extern elementval
@@ -551,11 +576,11 @@ cudakernel_tile_array_beam(int N, int T, int K, int F, double *freqs, float *lon
 
 extern void
 cudakernel_element_beam(int N, int T, int K, int F, double *freqs, float *longitude, float *latitude,
- double *time_utc, float *ra, float *dec, int Nmodes, int M, float beta, float *pattern_phi, float *pattern_theta, float *pattern_preamble, float *elementbeam, int wideband);
+ double *time_utc, float *ra, float *dec, int Nmodes, int M, float beta, int Ns, float *pattern_phi, float *pattern_theta, float *pattern_preamble, float *elementbeam, int wideband);
 
 extern void
 cudakernel_element_beam_lunar(int N, int T, int K, int F, double *freqs, float *longitude, float *latitude,
- double *src_longitude, double *src_latitude, int Nmodes, int M, float beta, float *pattern_phi, float *pattern_theta, float *pattern_preamble, float *beam, int wideband);
+ double *src_longitude, double *src_latitude, int Nmodes, int M, float beta, int Ns, float *pattern_phi, float *pattern_theta, float *pattern_preamble, float *beam, int wideband);
 
 extern void
 cudakernel_coherencies(int B, int N, int T, int K, int F, double *u, double *v, double *w,baseline_t *barr, double *freqs, float *beam, float *element, double *ll, double *mm, double *nn, double *sI, double *sQ, double *sU, double *sV,

@@ -65,6 +65,7 @@ int Data::DoSim=0;
 int Data::DoDiag=0;
 int Data::doChan=0; /* if 1, solve for each channel in multi channel data */
 int Data::doBeam=DOBEAM_NONE; /* if >0, enable LOFAR beam model, DOBEAM_ARRAY: array, DOBEAM_FULL: array+element, DOBEAM_ELEMENT: element, DOBEAM_ARRAY_WB: array beam per channel, DOBEAM_FULL_WB: full beam per channel, DOBEAM_ELEMENT_WB: element beam per channel */
+char *Data::beam_model_dir=NULL; /* if -B 'dirname' given, runtime load element beam models (only element beam model is predicted) */
 int Data::phaseOnly=0; /* if >0, enable phase only correction */
 int Data::solver_mode=SM_RTR_OSRLM_RLBFGS; /* use RTR+LBFGS by default */
 int Data::ccid=-99999;
@@ -512,6 +513,17 @@ Data::readAuxData(const char *fname, Data::IOData *data, Data::LBeam *binfo) {
      }
    }
 
+#ifdef HAVE_CUDA
+   /* do a sanity check if array beam is requested and number of elements in
+    * a station is too large for shared memory */
+   if (!isDipole) {
+     for (int ci=0; ci<data->N; ci++) {
+       if (binfo->Nelem[ci]> ARRAY_MAX_ELEM) {
+         cout<<"Warning: The number of elements of station "<<ci<<"is too large to fit in GPU shared memory (if array beam is calculated). Recompile with increased ARRAY_MAX_ELEM (currently "<<ARRAY_MAX_ELEM<<")."<<endl;
+       }
+     }
+   }
+#endif
 }
 
 void 
