@@ -376,7 +376,7 @@ kernel_element_beam(int N, int T, int K, int F,
     /* y-dimension is station */
     int istat=blockIdx.y;
 
-    if (istat >= Ns) { return; }
+    if (istat >= N) { return; }
     // find respective source,freq,time for this thread
     int n1 = x;
     int isrc=n1/(T*F);
@@ -434,6 +434,7 @@ kernel_element_beam(int N, int T, int K, int F,
       #endif
       } else if (wideband) {
        // in wideband mode, offset by 2*Nmodes*ifrq, not using shared memory
+       // regardless of value of Ns (separate models for stations)
       evalX=eval_elementcoeff(r, theta, M, beta, (float2*)&pattern_theta[2*Nmodes*ifrq],
                 (float2*)&pattern_phi[2*Nmodes*ifrq], pattern_preamble);
       evalY=eval_elementcoeff(r, theta+M_PI_2f, M, beta, (float2*)&pattern_theta[2*Nmodes*ifrq],
@@ -442,7 +443,7 @@ kernel_element_beam(int N, int T, int K, int F,
       } else { 
        // separate models for each station
        /* determine offset to read in the pattern for this station */
-       const int pattern_offset=2*istat*Nmodes;
+       const int pattern_offset=(istat < Ns ? 2*istat*Nmodes : 0);
        evalX=eval_elementcoeff(r, theta, M, beta, (float2*)&pattern_theta[pattern_offset],
                 (float2*)&pattern_phi[pattern_offset], pattern_preamble);
        evalY=eval_elementcoeff(r, theta+M_PI_2f, M, beta, (float2*)&pattern_theta[pattern_offset],
@@ -450,7 +451,7 @@ kernel_element_beam(int N, int T, int K, int F,
       }
 
    /* store output EJones 8 values */ 
-   int boffset=itm*N*K*F+isrc*N*F+ifrq*N+istat;
+   size_t boffset=itm*N*K*F+isrc*N*F+ifrq*N+istat;
    beam[8*boffset]=evalX.x;
    beam[8*boffset+1]=evalX.y;
    beam[8*boffset+2]=evalX.z;
@@ -460,7 +461,7 @@ kernel_element_beam(int N, int T, int K, int F,
    beam[8*boffset+6]=evalY.z;
    beam[8*boffset+7]=evalY.w;
    } else {
-   int boffset=itm*N*K*F+isrc*N*F+ifrq*N+istat;
+   size_t boffset=itm*N*K*F+isrc*N*F+ifrq*N+istat;
    beam[8*boffset]=0.0f;
    beam[8*boffset+1]=0.0f;
    beam[8*boffset+2]=0.0f;
@@ -726,9 +727,10 @@ calculate_uv_mode_vectors_scalar(float u, float v, float beta, int n0, float *Av
 
 __device__ cuDoubleComplex
 shapelet_contrib__(int *dd, float u, float v, float w) {
+
   exinfo_shapelet *dp=(exinfo_shapelet*)dd;
-  int *cplx;
-  float *Av;
+  int *cplx = 0;
+  float *Av = 0;
   int ci,M;
   float a,b,ut,vt,up,vp;
   float sinph,cosph;
@@ -768,8 +770,8 @@ shapelet_contrib__(int *dd, float u, float v, float w) {
   /* need max storage 2 x n0 */
   shpvl=(float*)malloc((size_t)(2*dp->n0)*sizeof(float));
 
-  if (!fact || !Av || !cplx || !shpvl) {
-   printf("Error: Device memory allocation failure!! increase heap size.\n");
+  if ((fact == NULL) || (Av == NULL) || (cplx == NULL) || (shpvl == NULL)) {
+   printf("Error: Device memory allocation failure!! increase heap size using -S option.\n");
   }
   fact[0]=1.0f;
   for (ci=1; ci<dp->n0; ci++) {
@@ -2284,10 +2286,11 @@ cudakernel_element_beam_lunar(int N, int T, int K, int F, double *freqs, float *
 void
 cudakernel_coherencies(int B, int N, int T, int K, int F, double *u, double *v, double *w,baseline_t *barr, double *freqs, float *beam, float *element, double *ll, double *mm, double *nn, double *sI, double *sQ, double *sU, double *sV,
   unsigned char *stype, double *sI0, double *sQ0, double *sU0, double *sV0, double *f0, double *spec_idx, double *spec_idx1, double *spec_idx2, int **exs, double deltaf, double deltat, double dec0, double *coh,int dobeam) {
-#ifdef CUDA_DBG
+
+  // always check error of this call because heap size being too small
+  // can pass undetected
   cudaError_t error;
   error = cudaGetLastError();
-#endif
 
   /* spawn threads to handle baselines, these threads will spawn threads for sources */
   int ThreadsPerBlock=DEFAULT_TH_PER_BK;
@@ -2297,14 +2300,12 @@ cudakernel_coherencies(int B, int N, int T, int K, int F, double *u, double *v, 
   kernel_coherencies<<<BlocksPerGrid,ThreadsPerBlock>>>(B, N, T, K, F,u,v,w,barr,freqs, beam, element, ll, mm, nn, sI, sQ, sU, sV,
     stype, sI0, sQ0, sU0, sV0, f0, spec_idx, spec_idx1, spec_idx2, exs, deltaf, deltat, dec0, coh, dobeam);
   cudaDeviceSynchronize();
-#ifdef CUDA_DBG
   error = cudaGetLastError();
   if(error != cudaSuccess) {
     // print the CUDA error message and exit
     fprintf(stderr,"CUDA error: %s :%s: %d\n", cudaGetErrorString(error),__FILE__,__LINE__);
     exit(-1);
   }
-#endif
 }
 
 
@@ -2345,10 +2346,11 @@ cudakernel_residuals(int B, int N, int T, int K, int F, double *u, double *v, do
 void
 cudakernel_coherencies_and_residuals(int B, int N, int T, int K, int F, double *u, double *v, double *w, double *p, int nchunk, baseline_t *barr, double *freqs, float *beam, float *element, double *ll, double *mm, double *nn, double *sI, double *sQ, double *sU, double *sV,
   unsigned char *stype, double *sI0, double *sQ0, double *sU0, double *sV0, double *f0, double *spec_idx, double *spec_idx1, double *spec_idx2, int **exs, double deltaf, double deltat, double dec0, double *mod, double *coh, int dobeam) {
-#ifdef CUDA_DBG
+
+  // always check error of this call because heap size being too small
+  // can pass undetected
   cudaError_t error;
   error = cudaGetLastError();
-#endif
 
   /* spawn threads to handle baselines, these threads will loop over sources */
   int ThreadsPerBlock=DEFAULT_TH_PER_BK;
@@ -2358,14 +2360,12 @@ cudakernel_coherencies_and_residuals(int B, int N, int T, int K, int F, double *
   kernel_coherencies_and_residuals<<<BlocksPerGrid,ThreadsPerBlock>>>(B, N, T, K, F,u,v,w,p,nchunk,barr,freqs, beam, element, ll, mm, nn, sI, sQ, sU, sV,
     stype, sI0, sQ0, sU0, sV0, f0, spec_idx, spec_idx1, spec_idx2, exs, deltaf, deltat, dec0, mod, coh, dobeam);
   cudaDeviceSynchronize();
-#ifdef CUDA_DBG
   error = cudaGetLastError();
   if(error != cudaSuccess) {
     // print the CUDA error message and exit
     fprintf(stderr,"CUDA error: %s :%s: %d\n", cudaGetErrorString(error),__FILE__,__LINE__);
     exit(-1);
   }
-#endif
 }
 
 void

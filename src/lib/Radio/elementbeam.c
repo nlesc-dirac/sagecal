@@ -402,7 +402,7 @@ set_elementcoeffs_textfile(int element_type,  int n_stat, double frequency, cons
 
    /* check number of antennas = number of sub directories */
    if (n_ant < n_stat) {
-     fprintf(stderr,"%s: %d: Invalid number of antenna models: expected %d, got %d, copying the model of first antenna\n",__FILE__,__LINE__,n_stat,n_ant);
+     fprintf(stderr,"%s: %d: Invalid number of antenna models: expected %d, got %d, copying the model of antenna 0 to all others\n",__FILE__,__LINE__,n_stat,n_ant);
 
      for (int ant=n_ant; ant < n_stat; ant++) {
        my_ccopy(ecoeff->Nmodes, &ecoeff->pattern_phi[0], 1, &ecoeff->pattern_phi[ant*ecoeff->Nmodes],1);
