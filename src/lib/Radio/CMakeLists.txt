@@ -11,6 +11,7 @@ set (objects
     elementbeam
     shapelet
     diffuse_predict
+    text_parse
 )
 
 # only build readsky if glib.h is found
