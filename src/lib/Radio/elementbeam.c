@@ -970,7 +970,7 @@ read_element_coeffs(const char *coeff_file, elementcoeff *ecoeff, const double f
   /* interpolate */
   double wl=myfreq-freqs[idl];
   double wh=freqs[idh]-myfreq;
-  double w1=wl/(wl+wh);
+  double w1=(wl+wh > 0.0 ? wl/(wl+wh) : 1.0);
 
   for (int nmode=0; nmode< ecoeff->Nmodes; nmode++) {
     ecoeff->pattern_theta[stat*ecoeff->Nmodes+nmode]=theta_low_re[nmode]*w1+theta_high_re[nmode]*(1-w1)+_Complex_I*(theta_low_im[nmode]*w1+theta_high_im[nmode]*(1-w1));

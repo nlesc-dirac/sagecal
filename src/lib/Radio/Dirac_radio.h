@@ -409,7 +409,7 @@ sharmonic_modes(int n0,double *th, double *ph, int Nt, complex double *output);
  * ...
  *
  * ecoff: element coefficient struct
- * freq: GHz, which frequency to create the model
+ * freq: Hz, which frequency to create the model
  * stat: station id 0,1,... for which to create the model
  * initialize: if 1, element coefficient metadata will be set, and memory allocated
  */
