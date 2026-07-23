@@ -144,24 +144,21 @@ extern int
 read_arho_fromfile(const char *admm_rho_file,int Mt,double *arho, int M, double *arhoslave, int spatialreg, double *alpha);
 
 
-/* read element coefficients from the given text file */
-/* element coefficient file format: 
- * comments begin with '#' 
- * first line to parse: n_order (int) , beta (double), n_freqs (int)
- * n_modes = n_order * (n_order+1)/2
- * next line: n_freq frequency values (GHz, double)
- * next n_modes : coefficients (Etheta,Ephi) real,imag for freq 1
- * next n_modes : coefficients (Etheta,Ephi) real,imag for freq 2
- * ....
- * ...
- *
- * ecoff: element coefficient struct
- * freq: GHz, which frequency to create the model
- * stat: station id 0,1,... for which to create the model
- * initialize: if 1, element coefficient metadata will be set, and memory allocated
- */
+/****************************** text_parse.c ****************************/
+/* skips comment lines */
 extern int
-read_element_coeffs(const char *coeff_file, elementcoeff *ecoeff, const double freq,  const int stat, const int initialize); 
+skip_lines(FILE *fin);
+
+/* skips rest of line */
+extern int
+skip_restof_line(FILE *fin);
+
+/* reads the next string (isalphanumeric() contiguous set of characters)
+  separated by spaces, tabs or a newline. If the last character read is newline
+  1 is returned, else 0 returned. */
+/* buffer is automatically adjusted is length is not enough */
+extern int
+read_next_string(char **buff, int *buff_len, FILE *infd);
 /****************************** predict.c ****************************/
 /************* extended source contributions ************/
 extern complex double
@@ -400,7 +397,24 @@ eval_elementcoeffs_wb(double r, double theta, elementcoeff *ecoeff, int findex);
 extern int
 sharmonic_modes(int n0,double *th, double *ph, int Nt, complex double *output);
 
-
+/* read element coefficients from the given text file */
+/* element coefficient file format: 
+ * comments begin with '#' 
+ * first line to parse: n_order (int) , beta (double), n_freqs (int)
+ * n_modes = n_order * (n_order+1)/2
+ * next line: n_freq frequency values (GHz, double)
+ * next n_modes : coefficients (Etheta,Ephi) real,imag for freq 1
+ * next n_modes : coefficients (Etheta,Ephi) real,imag for freq 2
+ * ....
+ * ...
+ *
+ * ecoff: element coefficient struct
+ * freq: Hz, which frequency to create the model
+ * stat: station id 0,1,... for which to create the model
+ * initialize: if 1, element coefficient metadata will be set, and memory allocated
+ */
+extern int
+read_element_coeffs(const char *coeff_file, elementcoeff *ecoeff, const double freq,  const int stat, const int initialize); 
 /****************************** cspice_utils.c ************************************/
 #ifdef HAVE_CSPICE
 extern void
