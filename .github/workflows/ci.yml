@@ -5,44 +5,6 @@ on:
   pull_request: {}
 
 jobs:
-  clang-format:
-    name: Clang-Format Check
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
-      - name: Install clang-format
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y clang-format
-
-      - name: Run clang-format check
-        shell: bash
-        run: |
-          set -euo pipefail
-          files=$(git ls-files '*.c' '*.h' '*.cpp' '*.hpp' '*.cc' '*.cu' '*.cuh' || true)
-          if [ -z "$files" ]; then
-            echo "No C/C++/CUDA files to check"
-            exit 0
-          fi
-          echo "Checking formatting for files:"
-          echo "$files"
-          unformatted=0
-          for f in $files; do
-            if ! diff -u "$f" <(clang-format -style=file "$f") >/dev/null; then
-              echo ""
-              echo "File not formatted: $f"
-              unformatted=1
-            fi
-          done
-          if [ "$unformatted" -ne 0 ]; then
-            echo ""
-            echo "Some files are not formatted. Run: clang-format -i <file> or install a pre-commit hook."
-            exit 1
-          fi
 
   build:
     name: Build (CMake) - CPU / CUDA matrix
@@ -120,3 +82,43 @@ jobs:
           else
             echo "No CTest tests found in $BUILD_DIR; skipping test run"
           fi
+
+  clang-format:
+    name: Clang-Format Check
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install clang-format
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y clang-format
+
+      - name: Run clang-format check
+        shell: bash
+        run: |
+          set -euo pipefail
+          files=$(git ls-files '*.c' '*.h' '*.cpp' '*.hpp' '*.cc' '*.cu' '*.cuh' || true)
+          if [ -z "$files" ]; then
+            echo "No C/C++/CUDA files to check"
+            exit 0
+          fi
+          echo "Checking formatting for files:"
+          echo "$files"
+          unformatted=0
+          for f in $files; do
+            if ! diff -u "$f" <(clang-format -style=file "$f") >/dev/null; then
+              echo ""
+              echo "File not formatted: $f"
+              unformatted=1
+            fi
+          done
+          if [ "$unformatted" -ne 0 ]; then
+            echo ""
+            echo "Some files are not formatted. Run: clang-format -i <file> or install a pre-commit hook."
+            exit 1
+          fi
+
