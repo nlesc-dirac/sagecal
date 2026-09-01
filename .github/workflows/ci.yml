@@ -5,7 +5,6 @@ on:
   pull_request: {}
 
 jobs:
-
   build:
     name: Build (CMake) - CPU / CUDA matrix
     runs-on: ubuntu-latest
@@ -122,3 +121,34 @@ jobs:
             exit 1
           fi
 
+          # Get the list of changed files (new and modified)
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            # For PRs, compare against the base branch
+            changed_files=$(git diff --name-only ${{ github.base_ref }}... | grep -E '\.(c|h|cpp|hpp|cc|cu|cuh)$' || true)
+          else
+            # For push events, compare against the previous commit
+            changed_files=$(git diff --name-only HEAD~1 | grep -E '\.(c|h|cpp|hpp|cc|cu|cuh)$' || true)
+          fi
+
+          if [ -z "$changed_files" ]; then
+            echo "No C/C++/CUDA files changed"
+            exit 0
+          fi
+
+          echo "Checking formatting for changed files:"
+          echo "$changed_files"
+
+          unformatted=0
+          for f in $changed_files; do
+             if ! diff -u "$f" <(clang-format -style=file "$f") > /dev/null; then
+              echo ""
+              echo "File not formatted: $f"
+              unformatted=1
+             fi
+          done
+
+          if [ "$unformatted" -ne 0 ]; then
+            echo ""
+            echo "Some files are not formatted. Run: clang-format -i <file>"
+            exit 1
+          fi
