@@ -1,0 +1,122 @@
+name: CI
+
+on:
+  push: {}
+  pull_request: {}
+
+jobs:
+  clang-format:
+    name: Clang-Format Check
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install clang-format
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y clang-format
+
+      - name: Run clang-format check
+        shell: bash
+        run: |
+          set -euo pipefail
+          files=$(git ls-files '*.c' '*.h' '*.cpp' '*.hpp' '*.cc' '*.cu' '*.cuh' || true)
+          if [ -z "$files" ]; then
+            echo "No C/C++/CUDA files to check"
+            exit 0
+          fi
+          echo "Checking formatting for files:"
+          echo "$files"
+          unformatted=0
+          for f in $files; do
+            if ! diff -u "$f" <(clang-format -style=file "$f") >/dev/null; then
+              echo ""
+              echo "File not formatted: $f"
+              unformatted=1
+            fi
+          done
+          if [ "$unformatted" -ne 0 ]; then
+            echo ""
+            echo "Some files are not formatted. Run: clang-format -i <file> or install a pre-commit hook."
+            exit 1
+          fi
+
+  build:
+    name: Build (CMake) - CPU / CUDA matrix
+    runs-on: ubuntu-latest
+    needs: clang-format
+    strategy:
+      matrix:
+        cuda: [false, true]
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Cache ccache
+        uses: actions/cache@v4
+        with:
+          path: ~/.ccache
+          key: ${{ runner.os }}-ccache-${{ matrix.cuda }}-${{ hashFiles('**/CMakeLists.txt') }}
+          restore-keys: ${{ runner.os }}-ccache-
+
+      - name: Cache build dir
+        uses: actions/cache@v4
+        with:
+          path: build-${{ matrix.cuda }}
+          key: ${{ runner.os }}-build-${{ matrix.cuda }}-${{ hashFiles('**/CMakeLists.txt') }}
+          restore-keys: ${{ runner.os }}-build-${{ matrix.cuda }}-
+
+      - name: Install build dependencies
+        shell: bash
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential cmake ninja-build ccache pkg-config
+
+      - name: Setup CUDA toolkit (matrix.cuda == true)
+        if: matrix.cuda == 'true'
+        uses: nvidia/setup-cuda@v2
+        with:
+          cuda-version: '12.8'
+
+      - name: Configure CMake
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ "${{ matrix.cuda }}" = "true" ]; then
+            BUILD_DIR=build-cuda
+          else
+            BUILD_DIR=build-cpu
+          fi
+          cmake -S . -B "$BUILD_DIR" -DCMAKE_BUILD_TYPE=Release -G Ninja -DHAVE_CUDA=${{ matrix.cuda }}
+
+      - name: Build
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ "${{ matrix.cuda }}" = "true" ]; then
+            BUILD_DIR=build-cuda
+          else
+            BUILD_DIR=build-cpu
+          fi
+          cmake --build "$BUILD_DIR" -- -j$(nproc)
+
+      - name: Run tests (if available)
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ "${{ matrix.cuda }}" = "true" ]; then
+            BUILD_DIR=build-cuda
+          else
+            BUILD_DIR=build-cpu
+          fi
+          if [ -f "$BUILD_DIR/CTestTestfile.cmake" ]; then
+            cd "$BUILD_DIR" && ctest --output-on-failure
+          else
+            echo "No CTest tests found in $BUILD_DIR; skipping test run"
+          fi
