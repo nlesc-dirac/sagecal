@@ -36,7 +36,7 @@ jobs:
         shell: bash
         run: |
           sudo apt-get update
-          sudo apt-get install -y build-essential cmake ninja-build ccache pkg-config libcfitsio-dev libopenblas-dev wcslib-dev libglib2.0-dev libcasa-casa7t64 casacore-dev casacore-data casacore-tools
+          sudo apt-get install -y build-essential cmake ninja-build ccache pkg-config libcfitsio-dev libopenblas-dev wcslib-dev libglib2.0-dev libcasa-casa7t64 casacore-dev casacore-data casacore-tools libopenmpi-dev libfftw3-dev
 
       - name: Setup CUDA toolkit (matrix.cuda == true)
         if: matrix.cuda == 'true'
