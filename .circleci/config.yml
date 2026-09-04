@@ -1,11 +1,10 @@
 version: 2.1
 
 workflows:
-  # test building
+  # test building (remove GPU build)
   test-deploy:
     jobs:
       - build-cpu
-      - build-gpu
 
 jobs:
   build-cpu:
