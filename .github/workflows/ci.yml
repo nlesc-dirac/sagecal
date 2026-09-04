@@ -51,10 +51,11 @@ jobs:
           set -euo pipefail
           if [ "${{ matrix.cuda }}" = "true" ]; then
             BUILD_DIR=build-cuda
+            CMAKE_CUDA_COMPILER=/usr/local/cuda/bin/nvcc
           else
             BUILD_DIR=build-cpu
           fi
-          cmake -S . -B "$BUILD_DIR" -DCMAKE_BUILD_TYPE=Release -G Ninja -DHAVE_CUDA=${{ matrix.cuda }} -DCMAKE_CUDA_COMPILER=/usr/local/cuda/bin/nvcc
+          cmake -S . -B "$BUILD_DIR" -DCMAKE_BUILD_TYPE=Release -G Ninja -DHAVE_CUDA=${{ matrix.cuda }} ${CMAKE_CUDA_COMPILER:+-DCMAKE_CUDA_COMPILER=$CMAKE_CUDA_COMPILER}
 
       - name: Build
         shell: bash
