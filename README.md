@@ -18,6 +18,7 @@
 - Spectral and spatial regularization of calibration solutions
 - Large scale diffuse sky models via shapelet decomposition
 - Lunar frame interferometric simulation via the SPICE toolkit
+- Influence function (eigenvalues of the Jacobian) calculation
 
 Please read INSTALL.md for installation instructions, but 'cmake' should work in most cases. We give a brief guide to use SAGECal here but there is extensive documentation in the links at the end.
 
