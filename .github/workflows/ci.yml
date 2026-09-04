@@ -47,6 +47,8 @@ jobs:
 
       - name: Configure CMake
         shell: bash
+        env:
+          CUDA_TOOLKIT_ROOT: /usr/local/cuda
         run: |
           set -euo pipefail
           if [ "${{ matrix.cuda }}" = "true" ]; then
