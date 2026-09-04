@@ -47,17 +47,18 @@ jobs:
 
       - name: Configure CMake
         shell: bash
-        env:
-          CUDA_TOOLKIT_ROOT: /usr/local/cuda
         run: |
           set -euo pipefail
           if [ "${{ matrix.cuda }}" = "true" ]; then
             BUILD_DIR=build-cuda
-            CMAKE_CUDA_COMPILER=/usr/local/cuda/bin/nvcc
+            CMAKE_CUDA_COMPILER=${{ steps.cuda-toolkit.outputs.CUDA_PATH }}/bin/nvcc
+            CUDA_TOOLKIT_ROOT=${{ steps.cuda-toolkit.outputs.CUDA_PATH }}
           else
             BUILD_DIR=build-cpu
           fi
-          cmake -S . -B "$BUILD_DIR" -DCMAKE_BUILD_TYPE=Release -G Ninja -DHAVE_CUDA=${{ matrix.cuda }} ${CMAKE_CUDA_COMPILER:+-DCMAKE_CUDA_COMPILER=$CMAKE_CUDA_COMPILER}
+          cmake -S . -B "$BUILD_DIR" -DCMAKE_BUILD_TYPE=Release -G Ninja -DHAVE_CUDA=${{ matrix.cuda }} \
+           ${CUDA_TOOLKIT_ROOT:+-DCUDA_TOOLKIT_ROOT_DIR=${{ steps.cuda-toolkit.outputs.CUDA_PATH }}} \
+           ${CMAKE_CUDA_COMPILER:+-DCMAKE_CUDA_COMPILER=$CMAKE_CUDA_COMPILER}
 
       - name: Build
         shell: bash
