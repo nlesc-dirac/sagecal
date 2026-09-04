@@ -1,0 +1,87 @@
+name: CI
+
+on:
+  push: {}
+  pull_request: {}
+
+jobs:
+  build:
+    name: Build (CMake) - CPU / CUDA matrix
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        cuda: [false, true]
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Cache ccache
+        uses: actions/cache@v4
+        with:
+          path: ~/.ccache
+          key: ${{ runner.os }}-ccache-${{ matrix.cuda }}-${{ hashFiles('**/CMakeLists.txt') }}
+          restore-keys: ${{ runner.os }}-ccache-
+
+      - name: Cache build dir
+        uses: actions/cache@v4
+        with:
+          path: build-${{ matrix.cuda }}
+          key: ${{ runner.os }}-build-${{ matrix.cuda }}-${{ hashFiles('**/CMakeLists.txt') }}
+          restore-keys: ${{ runner.os }}-build-${{ matrix.cuda }}-
+
+      - name: Install build dependencies
+        shell: bash
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential cmake ninja-build ccache pkg-config libcfitsio-dev libopenblas-dev wcslib-dev libglib2.0-dev libcasa-casa7t64 casacore-dev casacore-data casacore-tools libopenmpi-dev libfftw3-dev
+
+      - name: Setup CUDA toolkit (matrix.cuda == true)
+        if: matrix.cuda
+        uses: Jimver/cuda-toolkit@v0.2.36
+        id: cuda-toolkit
+        with:
+          cuda: '13.2.0'
+
+      - name: Configure CMake
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ "${{ matrix.cuda }}" = "true" ]; then
+            BUILD_DIR=build-cuda
+            CMAKE_CUDA_COMPILER=${{ steps.cuda-toolkit.outputs.CUDA_PATH }}/bin/nvcc
+            CUDA_TOOLKIT_ROOT=${{ steps.cuda-toolkit.outputs.CUDA_PATH }}
+          else
+            BUILD_DIR=build-cpu
+          fi
+          cmake -S . -B "$BUILD_DIR" -DCMAKE_BUILD_TYPE=Release -G Ninja -DHAVE_CUDA=${{ matrix.cuda }} \
+           ${CUDA_TOOLKIT_ROOT:+-DCUDA_TOOLKIT_ROOT_DIR=${{ steps.cuda-toolkit.outputs.CUDA_PATH }}} \
+           ${CMAKE_CUDA_COMPILER:+-DCMAKE_CUDA_COMPILER=$CMAKE_CUDA_COMPILER}
+
+      - name: Build
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ "${{ matrix.cuda }}" = "true" ]; then
+            BUILD_DIR=build-cuda
+          else
+            BUILD_DIR=build-cpu
+          fi
+          cmake --build "$BUILD_DIR" -- -j$(nproc)
+
+      - name: Run tests (if available)
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ "${{ matrix.cuda }}" = "true" ]; then
+            BUILD_DIR=build-cuda
+          else
+            BUILD_DIR=build-cpu
+          fi
+          if [ -f "$BUILD_DIR/CTestTestfile.cmake" ]; then
+            cd "$BUILD_DIR" && ctest --output-on-failure
+          else
+            echo "No CTest tests found in $BUILD_DIR; skipping test run"
+          fi
