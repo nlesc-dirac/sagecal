@@ -54,7 +54,7 @@ jobs:
           else
             BUILD_DIR=build-cpu
           fi
-          cmake -S . -B "$BUILD_DIR" -DCMAKE_BUILD_TYPE=Release -G Ninja -DHAVE_CUDA=${{ matrix.cuda }}
+          cmake -S . -B "$BUILD_DIR" -DCMAKE_BUILD_TYPE=Release -G Ninja -DHAVE_CUDA=${{ matrix.cuda }} -DCMAKE_CUDA_COMPILER=/usr/local/cuda/bin/nvcc
 
       - name: Build
         shell: bash
