@@ -36,35 +36,14 @@ jobs:
         shell: bash
         run: |
           sudo apt-get update
-          sudo apt-get install -y build-essential cmake ninja-build ccache pkg-config
+          sudo apt-get install -y build-essential cmake ninja-build ccache pkg-confi pkg-config libcfitsio-bin libcfitsio-dev libopenblas-base libopenblas-dev wcslib-dev wcslib-tools libglib2.0-dev libcasa-casa7t64 casacore-dev casacore-data casacore-tools
 
-      - name: Install CUDA toolkit (matrix.cuda == true)
+      - name: Setup CUDA toolkit (matrix.cuda == true)
         if: matrix.cuda == 'true'
-        shell: bash
-        run: |
-          set -euo pipefail
-          # Adjust ubuntu2204 below if your runner OS is different (ubuntu2004 / ubuntu2404)
-          UBUNTU_CODENAME=ubuntu2204
-
-          sudo apt-get update
-          sudo apt-get install -y wget curl gnupg ca-certificates lsb-release
-
-          # Add NVIDIA CUDA repository pin and key
-          CUDA_PIN_URL="https://developer.download.nvidia.com/compute/cuda/repos/${UBUNTU_CODENAME}/x86_64/cuda-ubuntu${UBUNTU_CODENAME#ubuntu}.pin"
-          if curl -fsSL "$CUDA_PIN_URL" -o /tmp/cuda.pin; then
-            sudo mv /tmp/cuda.pin /etc/apt/preferences.d/cuda-repository-pin-600
-          fi
-
-          # Import NVIDIA GPG key and register repo (use apt signed-by keyring)
-          curl -fsSL "https://developer.download.nvidia.com/compute/cuda/repos/${UBUNTU_CODENAME}/x86_64/3bf863cc.pub" | sudo gpg --dearmour -o /usr/share/keyrings/nvidia-cuda.gpg
-          echo "deb [signed-by=/usr/share/keyrings/nvidia-cuda.gpg] https://developer.download.nvidia.com/compute/cuda/repos/${UBUNTU_CODENAME}/x86_64/ /" | sudo tee /etc/apt/sources.list.d/nvidia-cuda.list
-
-          sudo apt-get update
-          # Install the CUDA toolkit package (12-8). Change package name if you prefer a different version.
-          sudo apt-get -y install cuda-toolkit-12-8 || {
-            echo "cuda-toolkit-12-8 not available; attempting 'nvidia-cuda-toolkit' fallback"
-            sudo apt-get -y install nvidia-cuda-toolkit || true
-          }
+        uses: Jimver/cuda-toolkit@v0.2.36
+        id: cuda-toolkit
+        with:
+          cuda: '13.2.0'
 
       - name: Configure CMake
         shell: bash
